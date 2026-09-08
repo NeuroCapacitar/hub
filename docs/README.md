@@ -73,6 +73,13 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 
 ### Revisões
 
+- [Remediação direta das instruções de skills e AGENTS.md em 2026-09-06](reviews/2026-09-06-instructions-remediation.md)
+- [Auditoria consolidada de skills e AGENTS.md em 2026-09-06](reviews/2026-09-06-skills-audit.md)
+- [Auditoria dos AGENTS.md](reviews/2026-09-06-agents-files-audit.md)
+- [Auditoria das skills pessoais e de projetos](reviews/2026-09-06-personal-skills-audit.md)
+- [Auditoria das skills Vercel e Neon](reviews/2026-09-06-vercel-neon-skills-audit.md)
+- [Auditoria dos demais plugins Codex](reviews/2026-09-06-other-plugin-skills-audit.md)
+- [Auditoria suplementar de outros clientes e instalações](reviews/2026-09-06-supplemental-skills-audit.md)
 - [Requalificação de prontidão e higiene operacional em 2026-09-03](reviews/2026-09-03-readiness-remediation-requalification.md)
 - [Revisão final de Production Readiness da liberação por Módulo](reviews/2026-09-06-module-content-release-production-readiness-review.md)
 - [Pesquisa externa da liberação por Módulo](reviews/2026-09-06-module-content-release-external-research.md)

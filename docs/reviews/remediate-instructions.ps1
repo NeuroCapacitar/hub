@@ -3,6 +3,14 @@ $ErrorActionPreference = 'Stop'
 $ledgerPath = Join-Path $PSScriptRoot '2026-09-06-audit-coverage.csv'
 $backupRoot = 'C:/Users/Junior/.codex/instruction-remediation/2026-09-06'
 $changes = [System.Collections.Generic.List[object]]::new()
+function Set-FrontmatterDescription([string]$text, [string]$description) {
+    $frontmatter = [regex]::Match($text, '(?ms)^---\r?\n(.*?)\r?\n---')
+    if (-not $frontmatter.Success) { return $text }
+    $body = $frontmatter.Groups[1].Value
+    $newBody = [regex]::Replace($body, '(?ms)^description:.*?(?=\r?\n[A-Za-z][A-Za-z0-9_-]*:|\z)', ('description: ' + $description))
+    if ($newBody -eq $body) { return $text }
+    return $text.Substring(0, $frontmatter.Groups[1].Index) + $newBody + $text.Substring($frontmatter.Groups[1].Index + $frontmatter.Groups[1].Length)
+}
 $usingBody = @'
 ---
 name: using-superpowers
@@ -126,6 +134,26 @@ foreach ($entry in Import-Csv -LiteralPath $ledgerPath) {
     $updated = $original
     if ($entry.kind -eq 'SKILL.md') {
         $name = Split-Path (Split-Path $path) -Leaf
+        $focusedDescriptions = @{
+            'better-ui' = 'Polish existing component details such as states, borders, shadows and micro-interactions when a specific UI issue is named. Use a broader design workflow for a whole surface or visual direction.'
+            'make-interfaces-feel-better' = 'Tune interaction, motion and visual details for a specific component or state. Use a broader design workflow for a whole surface or visual direction.'
+            'frontend-design' = 'Create or reshape a complete frontend surface or visual direction when the user requests a new page, site or application interface.'
+            'impeccable' = 'Audit or refine an existing frontend surface when the user requests a focused interface improvement; route component-level polish and typography to their specialized skills.'
+            'interface-design' = 'Design structural UI systems and component interfaces for product surfaces when layout, tokens or component contracts are the decision at hand.'
+            'transitions-dev' = 'Implement or review transition behavior and motion primitives when a specific transition system is the subject.'
+            'transitions-polish' = 'Review transition timing and interaction polish for a specific component or state.'
+            'better-layout' = 'Tune layout structure, spacing and responsive composition for a specific product surface.'
+            'better-colors' = 'Convert, validate or tune color tokens and contrast for a specific color-system task.'
+            'better-typography' = 'Tune fonts, type scale, text wrapping and typographic accessibility for a specific text-system task.'
+            'apple-design' = 'Apply physical interaction and motion principles to a specific gesture, spring, sheet or translucent-material decision.'
+            'review' = 'Review a branch, pull request or diff against its requirements and repository standards when the user requests a review.'
+            'code-review' = 'Run a standards-and-spec review of a fixed diff when the user explicitly requests that review workflow.'
+            'orchestrate' = 'Coordinate substantial independent work when delegation is useful and authorized; use the host coordination tools available for this session.'
+            'find-docs' = 'Look up current documentation for a named library, framework, SDK, CLI or cloud service when the task needs API or setup facts.'
+        }
+        if ($focusedDescriptions.ContainsKey($name)) {
+            $updated = Set-FrontmatterDescription $updated $focusedDescriptions[$name]
+        }
         if ($path -match '\\vercel\\' -and $name -eq 'auth') {
             $updated = [regex]::Replace($updated, '(?m)^  pathPatterns:\r?\n(?:    [^\r\n]*\r?\n)+', "  pathPatterns:`n    - 'clerk.config.*'`n")
             $updated = $updated.Replace('## Clerk (Recommended — Native Marketplace Integration)', '## Clerk (when selected)')
@@ -171,12 +199,116 @@ foreach ($entry in Import-Csv -LiteralPath $ledgerPath) {
             $updated = $updated.Replace('Group all confirmed findings by principle. Use a markdown table with **Severity**, **Location**, **Before**, **After**, and **Why** columns. Never use separate "Before:" / "After:" lines.', 'Group confirmed findings when useful. Include severity, location, evidence and impact; choose a table or concise prose based on the size of the review.')
             $updated = $updated.Replace('report verification, and end with `Approve`.', 'report the scope of verification without implying an approval decision the user did not request.')
         }
+        if ($name -in @('better-colors','oklch-skill')) {
+            $updated = $updated.Replace('Always present color changes as a markdown table with **Before** and **After** columns. Include **every color that was changed**, not just a subset. Never list findings as separate "Before:" / "After:" lines outside of a table.', 'Report material color changes and evidence clearly. Use a Before/After table when it improves comparison; concise prose or a list is appropriate for a small change. Include all affected tokens within the requested scope.')
+            $updated = $updated.Replace('Always present color changes as a markdown table with **Before** and **After** columns. Include **every color that was changed** — not just a subset. Never list findings as separate "Before:" / "After:" lines outside of a table.', 'Report material color changes and evidence clearly. Use a Before/After table when it improves comparison; concise prose or a list is appropriate for a small change. Include all affected tokens within the requested scope.')
+            $updated = [regex]::Replace($updated, '(?m)^Always present color changes as a markdown table[^\r\n]*', 'Report material color changes and evidence clearly. Use a Before/After table when it improves comparison; concise prose or a list is appropriate for a small change. Include all affected tokens within the requested scope.')
+            $updated = $updated.Replace('When there are no findings, omit the table, state "No actionable color findings", report verification, and end with `Approve`.', 'When there are no findings, state that result and report the verification scope without forcing a specific closing word.')
+        }
+        if ($name -eq 'better-typography') {
+            $updated = $updated.Replace('Always present changes as a markdown table with **Before** and **After** columns. Include every change you made, not just a subset. Never list findings as separate "Before:" / "After:" lines outside of a table. Group changes by principle using a heading above each table, and keep each row focused on a single diff. Write every **After** snippet in the styling system the project already uses.', 'Report material typography changes and evidence clearly. Use a Before/After table when comparison helps; concise prose or a list is appropriate for a small change. Keep examples in the project''s existing styling system.')
+        }
+        if ($name -eq 'emil-design-eng') {
+            $updated = $updated.Replace('When reviewing UI code, you MUST use a markdown table with Before/After columns. Do NOT use a list with "Before:" and "After:" on separate lines. Always output an actual markdown table like this:', 'When reviewing UI code, present changes and evidence in the clearest compact format. Use a Before/After table when comparison helps; prose is fine for a small review.')
+        }
+        if ($name -eq 'better-layout') {
+            $updated = $updated.Replace('When there are no findings, omit the tables, state "No actionable layout findings", report verification, and end with `Approve`.', 'When there are no findings, state that result and report the verification scope without forcing a specific closing word.')
+        }
+        if ($name -eq 'writing-skills') {
+            $updated = $updated.Replace('**Writing skills IS Test-Driven Development applied to process documentation.**', '**Writing skills benefits from evidence-driven iteration, but TDD is one option rather than a universal prerequisite.**')
+            $updated = $updated.Replace('**REQUIRED BACKGROUND:** You MUST understand superpowers:test-driven-development before using this skill. That skill defines the fundamental RED-GREEN-REFACTOR cycle. This skill adapts TDD to documentation.', 'Use test-first evaluation when a realistic pressure scenario can falsify the skill. For a narrow wording edit or documentation-only change, inspect the result and relevant references directly.')
+            $updated = $updated.Replace('When the description was changed to just "Use when executing implementation plans with independent tasks" (no workflow summary), Claude correctly read the flowchart and followed the two-stage review process.', 'A concise description should route to the skill body; the body should state only the review and evaluation depth that the current workflow needs.')
+            $updated = $updated.Replace('Use skill name only, with explicit requirement markers:', 'Use skill names without file-path force-loading. Mark a supporting skill as required only when the current workflow genuinely depends on it; otherwise describe it as optional guidance:')
+            $updated = $updated.Replace('- ✅ Good: `**REQUIRED SUB-SKILL:** Use superpowers:test-driven-development`', '- ✅ When required: `Use superpowers:test-driven-development when a regression test is the appropriate seam.`')
+            $updated = $updated.Replace('- ✅ Good: `**REQUIRED BACKGROUND:** You MUST understand superpowers:systematic-debugging`', '- ✅ When optional: `Consult superpowers:systematic-debugging if the skill handles a difficult runtime failure.`')
+        }
+        if ($name -eq 'systematic-debugging') {
+            $updated = [regex]::Replace($updated, '(?m)^description:[^\r\n]*', 'description: Diagnose a difficult bug, test failure or regression with evidence and proportionate verification when the user requests debugging.')
+            $updated = $updated.Replace('**Core principle:** ALWAYS find root cause before attempting fixes. Symptom fixes are failure.', '**Core principle:** establish the strongest available evidence for the cause before changing behavior. Label uncertainty and choose a proportionate mitigation when the full cause cannot yet be isolated.')
+            $updated = $updated.Replace('**Violating the letter of this process is violating the spirit of debugging.**', 'Use the process as a guide; adapt it to the evidence, risk and available runtime.')
+            $updated = $updated.Replace('You MUST complete each phase before proceeding to the next.', 'Complete the phases that the current failure needs; a clear evidence-backed cause may allow a phase to be shortened or skipped.')
+            $updated = $updated.Replace('**If ≥ 3: STOP and question the architecture (step 5 below)**', '**If ≥ 3: examine the architecture when the repeated evidence supports that conclusion**')
+            $updated = $updated.Replace('If you haven''t completed Phase 1, you cannot propose fixes.', 'If Phase 1 is incomplete, state what is known and what remains uncertain; do not overclaim the cause.')
+            $updated = $updated.Replace('Use for ANY technical issue:', 'Use for difficult or ambiguous failures where systematic diagnosis is useful:')
+            $updated = $updated.Replace('**BEFORE attempting ANY fix:**', '**Before changing behavior:**')
+            $updated = $updated.Replace('   - MUST have before fixing', '   - Prefer a failing test when a correct seam exists; otherwise record the available evidence and verify proportionately')
+            $updated = $updated.Replace('   - Use the `superpowers:test-driven-development` skill for writing proper failing tests', '   - Use a test-first workflow when a correct seam and the requested scope make it useful')
+            $updated = $updated.Replace('   - STOP', '   - Return to diagnosis with the new evidence; do not repeat the same fix')
+            $updated = $updated.Replace('   - DON''T attempt Fix #4 without architectural discussion', '   - Reassess cause and scope before another attempt; ask only when a material architectural decision is required')
+            $updated = $updated.Replace('   **STOP and question fundamentals:**', '   **Reassess fundamentals when repeated evidence indicates an architectural problem:**')
+            $updated = $updated.Replace('   **Discuss with your human partner before attempting more fixes**', '   Pause for user input only when the next step is a material decision; otherwise continue safe diagnosis')
+        }
+        if ($name -eq 'test-driven-development') {
+            $updated = [regex]::Replace($updated, '(?m)^description:[^\r\n]*', 'description: Use a test-first workflow when the user requests TDD or a failing test is the appropriate seam for the change.')
+            $updated = $updated.Replace('**Always:**', '**Use this workflow when requested or when a valid regression seam makes it useful:**')
+            $updated = $updated.Replace('**Exceptions (ask your human partner):**', '**Cases where another verification approach may be better:**')
+            $updated = $updated.Replace('Thinking "skip TDD just this once"? Stop. That''s rationalization.', 'Do not force test-first development when the task has no meaningful test seam, is exploratory, or has another proportionate verification method.')
+            $updated = $updated.Replace('NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST', 'When this workflow is selected, establish a failing test before implementation where a valid seam exists')
+            $updated = $updated.Replace('**No exceptions:**', '**When this workflow applies:**')
+        }
+        if ($name -eq 'requesting-code-review') {
+            $updated = [regex]::Replace($updated, '(?m)^description:[^\r\n]*', 'description: Request an independent code review when the user asks for review or the change risk justifies it before integration.')
+            $updated = [regex]::Replace($updated, '(?ms)\*\*Mandatory:\*\*.*?(?=\r?\n\r?\n\*\*Optional)', '**Use review when:**\n- The user explicitly requests it\n- The change is high-risk or a merge decision needs independent evidence\n\nDo not dispatch a reviewer for every small task or because another workflow mentions one.')
+            $updated = $updated.Replace('- Review after EACH task', '- Review at a meaningful checkpoint when the task risk or user request warrants it')
+            $updated = $updated.Replace('- Catch issues before they compound', '- Use findings to guide the next authorized change')
+            $updated = $updated.Replace('- Review after each batch (3 tasks)', '- Review a batch when it has a coherent boundary or the risk warrants it')
+            $updated = $updated.Replace('- Review after each task or at natural checkpoints', '- Review at coherent checkpoints when the task risk or user request warrants it')
+            $updated = $updated.Replace('- Review before merge', '- Review before merge when requested or when the integration risk warrants independent evidence')
+            $updated = $updated.Replace('independent evidence when requested or when the integration risk warrants independent evidence', 'independent evidence')
+            $updated = $updated.Replace('- Skip review because "it''s simple"', '- Skip a review that the user explicitly requested or the integration risk requires')
+        }
+        if ($name -eq 'finishing-a-development-branch') {
+            $updated = $updated.Replace('**Before presenting options, verify tests pass:**', '**Before presenting integration options, verify checks relevant to the changed behavior:**')
+            $updated = $updated.Replace('npm test / cargo test / pytest / go test ./...', 'Run the project''s narrowest relevant check; broaden only when scope or evidence requires it.')
+            $updated = $updated.Replace('Stop. Don''t proceed to Step 2.', 'Do not present the integration as complete while relevant failures remain. Continue authorized fixes or report the blocker.')
+            $updated = $updated.Replace('**Always:**', '**When relevant:**')
+            $updated = $updated.Replace('**Core principle:** Verify tests → Present options → Execute choice → Clean up.', '**Core principle:** Verify relevant checks → Present only requested integration choices → Execute the authorized choice → Clean up.')
+            $updated = $updated.Replace('**Announce at start:** "I''m using the finishing-a-development-branch skill to complete this work."', 'Use the integration workflow when the user asks to merge, publish, or clean up a completed branch.')
+            $updated = $updated.Replace('Tests failing (<N> failures). Must fix before completing:', 'Tests failing: fix failures caused by this change or report unrelated failures before integration:')
+            $updated = $updated.Replace('- **Fix:** Always verify tests before offering options', '- **Fix:** Verify checks relevant to changed behavior before offering integration options')
+        }
+        if ($name -in @('review','code-review')) {
+            $updated = $updated.Replace('Both axes run as **parallel sub-agents** so they don''t pollute each other''s context, then this skill aggregates their findings.', 'Review the standards and spec axes independently when that improves confidence. A small diff may use one combined pass; delegation is optional and must use the host''s available tools.')
+            $updated = $updated.Replace('Both axes run as **parallel sub-agents** so they don''t pollute each other''s context, then this skill aggregates their findings.', 'Review the standards and spec axes independently when that improves confidence. A small diff may use one combined pass; delegation is optional and must use the host''s available tools.')
+        }
+        if ($name -eq 'create-auth-skill') {
+            $updated = $updated.Replace('### Step 2: Ask planning questions', '### Step 2: Ask only unresolved planning questions')
+            $updated = $updated.Replace('Use the `AskQuestion` tool to ask the user **all applicable questions in a single call**. Skip any question you already have a confident answer for from the scan.', 'Use the host''s available input capability to ask only questions whose answers are not established by the scan, project configuration or the user''s request. Ask in one concise batch when that reduces friction; follow up only when a dependency requires it.')
+            $updated = $updated.Replace('4. **Authentication methods** (always ask, allow multiple)', '4. **Authentication methods** (ask only if not already specified)')
+            $updated = $updated.Replace('8. **Features & plugins** (always ask, allow multiple)', '8. **Features & plugins** (ask only for unresolved scope, allow multiple)')
+            $updated = $updated.Replace('9. **Auth pages** (always ask, allow multiple — pre-select based on earlier answers)', '9. **Auth pages** (ask only for unresolved product scope; pre-select from known answers)')
+            $updated = $updated.Replace('10. **Auth UI style** (always ask)', '10. **Auth UI style** (ask only when visual direction is unresolved)')
+        }
+        if ($name -eq 'make-interfaces-feel-better') {
+            $updated = [regex]::Replace($updated, '(?m)^description:[^\r\n]*', 'description: Apply interaction, motion and visual-polish guidance when a specific UI detail is being built or reviewed.')
+            $updated = $updated.Replace('Use exactly these values:', 'Use values appropriate to the existing motion system; the following are examples only:')
+            $updated = $updated.Replace('bounce must always be `0`.', 'preserve the project''s spring settings and reduced-motion behavior.')
+            $updated = $updated.Replace('Always use `0.96`. Never use a value smaller than `0.95` — anything below feels exaggerated.', 'Treat `scale(0.96)` as an optional starting point. Match the existing interaction system and avoid motion where it distracts or harms accessibility.')
+            $updated = [regex]::Replace($updated, '(?m)^Always present changes as a markdown table[^\r\n]*', 'Report material changes and evidence clearly. Use a Before/After table when comparison helps; concise prose or a list is appropriate for a small change.')
+            $updated = [regex]::Replace($updated, '(?m)^When there are no findings, omit the findings table,[^\r\n]*', 'When there are no findings, state that result and report the verification scope without forcing a specific closing word.')
+        }
+        if ($path -match '\\(better-ui|make-interfaces-feel-better)\\animations\.md$') {
+            $updated = [regex]::Replace($updated, '(?m)^\*\*Important:\*\* Always use exactly these values[^\r\n]*', '**Suggested starting values:** Adapt these to the existing motion system, component state and reduced-motion requirements; do not treat examples as fixed constraints.')
+            $updated = $updated.Replace('- `scale`: `0.25` → `1` (never use `0.5` or `0.6`)', '- `scale`: choose a restrained range appropriate to the icon and surrounding layout')
+            $updated = $updated.Replace('- `transition`: `{ type: "spring", duration: 0.3, bounce: 0 }`; **bounce must always be `0`**, never `0.1` or any other value', '- `transition`: use the project''s established spring or CSS timing; keep motion accessible')
+            $updated = $updated.Replace('- `transition`: `{ type: "spring", duration: 0.3, bounce: 0 }` — **bounce must always be `0`**, never `0.1` or any other value', '- `transition`: use the project''s established spring or CSS timing; keep motion accessible')
+            $updated = [regex]::Replace($updated, '(?m)^A subtle scale-down on click gives buttons tactile feedback\. Always use `scale\(0\.96\)\. Never use a value smaller than `0\.95`[^\r\n]*', 'A restrained scale-down can provide tactile feedback. Choose a value that fits the existing component system and reduced-motion behavior; use CSS transitions for interruptibility.')
+            $updated = [regex]::Replace($updated, '(?m)^A subtle scale-down on click gives buttons tactile feedback\. Always use `0\.96`\. Never use a value smaller than `0\.95`[^\r\n]*', 'A restrained scale-down can provide tactile feedback. Choose a value that fits the existing component system and reduced-motion behavior; use CSS transitions for interruptibility.')
+        }
         if ($name -eq 'impeccable') {
+            $updated = $updated.Replace('You MUST do these steps before proceeding:', 'Use the setup steps that are relevant to the requested workflow before editing.')
+            $updated = $updated.Replace('**Required even when you''ve loaded a sub-command reference in step 2.**', 'Inspect a representative project file when editing so the change follows existing conventions.')
+            $updated = $updated.Replace('**This is non-optional; skipping it produces generic output.**', 'Read the matching register when the task needs its guidance; skip unrelated registers.')
+            $updated = $updated.Replace('Take no shortcuts unless the user asks for them (when in doubt, ask). Don''t stop until arriving at a complete implementation (beautiful, responsive, fast, precise, bug-free, on brand).', 'Aim for the requested outcome with checks proportionate to its scope. Continue while relevant defects or unverified requirements remain; ask only when a material decision is unresolved.')
             $updated = [regex]::Replace($updated, '(?m)^- Verify in bounded passes, not a loop,[^\r\n]*', '- Batch relevant inspections and fixes. Stop when the requested behavior and quality criteria are verified. Further passes require a confirmed defect, a relevant change or unresolved evidence; avoid speculative polishing, but do not leave required fixes incomplete to satisfy a fixed pass count. Use only inspection methods permitted by the user and host.')
+            $updated = $updated.Replace('When there are no findings, omit the findings table, state "No actionable interface-polish findings", report verification and rejected candidates, and end with `Approve`.', 'When there are no findings, state that result and report the verification scope without forcing a specific closing word.')
         }
         if ($name -eq 'improve-ui') {
             $updated = [regex]::Replace($updated, '(?m)^description:[^\r\n]*', 'description: Audit an existing interface against its design evidence and prepare requested implementation handoff plans. Use for review or planning requests, not direct implementation.')
             $updated = $updated.Replace('If asked to fix or improve directly, offer a plan; never implement it.', 'If the user asks for direct implementation, this audit-only workflow no longer applies. Continue through the appropriate implementation workflow within the authorized scope; do not substitute a plan for the requested fix.')
+        }
+        if ($name -eq 'orchestrate') {
+            $updated = $updated.Replace('Remain available to the user while delegating substantive work. Run narrow, read-only scouts in parallel with `reasoning_effort: "low"` and `fork_turns: "none"`. Use `reasoning_effort: "medium"` for routine implementation and `"high"` for difficult work. Give each agent distinct ownership, prevent overlapping assignments, and instruct leaf workers not to delegate. Integrate the results and keep approvals with the user.', 'Delegate only when the work is genuinely independent, the host supports it and delegation is authorized or clearly useful. Give each worker distinct ownership, prevent overlapping writes and integrate actual artifacts. Use the host''s supported model and collaboration settings; do not impose reasoning levels or parallelism on every task. Keep approval decisions with the user.')
         }
         if ($name -eq 'diagnosing-bugs') {
             $updated = $updated.Replace('If you don''t have one, no amount of staring at code will save you.', 'When a runnable reproduction is unavailable, source analysis and captured evidence can still establish a defect or a falsifiable hypothesis; distinguish those conclusions from runtime verification.')
