@@ -51,11 +51,14 @@ vi.mock("@/features/certificates/templates", () => ({
 vi.mock("@/lib/env", () => ({ getServerEnv: dependencies.getServerEnv }));
 vi.mock("./certificate-template-editor", () => ({
   CertificateTemplateEditor: ({
+    courseWorkloadHours,
     pendingCertificateReconciliationCount,
   }: {
+    courseWorkloadHours: number;
     pendingCertificateReconciliationCount: number;
   }) => (
     <div
+      data-course-workload-hours={courseWorkloadHours}
       data-pending-certificate-reconciliation={
         pendingCertificateReconciliationCount
       }
@@ -266,7 +269,7 @@ describe("AdminCourseDetailPage overview", () => {
     expect(markup).not.toContain('data-pending-certificate-reconciliation="7"');
     expect(markup).toContain('data-module-count="0"');
     expect(markup).toContain('data-total-lessons="6"');
-    expect(markup).toContain('data-duration-seconds="7200"');
+    expect(markup).toContain('data-duration-seconds="7500"');
     expect(markup).toContain('data-has-published="true"');
     expect(markup).toContain('data-has-draft="false"');
   });
@@ -345,6 +348,36 @@ describe("AdminCourseDetailPage overview", () => {
     expect(markup).not.toContain('data-course-panel="students"');
     expect(markup).not.toContain('data-course-panel="settings"');
     expect(markup).not.toContain('data-course-panel="certificate"');
+  });
+});
+
+describe("AdminCourseDetailPage certificate", () => {
+  it("passes the effective workload to the certificate preview", async () => {
+    dependencies.getAdminCourseTabData.mockResolvedValue({
+      tab: "certificate",
+      course: {
+        ...course,
+        workloadHours: 10,
+        workloadHoursOverride: 20,
+      },
+      lessons: [],
+      modules: [],
+      overviewSummary: {
+        activeEnrollmentCount: 0,
+        paidOrderCount: 0,
+        validCertificateCount: 0,
+      },
+      publicationState: { hasDraft: false, hasPublished: true },
+    });
+
+    const markup = renderToStaticMarkup(
+      await AdminCourseDetailPage({
+        params: Promise.resolve({ courseId: course.id }),
+        searchParams: Promise.resolve({ tab: "certificate" }),
+      })
+    );
+
+    expect(markup).toContain('data-course-workload-hours="20"');
   });
 });
 

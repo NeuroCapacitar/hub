@@ -128,7 +128,8 @@ Contagem ou medida por Aula e Publicação de Curso que não apresenta Conta, Ma
 Estimativa de consumo: vídeo mais leitura. Serve à experiência.
 
 **Carga horária do Curso**  
-Soma das durações pedagógicas das Aulas; não define validade de acesso.
+Valor oficial do Curso: soma das durações pedagógicas das Aulas ou override
+manual configurado; não define validade de acesso.
 
 **Duração comercial de acesso**  
 Quantidade de meses vendida e capturada no Pedido/Concessão.

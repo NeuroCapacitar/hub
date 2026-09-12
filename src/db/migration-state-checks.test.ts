@@ -1,10 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { certificateMigrationStateChecks } from "./migration-state-checks";
+import {
+  certificateMigrationStateChecks,
+  courseContentMigrationStateChecks,
+} from "./migration-state-checks";
 
 const MUTATING_STATEMENT_PATTERN =
   /\b(alter|create|delete|drop|insert|truncate|update)\b/i;
 
 describe("migration state checks", () => {
+  it("covers the Module and Publication ownership constraint", () => {
+    const [ownershipCheck] = courseContentMigrationStateChecks;
+
+    expect(courseContentMigrationStateChecks).toHaveLength(1);
+    expect(ownershipCheck?.migration).toBe(
+      "0078_protect_module_course_publication_ownership"
+    );
+    expect(ownershipCheck?.statement).toContain(
+      "course_publications_id_course_unique"
+    );
+    expect(ownershipCheck?.statement).toContain(
+      "modules_course_publication_course_fk"
+    );
+  });
+
   it("covers the certificate template and render-claim catalog", () => {
     const certificateChecks = certificateMigrationStateChecks;
 
@@ -25,7 +43,10 @@ describe("migration state checks", () => {
   });
 
   it("keeps every migration audit query read-only", () => {
-    for (const check of certificateMigrationStateChecks) {
+    for (const check of [
+      ...courseContentMigrationStateChecks,
+      ...certificateMigrationStateChecks,
+    ]) {
       expect(check.statement).not.toMatch(MUTATING_STATEMENT_PATTERN);
     }
   });

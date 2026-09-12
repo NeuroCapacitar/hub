@@ -10,6 +10,11 @@ last_verified_commit: e325b7e
 
 `Course` é a identidade comercial. `CoursePublication` é uma revisão interna materializada de Módulos e Aulas, com estados `draft`, `published` e `retired`. Há no máximo uma publicação publicada e uma em rascunho por Curso.
 
+`modules.course_id` e `modules.course_publication_id` são protegidos pela
+constraint composta criada na migration
+`0078_protect_module_course_publication_ownership`; a Publicação vinculada a um
+Módulo precisa pertencer ao mesmo Curso.
+
 Matrícula concede acesso comercial ao Curso, não a uma publicação. Portanto, toda Matrícula ativa lê a publicação `published` vigente. Uma publicação nova alcança todas os Alunos com Matrícula ativa; acesso expirado, revogado ou bloqueado não lê conteúdo novo. Ver [ADR-0007](../adr/0007-course-versioning-and-enrollment-curriculum.md).
 
 ## Regras de domínio
@@ -50,7 +55,10 @@ configurações do Curso para exibir outro total inteiro não negativo. Remover 
 valor manual retorna ao cálculo automático. Certificados já emitidos preservam
 o snapshot anterior. A mutação de conteúdo e o recálculo do snapshot do draft e
 da carga efetiva usam o mesmo lock de liberação e a mesma transação; chamadas
-isoladas de recálculo também devem usar o wrapper transacional.
+isoladas de recálculo também devem usar o wrapper transacional. Alterar ou
+remover o override recalcula a projeção efetiva; leituras do catálogo e do Curso
+usam o override ou o snapshot da publicação vigente, sem tratar a duração do
+conteúdo como carga oficial.
 
 ### REG-LEA-005 Mídia e histórico
 

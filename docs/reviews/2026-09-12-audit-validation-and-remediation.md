@@ -69,10 +69,11 @@ Implementado no working tree:
 - A06/A07/A22/PR 04: draft e published são lidos separadamente sob lock e
   transação; authoring e recálculo compartilham o mesmo client antes do commit;
   o Aluno recebe a carga horária oficial e override `0` é preservado.
-- A08/A09/PR 05 parcial: ownership de Módulo/Aula é conferido no servidor,
-  movimento implícito entre Cursos é rejeitado e a técnica de reordenação não
-  usa mais valores temporários negativos. Constraints compostas, checks e
-  migration aguardam preflight de dados.
+- A08/PR 05: ownership de Módulo é conferido no servidor e também protegido
+  por FK composta no Development; o preflight encontrou 53 Módulos
+  consistentes. A08 está completo no código e no Development. A09 permanece
+  separado para a proteção relacional de Aulas; Staging e Production aguardam
+  preflight e release controlado.
 - A10/PR 06 parcial: parsers server-side para strings, inteiros, status,
   booleanos e campos de authoring foram extraídos e cobertos por testes; a
   consulta de banco ainda é a autoridade final para tipos UUID e invariantes
@@ -91,10 +92,10 @@ Ainda não implementado ou não verificável neste ambiente:
   Ranges continuam fora do escopo; `max_position_seconds` não é certificado de
   visualização. Player JMVStream real, PostgreSQL persistente e E2E continuam
   não verificados.
-- A08/A09/PR 05: não houve consulta de consistência em PostgreSQL descartável
-  ou Staging e nenhuma migration estrutural foi aplicada. Sem `DATABASE_URL*`
-  e sem Docker, dados legados, constraints e concorrência real permanecem
-  pendentes.
+- A09/PR 05: ainda não houve preflight em PostgreSQL descartável, Staging ou
+  Production para a constraint de Aula; a FK composta de Aulas e a migration
+  correspondente continuam pendentes. O A08 foi validado no Development com a
+  migration 0078 e não teve correção automática de dados.
 - A15/PR 10: não foi executada jornada E2E por teclado; os testes existentes
   cobrem axe e interações parciais. Isso continua sendo lacuna de assurance,
   não prova de não conformidade.
@@ -114,10 +115,10 @@ Verificação da implementação no working tree:
 | A02 | Aula opcional bloqueia a próxima aula pela sequência | COMPLETO — APROVADO, P1 | `isLessonAvailable` em `src/features/progress/rules.ts` agora exige somente Aulas obrigatórias anteriores; workspace, overview, catálogo e conclusão recalculam a próxima Aula pendente disponível | PR 02 aplicado; regra registrada no ADR-0011; Cursos sem obrigatórias permanecem sem fluxo de Certificado e sem bloqueio de authoring |
 | A03 | `watchedPercent` era posição máxima, não cobertura assistida | COMPLETO NO ESCOPO APROVADO, IMPLEMENTADO NO WORKING TREE | `advanceVideoPlaybackProgress` e `calculateValidatedVideoPercent` em `src/features/progress/rules.ts`, `lesson_watch_progress` e `recordLessonWatchProgress` | PR 03 aplicado sem ranges; fronteira linear validada, retomada separada, tempo reproduzido nos analytics e origem manual/automática; provider real ainda não verificado |
 | A04 | Runtime usava 95% e o contrato canônico usava 98% | COMPLETO — APROVADO, P2 | `JMVSTREAM_VIDEO_COMPLETE_PERCENT` e testes em `src/features/videos/jmvstream.ts`/`.test.ts`, contra `REG-LEA-003` | Limiar atual 100%; 99,9% não é uma fronteira distinta no contrato de percentuais inteiros |
-| A05 | Evento `end` ignora o limiar | CONFIRMADO, P1/P2 | `shouldCompleteLessonFromJmvstreamEvent` aceita `jmvplayerout-end` sem considerar o percentual | Remover a exceção, mantendo conclusão manual |
-| A06 | Draft pode vazar workload para `courses.workload_hours` | CONFIRMADO, P1 | `recalculateCourseWorkloadHours` em `src/features/courses/server.ts` busca draft/publicado com `limit 1` e depois tenta achar ambos | PR 04 aprovado; recálculo deve ser serializado |
-| A07 | UI do Aluno ignora override de workload | CONFIRMADO, P2 | dashboard e overview formatam `totalDurationSeconds`, embora o backend entregue `workloadHours` | PR 04 aprovado; `formatCourseWorkload` fica para duração calculada |
-| A08 | Módulo pode divergir entre Curso e Publicação | CONFIRMADO, P1 | FKs independentes em `modules` e `saveModule` usa `courseId` do `FormData` sem alterar publicação | PR 05 reescrito; derivar ownership no servidor e adicionar proteção relacional após auditoria de dados |
+| A05 | Evento `end` ignorava o limiar | COMPLETO — APROVADO, P1/P2 | `shouldCompleteLessonFromJmvstreamEvent` aplica o mesmo limiar de 100% ao `jmvplayerout-end`; testes cobrem `end` abaixo do limiar e conclusão válida | O `end` apenas dispara a sincronização; conclusão manual permanece independente |
+| A06 | Draft pode vazar workload para `courses.workload_hours` | COMPLETO — APROVADO, P1 | `recalculateCourseWorkloadHoursWithClient` em `src/features/courses/server.ts` lê draft e published separadamente e preserva a publicação vigente | O vazamento do draft foi corrigido e a projeção também é sincronizada quando o override é salvo ou removido |
+| A07 | UI do Aluno ignora override de workload | COMPLETO — APROVADO, P2 | dashboard, catálogo e overview usam a carga efetiva; duração do conteúdo permanece separada | PR 04 aplicado; catálogo usa snapshot publicado como fallback, Admin usa carga efetiva no preview e testes cobrem override |
+| A08 | Módulo pode divergir entre Curso e Publicação | COMPLETO NO DEVELOPMENT — APROVADO, P1 | `saveModule` confere ownership persistido; preflight encontrou 0 divergências em 53 Módulos; migration 0078 adiciona FK composta | Proteção server-side e relacional aplicadas no Development; promover após preflight dos ambientes persistentes |
 | A09 | Aula pode ser movida implicitamente entre Cursos | CONFIRMADO, achado adicional P1 | `saveLesson` valida Aula e módulo alvo separadamente e persiste o relacionamento alvo sem comparar Curso/publicação | PR 05 deve proibir cross-course; movimento entre Cursos exige operação explícita |
 | A10 | Authoring depende de validação do browser | CONFIRMADO, P2 | título de Curso/Módulo, `sortOrder`, status inválido e alguns IDs passam por parsers permissivos em `src/features/admin/authoring.ts` | PR 06 aprovado com schemas/parsers dedicados e sem reabsorver ownership |
 | A11 | Preview Admin não abre materiais privados | CONFIRMADO, P2 | links não carregam `preview`; Route Handlers chamam `assertProtectedLessonAccess` depois do preview | PR 08 aprovado, com autorização explícita e URLs privadas |

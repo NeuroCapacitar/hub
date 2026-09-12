@@ -722,7 +722,11 @@ export const getStudentCourseCatalog = async (
         c.sales_status,
         c.launch_date,
         c.launch_landing_url,
-        coalesce(c.workload_hours_override, c.workload_hours) as workload_hours,
+        coalesce(
+          c.workload_hours_override,
+          cv.workload_hours_snapshot,
+          c.workload_hours
+        ) as workload_hours,
         c.price_in_cents,
         c.cover_image_json,
         c.thumbnail_url,
@@ -759,7 +763,7 @@ export const getStudentCourseCatalog = async (
       left join enrollments e on e.course_id = c.id
         and e.user_id = $1
       left join lateral (
-        select id
+        select id, workload_hours_snapshot
         from course_publications
         where course_id = c.id and status = 'published'
         limit 1

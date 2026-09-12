@@ -5,6 +5,7 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -12,6 +13,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -489,6 +491,7 @@ export const coursePublications = pgTable(
       table.courseId,
       table.publicationNumber
     ),
+    unique("course_publications_id_course_unique").on(table.id, table.courseId),
     uniqueIndex("course_publications_one_published_per_course_idx")
       .on(table.courseId)
       .where(sql`${table.status} = 'published'`),
@@ -537,6 +540,11 @@ export const modules = pgTable(
       table.coursePublicationId,
       table.sortOrder
     ),
+    foreignKey({
+      columns: [table.coursePublicationId, table.courseId],
+      foreignColumns: [coursePublications.id, coursePublications.courseId],
+      name: "modules_course_publication_course_fk",
+    }).onDelete("cascade"),
     check(
       "modules_release_delay_days_non_negative",
       sql`${table.releaseDelayDays} >= 0`

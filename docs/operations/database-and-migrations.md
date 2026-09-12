@@ -2,8 +2,8 @@
 status: canonical
 owner: engineering
 last_verified_commit: b6e6d63
-current_migration_tag: 0077_analytics_completion_source
-migration_entry_count: 78
+current_migration_tag: 0078_protect_module_course_publication_ownership
+migration_entry_count: 79
 schema_table_count: 49
 ---
 
@@ -97,6 +97,13 @@ A migration `0077_analytics_completion_source` acrescenta a origem manual ou de
 vídeo aos eventos brutos de conclusão. O agregado diário continua combinando a
 contagem por evento; a origem detalhada permanece na linha de progresso e no
 evento bruto dentro do período de retenção.
+
+A migration `0078_protect_module_course_publication_ownership` cria a chave
+única composta de `course_publications(id, course_id)` e a chave estrangeira
+composta correspondente em `modules(course_publication_id, course_id)`. Antes
+de promovê-la a Staging ou Production, executar o preflight de inconsistências
+do plano de remediação no banco alvo; qualquer linha divergente exige STOP e
+investigação manual antes da migration.
 
 Na verificação de escala do Financeiro em Development, a base tinha 8 Pedidos e a
 busca textual usou `Seq Scan` com 2 buffers e 0,111 ms de execução; a ordenação por

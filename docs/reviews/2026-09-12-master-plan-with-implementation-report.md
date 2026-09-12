@@ -174,15 +174,15 @@ Pode aparecer como informação complementar, mas não deve ser apresentada como
 
 ---
 
-> **Relatório de implementação — status: implementado.**
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
 >
-> **Feito:** A aplicação passou a separar carga horária oficial (`override ?? publicação publicada`) da duração calculada pela soma dos conteúdos; dashboard, catálogo e overview usam o workload oficial.
+> **Feito:** A aplicação passou a separar carga horária oficial (`override ?? publicação publicada`) da duração calculada pela soma dos conteúdos; dashboard, catálogo e overview usam o workload oficial. Salvar ou remover o override também recalcula a projeção no mesmo lock e transação da alteração.
 >
 > **Não feito:** Certificados históricos não foram recalculados e a duração calculada não foi removida das superfícies em que ainda representa conteúdo.
 >
-> **Diferença/motivo:** O draft é recalculado para manter seu snapshot, mas não substitui a publicação vigente enquanto houver uma publicação publicada.
+> **Diferença/motivo:** O draft é recalculado para manter seu snapshot, mas não substitui a publicação vigente enquanto houver uma publicação publicada. A prévia administrativa usa a carga efetiva, enquanto a duração real do conteúdo continua sendo exibida separadamente.
 >
-> **Verificação:** Testes SQL, apresentação, dashboard e página de Curso passaram.
+> **Verificação:** Testes SQL, apresentação, dashboard, página de Curso, typecheck, Ultracite, `docs:check` e revisão CodeRabbit passaram; permanecem apenas dois testes temporais preexistentes fora deste escopo.
 
 ## D4. CI
 
@@ -1752,13 +1752,13 @@ para usar carga oficial.
 
 > **Relatório de implementação — status: corrigido.**
 >
-> **Feito:** Dashboard e página do Curso passaram a usar `workloadHours`.
+> **Feito:** Dashboard, catálogo e página do Curso passaram a usar a carga efetiva; o Admin também usa esse valor no preview do certificado e mantém a duração do conteúdo separada. Salvar ou remover o override atualiza a projeção no mesmo lock e transação.
 >
 > **Não feito:** Duração agregada continua sendo exibida somente onde representa duração de conteúdo.
 >
 > **Diferença/motivo:** Foi separado formatter de carga oficial de formatter baseado em segundos.
 >
-> **Verificação:** Testes de dashboard, página e apresentação passaram.
+> **Verificação:** Testes de dashboard, catálogo, página, apresentação e authoring passaram.
 
 # 8.7 Criar formatter específico
 
@@ -1880,15 +1880,15 @@ Deve ser tratado com cuidado.
 
 Antes de adicionar qualquer constraint, executar em PostgreSQL descartável e depois, no processo operacional aprovado, em Staging.
 
-> **Relatório de implementação — status: STOP respeitado.**
+> **Relatório de implementação — status: preflight Development concluído; Staging e Production pendentes.**
 >
-> **Feito:** As queries de preflight foram mantidas como procedimento obrigatório.
+> **Feito:** O preflight somente-leitura foi executado no Development com o guard de destino do projeto: 53 Módulos conferem com suas Publicações, nenhum Módulo está divergente e nenhuma Aula aponta para uma Publicação diferente da do Módulo.
 >
-> **Não feito:** Não foram executadas contra banco descartável ou Staging.
+> **Não feito:** O preflight ainda não foi executado em banco descartável, Staging ou Production; nenhuma linha legada precisou ser corrigida.
 >
-> **Diferença/motivo:** Sem acesso seguro ao banco, não seria correto aplicar backfill ou constraint.
+> **Diferença/motivo:** Como o Development estava íntegro, a migration foi aplicada somente nele. A promoção para Staging/Production continua seguindo o fluxo de release, com novo preflight no alvo.
 >
-> **Verificação:** O relatório registra ausência de `DATABASE_URL*` e bloqueio de migration.
+> **Verificação:** `bun run db:migrate:development`, `bun run db:migrations:check` e `bun run db:migrations:inspect -- --environment=development` passaram; as constraints foram confirmadas como validadas no PostgreSQL.
 
 ### Módulos inconsistentes
 
@@ -1986,15 +1986,15 @@ course_publication_id
 
 Para módulo existente:
 
-> **Relatório de implementação — status: implementado parcialmente.**
+> **Relatório de implementação — status: implementado e protegido no banco em Development.**
 >
-> **Feito:** Edição de módulo compara o `courseId` enviado com o ownership persistido e não atualiza mais `modules.course_id` a partir do hidden input.
+> **Feito:** Edição de módulo compara o `courseId` enviado com o ownership persistido e não atualiza mais `modules.course_id` a partir do hidden input. A migration `0078_protect_module_course_publication_ownership` agora exige no banco que `modules(course_publication_id, course_id)` corresponda a `course_publications(id, course_id)`.
 >
-> **Não feito:** Constraints compostas para impedir corrupção já existente não foram adicionadas.
+> **Não feito:** A constraint ainda não foi promovida para Staging/Production; isso ocorrerá pelo fluxo de release após o preflight de cada ambiente.
 >
-> **Diferença/motivo:** A proteção server-side foi feita sem fingir que ela substitui a defesa do banco.
+> **Diferença/motivo:** A proteção server-side continua sendo a primeira barreira para mensagens manipuladas, e a constraint composta passou a ser a barreira definitiva para gravações incompatíveis. A migração de Aulas permanece no A09 e não foi misturada neste item.
 >
-> **Verificação:** Testes adversariais rejeitam Curso manipulado.
+> **Verificação:** Teste adversarial rejeita Curso manipulado; teste de migration garante a ordem da chave única antes da FK; uma tentativa transacional inválida no Development foi rejeitada pela constraint `modules_course_publication_course_fk` e sofreu rollback.
 
 ### Não confiar em `courseId`
 
@@ -2066,15 +2066,15 @@ course_publication_id da publicação B
 
 ---
 
-> **Relatório de implementação — status: não implementado.**
+> **Relatório de implementação — status: implementado para Módulos; A09 permanece separado.**
 >
-> **Feito:** O desenho da necessidade de FKs compostas foi preservado no plano anotado.
+> **Feito:** O schema e a migration adicionam a unique composta de `course_publications(id, course_id)` e a FK composta de `modules(course_publication_id, course_id)`. O inspector de migrations também valida a presença das duas constraints.
 >
-> **Não feito:** Não foi alterado schema nem criada migration.
+> **Não feito:** Não foi adicionada a FK composta de `lessons(module_id, course_publication_id)` contra `modules(id, course_publication_id)`; essa proteção pertence ao A09. Staging e Production ainda aguardam promoção controlada.
 >
-> **Diferença/motivo:** A aplicação depende de preflight real para não transformar dados legados inconsistentes em falha de deploy.
+> **Diferença/motivo:** O preflight do Development retornou zero inconsistências, permitindo aplicar a proteção nesse ambiente. Não houve correção automática de dados nem aplicação em ambientes persistentes superiores.
 >
-> **Verificação:** Migrations atuais continuam válidas.
+> **Verificação:** `bun run db:migrations:check`, testes de contrato da migration e `db:migrations:inspect` passaram; a constraint rejeitou uma combinação Curso/Publicação inválida em transação revertida.
 
 # 9.7 Não remover imediatamente as FKs simples
 

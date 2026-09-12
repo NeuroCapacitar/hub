@@ -1729,6 +1729,7 @@ const runCourseUpdateTransaction = async ({
         targetType: "course",
       });
     }
+    await recalculateCourseWorkloadHoursWithClient(client, courseId);
     await client.query("commit");
     return {
       coverImage: currentCoverImage,

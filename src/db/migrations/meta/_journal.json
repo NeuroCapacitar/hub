@@ -547,6 +547,13 @@
       "when": 1789209803228,
       "tag": "0077_analytics_completion_source",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1789225677625,
+      "tag": "0078_protect_module_course_publication_ownership",
+      "breakpoints": true
     }
   ]
 }

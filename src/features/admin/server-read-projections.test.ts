@@ -64,6 +64,9 @@ const courseRow = {
   thumbnail_url: "https://example.test/thumb.jpg",
   title: "Course one",
   workload_hours: 24,
+  workload_hours_override: null,
+  published_workload_hours: 24,
+  draft_workload_hours: 30,
 };
 
 const moduleRow = {
@@ -297,6 +300,37 @@ describe("admin read projections", () => {
     ).toBe(false);
     expect(ordersSql.some((sql) => sql.includes("from payment_reviews"))).toBe(
       true
+    );
+  });
+
+  it("keeps calculated and effective workload separate for admin reads", async () => {
+    const effectiveCourseRow = {
+      ...courseRow,
+      draft_workload_hours: 14,
+      published_workload_hours: 13,
+      workload_hours: 10,
+      workload_hours_override: 20,
+    };
+    query.mockImplementation((sql: string) =>
+      sql.includes("has_draft")
+        ? { rows: [{ has_draft: true, has_published: true }] }
+        : { rows: [effectiveCourseRow] }
+    );
+
+    const data = await getAdminCourseTabData({
+      courseId,
+      tab: "settings",
+    });
+
+    expect(data).toMatchObject({
+      course: {
+        calculatedWorkloadHours: 13,
+        workloadHours: 20,
+        workloadHoursOverride: 20,
+      },
+    });
+    expect(String(query.mock.calls[0]?.[0])).toContain(
+      "published_workload_hours"
     );
   });
 

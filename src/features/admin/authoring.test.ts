@@ -742,6 +742,10 @@ describe("admin authoring", () => {
       "course-1",
     ]);
     expect(ensureJmvstreamCourseFolder).toHaveBeenCalledWith("course-1");
+    expect(recalculateCourseWorkloadHoursWithClient).toHaveBeenCalledWith(
+      expect.anything(),
+      "course-1"
+    );
   });
 
   it("rechecks a duration reduction after R2 and cleans a rejected upload outside database transactions", async () => {

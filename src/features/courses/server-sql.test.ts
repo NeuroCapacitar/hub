@@ -392,6 +392,20 @@ describe("student experience reads", () => {
     });
   });
 
+  it("uses the published workload snapshot as the catalog fallback", async () => {
+    query.mockResolvedValue({
+      rows: [createCatalogRow({ lessonId: "lesson-1", lessonSortOrder: 1 })],
+    });
+
+    await getStudentCourseCatalog("student-1");
+
+    const catalogSql = String(query.mock.calls[0]?.[0]);
+    expect(catalogSql).toContain("select id, workload_hours_snapshot");
+    expect(catalogSql).toContain("c.workload_hours_override");
+    expect(catalogSql).toContain("cv.workload_hours_snapshot");
+    expect(catalogSql).toContain("c.workload_hours");
+  });
+
   it("assembles an enrolled Course overview with progress and sequence", async () => {
     query.mockResolvedValue({
       rows: [
@@ -1097,7 +1111,7 @@ describe("course completion writes", () => {
     ).resolves.toMatchObject({
       completed: false,
       courseId: "course-1",
-      watchedPercent: 42,
+      watchedPercent: 41,
     });
     expect(clientQuery).not.toHaveBeenCalledWith(
       expect.stringContaining("insert into lesson_watch_progress"),

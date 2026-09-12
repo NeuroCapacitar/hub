@@ -47,11 +47,17 @@ import { CoursePurchaseLink } from "./course-purchase-link";
 
 export const dynamic = "force-dynamic";
 
-const SECONDS_PER_HOUR = 3600;
-
 const firstSearchParam = (
   value: string | string[] | undefined
 ): string | undefined => (Array.isArray(value) ? value[0] : value);
+
+const getEffectiveCourseWorkloadHours = ({
+  workloadHours,
+  workloadHoursOverride,
+}: Pick<
+  AdminCourseTabData["course"],
+  "workloadHours" | "workloadHoursOverride"
+>): number => workloadHoursOverride ?? workloadHours;
 
 const COURSE_MANAGEMENT_TAB_VALUES: AdminCourseManagementTab[] = [
   "overview",
@@ -240,7 +246,7 @@ export default async function AdminCourseDetailPage({
               <CertificateTemplateEditor
                 certificateEnabled={course.certificateEnabled}
                 courseId={course.id}
-                courseWorkloadHours={course.workloadHours}
+                courseWorkloadHours={getEffectiveCourseWorkloadHours(course)}
                 issuerConfigured={certificateData[1]}
                 pendingCertificateReconciliationCount={
                   course.pendingCertificateReconciliationCount
@@ -266,7 +272,7 @@ export default async function AdminCourseDetailPage({
               <CourseOverview
                 contentSummary={contentSummary}
                 courseId={course.id}
-                durationSeconds={course.workloadHours * SECONDS_PER_HOUR}
+                durationSeconds={contentSummary.totalDurationSeconds}
                 moduleCount={data.modules.length}
                 operationalState={operationalState}
                 overviewSummary={data.overviewSummary}

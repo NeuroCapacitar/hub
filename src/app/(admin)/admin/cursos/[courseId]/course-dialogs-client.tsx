@@ -49,6 +49,7 @@ import { CourseWorkloadDialog } from "./course-workload-dialog";
 
 export interface CourseData {
   accessDurationMonths: number;
+  calculatedWorkloadHours?: number;
   coverImage?: unknown;
   description: string | null;
   id: string;
@@ -242,7 +243,9 @@ export function CourseSettingsForm({
                     Carga horária
                   </FieldLabel>
                   <CourseWorkloadDialog
-                    calculatedHours={course.workloadHours}
+                    calculatedHours={
+                      course.calculatedWorkloadHours ?? course.workloadHours
+                    }
                     compact
                     onValueChange={(value) => {
                       setWorkloadHoursOverride(value?.toString() ?? "");
