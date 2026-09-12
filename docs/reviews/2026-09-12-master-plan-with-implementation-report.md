@@ -2486,7 +2486,7 @@ Isso pode esconder conflitos de outras constraints.
 
 ---
 
-> **Relatório de implementação — status: implementado conforme estratégia escolhida.**
+> **Relatório de implementação — status: COMPLETO — APROVADO; teste concorrente real pendente.**
 >
 > **Feito:** A alocação usa advisory lock global durante a transação e consulta/inserção no mesmo client.
 >
@@ -2494,7 +2494,7 @@ Isso pode esconder conflitos de outras constraints.
 >
 > **Diferença/motivo:** Retry amplo poderia mascarar conflito de outra constraint; o lock resolve a corrida de slug da aplicação.
 >
-> **Verificação:** Testes de slug e CodeRabbit não apontaram falha remanescente.
+> **Verificação:** Teste de slug confirma a ordem transacional e a seleção de sufixos; a concorrência com dois clientes PostgreSQL reais permanece como validação operacional pendente.
 
 # 11.2 Estratégia recomendada para este projeto
 
@@ -2577,13 +2577,13 @@ Nenhuma requisição deve falhar.
 
 ---
 
-> **Relatório de implementação — status: parcial.**
+> **Relatório de implementação — status: completo no código; teste concorrente real pendente.**
 >
-> **Feito:** Há teste de contrato do lock e seleção dentro da transação.
+> **Feito:** Há teste de contrato do lock e seleção dentro da transação, e a criação real usa o mesmo client desde `BEGIN` até `COMMIT`.
 >
 > **Não feito:** Não foi executado teste concorrente com dois clientes PostgreSQL reais.
 >
-> **Diferença/motivo:** O ambiente não oferecia banco seguro; isso fica para validação de integração.
+> **Diferença/motivo:** O ambiente disponível permite validar o caminho transacional, mas o teste com dois clientes simultâneos deve rodar no PostgreSQL efêmero da CI para não inserir dados de teste no Development.
 >
 > **Verificação:** Migrations, typecheck, lint e suíte unitária passaram.
 
@@ -2595,15 +2595,15 @@ Admin pode visualizar a aula como aluno, mas download/preview R2 exige matrícul
 
 ---
 
-> **Relatório de implementação — status: confirmado e corrigido.**
+> **Relatório de implementação — status: COMPLETO — APROVADO; E2E de navegador pendente.**
 >
-> **Feito:** O preview administrativo gerava links sem o parâmetro necessário; os Route Handlers depois aplicavam somente a checagem de aluno matriculado.
+> **Feito:** O preview administrativo agora preserva `preview=student` nos links da Aula, materiais, thumbnails e navegação. Os Route Handlers distinguem o contexto Admin do contexto de Aluno e usam autorização própria.
 >
-> **Não feito:** Não foi ampliado o acesso público nem removida a proteção de matrícula.
+> **Não feito:** Não foi ampliado o acesso público, não foi removida a proteção de matrícula e não foi executada a jornada E2E em navegador real.
 >
-> **Diferença/motivo:** Foi criada autorização explícita para admin em preview, separada do caminho de aluno.
+> **Diferença/motivo:** Foi criada autorização explícita para Admin em preview, separada do caminho de Aluno; `support` continua sem esse acesso.
 >
-> **Verificação:** Testes de download, preview e acesso protegido passaram.
+> **Verificação:** 55 testes de preview, download, autorização, navegação e página administrativa passaram; a ausência do E2E ficou registrada como lacuna de assurance.
 
 # 12.1 Não remover a segunda checagem
 

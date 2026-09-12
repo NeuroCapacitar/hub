@@ -77,9 +77,12 @@ Implementado no working tree:
   booleanos e campos de authoring foram extraídos e cobertos por testes; IDs
   são validados antes do banco e de efeitos externos, enquanto o banco continua
   sendo a autoridade final para existência e invariantes de dados.
-- A11/PR 08, A12/PR 07 e A13/A14/PR 09: preview Admin propaga o contexto até
-  materiais privados e mantém 404 para contextos indevidos; slug é alocado sob
-  lock transacional; CTA e fallback de certificado foram alinhados.
+- A11/PR 08: preview Admin propaga o contexto até materiais privados e mantém
+  404 para contextos indevidos; A11 está completo no código e aprovado, com
+  E2E de navegador ainda pendente como assurance.
+- A12/PR 07: slug é alocado sob lock transacional e A12 está completo no
+  código e aprovado; teste concorrente real permanece como assurance pendente.
+- A13/A14/PR 09: CTA e fallback de certificado foram alinhados.
 - A16/A17/A18/A19/PR 11-12: checkpoints e runbooks ficaram temporais e
   staging-first, o checker cobre o índice canônico e releases exigem CI do SHA
   exato, sem fallback para SHA de PR.
@@ -116,8 +119,8 @@ Verificação da implementação no working tree:
 | A08 | Módulo pode divergir entre Curso e Publicação | COMPLETO NO DEVELOPMENT — APROVADO, P1 | `saveModule` confere ownership persistido; preflight encontrou 0 divergências em 53 Módulos; migration 0078 adiciona FK composta | Proteção server-side e relacional aplicadas no Development; promover após preflight dos ambientes persistentes |
 | A09 | Aula pode ser movida implicitamente entre Cursos | COMPLETO NO DEVELOPMENT — APROVADO, P1 | `saveLesson` compara ownership no servidor; preflight encontrou 0 divergências em 82 Aulas; migration 0079 adiciona FK composta | Proteção server-side e relacional aplicadas no Development; promover após preflight dos ambientes persistentes |
 | A10 | Authoring depende de validação do browser | COMPLETO NO ESCOPO DE AUTHORING — APROVADO, P2 | `authoring-input.ts` valida textos, inteiros, UUIDs, status e booleanos; actions validam IDs antes do authoring, banco ou providers | PR 06 aplicado com parsers dedicados; ações fora de Course/Módulo/Aula permanecem fora do escopo |
-| A11 | Preview Admin não abre materiais privados | CONFIRMADO, P2 | links não carregam `preview`; Route Handlers chamam `assertProtectedLessonAccess` depois do preview | PR 08 aprovado, com autorização explícita e URLs privadas |
-| A12 | Alocação de slug tem corrida | CONFIRMADO, P3 | `resolveUniqueCourseSlug` consulta pelo pool antes do `BEGIN`/`INSERT` em `authoring.ts` | PR 07 aprovado com lock/retry que cubra colisão de constraint |
+| A11 | Preview Admin não abre materiais privados | COMPLETO — APROVADO, P2 | `getPreviewAwareHref`, Route Handlers e `assertAdminPreviewLessonAccess` preservam e autorizam o preview privado; 55 testes passaram | PR 08 aplicado; E2E de navegador real permanece como lacuna de assurance, sem ampliar para `support` |
+| A12 | Alocação de slug tem corrida | COMPLETO — APROVADO, P3 | `resolveUniqueCourseSlug(client, title)` adquire lock transacional antes de consultar candidatos; teste de authoring confirma a ordem | PR 07 aplicado com lock transacional; teste com dois clientes PostgreSQL reais permanece como assurance pendente |
 | A13 | CTA “Rever trilha” leva à próxima aula | CONFIRMADO, P3 | página do Curso usa somente `progressPercent`, embora o link seja `nextLessonId` | PR 09 aprovado |
 | A14 | Fallback promete certificado desligado | CONFIRMADO, P3 | fallback de descrição em `src/app/(student)/app/cursos/[courseId]/page.tsx`; painel só existe com `certificateEnabled` | PR 09 aprovado |
 | A15 | Axe não prova jornadas completas por teclado | LACUNA CONFIRMADA; BUG NÃO PROVADO, P2/P3 | `tests/e2e/accessibility.spec.ts` faz scans axe; jornadas keyboard-only completas não existem | PR 10 aprovado como assurance gap; não declarar conformidade WCAG |
