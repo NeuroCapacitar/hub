@@ -64,7 +64,7 @@ por Webhook.
 **Tema:** conclusão de Aula e Curso.
 **Estado:** aprovado e implementado.
 
-Toda Aula obrigatória pode ser concluída manualmente sem mínimo de visualização. Evento JMVStream válido em 98% ou mais também conclui automaticamente. Curso conclui quando todas as Aulas obrigatórias da publicação vigente estão concluídas; opcionais não entram no denominador. Certificado prova conclusão histórica, não domínio de conteúdo nem currículo vivo atual.
+Toda Aula obrigatória pode ser concluída manualmente sem mínimo de visualização. Evento JMVStream válido com fronteira linear em 100% também conclui automaticamente. Curso conclui quando todas as Aulas obrigatórias da publicação vigente estão concluídas; opcionais não entram no denominador. Certificado prova conclusão histórica, não domínio de conteúdo nem currículo vivo atual.
 
 ## DEC-DISC-005
 

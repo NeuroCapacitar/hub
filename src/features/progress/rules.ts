@@ -283,7 +283,7 @@ export const calculateValidatedVideoPercent = ({
 
   return Math.min(
     100,
-    Math.round((safeValidatedPositionSeconds / safeDurationSeconds) * 100)
+    Math.floor((safeValidatedPositionSeconds / safeDurationSeconds) * 100)
   );
 };
 

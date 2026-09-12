@@ -45,10 +45,10 @@ codificam justamente o comportamento divergente.
 ## Estado da implementação desta revisão
 
 As correções autorizadas foram implementadas na branch
-`codex/audit-remediation`, ainda sem commit ou push, sobre o baseline local
-`e0a55d0`. O campo `last_verified_commit` acima continua identificando o
-snapshot auditado; a implementação abaixo está no working tree e não deve ser
-tratada como estado já publicado.
+`codex/audit-remediation`, no commit `321d192`, ainda sem push, sobre o baseline
+local `e0a55d0`. O campo `last_verified_commit` acima continua identificando o
+snapshot auditado; o ajuste adicional do limiar para 100% está no working tree
+e não deve ser tratado como estado já publicado.
 
 Implementado no working tree:
 
@@ -64,7 +64,7 @@ Implementado no working tree:
 - A03/A04/A05/A21/PR 03: `skip` não avança a fronteira linear validada;
   retomada, posição máxima e tempo de reprodução são separados; reprodução
   posterior ao salto entra em analytics; conclusão automática exige a fronteira
-  linear em 98%; a origem manual/vídeo é registrada. Não foram criados ranges e
+  linear em 100%; a origem manual/vídeo é registrada. Não foram criados ranges e
   o histórico antigo não foi tratado como validado.
 - A06/A07/A22/PR 04: draft e published são lidos separadamente sob lock e
   transação; authoring e recálculo compartilham o mesmo client antes do commit;
@@ -113,7 +113,7 @@ Verificação da implementação no working tree:
 | A01 | Dashboard, overview e módulo calculam progresso com denominadores diferentes | CONFIRMADO, IMPLEMENTADO E APROVADO, P1 | `getStudentCourseCatalog`, `getEnrolledCourseOverview` e `CourseOverviewClient` em `src/features/courses/server.ts` e `src/app/(student)/app/cursos/[courseId]/course-overview-client.tsx` | PR 01 aprovado com contagem visual separada do denominador obrigatório |
 | A02 | Aula opcional bloqueia a próxima aula pela sequência | COMPLETO — APROVADO, P1 | `isLessonAvailable` em `src/features/progress/rules.ts` agora exige somente Aulas obrigatórias anteriores; workspace, overview, catálogo e conclusão recalculam a próxima Aula pendente disponível | PR 02 aplicado; regra registrada no ADR-0011; Cursos sem obrigatórias permanecem sem fluxo de Certificado e sem bloqueio de authoring |
 | A03 | `watchedPercent` era posição máxima, não cobertura assistida | COMPLETO NO ESCOPO APROVADO, IMPLEMENTADO NO WORKING TREE | `advanceVideoPlaybackProgress` e `calculateValidatedVideoPercent` em `src/features/progress/rules.ts`, `lesson_watch_progress` e `recordLessonWatchProgress` | PR 03 aplicado sem ranges; fronteira linear validada, retomada separada, tempo reproduzido nos analytics e origem manual/automática; provider real ainda não verificado |
-| A04 | Runtime usa 95% e contrato canônico registra 98% | CONFIRMADO, P2 | `JMVSTREAM_VIDEO_COMPLETE_PERCENT` e testes em `src/features/videos/jmvstream.ts`/`.test.ts`, contra `REG-LEA-003` | Corrigir limiar e evento em etapa independente |
+| A04 | Runtime usava 95% e o contrato canônico usava 98% | CORRIGIDO NO WORKING TREE, AGUARDANDO APROVAÇÃO, P2 | `JMVSTREAM_VIDEO_COMPLETE_PERCENT` e testes em `src/features/videos/jmvstream.ts`/`.test.ts`, contra `REG-LEA-003` | Limiar atual 100%; 99,9% não é uma fronteira distinta no contrato de percentuais inteiros |
 | A05 | Evento `end` ignora o limiar | CONFIRMADO, P1/P2 | `shouldCompleteLessonFromJmvstreamEvent` aceita `jmvplayerout-end` sem considerar o percentual | Remover a exceção, mantendo conclusão manual |
 | A06 | Draft pode vazar workload para `courses.workload_hours` | CONFIRMADO, P1 | `recalculateCourseWorkloadHours` em `src/features/courses/server.ts` busca draft/publicado com `limit 1` e depois tenta achar ambos | PR 04 aprovado; recálculo deve ser serializado |
 | A07 | UI do Aluno ignora override de workload | CONFIRMADO, P2 | dashboard e overview formatam `totalDurationSeconds`, embora o backend entregue `workloadHours` | PR 04 aprovado; `formatCourseWorkload` fica para duração calculada |
@@ -175,10 +175,10 @@ O histórico antigo começa sem fronteira validada. Isso melhora a interpretaç�
 do progresso, mas continua sendo evidência técnica do player, não prova de
 atenção humana.
 
-O limiar de 98% é diferente: ele já está ratificado em `DEC-DISC-004` e
-`REG-LEA-003`. A conclusão automática agora exige a fronteira linear validada;
-`end` e posição máxima isolados não bastam. A decisão foi registrada no
-ADR-0012.
+O limiar atual de 100% substitui os 98% do plano original. A conclusão
+automática exige a fronteira linear validada; `end` e posição máxima isolados
+não bastam. A decisão foi registrada no ADR-0012 e atualizada após a revisão do
+Produto.
 
 ### Payload de vídeo e compatibilidade de release
 
@@ -215,7 +215,7 @@ expand/contract, sem reinterpretar o histórico.
 
 ### Sprint 2 — contrato seguro de vídeo
 
-- Aplicar a fronteira linear validada ao limiar canônico de 98% e manter o
+- Aplicar a fronteira linear validada ao limiar canônico de 100% e manter o
   `end` apenas como gatilho de sincronização.
 - Validar allowlist de eventos, duração autoritativa, sessão e sequência no
   servidor; o cliente não escolhe o percentual ou o tempo.
@@ -279,7 +279,7 @@ expand/contract, sem reinterpretar o histórico.
 1. A projeção de aprendizagem antecedeu a mudança de sequência e qualquer
    alteração de UI que use `nextLessonId`; o encaminhamento automático mantém a
    distinção entre próxima Aula visual e próxima recomendação.
-2. O PR de vídeo deve ser dividido entre correção do contrato de 98% e uma
+2. O PR de vídeo deve ser dividido entre correção do contrato de 100% e uma
    futura decisão de cobertura.
 3. O recálculo de workload deve permanecer dentro do mesmo client, lock e
    commit das mutações de authoring; chamadas isoladas devem usar o wrapper

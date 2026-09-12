@@ -117,7 +117,7 @@ describe("JMVStream video embeds", () => {
       durationSeconds: 120,
       eventName: "jmvplayerout-status",
       isPaused: false,
-      positionPercent: 48,
+      positionPercent: 47,
     });
   });
 
@@ -167,19 +167,19 @@ describe("JMVStream video embeds", () => {
     expect(
       shouldCompleteLessonFromJmvstreamEvent({
         eventName: "jmvplayerout-status",
-        validatedPercent: 98,
+        validatedPercent: 100,
       })
     ).toBe(true);
     expect(
       shouldCompleteLessonFromJmvstreamEvent({
         eventName: "jmvplayerout-status",
-        validatedPercent: 80,
+        validatedPercent: 99,
       })
     ).toBe(false);
     expect(
       shouldCompleteLessonFromJmvstreamEvent({
         eventName: "jmvplayerout-skip",
-        validatedPercent: 98,
+        validatedPercent: 100,
       })
     ).toBe(false);
     expect(

@@ -3,7 +3,7 @@ const JMVSTREAM_PLAYER_ORIGIN = "https://player.jmvstream.com";
 const IFRAME_SRC_PATTERN = /\bsrc=(["'])(.*?)\1/i;
 const VIDEO_PROVIDERS = new Set(["external", "jmvstream", "panda"]);
 const JMVSTREAM_OUT_EVENT_PATTERN = /^jmvplayerout-/;
-export const JMVSTREAM_VIDEO_COMPLETE_PERCENT = 98;
+export const JMVSTREAM_VIDEO_COMPLETE_PERCENT = 100;
 
 export type VideoProvider = "external" | "jmvstream" | "panda" | null;
 export type JmvstreamPlayerEventName =
@@ -132,7 +132,7 @@ export const getJmvstreamPlayerEventFromMessage = (
   const durationSeconds = Math.max(1, Math.round(payload.duration));
   const positionPercent = Math.min(
     100,
-    Math.round((currentSeconds / durationSeconds) * 100)
+    Math.floor((currentSeconds / durationSeconds) * 100)
   );
 
   return {

@@ -115,16 +115,16 @@ Conclusão manual continua permitida.
 A conclusão automática por vídeo deve usar:
 
 ```text
-fronteira linear validada >= 98%
+fronteira linear validada = 100%
 ```
 
 e não:
 
 ```text
-maior posição alcançada >= 98%
+maior posição alcançada = 100%
 ```
 
-O valor de 98% é adotado porque essa já é a regra registrada na documentação canônica `REG-LEA-003`.
+O plano original usava 98%. Após a revisão do Produto, o valor atual é 100%: o contrato de percentuais inteiros não dá a 99,9% um comportamento distinto e previsível.
 
 Se futuramente produto decidir 95%, deve mudar **código + testes + documentação na mesma alteração**.
 
@@ -132,13 +132,13 @@ Se futuramente produto decidir 95%, deve mudar **código + testes + documentaç�
 
 > **Relatório de implementação — status: COMPLETO no escopo aprovado; implementado no working tree.**
 >
-> **Feito:** O limiar é 98%, eventos desconhecidos são rejeitados, `end` não ignora o limiar e a conclusão usa a fronteira linear validada.
+> **Feito:** O limiar atual é 100%, eventos desconhecidos são rejeitados, `end` não ignora o limiar e a conclusão usa a fronteira linear validada.
 >
 > **Não feito:** Não foi criada cobertura por intervalos, conforme decisão do Produto; a migração não transforma o histórico antigo em progresso validado.
 >
 > **Diferença/motivo:** O Produto aprovou fronteira linear para manter o Hub simples; a posição máxima continua disponível para diagnóstico, mas não é usada para conclusão automática.
 >
-> **Verificação:** Testes unitários, SQL e suíte completa cobrem 98%, 97%, `end`, `skip`, evento inválido e a fronteira linear.
+> **Verificação:** Testes unitários, SQL e suíte completa cobrem 100%, 99%, `end`, `skip`, evento inválido e a fronteira linear.
 
 ## D3. Carga horária
 
@@ -1040,7 +1040,7 @@ revocation
 >
 > **Verificação:** `bun run verify:quick` passou com 415 arquivos e 2.829 testes; a implementação de A02 foi revisada e aprovada. Permanecem apenas os cenários E2E e de ambiente real descritos acima.
 
-# 7. PR 03 — Corrigir tracking de vídeo e regra 98%
+# 7. PR 03 — Corrigir tracking de vídeo e regra 100%
 
 Este é um trabalho maior e deve ser dividido internamente em duas etapas.
 
@@ -1066,7 +1066,7 @@ Além disso:
 
 ```text
 runtime = 95%
-documentação = 98%
+documentação no baseline = 98%; decisão atual = 100%
 ```
 
 e o evento `end` atualmente pode concluir mesmo com percentual muito baixo.
@@ -1110,9 +1110,9 @@ conclusão automática = false
 
 ```text
 Aluno retorna ao ponto 30
-Aluno reproduz linearmente até 98%
+Aluno reproduz linearmente até 100%
 
-fronteira validada >= 98%
+fronteira validada = 100%
 conclusão automática = true
 ```
 
@@ -1411,7 +1411,7 @@ Nova regra:
 ```text
 recognized event
 AND
-validatedPositionSeconds / authoritativeDurationSeconds >= 98%
+validatedPositionSeconds / authoritativeDurationSeconds = 100%
 ```
 
 Evento `end` pode provocar sync imediato, mas não ignora o limiar nem
@@ -1422,25 +1422,25 @@ validada não conclui. O botão manual continua independente.
 
 > **Relatório de implementação — status: implementado.**
 >
-> **Feito:** Conclusão automática exige evento JMV reconhecido e fronteira linear validada em 98%; `skip`, posição máxima e `end` isolado não concluem.
+> **Feito:** Conclusão automática exige evento JMV reconhecido e fronteira linear validada em 100%; `skip`, posição máxima e `end` isolado não concluem.
 >
 > **Não feito:** Nenhuma cobertura por ranges foi criada, conforme decisão aprovada.
 >
 > **Diferença/motivo:** A regra foi ligada à fronteira linear aprovada, sem exigir ranges nem reinterpretar histórico.
 >
-> **Verificação:** Testes unitários e SQL confirmam `end` baixo, skip, fronteira bloqueada e evento reconhecido após 98% linear.
+> **Verificação:** Testes unitários e SQL confirmam `end` abaixo de 100%, skip, fronteira bloqueada e evento reconhecido somente após 100% linear.
 
 # 7.12 Manual continua funcionando
 
 `completeLessonAction()` deve continuar permitindo conclusão manual exatamente como hoje.
 
-Não condicionar o botão manual a 98%.
+Não condicionar o botão manual a 100%.
 
 ---
 
 > **Relatório de implementação — status: preservado.**
 >
-> **Feito:** Conclusão manual continua sem depender de 98% de vídeo.
+> **Feito:** Conclusão manual continua sem depender de 100% de vídeo.
 >
 > **Não feito:** Nenhuma barreira antifraude foi adicionada.
 >
@@ -1529,10 +1529,10 @@ skip pequeno sem avançar indevidamente
 rewind dentro de trecho validado
 assistir trecho duas vezes aumenta tempo, não fronteira indevidamente
 restore inicial
-vídeo 98%
-vídeo 97%
+vídeo 100%
+vídeo 99%
 end com 20%
-end com 98%
+end com 99%
 pausa salva posição válida
 visibilidade salva posição válida
 duas abas e eventos fora de ordem
@@ -4133,7 +4133,7 @@ Este plano só deve ser considerado encerrado quando todos os itens abaixo forem
 [ ] seek não vira progresso linear
 [ ] skip não altera a retomada sem reprodução posterior
 [ ] tempo após skip entra nos analytics
-[ ] threshold é 98% em código/teste/docs
+[ ] threshold é 100% em código/teste/docs
 [ ] end não ignora threshold
 [ ] manual completion continua disponível
 [ ] origem manual/automática é identificável
@@ -4269,7 +4269,7 @@ player event
        validated progress
              │
              ├── analytics
-             └── auto completion >= 98%
+             └── auto completion = 100%
 
 manual completion
              │

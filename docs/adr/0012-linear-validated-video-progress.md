@@ -10,7 +10,9 @@ O Hub deve impedir que um salto para frente seja interpretado como vídeo assist
 
 ## Decisão
 
-Um evento de `skip` para frente não avança a fronteira linear validada nem libera conclusão automática. Reprodução normal pode avançar essa fronteira somente a partir do ponto validado, com a tolerância técnica aprovada para eventos amostrados. O tempo realmente reproduzido depois de um `skip` entra nos analytics, mas não libera conclusão até que o trecho anterior seja percorrido linearmente. A conclusão automática exige a fronteira validada em pelo menos 98%; o evento `end` apenas dispara a sincronização e não substitui o limiar. A ação manual continua disponível sem requisito de vídeo.
+Um evento de `skip` para frente não avança a fronteira linear validada nem libera conclusão automática. Reprodução normal pode avançar essa fronteira somente a partir do ponto validado, com a tolerância técnica aprovada para eventos amostrados. O tempo realmente reproduzido depois de um `skip` entra nos analytics, mas não libera conclusão até que o trecho anterior seja percorrido linearmente. A conclusão automática exige a fronteira validada em 100%; o evento `end` apenas dispara a sincronização e não substitui o limiar. A ação manual continua disponível sem requisito de vídeo.
+
+O limiar de 100% mantém uma regra inequívoca no contrato atual, que trabalha com percentuais inteiros; 99,9% não pode ser representado como valor persistido sem alterar esse contrato e não criaria um comportamento intermediário confiável nesta etapa.
 
 A retomada usa o último ponto válido reproduzido. Um `skip` para frente não substitui essa posição até que exista reprodução real depois do salto. `max_position_seconds` é preservado como posição máxima observada e compatibilidade histórica, mas não é usado para retomada, progresso validado ou conclusão automática. Conclusões manuais e automáticas devem ser identificáveis nos analytics. Registros históricos de posição não são tratados como progresso validado.
 
@@ -26,4 +28,4 @@ Dados antigos podem continuar sendo usados como retomada de compatibilidade, mas
 
 - Ranges persistidos: adiados por complexidade, dependência do contrato do JMVStream e ausência de necessidade para a regra linear.
 - Conclusão somente pelo botão: mais simples e mais rígida, mas elimina a conveniência da conclusão automática após reprodução normal.
-- Maior posição como progresso: rejeitada para conclusão automática porque um `skip` pode alcançar 98% sem percorrer o conteúdo.
+- Maior posição como progresso: rejeitada para conclusão automática porque um `skip` pode alcançar 100% sem percorrer o conteúdo.

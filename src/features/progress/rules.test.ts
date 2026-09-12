@@ -333,4 +333,19 @@ describe("course progress rules", () => {
       })
     ).toBe(30);
   });
+
+  it("does not round video progress up to 100 before the frontier reaches the end", () => {
+    expect(
+      calculateValidatedVideoPercent({
+        durationSeconds: 100,
+        validatedPositionSeconds: 99,
+      })
+    ).toBe(99);
+    expect(
+      calculateValidatedVideoPercent({
+        durationSeconds: 100,
+        validatedPositionSeconds: 100,
+      })
+    ).toBe(100);
+  });
 });
