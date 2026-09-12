@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
-  formatCourseWorkload,
+  formatCourseWorkloadHours,
+  getStudentCourseActionLabel,
   getStudentCoursePrimaryHref,
 } from "@/features/courses/presentation";
 import {
@@ -31,13 +32,6 @@ import { PendingCertificateRefresh } from "../../certificados/pending-certificat
 import { CourseOverviewClient } from "./course-overview-client";
 
 export const dynamic = "force-dynamic";
-
-function getCourseButtonLabel(progressPercent: number): string {
-  if (progressPercent === 0) {
-    return "Iniciar curso";
-  }
-  return "Rever trilha";
-}
 
 function getIncompleteCertificateDescription({
   completedCount,
@@ -99,10 +93,6 @@ export default async function StudentCourseOverviewPage({
     notFound();
   }
 
-  const totalDurationSeconds = data.modules.reduce(
-    (acc, moduleData) => acc + moduleData.totalDurationSeconds,
-    0
-  );
   let primaryAction: React.JSX.Element | null = null;
   if (data.certificateCode) {
     primaryAction = (
@@ -126,7 +116,10 @@ export default async function StudentCourseOverviewPage({
             )
           )}
         >
-          {getCourseButtonLabel(data.progressPercent)}
+          {getStudentCourseActionLabel({
+            hasNextLesson: Boolean(data.nextLessonId),
+            progressPercent: data.progressPercent,
+          })}
         </Link>
       </Button>
     );
@@ -157,7 +150,9 @@ export default async function StudentCourseOverviewPage({
                 <p className="max-w-2xl text-pretty text-muted-foreground text-sm">
                   {data.course.subtitle ??
                     data.course.description ??
-                    "Avance pelas aulas na ordem da trilha, acompanhe seu progresso e conclua o curso para liberar o certificado."}
+                    (data.certificateEnabled
+                      ? "Avance pelas aulas na ordem da trilha, acompanhe seu progresso e conclua o curso para liberar o certificado."
+                      : "Avance pelas aulas na ordem da trilha, acompanhe seu progresso e conclua sua trilha.")}
                 </p>
               </div>
 
@@ -165,12 +160,12 @@ export default async function StudentCourseOverviewPage({
                 <CourseMetric
                   icon={BookOpen01Icon}
                   label="Aulas"
-                  value={data.totalCount.toString()}
+                  value={data.lessonCount.toString()}
                 />
                 <CourseMetric
                   icon={Clock01Icon}
                   label="Carga horária"
-                  value={formatCourseWorkload(totalDurationSeconds)}
+                  value={formatCourseWorkloadHours(data.course.workloadHours)}
                 />
 
                 <div className="flex min-w-[200px] flex-1 flex-col justify-center rounded-md border bg-card px-3 py-1 text-xs">

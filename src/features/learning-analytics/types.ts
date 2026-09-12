@@ -27,6 +27,7 @@ export interface LessonAnalyticsMetric {
   medianHoursToNextLesson: number | null;
   moduleSortOrder: number;
   moduleTitle: string;
+  playingSeconds: number;
   publicationNumber: number;
   publicationStatus: LessonAnalyticsPublicationStatus;
   started: number;
@@ -41,6 +42,7 @@ export interface LessonAnalyticsVersionMetric {
   medianHoursToComplete: number | null;
   medianHoursToNextLesson: number | null;
   moduleTitle: string;
+  playingSeconds: number;
   publicationNumber: number;
   publicationStatus: LessonAnalyticsPublicationStatus;
   started: number;
@@ -53,6 +55,7 @@ export interface LessonAnalyticsLessonSummary {
   medianCheckpointPercent: number | null;
   medianHoursToComplete: number | null;
   medianHoursToNextLesson: number | null;
+  playingSeconds: number;
   started: number;
 }
 

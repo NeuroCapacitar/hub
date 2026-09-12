@@ -53,8 +53,9 @@ classificada deve ser preservado até que seu destino seja decidido.
 
 Em 2026-07-27, a estação principal passou pelo preflight de Development com o
 compute Neon `ep-silent-leaf-aclmy5uk`, os dois buckets
-`hub-development-*`, o plano JMVStream compartilhado aprovado e o projeto
-Sentry Development. A configuração está liberada para desenvolvimento.
+`hub-development-*` e o plano JMVStream compartilhado aprovado. Sentry fica
+desativado deliberadamente em Development local; a configuração Sentry ocorre
+somente nos ambientes protegidos.
 
 Em uma estação nova, conclua todos os itens da seção
 [Preparação única](#preparação-única) antes de executar a aplicação.
@@ -70,7 +71,7 @@ Estado confirmado em 2026-07-27:
 - Resend Development reutiliza o domínio verificado
   `neurocapacitar.com.br`, protegido por allowlist de destinatários;
 - JMVStream reutiliza conscientemente o plano Production `OD-20912`;
-- Asaas usa Sandbox e Sentry usa projeto Development separado.
+- Asaas usa Sandbox e Sentry não é configurado em Development local.
 
 ## Topologia aprovada
 
@@ -104,7 +105,7 @@ Development deve permitir:
 - entrega real de e-mails pelo Resend;
 - checkout e webhook de teste do Asaas Sandbox;
 - upload e processamento real de vídeo na JMVStream;
-- captura de erros reais em um projeto Sentry de Development.
+- execução sem captura externa de erros pelo Sentry.
 
 “Real” significa executar a integração externa. JMVStream é a única exceção:
 reutiliza o plano Production por decisão explícita e exige cuidados adicionais
@@ -270,28 +271,17 @@ Regras obrigatórias:
 4. confira o hash e a Aula local antes de qualquer deleção;
 5. trate a credencial local como segredo Production.
 
-### 6. Criar o projeto Sentry Development
+### 6. Sentry não é configurado no Development local
 
-Use a mesma organização Sentry, mas um projeto diferente:
+Não crie nem configure um projeto Sentry para a estação local. Mantenha
+ausentes ou vazias as variáveis `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`,
+`DEVELOPMENT_SENTRY_PROJECT_ID` e `SENTRY_AUTH_TOKEN`. O launcher rejeita uma
+configuração Sentry local para evitar envio acidental de telemetria ou upload de
+source maps.
 
-1. Crie o projeto `hub-development`.
-2. Selecione Next.js.
-3. Copie o DSN do novo projeto.
-4. Configure alertas de Development sem acionar plantões Production.
-5. Não configure `SENTRY_AUTH_TOKEN` localmente; ele é necessário para upload
-   de source maps de build, não para capturar um erro em `next dev`.
-
-Valores:
-
-- `SENTRY_DSN`;
-- `NEXT_PUBLIC_SENTRY_DSN`, usando o DSN público do mesmo projeto.
-
-Gere uma exceção controlada e confirme:
-
-- projeto `hub-development`;
-- ambiente `development`;
-- ausência de e-mail, nome, senha, token, query string e payload;
-- `correlation_id` presente quando a falha passar pelo boundary do projeto.
+Sentry permanece uma capacidade dos ambientes protegidos que possuam DSN e
+`NODE_ENV=production`, especialmente Staging e Production. A prova de
+readiness continua restrita a esses ambientes.
 
 ### 7. Gerar segredos próprios
 
@@ -334,8 +324,9 @@ Não execute o seed E2E na branch compartilhada.
 ### 1. Preparar o repositório
 
 ```powershell
-git switch main
-git pull origin main
+git fetch origin staging
+git switch staging
+git pull --ff-only origin staging
 bun install
 ```
 
@@ -393,9 +384,7 @@ R2_SECRET_ACCESS_KEY=<development>
 R2_PUBLIC_BUCKET_NAME=hub-development-public
 R2_PUBLIC_BASE_URL=<public-development-url>
 
-SENTRY_DSN=<hub-development>
-NEXT_PUBLIC_SENTRY_DSN=<hub-development>
-DEVELOPMENT_SENTRY_PROJECT_ID=<id-numerico-hub-development>
+# Sentry não é configurado em Development local.
 
 CRON_SECRET=<development>
 SCHEDULED_JOBS_ENABLED=true
@@ -427,7 +416,8 @@ Antes de iniciar:
 3. confira `R2_PUBLIC_BUCKET_NAME=hub-development-public`;
 4. confira que o remetente contém `Dev`;
 5. confira que a base URL e a chave Asaas pertencem ao Sandbox;
-6. confira que o projeto Sentry é `hub-development`;
+6. confira que `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN` e
+   `DEVELOPMENT_SENTRY_PROJECT_ID` não estão configurados localmente;
 7. confira `DEVELOPMENT_JMVSTREAM_USES_PRODUCTION=true` e trate a credencial
    JMVStream como Production;
 8. confira `E2E_TEST_MODE=false`.
@@ -476,8 +466,9 @@ Nunca aponte webhook Production para um computador.
 ### 1. Atualizar e criar uma branch Git
 
 ```powershell
-git switch main
-git pull origin main
+git fetch origin staging
+git switch staging
+git pull --ff-only origin staging
 git switch -c feat/nome-curto-da-mudanca
 ```
 
@@ -487,7 +478,7 @@ Exemplos:
 - `fix/upload-certificado`;
 - `docs/guia-checkout`.
 
-Não programe diretamente na `main`.
+Não programe diretamente na `main` ou `staging`.
 
 ### 2. Desenvolver e testar
 
@@ -614,7 +605,7 @@ Pare sem tentar contornar quando:
 - JMVStream alterou ou removeu um ativo preexistente;
 - e-mail Development foi enviado a cliente;
 - R2 Development escreveu no bucket Production;
-- Sentry Development registrou PII ou segredo;
+- Sentry foi habilitado inesperadamente no Development local;
 - o deployment não passou na readiness.
 
 Informe:

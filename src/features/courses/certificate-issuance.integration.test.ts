@@ -578,7 +578,7 @@ describe("emissao concorrente de certificado", () => {
     await recordLessonWatchProgress({
       currentSeconds: 120,
       durationSeconds: 120,
-      eventName: "ended",
+      eventName: "jmvplayerout-end",
       lessonId: fixture.lessonId,
       userId: fixture.userId,
     });
@@ -589,7 +589,7 @@ describe("emissao concorrente de certificado", () => {
     await recordLessonWatchProgress({
       currentSeconds: 120,
       durationSeconds: 120,
-      eventName: "ended",
+      eventName: "jmvplayerout-end",
       lessonId: fixture.lessonId,
       userId: fixture.userId,
     });

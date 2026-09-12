@@ -116,7 +116,8 @@ describe("JMVStream video embeds", () => {
       currentSeconds: 57,
       durationSeconds: 120,
       eventName: "jmvplayerout-status",
-      watchedPercent: 48,
+      isPaused: false,
+      positionPercent: 48,
     });
   });
 
@@ -131,8 +132,20 @@ describe("JMVStream video embeds", () => {
       currentSeconds: 118,
       durationSeconds: 120,
       eventName: "jmvplayerout-end",
-      watchedPercent: 98,
+      isPaused: false,
+      positionPercent: 98,
     });
+  });
+
+  it("normalizes the documented paused flag", () => {
+    expect(
+      getJmvstreamPlayerEventFromMessage({
+        currentTime: 42,
+        duration: 120,
+        event: "jmvplayerout-status",
+        paused: 1,
+      })
+    ).toMatchObject({ isPaused: true });
   });
 
   it("ignores player messages without current time or duration", () => {
@@ -148,25 +161,31 @@ describe("JMVStream video embeds", () => {
     expect(
       shouldCompleteLessonFromJmvstreamEvent({
         eventName: "jmvplayerout-end",
-        watchedPercent: 20,
+        validatedPercent: 20,
+      })
+    ).toBe(false);
+    expect(
+      shouldCompleteLessonFromJmvstreamEvent({
+        eventName: "jmvplayerout-status",
+        validatedPercent: 98,
       })
     ).toBe(true);
     expect(
       shouldCompleteLessonFromJmvstreamEvent({
         eventName: "jmvplayerout-status",
-        watchedPercent: 95,
-      })
-    ).toBe(true);
-    expect(
-      shouldCompleteLessonFromJmvstreamEvent({
-        eventName: "jmvplayerout-status",
-        watchedPercent: 80,
+        validatedPercent: 80,
       })
     ).toBe(false);
     expect(
       shouldCompleteLessonFromJmvstreamEvent({
         eventName: "jmvplayerout-skip",
-        watchedPercent: 80,
+        validatedPercent: 98,
+      })
+    ).toBe(false);
+    expect(
+      shouldCompleteLessonFromJmvstreamEvent({
+        eventName: "untrusted-event",
+        validatedPercent: 100,
       })
     ).toBe(false);
   });

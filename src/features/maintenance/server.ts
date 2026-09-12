@@ -148,11 +148,12 @@ export const runMaintenance = async ({
   const analytics = await pool.query(`
     insert into learning_analytics_daily_metrics (
       metric_date, event_type, course_publication_id, lesson_id,
-      event_count, unique_enrollment_count
+      event_count, unique_enrollment_count, playing_seconds
     )
     select (occurred_at at time zone ${APP_TIME_ZONE_SQL})::date,
            event_type, course_publication_id, lesson_id,
-           count(*)::int, count(distinct enrollment_id)::int
+           count(*)::int, count(distinct enrollment_id)::int,
+           coalesce(sum(playing_seconds), 0)::int
     from learning_analytics_events
     where occurred_at < ${APP_CURRENT_DAY_START_SQL}
     group by (occurred_at at time zone ${APP_TIME_ZONE_SQL})::date,
@@ -160,6 +161,7 @@ export const runMaintenance = async ({
     on conflict (metric_date, event_type, course_publication_id, lesson_id)
     do update set event_count = excluded.event_count,
                   unique_enrollment_count = excluded.unique_enrollment_count,
+                  playing_seconds = excluded.playing_seconds,
                   updated_at = now()
   `);
   result.learningAnalyticsAggregated = analytics.rowCount ?? 0;

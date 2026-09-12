@@ -82,7 +82,10 @@ repete a CI.
 1. Homologue o deployment atual de Staging.
 2. Execute `Deploy Vercel production` com `mode=release-staging`.
 3. O workflow confirma que `main` é ancestral de `staging`.
-4. O workflow confirma que o SHA candidato possui um check `CI` verde.
+4. O workflow confirma que o SHA candidato possui um check `CI` verde associado
+   ao próprio SHA. Um check verde somente no head do PR não autoriza a promoção;
+   nesse caso, execute a CI manualmente para a referência candidata e repita a
+   release.
 5. `main` avança por fast-forward para o SHA homologado.
 6. O workflow aguarda a build Production automática sem domínio.
 7. Sem migration, não há branch Neon de release nem migration de banco.

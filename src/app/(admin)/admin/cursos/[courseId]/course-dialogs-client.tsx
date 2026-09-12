@@ -100,9 +100,8 @@ export function CourseSettingsForm({
   const [paymentMaxInstallmentCount, setPaymentMaxInstallmentCount] = useState(
     course.paymentMaxInstallmentCount.toString()
   );
-  const manualWorkloadHours = workloadHoursOverride
-    ? Number(workloadHoursOverride)
-    : null;
+  const manualWorkloadHours =
+    workloadHoursOverride.trim() === "" ? null : Number(workloadHoursOverride);
   const configuredInstallmentCount = Number(paymentMaxInstallmentCount);
   const validInstallmentCount = Number.isFinite(configuredInstallmentCount)
     ? configuredInstallmentCount

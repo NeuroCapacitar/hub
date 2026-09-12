@@ -26,6 +26,7 @@ export interface LessonCardProps {
   durationText: string;
   fallbackImageUrl?: string | null;
   hasVideo?: boolean;
+  isRequired?: boolean;
   lockReason?: LessonLockReason;
   status: LessonStatus;
   thumbnailUnoptimized?: boolean;
@@ -40,6 +41,7 @@ export function LessonCard({
   fallbackImageUrl,
   status,
   hasVideo = true,
+  isRequired = true,
   lockReason,
   thumbnailUrl,
   thumbnailUnoptimized = false,
@@ -66,6 +68,7 @@ export function LessonCard({
     !isLocked && hasVideo ? "translate-x-[2px]" : undefined;
 
   const statusBadge = getStatusBadge({ lockReason, status });
+  const requirementLabel = isRequired ? "Obrigatória" : "Opcional";
 
   return (
     <div
@@ -152,7 +155,13 @@ export function LessonCard({
         >
           {title}
         </h4>
-        <p className="text-muted-foreground text-xs">{durationText}</p>
+        <p className="flex items-center gap-1.5 text-muted-foreground text-xs">
+          <span>{durationText}</span>
+          <span aria-hidden="true" className="text-muted-foreground/60">
+            ·
+          </span>
+          <span className="text-muted-foreground/80">{requirementLabel}</span>
+        </p>
       </div>
     </div>
   );

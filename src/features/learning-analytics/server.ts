@@ -107,38 +107,44 @@ export const getLearningAnalyticsPreference = async ({
  */
 export const recordLearningAnalyticsEvent = async ({
   checkpointPercent,
+  completionSource,
   errorCode,
   eventType,
   idempotencyKey,
   lessonId,
+  playingSeconds,
   userId,
 }: {
   checkpointPercent?: number;
+  completionSource?: "manual" | "video";
   errorCode?: string;
   eventType: LearningAnalyticsEventType;
   idempotencyKey: string;
   lessonId: string;
+  playingSeconds?: number;
   userId: string;
 }): Promise<void> => {
   const normalizedCheckpoint =
     checkpointPercent === undefined
       ? null
       : Math.max(0, Math.min(100, Math.round(checkpointPercent)));
+  const normalizedPlayingSeconds =
+    playingSeconds === undefined ? 0 : Math.max(0, Math.round(playingSeconds));
 
   await getPool().query(
     `
       insert into learning_analytics_events (
         event_type, idempotency_key, user_id, enrollment_id, course_publication_id,
-        lesson_id, checkpoint_percent, error_code
+        lesson_id, checkpoint_percent, playing_seconds, completion_source, error_code
       )
-      select $1, $2, e.user_id, e.id, l.course_publication_id, l.id, $3, $4
+      select $1, $2, e.user_id, e.id, l.course_publication_id, l.id, $3, $4, $5, $6
       from enrollments e
       left join learning_analytics_preferences preference on preference.user_id = e.user_id
-      join lessons l on l.id = $5
+      join lessons l on l.id = $7
       join courses c on c.id = e.course_id and c.status = 'active'
       join course_publications cp on cp.id = l.course_publication_id
         and cp.course_id = e.course_id and cp.status = 'published'
-      where e.user_id = $6
+      where e.user_id = $8
         and e.status = 'active'
         and e.starts_at <= now()
         and e.expires_at >= now()
@@ -149,6 +155,8 @@ export const recordLearningAnalyticsEvent = async ({
       eventType,
       idempotencyKey,
       normalizedCheckpoint,
+      normalizedPlayingSeconds,
+      completionSource ?? null,
       validErrorCode(errorCode),
       lessonId,
       userId,
@@ -191,20 +199,22 @@ const getLessonAnalyticsMetricsQuery = (
     with analytics_events as (
       select course_publication_id, lesson_id, event_type,
              count(*)::int as event_count,
-             count(distinct enrollment_id)::int as unique_enrollment_count
+             count(distinct enrollment_id)::int as unique_enrollment_count,
+             coalesce(sum(playing_seconds), 0)::int as playing_seconds
       from learning_analytics_events
       where occurred_at >= ${APP_CURRENT_DAY_START_SQL}
       group by course_publication_id, lesson_id, event_type
       union all
       select course_publication_id, lesson_id, event_type,
-             event_count, unique_enrollment_count
+             event_count, unique_enrollment_count, playing_seconds
       from learning_analytics_daily_metrics
       where metric_date < ${APP_CURRENT_DATE_SQL}
         and metric_date >= ${periodStartDateSql}
     ), analytics as (
       select course_publication_id, lesson_id,
              coalesce(sum(unique_enrollment_count) filter (where event_type = 'lesson_started'), 0)::int as started,
-             coalesce(sum(event_count) filter (where event_type in ('player_error', 'resource_open_failed')), 0)::int as error_count
+             coalesce(sum(event_count) filter (where event_type in ('player_error', 'resource_open_failed')), 0)::int as error_count,
+             coalesce(sum(playing_seconds) filter (where event_type = 'watch_progress'), 0)::int as playing_seconds
       from analytics_events
       group by course_publication_id, lesson_id
     ), active_enrollment_users as (
@@ -370,6 +380,7 @@ const getLessonAnalyticsMetricsQuery = (
       coalesce(analytics.started, 0) as started,
       coalesce(completed_by_lesson.completed, 0) as completed,
       coalesce(analytics.error_count, 0) as error_count,
+      coalesce(analytics.playing_seconds, 0) as playing_seconds,
       checkpoints.median_checkpoint_percent,
       completion_timing.median_hours_to_complete,
       next_lesson_timing.median_hours_to_next_lesson,
@@ -440,6 +451,7 @@ const readLessonAnalyticsMetrics = async ({
     median_checkpoint_percent: number | null;
     median_hours_to_complete: number | null;
     median_hours_to_next_lesson: number | null;
+    playing_seconds: string;
     aggregate_median_checkpoint_percent: number | null;
     aggregate_median_hours_to_complete: number | null;
     aggregate_median_hours_to_next_lesson: number | null;
@@ -498,6 +510,7 @@ const readLessonAnalyticsMetrics = async ({
           : Number(row.course_average_viewing_percent),
       moduleSortOrder: row.module_sort_order,
       moduleTitle: row.module_title,
+      playingSeconds: Number(row.playing_seconds),
       publicationNumber: row.publication_number,
       publicationStatus: row.publication_status,
       started: Number(row.started),

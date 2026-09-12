@@ -57,12 +57,18 @@ export const recordLessonWatchProgressAction = async ({
   currentSeconds,
   durationSeconds,
   eventName,
+  eventSequence,
+  isPaused,
   lessonId,
+  trackingSessionId,
 }: {
   currentSeconds: number;
   durationSeconds: number;
   eventName: string;
+  eventSequence?: number;
+  isPaused?: boolean;
   lessonId: string;
+  trackingSessionId?: string;
 }): Promise<{
   completed: boolean;
   courseId: string;
@@ -83,7 +89,10 @@ export const recordLessonWatchProgressAction = async ({
     currentSeconds,
     durationSeconds,
     eventName,
+    ...(eventSequence === undefined ? {} : { eventSequence }),
+    ...(isPaused === undefined ? {} : { isPaused }),
     lessonId,
+    ...(trackingSessionId === undefined ? {} : { trackingSessionId }),
     userId: session.user.id,
   });
 

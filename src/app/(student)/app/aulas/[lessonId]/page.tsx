@@ -286,7 +286,7 @@ function LessonMainContent({
         <LessonVideoPlayer
           durationSeconds={data.lesson.durationSeconds}
           initialPositionSeconds={
-            data.lesson.watchProgress?.currentSeconds ?? 0
+            data.lesson.watchProgress?.resumePositionSeconds ?? 0
           }
           initialWatchedPercent={data.lesson.watchProgress?.watchedPercent ?? 0}
           isPreview={Boolean(previewMode)}
@@ -299,7 +299,10 @@ function LessonMainContent({
           {materialUnavailableAlert}
           {mobileCourseNavigation}
           {data.lesson.contentJson ? (
-            <LessonContentFrame lesson={data.lesson} />
+            <LessonContentFrame
+              lesson={data.lesson}
+              previewMode={previewMode}
+            />
           ) : null}
           <div className="mx-auto w-full max-w-5xl px-5 py-7 sm:px-8 lg:px-0">
             {footer}
@@ -322,7 +325,7 @@ function LessonMainContent({
             state={data.lesson.videoProcessingState ?? "processing"}
           />
         </div>
-        <LessonContentFrame lesson={data.lesson} />
+        <LessonContentFrame lesson={data.lesson} previewMode={previewMode} />
         <div className="mx-auto w-full max-w-5xl px-5 py-7 sm:px-8 lg:px-0">
           {footer}
         </div>
@@ -336,7 +339,7 @@ function LessonMainContent({
       {header}
       {materialUnavailableAlert}
       {mobileCourseNavigation}
-      <LessonContentFrame lesson={data.lesson} />
+      <LessonContentFrame lesson={data.lesson} previewMode={previewMode} />
       <div className="mx-auto w-full max-w-5xl px-5 py-7 sm:px-8 lg:px-0">
         {footer}
       </div>
@@ -397,11 +400,22 @@ function LessonHeader({
           </div>
         </div>
 
-        {data.lesson.description ? (
-          <p className="w-full text-pretty break-words font-light text-muted-foreground text-sm leading-normal">
-            {data.lesson.description}
-          </p>
-        ) : null}
+        <p className="w-full text-pretty break-words font-light text-muted-foreground text-sm leading-normal">
+          <span className="font-normal text-muted-foreground/80">
+            {data.lesson.isRequired === false ? "Opcional" : "Obrigatória"}
+          </span>
+          {data.lesson.description ? (
+            <>
+              <span
+                aria-hidden="true"
+                className="mx-1.5 text-muted-foreground/60"
+              >
+                ·
+              </span>
+              {data.lesson.description}
+            </>
+          ) : null}
+        </p>
       </div>
     </div>
   );
@@ -449,8 +463,10 @@ function LessonFooter({
 
 function LessonContentFrame({
   lesson,
+  previewMode,
 }: {
   lesson: LessonPageData["lesson"];
+  previewMode: StudentPreviewMode | null;
 }): React.JSX.Element {
   if (lesson.contentJson?.type === "text") {
     const resources =
@@ -463,7 +479,11 @@ function LessonContentFrame({
           <div className="max-w-[68ch] text-base leading-8">
             <LessonRichTextRenderer document={document} />
           </div>
-          <LessonResources lessonId={lesson.id} resources={resources ?? []} />
+          <LessonResources
+            lessonId={lesson.id}
+            previewMode={previewMode}
+            resources={resources ?? []}
+          />
         </div>
       </article>
     );
@@ -478,9 +498,11 @@ function LessonContentFrame({
 
 function LessonResources({
   lessonId,
+  previewMode,
   resources,
 }: {
   lessonId: string;
+  previewMode: StudentPreviewMode | null;
   resources: LessonResource[];
 }): React.JSX.Element | null {
   if (resources.length === 0) {
@@ -507,6 +529,7 @@ function LessonResources({
           <LessonResourceItem
             key={resource.id}
             lessonId={lessonId}
+            previewMode={previewMode}
             resource={resource}
           />
         ))}
@@ -517,21 +540,27 @@ function LessonResources({
 
 function LessonResourceItem({
   lessonId,
+  previewMode,
   resource,
 }: {
   lessonId: string;
+  previewMode: StudentPreviewMode | null;
   resource: LessonResource;
 }): React.JSX.Element {
   const extension = getResourceExtension(resource);
   const displayName = getResourceDisplayName(resource);
   const metadata = getResourceMetadata(resource);
-  const href = getLessonResourceHref({ lessonId, resource });
+  const href = getLessonResourceHref({ lessonId, previewMode, resource });
   const isExternal = resource.storage !== "r2";
   const badgeText = isExternal ? "LINK" : extension;
 
   return (
     <div className="group/resource grid min-w-0 grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 border-border/30 border-b py-3 transition-colors last:border-0 hover:bg-muted/10">
-      <ResourceVisual lessonId={lessonId} resource={resource} />
+      <ResourceVisual
+        lessonId={lessonId}
+        previewMode={previewMode}
+        resource={resource}
+      />
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
           <p className="min-w-0 flex-1 truncate font-normal text-sm">
@@ -579,9 +608,11 @@ function LessonResourceItem({
 
 function ResourceVisual({
   lessonId,
+  previewMode,
   resource,
 }: {
   lessonId: string;
+  previewMode: StudentPreviewMode | null;
   resource: LessonResource;
 }): React.JSX.Element {
   if (resource.storage === "r2" && resource.preview) {
@@ -593,6 +624,7 @@ function ResourceVisual({
         style={{
           backgroundImage: `url(${getLessonResourcePreviewHref({
             lessonId,
+            previewMode,
             resource,
           })})`,
         }}
@@ -622,14 +654,19 @@ function ResourceVisual({
 
 function getLessonResourceHref({
   lessonId,
+  previewMode,
   resource,
 }: {
   lessonId: string;
+  previewMode: StudentPreviewMode | null;
   resource: LessonResource;
 }): string {
   if (resource.storage === "r2") {
     return route(
-      `/api/lessons/${lessonId}/resources/${resource.id}/download`
+      getPreviewAwareHref(
+        `/api/lessons/${lessonId}/resources/${resource.id}/download`,
+        previewMode
+      )
     ) as string;
   }
 
@@ -638,13 +675,18 @@ function getLessonResourceHref({
 
 function getLessonResourcePreviewHref({
   lessonId,
+  previewMode,
   resource,
 }: {
   lessonId: string;
+  previewMode: StudentPreviewMode | null;
   resource: Extract<LessonResource, { storage: "r2" }>;
 }): string {
   return route(
-    `/api/lessons/${lessonId}/resources/${resource.id}/preview`
+    getPreviewAwareHref(
+      `/api/lessons/${lessonId}/resources/${resource.id}/preview`,
+      previewMode
+    )
   ) as string;
 }
 

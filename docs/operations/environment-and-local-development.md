@@ -12,8 +12,9 @@ Use `.env.local`, nunca versione segredos. Parta de `.env.example`. Banco e prov
 
 O `.env.local` da estação principal foi corrigido e passa pelo preflight
 fail-closed de Development. Ele usa a branch Neon `development`, os buckets
-`hub-development-private` e `hub-development-public`, Asaas Sandbox e o projeto
-Sentry de Development. Resend reutiliza o domínio verificado
+`hub-development-private` e `hub-development-public` e Asaas Sandbox. Sentry é
+desativado deliberadamente em Development local; suas variáveis não devem ser
+configuradas nessa estação. Resend reutiliza o domínio verificado
 com allowlist obrigatória. JMVStream reutiliza conscientemente o plano
 Production e, por isso, continua sendo a única integração sem isolamento
 técnico completo.
@@ -33,7 +34,7 @@ valor de nenhuma chave entra em chat, log ou documentação. Rotacionar
 
 O projeto possui cinco perfis:
 
-- Development local: integração manual contra recursos de teste;
+- Development local: integração manual contra recursos de teste, sem Sentry;
 - E2E: execução efêmera e isolada na CI;
 - Preview: candidato técnico descartável, fail-closed e sem providers;
 - Staging: homologação persistente em
@@ -125,13 +126,13 @@ históricos foram removidos. Smokes e testes manuais usam exclusivamente
 | `RECOVERY_DRILL_ENVIRONMENT` | `development`, `staging` ou `production` do ensaio | `ops:recovery:evidence` | não |
 | `RECOVERY_DRILL_MIGRATION_JOURNAL` | topo do journal conferido manualmente | `ops:recovery:evidence` | não |
 | `RECOVERY_DRILL_READINESS`, `RECOVERY_DRILL_MIGRATION`, `RECOVERY_DRILL_ALERTS` | resultado `passed`/`failed` confirmado pelo operador | `ops:recovery:evidence` | não |
-| `SENTRY_DSN` | exceções/traces servidor | configs Sentry | identificador protegido |
-| `NEXT_PUBLIC_SENTRY_DSN` | exceções navegador | `instrumentation-client.ts` | público controlado |
-| `NEXT_PUBLIC_SENTRY_RELEASE` | SHA Git completo injetado pelo build | SDK cliente | público controlado |
-| `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_PROJECT_ID` | organização, slug e ID do projeto único | `withSentryConfig`, checker | não |
+| `SENTRY_DSN` | exceções/traces servidor em Staging/Production; ausente em Development local | configs Sentry | identificador protegido |
+| `NEXT_PUBLIC_SENTRY_DSN` | exceções navegador em Staging/Production; ausente em Development local | boundary/instrumentação Sentry | público controlado |
+| `NEXT_PUBLIC_SENTRY_RELEASE` | SHA Git completo injetado pelo build protegido; ausente em Development local | SDK cliente | público controlado |
+| `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_PROJECT_ID` | organização, slug e ID usados no build protegido | `withSentryConfig`, checker | não |
 | `STAGING_SENTRY_PROJECT_ID` | confirmação do projeto Development compartilhado | preflight Staging | identificador protegido |
-| `DEVELOPMENT_SENTRY_PROJECT_ID` | preflight Development | confirmação do projeto Sentry | identificador protegido |
-| `SENTRY_AUTH_TOKEN` | source maps no build | `withSentryConfig` | sim |
+| `DEVELOPMENT_SENTRY_PROJECT_ID` | não configurar em Development local; rejeita configuração legada | preflight local | identificador protegido |
+| `SENTRY_AUTH_TOKEN` | source maps no build protegido; ausente em Development local | `withSentryConfig` | sim |
 | `SENTRY_READINESS_SECRET` | autoriza emissão sintética controlada | `POST /api/health/sentry` em Staging/Production | sim |
 | `SENTRY_READINESS_AUTH_TOKEN` | inspeção somente leitura do evento | checker local/CI, ausente do runtime web | sim |
 | `SENTRY_READINESS_ALERT_NAME` | nome exato do workflow ativo esperado | checker Sentry | não |
@@ -212,7 +213,7 @@ confirme um bucket de produção.
 
 ### Separação por fase
 
-- build público: `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SENTRY_DSN`,
+- build público protegido: `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SENTRY_DSN`,
   `NEXT_PUBLIC_SENTRY_RELEASE`, `R2_PUBLIC_BASE_URL` e `DEPLOYMENT_VERSION`;
 - build secreto: `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` e, opcionalmente,
   `SENTRY_AUTH_TOKEN`, armazenados no ambiente Vercel correspondente. Quando o

@@ -174,6 +174,7 @@ export type CourseContentReorderResult =
 
 const REORDER_FAILURE_MESSAGE =
   "Nao foi possivel salvar a nova ordem. Tente novamente.";
+const MAX_POSTGRES_INTEGER = 2_147_483_647;
 
 const hasExactlyTheSameIds = (
   actualIds: string[],
@@ -182,6 +183,21 @@ const hasExactlyTheSameIds = (
   actualIds.length === expectedIds.length &&
   new Set(actualIds).size === actualIds.length &&
   actualIds.every((id) => expectedIds.includes(id));
+
+const getTemporaryPositiveOrderBase = (
+  currentOrders: readonly number[],
+  itemCount: number
+): number => {
+  const currentMaximum = currentOrders.reduce(
+    (maximum, order) => Math.max(maximum, order),
+    0
+  );
+  const base = currentMaximum + itemCount + 1;
+  if (base + Math.max(0, itemCount - 1) > MAX_POSTGRES_INTEGER) {
+    throw new Error("A ordem do conteúdo excede o limite suportado.");
+  }
+  return base;
+};
 
 const getActionCorrelationId = async (): Promise<string> =>
   createCorrelationId((await headers()).get(CORRELATION_ID_HEADER));
@@ -1274,10 +1290,14 @@ export const reorderModulesAction = async (
             throw new Error("Invalid module order.");
           }
 
+          const temporaryOrderBase = getTemporaryPositiveOrderBase(
+            expectedModules.rows.map((module) => module.sort_order),
+            orderedModuleIds.length
+          );
           for (let i = 0; i < orderedModuleIds.length; i++) {
             await client.query(
               "update modules set sort_order = $1 where id = $2 and course_id = $3",
-              [-(i + 1), orderedModuleIds[i], courseId]
+              [temporaryOrderBase + i, orderedModuleIds[i], courseId]
             );
           }
 
@@ -1414,13 +1434,16 @@ export const reorderLessonsAction = async (
             throw new Error("Invalid lesson order.");
           }
 
-          let temporaryOrder = -1;
-          for (const lessonId of orderedLessonIds) {
+          const temporaryOrderBase = getTemporaryPositiveOrderBase(
+            expectedLessons.rows.map((lesson) => lesson.sort_order),
+            orderedLessonIds.length
+          );
+          for (let i = 0; i < orderedLessonIds.length; i++) {
+            const lessonId = orderedLessonIds[i];
             await client.query(
               "update lessons set sort_order = $1 where id = $2",
-              [temporaryOrder, lessonId]
+              [temporaryOrderBase + i, lessonId]
             );
-            temporaryOrder--;
           }
 
           for (const group of reorderGroups) {

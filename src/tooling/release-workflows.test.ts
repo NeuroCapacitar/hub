@@ -138,6 +138,10 @@ describe("CI and deployment workflow contracts", () => {
     expect(workflow).not.toContain("release_sha:");
     expect(workflow).not.toContain("confirm_production:");
     expect(workflow).not.toContain("EMERGENCY_SKIP_PRODUCTION");
+    expect(workflow).not.toContain("candidate_ci_head_sha");
+    expect(workflow).toContain(
+      "No successful CI check exists for the exact Staging candidate SHA."
+    );
   });
 
   it("keeps the JMVStream schedule at fifteen minutes", () => {
@@ -159,9 +163,15 @@ describe("CI and deployment workflow contracts", () => {
     expect(workflow).toContain("checks: read");
     expect(workflow).toContain("check-runs?check_name=CI");
     expect(workflow).toContain(
-      ["commits/", String.fromCharCode(36), "{release_sha}", "/pulls"].join("")
+      [
+        "commits/",
+        String.fromCharCode(36),
+        "{release_sha}",
+        "/check-runs?check_name=CI",
+      ].join("")
     );
     expect(workflow).not.toContain("actions/workflows/ci.yml/runs?branch=main");
+    expect(workflow).not.toContain("candidate_ci_head_sha");
   });
 
   it("keeps Development migrations tied to the current main CI check", () => {
@@ -170,11 +180,17 @@ describe("CI and deployment workflow contracts", () => {
     expect(workflow).toContain("checks: read");
     expect(workflow).toContain("check-runs?check_name=CI");
     expect(workflow).toContain(
-      ["commits/", String.fromCharCode(36), "{release_sha}", "/pulls"].join("")
+      [
+        "commits/",
+        String.fromCharCode(36),
+        "{release_sha}",
+        "/check-runs?check_name=CI",
+      ].join("")
     );
     expect(workflow).toContain(
-      "No successful CI check exists for the current main SHA"
+      "No successful CI check exists for the exact current main SHA."
     );
+    expect(workflow).not.toContain("candidate_ci_head_sha");
   });
 
   it("pins every migrated workflow to the valid setup-bun commit", () => {

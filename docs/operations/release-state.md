@@ -12,15 +12,16 @@ documented_environment: production
 
 # Estado de release
 
-## Checkpoint operacional atual — 2026-09-03
+## Último checkpoint operacional documentado — 2026-09-03
 
 Production está no deployment `dpl_E17vxVRp27EDVVmW5sEQgTYFpXb5`, estado
 `READY`, região `gru1`, servido pelo commit
 `10c9cb8dd187482144850015841fb4485eacbd5f`. O domínio canônico continua sendo
 `app.neurocapacitar.com.br`.
-O commit atual de `main` é `10c9cb8dd187482144850015841fb4485eacbd5f`.
+No checkpoint de 2026-09-03, `main` apontava para
+`10c9cb8dd187482144850015841fb4485eacbd5f`.
 
-O remoto mantém `main` no SHA Production
+No checkpoint, o remoto mantinha `main` no SHA Production
 `10c9cb8dd187482144850015841fb4485eacbd5f`. O último checkpoint verificado de
 `staging` é o merge commit `35e838c21f2ad94fefe2aec187db5068f2726c0e`, no qual o
 PR `#200` foi mesclado. A CI completa do candidato passou os gates obrigatórios;

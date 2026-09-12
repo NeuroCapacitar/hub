@@ -37,6 +37,9 @@ describe("learning analytics preference persistence", () => {
     expect(metricsQuery).toContain("course_viewing_by_enrollment");
     expect(metricsQuery).toContain("aggregate_median_hours_to_complete");
     expect(metricsQuery).toContain(
+      "sum(playing_seconds) filter (where event_type = 'watch_progress')"
+    );
+    expect(metricsQuery).toContain(
       "date_trunc('day', current_timestamp at time zone 'America/Sao_Paulo')"
     );
     expect(metricsQuery).not.toContain("where occurred_at >= current_date");
@@ -62,6 +65,7 @@ describe("learning analytics preference persistence", () => {
           median_checkpoint_percent: null,
           median_hours_to_complete: null,
           median_hours_to_next_lesson: null,
+          playing_seconds: "120",
           aggregate_median_checkpoint_percent: null,
           aggregate_median_hours_to_complete: null,
           aggregate_median_hours_to_next_lesson: null,
@@ -84,7 +88,7 @@ describe("learning analytics preference persistence", () => {
       page: 2,
       pageSize: 20,
       totalCount: 21,
-      metrics: [{ courseAverageViewingPercent: 62.5 }],
+      metrics: [{ courseAverageViewingPercent: 62.5, playingSeconds: 120 }],
     });
 
     expect(String(query.mock.calls[0]?.[0])).toContain("limit $1 offset $2");
@@ -151,7 +155,16 @@ describe("learning analytics preference persistence", () => {
 
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("learning_analytics_preferences preference"),
-      ["lesson_started", "event-1", null, null, "lesson-1", "student-1"]
+      [
+        "lesson_started",
+        "event-1",
+        null,
+        0,
+        null,
+        null,
+        "lesson-1",
+        "student-1",
+      ]
     );
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("preference.disabled_at is null"),

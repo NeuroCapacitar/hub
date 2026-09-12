@@ -13,6 +13,7 @@ import {
   type CourseSalesStatus,
   resolveCourseAvailability,
 } from "@/features/courses/availability";
+import { lockCourseContentRelease } from "@/features/courses/content-release-lock";
 import {
   classifyContentReleaseError,
   createContentReleaseDiagnostics,
@@ -41,13 +42,19 @@ import { syncJmvstreamLessonPlayer } from "@/features/jmvstream/server";
 import { getWatchCheckpointPercent } from "@/features/learning-analytics/rules";
 import { recordLearningAnalyticsEvent } from "@/features/learning-analytics/server";
 import {
+  advanceVideoPlaybackProgress,
   calculateCourseProgress,
-  calculateVideoPositionProgress,
+  calculateValidatedVideoPercent,
+  getNextAutomaticLessonId,
   getNextAvailablePendingLessonId,
   isLessonAvailable,
+  type VideoPlaybackProgressState,
 } from "@/features/progress/rules";
 import { getCourseCoverBlurDataUrl } from "@/features/storage/course-cover";
-import { shouldCompleteLessonFromJmvstreamEvent } from "@/features/videos/jmvstream";
+import {
+  isJmvstreamPlayerEventName,
+  shouldCompleteLessonFromJmvstreamEvent,
+} from "@/features/videos/jmvstream";
 import type { AppRole } from "@/lib/session";
 import {
   assertProtectedLessonAccess,
@@ -55,6 +62,9 @@ import {
 } from "./protected-lesson-access";
 
 const MAX_LESSON_DURATION_SECONDS = 12 * 60 * 60;
+const VIDEO_TRACKING_VERSION = 1;
+
+type LessonCompletionSource = "manual" | "video";
 
 export interface StudentCourseCard {
   completedCount: number;
@@ -84,6 +94,7 @@ export interface StudentCatalogCourseCard {
   isInterested: boolean;
   launchDate: string | null;
   launchLandingUrl: string | null;
+  lessonCount: number;
   nextLessonId: string | null;
   nextReleaseAt: Date | null;
   priceInCents: number;
@@ -147,9 +158,11 @@ export interface StudentCourseOverviewData {
     workloadHours: number;
   };
   isPreview: boolean;
+  lessonCount: number;
   modules: Array<{
     availableAt: Date | null;
     description: string | null;
+    completedRequiredLessonCount: number;
     id: string;
     lessonCount: number;
     lessons: Array<{
@@ -158,12 +171,15 @@ export interface StudentCourseOverviewData {
       id: string;
       availability: LessonAvailability;
       isCompleted: boolean;
+      isRequired: boolean;
       sortOrder: number;
       thumbnailUrl: string | null;
       title: string;
       watchedPercent: number;
     }>;
     releaseState: "available" | "invalid" | "time_locked";
+    progressPercent: number;
+    requiredLessonCount: number;
     sortOrder: number;
     totalDurationSeconds: number;
     title: string;
@@ -199,10 +215,14 @@ export interface StudentLessonData {
     durationSeconds: number;
     videoDurationSeconds: number;
     isCompleted: boolean;
+    isRequired?: boolean;
     watchProgress: {
       currentSeconds: number;
       durationSeconds: number;
       maxPositionSeconds: number;
+      playingTimeSeconds: number;
+      resumePositionSeconds: number;
+      validatedPositionSeconds: number;
       watchedPercent: number;
     } | null;
     videoEmbedUrl: string | null;
@@ -220,6 +240,31 @@ export type StudentLessonWorkspaceResult =
   | { data: StudentLessonData; kind: "available" }
   | { availableAt: Date; courseId: string; kind: "time_locked" }
   | { kind: "unavailable" };
+
+const getNextAvailableLessonIdForTransaction = async ({
+  client,
+  lessonId,
+  userId,
+}: {
+  client: PoolClient;
+  lessonId: string;
+  userId: string;
+}): Promise<string | null> => {
+  const refreshedWorkspace = await getEnrolledLessonWorkspace({
+    client,
+    lessonId,
+    resolveVideo: false,
+    userId,
+  });
+  if (refreshedWorkspace.kind !== "available") {
+    return null;
+  }
+
+  return getNextAutomaticLessonId(
+    refreshedWorkspace.data.modules.flatMap((moduleData) => moduleData.lessons),
+    lessonId
+  );
+};
 
 interface LessonRow {
   completed_at: Date | null;
@@ -243,16 +288,32 @@ interface LessonRow {
   video_embed_url: string | null;
   video_external_id: string | null;
   video_provider: string | null;
+  watch_awaiting_playback_after_seek: boolean | null;
   watch_current_seconds: number | null;
   watch_duration_seconds: number | null;
+  watch_last_event_sequence: number | null;
+  watch_linear_progress_blocked: boolean | null;
   watch_max_position_seconds: number | null;
   watch_percent: number | null;
+  watch_playing_time_seconds: number | null;
+  watch_resume_position_seconds: number | null;
+  watch_tracking_session_id: string | null;
+  watch_tracking_version: number | null;
+  watch_validated_position_seconds: number | null;
 }
 
 interface LessonWatchProgressRow {
+  awaiting_playback_after_seek: boolean;
   current_seconds: number;
   duration_seconds: number;
+  last_event_sequence: number;
+  linear_progress_blocked: boolean;
   max_position_seconds: number;
+  playing_time_seconds: number;
+  resume_position_seconds: number;
+  tracking_session_id: string | null;
+  tracking_version: number;
+  validated_position_seconds: number;
   watched_percent: number;
 }
 
@@ -276,6 +337,7 @@ type StudentCatalogCourseAggregate = StudentCatalogCourseCard & {
   decisionNow: Date;
   durationSecondsPerLesson: Map<string, number>;
   lessonIds: string[];
+  requiredLessonIds: string[];
   lessons: Array<{
     id: string;
     moduleId: string;
@@ -326,6 +388,7 @@ interface CoursePreviewOverviewRow {
   course_subtitle: string | null;
   course_title: string;
   duration_seconds: number | null;
+  is_required: boolean | null;
   lesson_id: string | null;
   lesson_sort_order: number | null;
   lesson_thumbnail_url: string | null;
@@ -342,6 +405,9 @@ interface CoursePreviewOverviewRow {
 
 const mapModules = (rows: LessonRow[]): ModuleWithLessons[] => {
   const lessonIds = rows.map((row) => row.lesson_id);
+  const requiredLessonIds = rows
+    .filter((row) => row.is_required !== false)
+    .map((row) => row.lesson_id);
   const completedLessonIds = rows
     .filter((row) => row.completed_at)
     .map((row) => row.lesson_id);
@@ -367,6 +433,7 @@ const mapModules = (rows: LessonRow[]): ModuleWithLessons[] => {
       isAvailable: isLessonAvailable({
         lessonIds,
         completedLessonIds,
+        requiredLessonIds,
         lessonId: row.lesson_id,
       }),
     });
@@ -597,6 +664,7 @@ const resolveCatalogNextLesson = ({
         completedLessonIds,
         lessonId: lesson.id,
         lessonIds: course.lessonIds,
+        requiredLessonIds: course.requiredLessonIds,
       })
     ) {
       nextLessonId = lesson.id;
@@ -626,6 +694,7 @@ export const getStudentCourseCatalog = async (
     is_interested: boolean;
     launch_date: string | null;
     launch_landing_url: string | null;
+    is_required: boolean | null;
     lesson_id: string | null;
     lesson_sort_order: number | null;
     module_release_delay_days: number | null;
@@ -679,6 +748,7 @@ export const getStudentCourseCatalog = async (
           where csi.course_id = c.id and csi.user_id = $1
         ) as is_interested,
         l.id as lesson_id,
+        l.is_required,
         l.sort_order as lesson_sort_order,
         m.id as module_id,
         m.release_delay_days as module_release_delay_days,
@@ -743,6 +813,7 @@ export const getStudentCourseCatalog = async (
       isInterested: row.is_interested,
       launchDate: row.launch_date,
       launchLandingUrl: row.launch_landing_url,
+      lessonCount: 0,
       accessStatus: row.access_status,
       contentReleaseMode: row.content_release_mode ?? "full_access",
       contentReleaseStartedAt: row.content_release_started_at,
@@ -755,6 +826,7 @@ export const getStudentCourseCatalog = async (
       nextLessonId: null,
       nextReleaseAt: null,
       lessonIds: [],
+      requiredLessonIds: [],
       completedLessonIds: [],
       durationSecondsPerLesson: new Map<string, number>(),
       lessons: [],
@@ -762,6 +834,9 @@ export const getStudentCourseCatalog = async (
 
     if (row.lesson_id) {
       course.lessonIds.push(row.lesson_id);
+      if (row.is_required !== false) {
+        course.requiredLessonIds.push(row.lesson_id);
+      }
       course.durationSecondsPerLesson.set(row.lesson_id, row.duration_seconds);
       if (
         typeof row.lesson_sort_order === "number" &&
@@ -788,7 +863,11 @@ export const getStudentCourseCatalog = async (
   return [...byCourse.values()].map((course) => {
     const progress = course.isEnrolled
       ? calculateCourseProgress(course)
-      : { completedCount: 0, percent: 0, totalCount: course.lessonIds.length };
+      : {
+          completedCount: 0,
+          percent: 0,
+          totalCount: course.requiredLessonIds.length,
+        };
     const next = course.isEnrolled
       ? resolveCatalogNextLesson({
           course,
@@ -812,6 +891,7 @@ export const getStudentCourseCatalog = async (
       isInterested: course.isInterested,
       launchDate: course.launchDate,
       launchLandingUrl: course.launchLandingUrl,
+      lessonCount: course.lessonIds.length,
       availabilityPreset: course.availabilityPreset,
       accessStatus: course.accessStatus,
       revokedReason: course.revokedReason,
@@ -842,16 +922,21 @@ export const getStudentCourseAccessStatus = async ({
   };
 };
 
-export const recalculateCourseWorkloadHours = async (
+/**
+ * Recalculates workload inside a caller-owned transaction. The caller must
+ * already hold the Course content-release lock.
+ */
+export const recalculateCourseWorkloadHoursWithClient = async (
+  client: PoolClient,
   courseId: string
 ): Promise<number> => {
-  const course = await getPool().query<{
+  const course = await client.query<{
     workload_hours_override: number | null;
   }>("select workload_hours_override from courses where id = $1 limit 1", [
     courseId,
   ]);
   const workloadOverride = course.rows[0]?.workload_hours_override ?? null;
-  const publications = await getPool().query<{
+  const publications = await client.query<{
     id: string;
     workload_hours_snapshot: number;
     status: "draft" | "published";
@@ -861,25 +946,30 @@ export const recalculateCourseWorkloadHours = async (
       from course_publications
       where course_id = $1 and status in ('draft', 'published')
       order by case status when 'draft' then 0 else 1 end, publication_number desc
-      limit 1
     `,
     [courseId]
   );
-  const coursePublication = publications.rows[0];
+  const draftPublication = publications.rows.find(
+    (publication) => publication.status === "draft"
+  );
+  const publishedPublication = publications.rows.find(
+    (publication) => publication.status === "published"
+  );
+  const coursePublication = draftPublication ?? publishedPublication;
 
   if (!coursePublication) {
     const effectiveWorkloadHours = resolveCourseWorkloadHours(
       0,
       workloadOverride
     );
-    await getPool().query(
+    await client.query(
       "update courses set workload_hours = $1, updated_at = now() where id = $2",
       [effectiveWorkloadHours, courseId]
     );
     return effectiveWorkloadHours;
   }
 
-  const { rows } = await getPool().query<{ duration_seconds: number }>(
+  const { rows } = await client.query<{ duration_seconds: number }>(
     `
       select l.duration_seconds
       from lessons l
@@ -894,7 +984,7 @@ export const recalculateCourseWorkloadHours = async (
     rows.map((row) => row.duration_seconds)
   );
 
-  await getPool().query(
+  await client.query(
     `
       update course_publications
       set workload_hours_snapshot = $1,
@@ -904,16 +994,15 @@ export const recalculateCourseWorkloadHours = async (
     [derivedWorkloadHours, coursePublication.id]
   );
 
-  const publishedPublication = publications.rows.find(
-    (item) => item.status === "published"
-  );
+  const publishedWorkloadHours =
+    publishedPublication && publishedPublication.id !== coursePublication.id
+      ? publishedPublication.workload_hours_snapshot
+      : derivedWorkloadHours;
   const effectiveWorkloadHours = resolveCourseWorkloadHours(
-    coursePublication.status === "published"
-      ? derivedWorkloadHours
-      : (publishedPublication?.workload_hours_snapshot ?? derivedWorkloadHours),
+    publishedWorkloadHours,
     workloadOverride
   );
-  await getPool().query(
+  await client.query(
     `
       update courses
       set workload_hours = $1,
@@ -922,8 +1011,27 @@ export const recalculateCourseWorkloadHours = async (
     `,
     [effectiveWorkloadHours, courseId]
   );
-
   return effectiveWorkloadHours;
+};
+
+export const recalculateCourseWorkloadHours = async (
+  courseId: string
+): Promise<number> => {
+  const client = await getPool().connect();
+
+  try {
+    await client.query("begin");
+    await lockCourseContentRelease(client, courseId);
+    const effectiveWorkloadHours =
+      await recalculateCourseWorkloadHoursWithClient(client, courseId);
+    await client.query("commit");
+    return effectiveWorkloadHours;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 interface EnrolledOverviewProjectionInput {
@@ -931,6 +1039,7 @@ interface EnrolledOverviewProjectionInput {
   diagnostics: ReturnType<typeof createContentReleaseDiagnostics>;
   lessonIds: string[];
   now: Date;
+  requiredLessonIds: string[];
   rows: CourseOverviewRow[];
 }
 
@@ -938,6 +1047,12 @@ interface OverviewModuleRelease {
   availableAt: Date | null;
   releaseState: "available" | "invalid" | "time_locked";
 }
+
+type EnrolledOverviewModule = StudentCourseOverviewData["modules"][number] & {
+  completedLessonIds: string[];
+  lessonIds: string[];
+  requiredLessonIds: string[];
+};
 
 const resolveOverviewModuleRelease = (
   row: CourseOverviewRow,
@@ -969,16 +1084,18 @@ const appendOverviewLesson = ({
   lessonIds,
   moduleData,
   nextLessonCandidates,
+  requiredLessonIds,
   row,
 }: {
   completedLessonIds: string[];
   lessonIds: string[];
-  moduleData: StudentCourseOverviewData["modules"][number];
+  moduleData: EnrolledOverviewModule;
   nextLessonCandidates: Array<{
     availability: LessonAvailability;
     id: string;
     isCompleted: boolean;
   }>;
+  requiredLessonIds: string[];
   row: CourseOverviewRow;
 }): void => {
   if (
@@ -990,6 +1107,13 @@ const appendOverviewLesson = ({
   const isCompleted = Boolean(row.completed_at);
   moduleData.lessonCount += 1;
   moduleData.totalDurationSeconds += Math.max(0, row.duration_seconds);
+  moduleData.lessonIds.push(row.lesson_id);
+  if (row.is_required !== false) {
+    moduleData.requiredLessonIds.push(row.lesson_id);
+    if (isCompleted) {
+      moduleData.completedLessonIds.push(row.lesson_id);
+    }
+  }
   if (moduleData.releaseState === "invalid" && !isCompleted) {
     return;
   }
@@ -1005,6 +1129,7 @@ const appendOverviewLesson = ({
     sequenceAvailable: isLessonAvailable({
       lessonIds,
       completedLessonIds,
+      requiredLessonIds,
       lessonId: row.lesson_id,
     }),
   });
@@ -1012,6 +1137,7 @@ const appendOverviewLesson = ({
   moduleData.lessons.push({
     availability,
     id: row.lesson_id,
+    isRequired: row.is_required !== false,
     title: row.lesson_title,
     thumbnailUrl: hasVideo ? row.lesson_thumbnail_url : null,
     hasVideo,
@@ -1030,11 +1156,15 @@ const projectEnrolledOverviewModules = (
   nextLessonId: string | null;
   nextReleaseAt: Date | null;
 } => {
-  const { completedLessonIds, diagnostics, lessonIds, now, rows } = input;
-  const modules = new Map<
-    string,
-    StudentCourseOverviewData["modules"][number]
-  >();
+  const {
+    completedLessonIds,
+    diagnostics,
+    lessonIds,
+    now,
+    requiredLessonIds,
+    rows,
+  } = input;
+  const modules = new Map<string, EnrolledOverviewModule>();
   const nextLessonCandidates: Array<{
     availability: LessonAvailability;
     id: string;
@@ -1052,11 +1182,17 @@ const projectEnrolledOverviewModules = (
       const release = resolveOverviewModuleRelease(row, now, diagnostics);
       moduleData = {
         availableAt: release.availableAt,
+        completedLessonIds: [],
+        completedRequiredLessonCount: 0,
         description: row.module_description,
         id: row.module_id,
+        lessonIds: [],
         lessonCount: 0,
         lessons: [],
+        progressPercent: 0,
         releaseState: release.releaseState,
+        requiredLessonCount: 0,
+        requiredLessonIds: [],
         sortOrder: row.module_sort_order,
         title: row.module_title,
         totalDurationSeconds: 0,
@@ -1077,12 +1213,31 @@ const projectEnrolledOverviewModules = (
       lessonIds,
       moduleData,
       nextLessonCandidates,
+      requiredLessonIds,
       row,
     });
   }
 
   return {
-    modules: [...modules.values()].sort((a, b) => a.sortOrder - b.sortOrder),
+    modules: [...modules.values()]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map(
+        ({
+          completedLessonIds,
+          lessonIds,
+          requiredLessonIds,
+          ...moduleData
+        }) => ({
+          ...moduleData,
+          completedRequiredLessonCount: completedLessonIds.length,
+          progressPercent: calculateCourseProgress({
+            completedLessonIds,
+            lessonIds,
+            requiredLessonIds,
+          }).percent,
+          requiredLessonCount: requiredLessonIds.length,
+        })
+      ),
     nextLessonId: getNextAvailablePendingLessonId(nextLessonCandidates),
     nextReleaseAt,
   };
@@ -1129,7 +1284,12 @@ const getEnrolledCourseOverview = async ({
         l.is_required,
         l.sort_order as lesson_sort_order,
         lp.completed_at,
-        lwp.watched_percent
+        case
+          when lwp.id is null then null
+          when lwp.tracking_version = 1 and l.video_duration_seconds > 0 then
+            least(100, round(lwp.validated_position_seconds::numeric * 100 / l.video_duration_seconds)::int)
+          else 0
+        end as watched_percent
       from enrollments e
       join users u on u.id = e.user_id
       join courses c on c.id = e.course_id
@@ -1193,12 +1353,15 @@ const getEnrolledCourseOverview = async ({
     diagnostics: createContentReleaseDiagnostics(),
     lessonIds,
     now: firstRow.decision_now ?? new Date(),
+    requiredLessonIds,
     rows,
   });
+  const hasCertificateFlow =
+    requiredLessonIds.length > 0 || Boolean(firstRow.certificate_code);
 
   return {
     certificateCode: firstRow.certificate_code,
-    certificateEnabled: firstRow.certificate_enabled,
+    certificateEnabled: firstRow.certificate_enabled && hasCertificateFlow,
     certificateRenderStatus: firstRow.certificate_render_status,
     certificateStatus: firstRow.certificate_status,
     completedCount: progress.completedCount,
@@ -1218,6 +1381,7 @@ const getEnrolledCourseOverview = async ({
     nextReleaseAt: moduleProjection.nextReleaseAt,
     progressPercent: progress.percent,
     studentName: firstRow.student_name,
+    lessonCount: lessonIds.length,
     totalCount: progress.totalCount,
   };
 };
@@ -1247,6 +1411,7 @@ const getPreviewCourseOverview = async ({
         l.video_embed_url,
         l.video_external_id,
         l.duration_seconds,
+        l.is_required,
         l.sort_order as lesson_sort_order
       from courses c
       join lateral (
@@ -1272,6 +1437,9 @@ const getPreviewCourseOverview = async ({
   const lessonIds = rows
     .map((row) => row.lesson_id)
     .filter((lessonId): lessonId is string => Boolean(lessonId));
+  const requiredLessonIds = rows
+    .filter((row) => row.lesson_id && row.is_required !== false)
+    .map((row) => row.lesson_id as string);
   const modules = new Map<
     string,
     StudentCourseOverviewData["modules"][number]
@@ -1284,10 +1452,13 @@ const getPreviewCourseOverview = async ({
 
     const moduleData = modules.get(row.module_id) ?? {
       availableAt: null,
+      completedRequiredLessonCount: 0,
       description: row.module_description,
       id: row.module_id,
       lessonCount: 0,
       releaseState: "available" as const,
+      progressPercent: 0,
+      requiredLessonCount: 0,
       totalDurationSeconds: 0,
       title: row.module_title,
       sortOrder: row.module_sort_order,
@@ -1305,6 +1476,7 @@ const getPreviewCourseOverview = async ({
       moduleData.lessons.push({
         availability: { kind: "available" },
         id: row.lesson_id,
+        isRequired: row.is_required !== false,
         title: row.lesson_title,
         thumbnailUrl: hasVideo ? row.lesson_thumbnail_url : null,
         hasVideo,
@@ -1314,6 +1486,9 @@ const getPreviewCourseOverview = async ({
         watchedPercent: 0,
       });
       moduleData.lessonCount += 1;
+      if (row.is_required !== false) {
+        moduleData.requiredLessonCount += 1;
+      }
       moduleData.totalDurationSeconds += Math.max(0, row.duration_seconds);
     }
 
@@ -1342,7 +1517,8 @@ const getPreviewCourseOverview = async ({
     nextReleaseAt: null,
     progressPercent: 0,
     studentName: null,
-    totalCount: lessonIds.length,
+    lessonCount: lessonIds.length,
+    totalCount: requiredLessonIds.length,
   };
 };
 
@@ -1421,120 +1597,16 @@ export const getPublishedFaqItems = async (): Promise<FaqItem[]> => {
   }));
 };
 
-const getEnrolledLessonWorkspace = async ({
-  client,
-  resolveVideo = true,
-  userId,
-  lessonId,
-}: {
-  client?: PoolClient;
-  resolveVideo?: boolean;
-  userId: string;
-  lessonId: string;
-}): Promise<StudentLessonWorkspaceResult> => {
-  const diagnostics = createContentReleaseDiagnostics();
-  const accessDecision = client
-    ? await resolveLessonAccessWithClient({
-        client,
-        diagnostics,
-        lessonId,
-        userId,
-      })
-    : await resolveLessonAccess({ diagnostics, lessonId, userId });
-
-  if (accessDecision.kind === "denied") {
-    return { kind: "unavailable" };
-  }
-  if (accessDecision.kind === "time_locked") {
-    return accessDecision;
-  }
-
-  const db = client ?? getPool();
-  const { rows } = await db.query<LessonRow>(
-    `
-      with target_course as (
-        select l.course_publication_id
-        from lessons l
-        where l.id = $2
-      )
-      select
-        c.id as course_id,
-        c.title as course_title,
-        now() as decision_now,
-        e.content_release_mode,
-        e.content_release_started_at,
-        m.id as module_id,
-        m.title as module_title,
-        m.sort_order as module_sort_order,
-        m.release_delay_days,
-        l.id as lesson_id,
-        l.title as lesson_title,
-        l.description as lesson_description,
-        l.content_json,
-        l.duration_seconds,
-        l.video_duration_seconds,
-        l.sort_order as lesson_sort_order,
-        l.video_embed_url,
-        l.video_external_id,
-        l.video_provider,
-        l.is_required,
-        lp.completed_at,
-        lwp.current_seconds as watch_current_seconds,
-        lwp.duration_seconds as watch_duration_seconds,
-        lwp.max_position_seconds as watch_max_position_seconds,
-        lwp.watched_percent as watch_percent
-      from target_course tc
-      join course_publications cp on cp.id = tc.course_publication_id and cp.status = 'published'
-      join enrollments e on e.course_id = cp.course_id and e.user_id = $1
-      join courses c on c.id = e.course_id
-      join modules m on m.course_publication_id = cp.id and m.status = 'active'
-      join lessons l on l.module_id = m.id
-        and l.course_publication_id = cp.id
-        and l.status = 'active'
-      left join lateral (
-        select min(lp.completed_at) as completed_at
-        from lesson_progress lp
-        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
-        where lp.user_id = e.user_id
-          and completed_lesson.curriculum_key = l.curriculum_key
-      ) lp on true
-      left join lesson_watch_progress lwp on lwp.lesson_id = l.id and lwp.user_id = e.user_id
-      where e.status = 'active'
-        and e.starts_at <= now()
-        and e.expires_at >= now()
-        and c.status = 'active'
-      order by m.sort_order asc, l.sort_order asc
-    `,
-    [userId, lessonId]
-  );
-
-  if (rows.length === 0) {
-    return { kind: "unavailable" };
-  }
-
-  const lessonIds = rows.map((row) => row.lesson_id);
-  const completedLessonIds = rows
-    .filter((row) => row.completed_at)
-    .map((row) => row.lesson_id);
-  const requiredLessonIds = rows
-    .filter((row) => row.is_required !== false)
-    .map((row) => row.lesson_id);
-
-  if (!isLessonAvailable({ lessonIds, completedLessonIds, lessonId })) {
-    return { kind: "unavailable" };
-  }
-
-  const activeLesson = rows.find((row) => row.lesson_id === lessonId);
-
-  if (!activeLesson) {
-    return { kind: "unavailable" };
-  }
-
-  const visibleModules = mapModules(rows).map((moduleData) => {
+const getEnrolledVisibleModules = (
+  rows: LessonRow[],
+  diagnostics: ReturnType<typeof createContentReleaseDiagnostics>
+): ModuleWithLessons[] =>
+  mapModules(rows).map((moduleData) => {
     const moduleRow = rows.find((row) => row.module_id === moduleData.id);
     if (!moduleRow) {
       return moduleData;
     }
+
     try {
       const release = resolveModuleContentRelease({
         contentReleaseMode: moduleRow.content_release_mode ?? "full_access",
@@ -1572,6 +1644,169 @@ const getEnrolledLessonWorkspace = async ({
       };
     }
   });
+
+const getEnrolledLessonAccessDecision = async ({
+  client,
+  diagnostics,
+  lessonId,
+  userId,
+}: {
+  client?: PoolClient;
+  diagnostics: ReturnType<typeof createContentReleaseDiagnostics>;
+  lessonId: string;
+  userId: string;
+}) => {
+  if (client) {
+    return await resolveLessonAccessWithClient({
+      client,
+      diagnostics,
+      lessonId,
+      userId,
+    });
+  }
+
+  return await resolveLessonAccess({ diagnostics, lessonId, userId });
+};
+
+const getEnrolledLessonAccessShortCircuit = (
+  accessDecision: Awaited<ReturnType<typeof resolveLessonAccess>>
+): StudentLessonWorkspaceResult | null => {
+  if (accessDecision.kind === "denied") {
+    return { kind: "unavailable" };
+  }
+  if (accessDecision.kind === "time_locked") {
+    return accessDecision;
+  }
+  return null;
+};
+
+const getEnrolledLessonWorkspace = async ({
+  client,
+  resolveVideo = true,
+  userId,
+  lessonId,
+}: {
+  client?: PoolClient;
+  resolveVideo?: boolean;
+  userId: string;
+  lessonId: string;
+}): Promise<StudentLessonWorkspaceResult> => {
+  const diagnostics = createContentReleaseDiagnostics();
+  const accessDecision = await getEnrolledLessonAccessDecision({
+    ...(client ? { client } : {}),
+    diagnostics,
+    lessonId,
+    userId,
+  });
+
+  const accessShortCircuit =
+    getEnrolledLessonAccessShortCircuit(accessDecision);
+  if (accessShortCircuit) {
+    return accessShortCircuit;
+  }
+
+  const db = client ?? getPool();
+  const { rows } = await db.query<LessonRow>(
+    `
+      with target_course as (
+        select l.course_publication_id
+        from lessons l
+        where l.id = $2
+      )
+      select
+        c.id as course_id,
+        c.title as course_title,
+        now() as decision_now,
+        e.content_release_mode,
+        e.content_release_started_at,
+        m.id as module_id,
+        m.title as module_title,
+        m.sort_order as module_sort_order,
+        m.release_delay_days,
+        l.id as lesson_id,
+        l.title as lesson_title,
+        l.description as lesson_description,
+        l.content_json,
+        l.duration_seconds,
+        l.video_duration_seconds,
+        l.sort_order as lesson_sort_order,
+        l.video_embed_url,
+        l.video_external_id,
+        l.video_provider,
+        l.is_required,
+        lp.completed_at,
+        lwp.current_seconds as watch_current_seconds,
+        lwp.duration_seconds as watch_duration_seconds,
+        lwp.max_position_seconds as watch_max_position_seconds,
+        lwp.resume_position_seconds as watch_resume_position_seconds,
+        lwp.validated_position_seconds as watch_validated_position_seconds,
+        lwp.playing_time_seconds as watch_playing_time_seconds,
+        lwp.tracking_session_id as watch_tracking_session_id,
+        lwp.last_event_sequence as watch_last_event_sequence,
+        lwp.awaiting_playback_after_seek as watch_awaiting_playback_after_seek,
+        lwp.linear_progress_blocked as watch_linear_progress_blocked,
+        lwp.tracking_version as watch_tracking_version,
+        case
+          when lwp.id is null then null
+          when lwp.tracking_version = 1 and l.video_duration_seconds > 0 then
+            least(100, round(lwp.validated_position_seconds::numeric * 100 / l.video_duration_seconds)::int)
+          else 0
+        end as watch_percent
+      from target_course tc
+      join course_publications cp on cp.id = tc.course_publication_id and cp.status = 'published'
+      join enrollments e on e.course_id = cp.course_id and e.user_id = $1
+      join courses c on c.id = e.course_id
+      join modules m on m.course_publication_id = cp.id and m.status = 'active'
+      join lessons l on l.module_id = m.id
+        and l.course_publication_id = cp.id
+        and l.status = 'active'
+      left join lateral (
+        select min(lp.completed_at) as completed_at
+        from lesson_progress lp
+        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
+        where lp.user_id = e.user_id
+          and completed_lesson.curriculum_key = l.curriculum_key
+      ) lp on true
+      left join lesson_watch_progress lwp on lwp.lesson_id = l.id and lwp.user_id = e.user_id
+      where e.status = 'active'
+        and e.starts_at <= now()
+        and e.expires_at >= now()
+        and c.status = 'active'
+      order by m.sort_order asc, l.sort_order asc
+    `,
+    [userId, lessonId]
+  );
+
+  if (rows.length === 0) {
+    return { kind: "unavailable" };
+  }
+
+  const lessonIds = rows.map((row) => row.lesson_id);
+  const completedLessonIds = rows
+    .filter((row) => row.completed_at)
+    .map((row) => row.lesson_id);
+  const requiredLessonIds = rows
+    .filter((row) => row.is_required !== false)
+    .map((row) => row.lesson_id);
+
+  if (
+    !isLessonAvailable({
+      lessonIds,
+      completedLessonIds,
+      requiredLessonIds,
+      lessonId,
+    })
+  ) {
+    return { kind: "unavailable" };
+  }
+
+  const activeLesson = rows.find((row) => row.lesson_id === lessonId);
+
+  if (!activeLesson) {
+    return { kind: "unavailable" };
+  }
+
+  const visibleModules = getEnrolledVisibleModules(rows, diagnostics);
   const visibleLessonIds = visibleModules.flatMap((module) =>
     module.lessons.map((lesson) => lesson.id)
   );
@@ -1616,6 +1851,7 @@ const getEnrolledLessonWorkspace = async ({
         durationSeconds: activeLesson.duration_seconds,
         videoDurationSeconds: activeLesson.video_duration_seconds,
         isCompleted: Boolean(activeLesson.completed_at),
+        isRequired: activeLesson.is_required !== false,
         watchProgress:
           activeLesson.watch_percent === null
             ? null
@@ -1624,6 +1860,14 @@ const getEnrolledLessonWorkspace = async ({
                 durationSeconds: activeLesson.watch_duration_seconds ?? 0,
                 maxPositionSeconds:
                   activeLesson.watch_max_position_seconds ?? 0,
+                playingTimeSeconds:
+                  activeLesson.watch_playing_time_seconds ?? 0,
+                resumePositionSeconds:
+                  activeLesson.watch_resume_position_seconds ??
+                  activeLesson.watch_current_seconds ??
+                  0,
+                validatedPositionSeconds:
+                  activeLesson.watch_validated_position_seconds ?? 0,
                 watchedPercent: activeLesson.watch_percent,
               },
         videoEmbedUrl: video.embedUrl,
@@ -1676,6 +1920,14 @@ const getPreviewLessonWorkspace = async ({
         null::integer as watch_current_seconds,
         null::integer as watch_duration_seconds,
         null::integer as watch_max_position_seconds,
+        null::integer as watch_resume_position_seconds,
+        null::integer as watch_validated_position_seconds,
+        null::integer as watch_playing_time_seconds,
+        null::text as watch_tracking_session_id,
+        null::integer as watch_last_event_sequence,
+        null::boolean as watch_awaiting_playback_after_seek,
+        null::boolean as watch_linear_progress_blocked,
+        null::integer as watch_tracking_version,
         null::integer as watch_percent
       from target_course tc
       join course_publications cp on cp.id = tc.course_publication_id
@@ -1716,6 +1968,7 @@ const getPreviewLessonWorkspace = async ({
         durationSeconds: activeLesson.duration_seconds,
         videoDurationSeconds: activeLesson.video_duration_seconds,
         isCompleted: false,
+        isRequired: activeLesson.is_required !== false,
         watchProgress: null,
         videoEmbedUrl: video.embedUrl,
         videoExternalId: activeLesson.video_external_id,
@@ -1821,11 +2074,13 @@ interface CompletionMutationResult {
 
 const completeLessonInTransaction = async ({
   client,
+  completionSource,
   lessonData,
   lessonId,
   userId,
 }: {
   client: PoolClient;
+  completionSource: LessonCompletionSource;
   lessonData: StudentLessonData;
   lessonId: string;
   userId: string;
@@ -1837,11 +2092,11 @@ const completeLessonInTransaction = async ({
   );
   const progressInsert = await client.query(
     `
-      insert into lesson_progress (user_id, lesson_id)
-      values ($1, $2)
+      insert into lesson_progress (user_id, lesson_id, completion_source)
+      values ($1, $2, $3)
       on conflict (user_id, lesson_id) do nothing
     `,
-    [userId, lessonId]
+    [userId, lessonId, completionSource]
   );
 
   const { rows } = await client.query<{
@@ -1943,7 +2198,13 @@ export const completeLesson = async ({
     const lessonData = data.data;
     const result = await completeLessonInTransaction({
       client,
+      completionSource: "manual",
       lessonData,
+      lessonId,
+      userId,
+    });
+    const nextLessonId = await getNextAvailableLessonIdForTransaction({
+      client,
       lessonId,
       userId,
     });
@@ -1952,6 +2213,7 @@ export const completeLesson = async ({
 
     if (result.progressInserted) {
       await recordLearningAnalyticsEvent({
+        completionSource: "manual",
         eventType: "lesson_completed",
         idempotencyKey: `lesson_completed/${userId}/${lessonId}/v1`,
         lessonId,
@@ -1962,7 +2224,7 @@ export const completeLesson = async ({
     return {
       certificateIssued: result.certificateIssued,
       courseId: lessonData.course.id,
-      nextLessonId: lessonData.nextLessonId,
+      nextLessonId,
     };
   } catch (error) {
     await client.query("rollback");
@@ -1994,24 +2256,24 @@ const getWatchAnalyticsKey = ({
 
 const persistLessonWatchProgress = async ({
   client,
-  currentSeconds,
   durationSeconds,
   eventName,
   lessonId,
-  maxPositionSeconds,
+  progress,
   shouldCompleteByVideo,
+  trackingSessionId,
+  eventSequence,
   userId,
-  watchedPercent,
 }: {
   client: PoolClient;
-  currentSeconds: number;
   durationSeconds: number;
   eventName: string;
   lessonId: string;
-  maxPositionSeconds: number;
+  progress: VideoPlaybackProgressState;
   shouldCompleteByVideo: boolean;
+  trackingSessionId: string;
+  eventSequence: number;
   userId: string;
-  watchedPercent: number;
 }): Promise<void> => {
   await client.query(
     `
@@ -2019,21 +2281,37 @@ const persistLessonWatchProgress = async ({
         user_id,
         lesson_id,
         current_seconds,
+        resume_position_seconds,
         max_position_seconds,
+        validated_position_seconds,
+        playing_time_seconds,
         duration_seconds,
         watched_percent,
         last_event_name,
         last_event_at,
+        tracking_session_id,
+        last_event_sequence,
+        awaiting_playback_after_seek,
+        linear_progress_blocked,
+        tracking_version,
         completed_by_video_at
       )
-      values ($1, $2, $3, $4, $5, $6, $7, now(), case when $8 then now() else null end)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), $11, $12, $13, $14, $15, case when $16 then now() else null end)
       on conflict (user_id, lesson_id) do update set
         current_seconds = excluded.current_seconds,
+        resume_position_seconds = excluded.resume_position_seconds,
         max_position_seconds = greatest(lesson_watch_progress.max_position_seconds, excluded.max_position_seconds),
+        validated_position_seconds = greatest(lesson_watch_progress.validated_position_seconds, excluded.validated_position_seconds),
+        playing_time_seconds = greatest(lesson_watch_progress.playing_time_seconds, excluded.playing_time_seconds),
         duration_seconds = excluded.duration_seconds,
         watched_percent = greatest(lesson_watch_progress.watched_percent, excluded.watched_percent),
         last_event_name = excluded.last_event_name,
         last_event_at = now(),
+        tracking_session_id = excluded.tracking_session_id,
+        last_event_sequence = excluded.last_event_sequence,
+        awaiting_playback_after_seek = excluded.awaiting_playback_after_seek,
+        linear_progress_blocked = excluded.linear_progress_blocked,
+        tracking_version = excluded.tracking_version,
         completed_by_video_at = case
           when excluded.completed_by_video_at is not null then coalesce(lesson_watch_progress.completed_by_video_at, excluded.completed_by_video_at)
           else lesson_watch_progress.completed_by_video_at
@@ -2043,39 +2321,48 @@ const persistLessonWatchProgress = async ({
     [
       userId,
       lessonId,
-      currentSeconds,
-      maxPositionSeconds,
+      progress.currentPositionSeconds,
+      progress.resumePositionSeconds,
+      progress.maxPositionSeconds,
+      progress.validatedPositionSeconds,
+      progress.playingTimeSeconds,
       durationSeconds,
-      watchedPercent,
+      calculateValidatedVideoPercent({
+        durationSeconds,
+        validatedPositionSeconds: progress.validatedPositionSeconds,
+      }),
       eventName,
+      trackingSessionId,
+      eventSequence,
+      progress.isAwaitingPlaybackAfterSeek,
+      progress.isLinearProgressBlocked,
+      VIDEO_TRACKING_VERSION,
       shouldCompleteByVideo,
     ]
   );
 };
 
-export const recordLessonWatchProgress = async ({
+const assertValidLessonWatchProgressInput = ({
   currentSeconds,
   durationSeconds,
   eventName,
   lessonId,
-  userId,
+  trackingSessionId,
+  eventSequence,
 }: {
   currentSeconds: number;
   durationSeconds: number;
   eventName: string;
   lessonId: string;
-  userId: string;
-}): Promise<{
-  certificateIssued: boolean;
-  completed: boolean;
-  courseId: string;
-  nextLessonId: string | null;
-  watchedPercent: number;
-}> => {
+  trackingSessionId?: string;
+  eventSequence?: number;
+}): void => {
   if (!(lessonId && eventName)) {
     throw new Error("Evento de aula invalido.");
   }
-
+  if (!isJmvstreamPlayerEventName(eventName)) {
+    throw new Error("Evento de video invalido.");
+  }
   if (
     !(Number.isFinite(currentSeconds) && Number.isFinite(durationSeconds)) ||
     currentSeconds < 0 ||
@@ -2084,6 +2371,345 @@ export const recordLessonWatchProgress = async ({
   ) {
     throw new Error("Progresso de video invalido.");
   }
+  if (
+    trackingSessionId !== undefined &&
+    (trackingSessionId.trim().length === 0 || trackingSessionId.length > 128)
+  ) {
+    throw new Error("Sessao de video invalida.");
+  }
+  if (
+    eventSequence !== undefined &&
+    (!Number.isInteger(eventSequence) || eventSequence < 0)
+  ) {
+    throw new Error("Sequencia de video invalida.");
+  }
+};
+
+const getAuthoritativeVideoDurationSeconds = (
+  videoDurationSeconds: number
+): number | null => {
+  const durationSeconds = Math.round(videoDurationSeconds);
+  if (durationSeconds <= 0 || durationSeconds > MAX_LESSON_DURATION_SECONDS) {
+    return null;
+  }
+  return durationSeconds;
+};
+
+type VideoWatchProgressUpdate =
+  | {
+      kind: "ignored";
+      validatedPercent: number;
+    }
+  | {
+      analyticsKey: string | null;
+      checkpointPercent: number | null;
+      eventType: "lesson_started" | "watch_checkpoint";
+      kind: "updated";
+      playingSeconds: number;
+      progress: VideoPlaybackProgressState;
+      shouldCompleteByVideo: boolean;
+      trackingSessionId: string;
+      eventSequence: number;
+      validatedPercent: number;
+    };
+
+const calculateStoredValidatedPercent = (
+  progress: LessonWatchProgressRow | undefined,
+  durationSeconds: number
+): number => {
+  if (!progress) {
+    return 0;
+  }
+
+  return calculateValidatedVideoPercent({
+    durationSeconds:
+      durationSeconds > 0 ? durationSeconds : progress.duration_seconds,
+    validatedPositionSeconds: progress.validated_position_seconds ?? 0,
+  });
+};
+
+const isStaleVideoTrackingEvent = (
+  progress: LessonWatchProgressRow | undefined,
+  trackingSessionId: string,
+  eventSequence: number | undefined
+): boolean =>
+  Boolean(
+    progress &&
+      progress.tracking_session_id === trackingSessionId &&
+      eventSequence !== undefined &&
+      eventSequence <= (progress.last_event_sequence ?? 0)
+  );
+
+const toVideoPlaybackProgressState = (
+  progress: LessonWatchProgressRow | undefined
+): VideoPlaybackProgressState => ({
+  currentPositionSeconds: progress?.current_seconds ?? 0,
+  isAwaitingPlaybackAfterSeek: progress?.awaiting_playback_after_seek ?? false,
+  isLinearProgressBlocked: progress?.linear_progress_blocked ?? false,
+  maxPositionSeconds: progress?.max_position_seconds ?? 0,
+  playingTimeSeconds: progress?.playing_time_seconds ?? 0,
+  resumePositionSeconds:
+    progress?.resume_position_seconds ?? progress?.current_seconds ?? 0,
+  validatedPositionSeconds: progress?.validated_position_seconds ?? 0,
+});
+
+const calculateVideoWatchProgressUpdate = async ({
+  client,
+  currentSeconds,
+  eventName,
+  isPaused,
+  lessonId,
+  trackingSessionId,
+  eventSequence,
+  userId,
+  videoDurationSeconds,
+}: {
+  client: PoolClient;
+  currentSeconds: number;
+  eventName: string;
+  isPaused: boolean;
+  lessonId: string;
+  trackingSessionId: string;
+  eventSequence?: number;
+  userId: string;
+  videoDurationSeconds: number;
+}): Promise<VideoWatchProgressUpdate> => {
+  const { rows } = await client.query<LessonWatchProgressRow>(
+    `
+      select
+        current_seconds,
+        duration_seconds,
+        max_position_seconds,
+        resume_position_seconds,
+        validated_position_seconds,
+        playing_time_seconds,
+        tracking_session_id,
+        last_event_sequence,
+        awaiting_playback_after_seek,
+        linear_progress_blocked,
+        tracking_version,
+        watched_percent
+      from lesson_watch_progress
+      where user_id = $1 and lesson_id = $2
+      limit 1
+    `,
+    [userId, lessonId]
+  );
+  const previousProgress = rows[0];
+  const normalizedEventSequence =
+    eventSequence ??
+    (previousProgress?.tracking_session_id === trackingSessionId
+      ? (previousProgress.last_event_sequence ?? 0) + 1
+      : 1);
+  if (
+    isStaleVideoTrackingEvent(
+      previousProgress,
+      trackingSessionId,
+      eventSequence
+    )
+  ) {
+    return {
+      kind: "ignored",
+      validatedPercent: calculateStoredValidatedPercent(
+        previousProgress,
+        videoDurationSeconds
+      ),
+    };
+  }
+
+  const authoritativeDurationSeconds =
+    getAuthoritativeVideoDurationSeconds(videoDurationSeconds);
+  if (authoritativeDurationSeconds === null) {
+    return {
+      kind: "ignored",
+      validatedPercent: calculateStoredValidatedPercent(
+        previousProgress,
+        previousProgress?.duration_seconds ?? 0
+      ),
+    };
+  }
+
+  const progress = advanceVideoPlaybackProgress({
+    currentSeconds: Math.max(0, Math.round(currentSeconds)),
+    durationSeconds: authoritativeDurationSeconds,
+    isPaused,
+    isSkipEvent: eventName === "jmvplayerout-skip",
+    previous: toVideoPlaybackProgressState(previousProgress),
+  });
+  const validatedPercent = calculateValidatedVideoPercent({
+    durationSeconds: authoritativeDurationSeconds,
+    validatedPositionSeconds: progress.validatedPositionSeconds,
+  });
+  const shouldCompleteByVideo = shouldCompleteLessonFromJmvstreamEvent({
+    eventName,
+    validatedPercent,
+  });
+  const previousValidatedPercent = calculateStoredValidatedPercent(
+    previousProgress,
+    authoritativeDurationSeconds
+  );
+  const eventType =
+    previousProgress?.tracking_version === VIDEO_TRACKING_VERSION
+      ? "watch_checkpoint"
+      : "lesson_started";
+  const checkpointPercent = getWatchCheckpointPercent({
+    previousPercent: previousValidatedPercent,
+    watchedPercent: validatedPercent,
+  });
+  const previousPlayingTimeSeconds =
+    previousProgress?.playing_time_seconds ?? 0;
+
+  return {
+    analyticsKey: getWatchAnalyticsKey({
+      checkpointPercent,
+      eventType,
+      lessonId,
+      userId,
+    }),
+    checkpointPercent,
+    eventSequence: normalizedEventSequence,
+    eventType,
+    kind: "updated",
+    playingSeconds: Math.max(
+      0,
+      progress.playingTimeSeconds - previousPlayingTimeSeconds
+    ),
+    progress,
+    shouldCompleteByVideo,
+    trackingSessionId,
+    validatedPercent,
+  };
+};
+
+const completeLessonFromVideoIfEligible = async ({
+  client,
+  lessonData,
+  lessonId,
+  progressUpdate,
+  userId,
+}: {
+  client: PoolClient;
+  lessonData: StudentLessonData;
+  lessonId: string;
+  progressUpdate: Extract<VideoWatchProgressUpdate, { kind: "updated" }>;
+  userId: string;
+}): Promise<CompletionMutationResult> => {
+  if (!progressUpdate.shouldCompleteByVideo || lessonData.lesson.isCompleted) {
+    return { certificateIssued: false, progressInserted: false };
+  }
+
+  return await completeLessonInTransaction({
+    client,
+    completionSource: "video",
+    lessonData,
+    lessonId,
+    userId,
+  });
+};
+
+const getNextLessonAfterVideoProgress = async ({
+  client,
+  lessonData,
+  lessonId,
+  progressUpdate,
+  userId,
+}: {
+  client: PoolClient;
+  lessonData: StudentLessonData;
+  lessonId: string;
+  progressUpdate: Extract<VideoWatchProgressUpdate, { kind: "updated" }>;
+  userId: string;
+}): Promise<string | null> => {
+  if (
+    !(progressUpdate.shouldCompleteByVideo || lessonData.lesson.isCompleted)
+  ) {
+    return lessonData.nextLessonId;
+  }
+
+  return await getNextAvailableLessonIdForTransaction({
+    client,
+    lessonId,
+    userId,
+  });
+};
+
+const recordVideoWatchAnalytics = async ({
+  completion,
+  lessonId,
+  progressUpdate,
+  userId,
+}: {
+  completion: CompletionMutationResult;
+  lessonId: string;
+  progressUpdate: Extract<VideoWatchProgressUpdate, { kind: "updated" }>;
+  userId: string;
+}): Promise<void> => {
+  if (progressUpdate.analyticsKey) {
+    await recordLearningAnalyticsEvent({
+      ...(progressUpdate.checkpointPercent === null
+        ? {}
+        : { checkpointPercent: progressUpdate.checkpointPercent }),
+      eventType: progressUpdate.eventType,
+      idempotencyKey: progressUpdate.analyticsKey,
+      lessonId,
+      userId,
+    }).catch(() => undefined);
+  }
+
+  if (progressUpdate.playingSeconds > 0) {
+    await recordLearningAnalyticsEvent({
+      eventType: "watch_progress",
+      idempotencyKey: `watch_progress/${userId}/${lessonId}/${progressUpdate.trackingSessionId}/${progressUpdate.eventSequence}/v1`,
+      lessonId,
+      playingSeconds: progressUpdate.playingSeconds,
+      userId,
+    }).catch(() => undefined);
+  }
+
+  if (completion.progressInserted) {
+    await recordLearningAnalyticsEvent({
+      completionSource: "video",
+      eventType: "lesson_completed",
+      idempotencyKey: `lesson_completed/${userId}/${lessonId}/v1`,
+      lessonId,
+      userId,
+    }).catch(() => undefined);
+  }
+};
+
+export const recordLessonWatchProgress = async ({
+  currentSeconds,
+  durationSeconds,
+  eventName,
+  isPaused,
+  lessonId,
+  trackingSessionId,
+  eventSequence,
+  userId,
+}: {
+  currentSeconds: number;
+  durationSeconds: number;
+  eventName: string;
+  isPaused?: boolean;
+  lessonId: string;
+  trackingSessionId?: string;
+  eventSequence?: number;
+  userId: string;
+}): Promise<{
+  certificateIssued: boolean;
+  completed: boolean;
+  courseId: string;
+  nextLessonId: string | null;
+  watchedPercent: number;
+}> => {
+  assertValidLessonWatchProgressInput({
+    currentSeconds,
+    durationSeconds,
+    eventName,
+    lessonId,
+    ...(trackingSessionId === undefined ? {} : { trackingSessionId }),
+    ...(eventSequence === undefined ? {} : { eventSequence }),
+  });
 
   const courseId = await getCourseIdForLessonMutation(lessonId);
   const client = await getPool().connect();
@@ -2114,96 +2740,73 @@ export const recordLessonWatchProgress = async ({
       };
     }
 
-    const roundedCurrentSeconds = Math.max(0, Math.round(currentSeconds));
-    const roundedDurationSeconds = Math.max(1, Math.round(durationSeconds));
-    const { rows } = await client.query<LessonWatchProgressRow>(
-      `
-        select
-          current_seconds,
-          duration_seconds,
-          max_position_seconds,
-          watched_percent
-        from lesson_watch_progress
-        where user_id = $1 and lesson_id = $2
-        limit 1
-      `,
-      [userId, lessonId]
-    );
-    const previousProgress = rows[0];
-    const { maxPositionSeconds, watchedPercent } =
-      calculateVideoPositionProgress({
-        currentSeconds: roundedCurrentSeconds,
-        durationSeconds: roundedDurationSeconds,
-        previousMaxPositionSeconds: previousProgress?.max_position_seconds ?? 0,
-      });
-    const shouldCompleteByVideo = shouldCompleteLessonFromJmvstreamEvent({
+    const normalizedTrackingSessionId = trackingSessionId?.trim() || "legacy";
+    const watchUpdate = await calculateVideoWatchProgressUpdate({
+      client,
+      currentSeconds,
       eventName,
-      watchedPercent,
+      ...(eventSequence === undefined ? {} : { eventSequence }),
+      isPaused: isPaused ?? eventName === "jmvplayerout-pause",
+      lessonId,
+      trackingSessionId: normalizedTrackingSessionId,
+      userId,
+      videoDurationSeconds: lessonData.lesson.videoDurationSeconds,
     });
+    if (watchUpdate.kind === "ignored") {
+      await client.query("commit");
+      return {
+        certificateIssued: false,
+        completed: lessonData.lesson.isCompleted,
+        courseId: lessonData.course.id,
+        nextLessonId: lessonData.lesson.isCompleted
+          ? lessonData.nextLessonId
+          : null,
+        watchedPercent: watchUpdate.validatedPercent,
+      };
+    }
 
     await persistLessonWatchProgress({
       client,
-      currentSeconds: roundedCurrentSeconds,
-      durationSeconds: roundedDurationSeconds,
+      durationSeconds: lessonData.lesson.videoDurationSeconds,
       eventName,
       lessonId,
-      maxPositionSeconds,
-      shouldCompleteByVideo,
+      progress: watchUpdate.progress,
+      shouldCompleteByVideo: watchUpdate.shouldCompleteByVideo,
+      trackingSessionId: watchUpdate.trackingSessionId,
+      eventSequence: watchUpdate.eventSequence,
       userId,
-      watchedPercent,
     });
 
-    const checkpointPercent = getWatchCheckpointPercent({
-      previousPercent: previousProgress?.watched_percent ?? 0,
-      watchedPercent,
-    });
-    const eventType = previousProgress ? "watch_checkpoint" : "lesson_started";
-    const analyticsKey = getWatchAnalyticsKey({
-      checkpointPercent,
-      eventType,
+    const completion = await completeLessonFromVideoIfEligible({
+      client,
+      lessonData,
       lessonId,
+      progressUpdate: watchUpdate,
       userId,
     });
-
-    let completion: CompletionMutationResult = {
-      certificateIssued: false,
-      progressInserted: false,
-    };
-    if (shouldCompleteByVideo && !lessonData.lesson.isCompleted) {
-      completion = await completeLessonInTransaction({
-        client,
-        lessonData,
-        lessonId,
-        userId,
-      });
-    }
+    const nextLessonId = await getNextLessonAfterVideoProgress({
+      client,
+      lessonData,
+      lessonId,
+      progressUpdate: watchUpdate,
+      userId,
+    });
 
     await client.query("commit");
-
-    if (analyticsKey) {
-      await recordLearningAnalyticsEvent({
-        ...(checkpointPercent === null ? {} : { checkpointPercent }),
-        eventType,
-        idempotencyKey: analyticsKey,
-        lessonId,
-        userId,
-      }).catch(() => undefined);
-    }
-    if (completion.progressInserted) {
-      await recordLearningAnalyticsEvent({
-        eventType: "lesson_completed",
-        idempotencyKey: `lesson_completed/${userId}/${lessonId}/v1`,
-        lessonId,
-        userId,
-      }).catch(() => undefined);
-    }
+    await recordVideoWatchAnalytics({
+      completion,
+      lessonId,
+      progressUpdate: watchUpdate,
+      userId,
+    });
 
     return {
       certificateIssued: completion.certificateIssued,
-      completed: shouldCompleteByVideo || lessonData.lesson.isCompleted,
+      completed:
+        watchUpdate.shouldCompleteByVideo || lessonData.lesson.isCompleted,
       courseId: lessonData.course.id,
-      nextLessonId: lessonData.nextLessonId,
-      watchedPercent,
+      nextLessonId,
+      watchedPercent: watchUpdate.validatedPercent,
     };
   } catch (error) {
     await client.query("rollback");

@@ -4,7 +4,10 @@ import type {
   SpanJSON,
   TransactionEvent,
 } from "@sentry/core";
-import { isFullSentryRelease } from "./sentry-deployment";
+import {
+  isFullSentryRelease,
+  isSentryRuntimeEnabled,
+} from "./sentry-deployment";
 
 const SENTRY_TRACE_SAMPLE_RATE = 0.1;
 const CERTIFICATE_CODE = /\bPRT-[0-9A-Z-]{6,}\b/giu;
@@ -126,7 +129,9 @@ export const getSentryOptions = (
   release?: string
 ) => {
   const protectedEnvironment =
-    environment === "production" || environment === "staging";
+    environment === "production" ||
+    environment === "staging" ||
+    process.env.NODE_ENV === "production";
   if (dsn && protectedEnvironment && !isFullSentryRelease(release)) {
     throw new Error("Sentry release must be the full deployment Git SHA.");
   }
@@ -149,7 +154,7 @@ export const getSentryOptions = (
       userInfo: false,
     },
     dsn,
-    enabled: Boolean(dsn),
+    enabled: isSentryRuntimeEnabled({ dsn }),
     ...(environment ? { environment } : {}),
     ...(release ? { release } : {}),
     sendDefaultPii: false,

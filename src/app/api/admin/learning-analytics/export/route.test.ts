@@ -39,6 +39,7 @@ describe("GET /api/admin/learning-analytics/export", () => {
         lessonSortOrder: 2,
         lessonTitle: 'Aula "Inicial", 1',
         medianCheckpointPercent: 75.5,
+        playingSeconds: 3600,
         medianHoursToComplete: null,
         medianHoursToNextLesson: 2,
         moduleSortOrder: 1,
@@ -63,8 +64,8 @@ describe("GET /api/admin/learning-analytics/export", () => {
     expect(response.headers.get("content-type")).toContain("text/csv");
     await expect(response.text()).resolves.toBe(
       [
-        "curso,ordem_modulo,ordem_aula,modulo,aula,versao_curso,status_versao,matriculas_ativas,iniciaram,concluiram,checkpoint_mediano_percentual,mediana_horas_ate_concluir,mediana_horas_ate_proxima_aula,erros",
-        '"Curso de exemplo","1","2","Módulo inicial","Aula ""Inicial"", 1","3","published","5","4","2","75.5","","2","1"',
+        "curso,ordem_modulo,ordem_aula,modulo,aula,versao_curso,status_versao,matriculas_ativas,iniciaram,concluiram,checkpoint_mediano_percentual,tempo_reproduzido_total_segundos,mediana_horas_ate_concluir,mediana_horas_ate_proxima_aula,erros",
+        '"Curso de exemplo","1","2","Módulo inicial","Aula ""Inicial"", 1","3","published","5","4","2","75.5","3600","","2","1"',
       ].join("\n")
     );
     expect(dependencies.getLessonAnalyticsMetrics).toHaveBeenCalledWith({

@@ -1,4 +1,6 @@
+import { getStudentPreviewMode } from "@/features/courses/preview";
 import {
+  assertAdminPreviewLessonAccess,
   assertProtectedLessonAccess,
   LessonAccessDeniedError,
 } from "@/features/courses/protected-lesson-access";
@@ -11,10 +13,28 @@ export const runtime = "nodejs";
 const NO_STORE_HEADERS = { "Cache-Control": "private, no-store" };
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ lessonId: string; resourceId: string }> }
 ): Promise<Response> {
   const session = await requireSession();
+  const url = new URL(request.url);
+  const previewParameter = url.searchParams.get("preview");
+  const previewRequested =
+    previewParameter === "student" || previewParameter === "aluno";
+  const previewMode = getStudentPreviewMode({
+    preview: previewParameter ?? undefined,
+    role: session.role,
+  });
+  const isAdminPreview = previewMode === "student";
+  if (
+    (previewRequested && !isAdminPreview) ||
+    (!isAdminPreview && session.role !== "student")
+  ) {
+    return Response.json(
+      { error: "Preview nao encontrado." },
+      { headers: NO_STORE_HEADERS, status: 404 }
+    );
+  }
   const { lessonId, resourceId } = await context.params;
   const data = await getStudentLessonWorkspace({
     lessonId,
@@ -50,11 +70,15 @@ export async function GET(
   }
 
   try {
-    await assertProtectedLessonAccess({
-      courseId: data.data.course.id,
-      lessonId,
-      userId: session.user.id,
-    });
+    if (isAdminPreview) {
+      await assertAdminPreviewLessonAccess({ lessonId });
+    } else {
+      await assertProtectedLessonAccess({
+        courseId: data.data.course.id,
+        lessonId,
+        userId: session.user.id,
+      });
+    }
   } catch (error) {
     if (error instanceof LessonAccessDeniedError) {
       return Response.json(

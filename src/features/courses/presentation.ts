@@ -84,7 +84,7 @@ export const getCourseAccessPresentation = ({
     return {
       tone: "completed",
       label: "Curso concluído",
-      helper: "Certificado pronto para emitir ou baixar.",
+      helper: "Todas as aulas obrigatórias foram concluídas.",
     };
   }
 
@@ -156,6 +156,20 @@ export const getStudentCoursePrimaryHref = ({
   nextLessonId,
 }: StudentCourseHrefInput): string =>
   nextLessonId ? `/app/aulas/${nextLessonId}` : `/app/cursos/${courseId}`;
+
+export const getStudentCourseActionLabel = ({
+  hasNextLesson,
+  progressPercent,
+}: {
+  hasNextLesson: boolean;
+  progressPercent: number;
+}): string => {
+  if (!hasNextLesson) {
+    return "Rever trilha";
+  }
+
+  return progressPercent === 0 ? "Iniciar curso" : "Continuar curso";
+};
 
 export const groupStudentCatalogCourses = <
   TCourse extends StudentCatalogCourseGroupingInput,
@@ -271,6 +285,11 @@ export const formatCourseWorkload = (totalSeconds: number): string => {
   }
 
   return `${totalMinutes}min`;
+};
+
+export const formatCourseWorkloadHours = (hours: number): string => {
+  const safeHours = Number.isFinite(hours) ? Math.max(0, Math.round(hours)) : 0;
+  return `${safeHours}h`;
 };
 
 import type { CourseAvailabilityPreset } from "./availability";

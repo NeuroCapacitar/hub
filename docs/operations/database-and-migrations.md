@@ -2,8 +2,8 @@
 status: canonical
 owner: engineering
 last_verified_commit: b6e6d63
-current_migration_tag: 0075_installment_schedule_and_observed_evidence
-migration_entry_count: 76
+current_migration_tag: 0077_analytics_completion_source
+migration_entry_count: 78
 schema_table_count: 49
 ---
 
@@ -85,6 +85,18 @@ parcelamento Asaas quando a conciliação as valida e guarda valores observados
 nas Revisões de divergência. Datas das parcelas permanecem texto do provedor,
 sem assumir fuso horário; ausência de taxa ou líquido continua sendo evidência
 incompleta, não taxa zero confirmada.
+
+A migration `0076_linear_validated_video_progress` separa retomada, posição
+máxima observada, fronteira linear validada e tempo de reprodução. Ela inicializa
+a posição de retomada histórica a partir de `current_seconds`, mas deixa a
+fronteira e o tempo validados em zero; portanto, não transforma registros antigos
+em prova de reprodução. Também registra a origem manual ou automática da
+conclusão e permite agregar tempo de reprodução nos analytics.
+
+A migration `0077_analytics_completion_source` acrescenta a origem manual ou de
+vídeo aos eventos brutos de conclusão. O agregado diário continua combinando a
+contagem por evento; a origem detalhada permanece na linha de progresso e no
+evento bruto dentro do período de retenção.
 
 Na verificação de escala do Financeiro em Development, a base tinha 8 Pedidos e a
 busca textual usou `Seq Scan` com 2 buffers e 0,111 ms de execução; a ordenação por

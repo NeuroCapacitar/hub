@@ -533,6 +533,20 @@
       "when": 1788980097750,
       "tag": "0075_installment_schedule_and_observed_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1789209157532,
+      "tag": "0076_linear_validated_video_progress",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1789209803228,
+      "tag": "0077_analytics_completion_source",
+      "breakpoints": true
     }
   ]
 }

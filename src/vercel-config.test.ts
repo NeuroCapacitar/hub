@@ -40,13 +40,18 @@ describe("Vercel cron configuration", () => {
     const source = await readFile("next.config.ts", "utf8");
 
     expect(source).toContain('process.env.E2E_TEST_MODE === "true"');
-    expect(source).toContain('isE2eTest ? "" : process.env.SENTRY_AUTH_TOKEN');
+    expect(source).toContain(
+      "isProduction && !isE2eTest ? process.env.SENTRY_AUTH_TOKEN : undefined"
+    );
     expect(source).toContain(
       "isProduction && !isE2eTest ? sentryAuthToken : undefined"
     );
     expect(source).toContain(
       "disable: !sentryBuildConfiguration.uploadSourceMaps"
     );
+    expect(source).toContain("export default isProduction");
+    expect(source).toContain("withSentryConfig(nextConfig, sentryNextConfig)");
+    expect(source).toContain(": nextConfig;");
   });
 
   it("runs database-backed functions in the same region as production Neon", async () => {

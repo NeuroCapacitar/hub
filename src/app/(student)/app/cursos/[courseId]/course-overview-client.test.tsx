@@ -10,6 +10,7 @@ describe("CourseOverviewClient scheduled modules", () => {
         modules={[
           {
             availableAt: null,
+            completedRequiredLessonCount: 0,
             description: null,
             id: "module-1",
             lessonCount: 2,
@@ -36,6 +37,8 @@ describe("CourseOverviewClient scheduled modules", () => {
               },
             ],
             releaseState: "available",
+            progressPercent: 0,
+            requiredLessonCount: 0,
             sortOrder: 1,
             title: "Fundamentos",
             totalDurationSeconds: 180,
@@ -63,6 +66,7 @@ describe("CourseOverviewClient scheduled modules", () => {
         modules={[
           {
             availableAt: null,
+            completedRequiredLessonCount: 0,
             description: null,
             id: "module-1",
             lessonCount: 1,
@@ -79,6 +83,8 @@ describe("CourseOverviewClient scheduled modules", () => {
               },
             ],
             releaseState: "available",
+            progressPercent: 0,
+            requiredLessonCount: 0,
             sortOrder: 1,
             title: "Módulo 1",
             totalDurationSeconds: 600,
@@ -99,17 +105,21 @@ describe("CourseOverviewClient scheduled modules", () => {
         modules={[
           {
             availableAt: null,
+            completedRequiredLessonCount: 0,
             description: "Descrição inicial",
             id: "module-1",
             lessonCount: 1,
             lessons: [],
             releaseState: "available",
+            progressPercent: 0,
+            requiredLessonCount: 0,
             sortOrder: 1,
             title: "Comece aqui",
             totalDurationSeconds: 120,
           },
           {
             availableAt: new Date("2026-09-12T14:30:00.000Z"),
+            completedRequiredLessonCount: 0,
             description: "Descrição do módulo futuro",
             id: "module-2",
             lessonCount: 4,
@@ -129,6 +139,8 @@ describe("CourseOverviewClient scheduled modules", () => {
               },
             ],
             releaseState: "time_locked",
+            progressPercent: 0,
+            requiredLessonCount: 0,
             sortOrder: 2,
             title: "Aplicação",
             totalDurationSeconds: 480,
@@ -159,6 +171,7 @@ describe("CourseOverviewClient scheduled modules", () => {
         modules={[
           {
             availableAt: new Date("2026-09-12T14:30:00.000Z"),
+            completedRequiredLessonCount: 1,
             description: null,
             id: "module-2",
             lessonCount: 2,
@@ -174,6 +187,8 @@ describe("CourseOverviewClient scheduled modules", () => {
               },
             ],
             releaseState: "time_locked",
+            progressPercent: 100,
+            requiredLessonCount: 1,
             sortOrder: 2,
             title: "Aplicação",
             totalDurationSeconds: 120,
@@ -195,6 +210,7 @@ describe("CourseOverviewClient scheduled modules", () => {
         modules={[
           {
             availableAt: new Date("2026-09-12T14:30:00.000Z"),
+            completedRequiredLessonCount: 0,
             description: null,
             id: "module-2",
             lessonCount: 2,
@@ -224,6 +240,8 @@ describe("CourseOverviewClient scheduled modules", () => {
               },
             ],
             releaseState: "time_locked",
+            progressPercent: 0,
+            requiredLessonCount: 0,
             sortOrder: 2,
             title: "Aplicação",
             totalDurationSeconds: 150,
@@ -252,6 +270,7 @@ describe("CourseOverviewClient scheduled modules", () => {
         modules={[
           {
             availableAt: null,
+            completedRequiredLessonCount: 2,
             description: null,
             id: "module-1",
             lessonCount: 2,
@@ -279,6 +298,8 @@ describe("CourseOverviewClient scheduled modules", () => {
               },
             ],
             releaseState: "available",
+            progressPercent: 100,
+            requiredLessonCount: 2,
             sortOrder: 1,
             title: "Fundamentos",
             totalDurationSeconds: 150,

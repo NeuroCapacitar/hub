@@ -43,6 +43,8 @@ Projeção consolidada do acesso atual de uma Conta a um Curso. Pode refletir ma
 **Liberação programada**
 Modo de Matrícula que libera Módulos em `D+N`, com cada dia representando 24 horas decorridas desde a âncora do episódio. A sequência pedagógica continua sendo uma decisão separada.
 
+Na sequência pedagógica, somente Aulas obrigatórias anteriores formam pré-requisito. Aulas opcionais ficam acessíveis quando as obrigatórias anteriores foram concluídas, não bloqueiam a próxima Aula obrigatória e podem ser recomendadas; após uma conclusão, a recomendação segue para frente e só reinicia no começo ao terminar a última Aula do currículo.
+
 **Acesso integral**
 Modo de Matrícula que ignora atrasos temporais. Admin pode concedê-lo uma vez no episódio atual com motivo e auditoria; Support apenas diagnostica.
 
@@ -76,7 +78,7 @@ Produto educacional vendável e publicável, composto por Módulos e Aulas.
 Revisão interna materializada de Módulos e Aulas, com estados rascunho, publicada e aposentada. A publicação vigente define o currículo vivo de todas as Matrículas ativas do Curso; não é produto nem direito comercial individual.
 
 **Conclusão de Curso (`CourseCompletion`)**
-Primeira conclusão histórica de um Aluno em um Curso, com data e publicação de origem. Somente a transação que cria essa primeira evidência pode iniciar a emissão automática de Certificado. Não é apagada por publicação posterior, revogação ou reemissão de certificado.
+Primeira conclusão histórica de um Aluno em um Curso, com data e publicação de origem. Somente Cursos com pelo menos uma Aula obrigatória entram no fluxo de conclusão e Certificado; a transação que cria essa primeira evidência pode iniciar a emissão automática. Não é apagada por publicação posterior, revogação ou reemissão de certificado.
 
 **Módulo**  
 Agrupamento ordenado de Aulas dentro de Curso e unidade de disponibilidade temporal. Todas as Aulas herdam o momento de liberação do Módulo atual.
@@ -87,8 +89,20 @@ Unidade ordenada de aprendizagem que pode combinar vídeo, texto rico e materiai
 **Progresso**  
 Evidência de consumo de Aulas e Curso. Não é direito de acesso.
 
+**Posição de retomada**
+Último ponto válido reproduzido que o Aluno deve reencontrar ao reabrir um vídeo. Um salto para frente não substitui esse ponto até que exista reprodução real depois dele.
+
+**Fronteira linear validada**
+Maior ponto alcançado por reprodução normal a partir do conteúdo já validado, sem contar saltos para frente. É a referência da conclusão automática de vídeo em Cursos lineares.
+
+**Tempo de reprodução**
+Tempo em que o vídeo avançou normalmente, separado de pausas, buscas, buffering e posição máxima. Pode contar novamente um trecho revisto e serve aos analytics, não substitui a fronteira linear.
+
 **Conclusão**  
 Estado em que Aula ou Curso satisfaz a regra vigente de completude. É independente de expiração.
+
+**Origem da conclusão**
+Indica se uma Aula foi concluída manualmente pelo Aluno ou automaticamente após reprodução validada do vídeo. Conclusões antigas sem essa informação são históricas ou desconhecidas.
 
 **Disponibilidade temporal do Módulo**
 Condição que define quantos períodos de 24 horas após o início da entrega devem transcorrer antes do consumo de um Módulo. Não concede acesso ao Curso, não altera sua validade e não substitui a sequência pedagógica.

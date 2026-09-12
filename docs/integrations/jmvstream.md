@@ -117,7 +117,25 @@ reduz despertares do Neon sem remover a recuperação automática.
 
 ## Retomada de reprodução
 
-O Hub persiste `current_seconds` e `max_position_seconds`. Depois de receber um evento válido do player em resposta a `jmvplayer-sync`, envia `jmvplayer-jump` com a última posição (`jump`) para restaurar a Aula sem iniciar nem concluir automaticamente. A primeira resposta após o salto é descartada pela gravação de progresso para impedir conclusão por reabertura.
+O Hub persiste a posição observada (`current_seconds`), a posição de retomada
+(`resume_position_seconds`), a maior posição observada (`max_position_seconds`),
+a fronteira linear validada (`validated_position_seconds`) e o tempo de
+reprodução (`playing_time_seconds`). Depois de receber um evento válido do player
+em resposta a `jmvplayer-sync`, envia `jmvplayer-jump` com a posição de retomada
+(`jump`) para restaurar a Aula sem iniciar nem concluir automaticamente. A
+primeira resposta após o salto é descartada pela gravação de progresso para
+impedir conclusão por reabertura.
+
+O endpoint de progresso trata `current_seconds`, `duration_seconds` e o nome do
+evento vindos do navegador como entrada não confiável: somente eventos OUT
+reconhecidos são aceitos, a duração do player passa por validação de faixa e o
+servidor usa a duração de vídeo persistida na Aula como autoridade. O valor do
+navegador não substitui a duração persistida. `max_position_seconds` permanece
+a posição máxima observada; `watched_percent`, para registros do tracking novo,
+é a projeção da fronteira linear validada, enquanto registros antigos não são
+tratados como validados. Nenhum desses valores prova atenção humana. Um `skip` não avança a fronteira linear nem
+libera conclusão automática; a reprodução posterior pode aumentar o tempo
+analítico, mas precisa retornar ao trecho pendente para continuar a fronteira.
 
 O comando é documentado na página oficial de eventos do player, marcada pelo próprio provedor como referência antiga; ele deve ser confirmado contra um player real antes de promover uma mudança de versão da integração.
 
