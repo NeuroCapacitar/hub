@@ -237,14 +237,17 @@ const readModuleReleaseDelayDays = (formData: FormData): number => {
     throw new LessonAuthoringError("O modo de liberação do Módulo é inválido.");
   }
 
-  const rawValue = readAuthoringString(formData, "releaseDelayDays");
-  const value = Number(rawValue);
-  if (!(rawValue && Number.isSafeInteger(value) && value >= 0)) {
-    throw new Error("Informe uma quantidade inteira e não negativa de dias.");
-  }
+  try {
+    const value = readAuthoringNonNegativeInteger(formData, "releaseDelayDays");
+    assertValidReleaseDelayDays(value);
+    return value;
+  } catch (error) {
+    if (error instanceof LessonAuthoringError) {
+      throw new Error("Informe uma quantidade inteira e não negativa de dias.");
+    }
 
-  assertValidReleaseDelayDays(value);
-  return value;
+    throw error;
+  }
 };
 
 const normalizeLessonContentForSave = ({

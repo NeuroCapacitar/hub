@@ -15,6 +15,11 @@ constraint composta criada na migration
 `0078_protect_module_course_publication_ownership`; a Publicação vinculada a um
 Módulo precisa pertencer ao mesmo Curso.
 
+`lessons.module_id` e `lessons.course_publication_id` são protegidos pela
+constraint composta criada na migration
+`0079_protect_lesson_module_publication_ownership`; a Aula precisa pertencer à
+mesma Publicação do Módulo.
+
 Matrícula concede acesso comercial ao Curso, não a uma publicação. Portanto, toda Matrícula ativa lê a publicação `published` vigente. Uma publicação nova alcança todas os Alunos com Matrícula ativa; acesso expirado, revogado ou bloqueado não lê conteúdo novo. Ver [ADR-0007](../adr/0007-course-versioning-and-enrollment-curriculum.md).
 
 ## Regras de domínio

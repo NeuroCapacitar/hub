@@ -2,8 +2,8 @@
 status: canonical
 owner: engineering
 last_verified_commit: b6e6d63
-current_migration_tag: 0078_protect_module_course_publication_ownership
-migration_entry_count: 79
+current_migration_tag: 0079_protect_lesson_module_publication_ownership
+migration_entry_count: 80
 schema_table_count: 49
 ---
 
@@ -104,6 +104,13 @@ composta correspondente em `modules(course_publication_id, course_id)`. Antes
 de promovê-la a Staging ou Production, executar o preflight de inconsistências
 do plano de remediação no banco alvo; qualquer linha divergente exige STOP e
 investigação manual antes da migration.
+
+A migration `0079_protect_lesson_module_publication_ownership` cria a chave
+única composta de `modules(id, course_publication_id)` e a chave estrangeira
+composta correspondente em `lessons(module_id, course_publication_id)`. Ela
+impede que uma Aula use um Módulo de uma Publicação e o identificador de outra.
+O preflight de Aulas deve ser repetido em cada ambiente antes da promoção;
+qualquer divergência exige STOP e investigação manual.
 
 Na verificação de escala do Financeiro em Development, a base tinha 8 Pedidos e a
 busca textual usou `Seq Scan` com 2 buffers e 0,111 ms de execução; a ordenação por

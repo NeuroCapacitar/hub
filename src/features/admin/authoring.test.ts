@@ -1064,6 +1064,9 @@ describe("admin authoring", () => {
   it.each([
     "",
     "1.5",
+    "+1",
+    "0x10",
+    "1e1",
     "-1",
     "NaN",
     "Infinity",

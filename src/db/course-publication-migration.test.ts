@@ -54,4 +54,27 @@ describe("course publication migration", () => {
       'FOREIGN KEY ("course_publication_id","course_id") REFERENCES "public"."course_publications"("id","course_id")'
     );
   });
+
+  it("protects Lesson ownership before adding the composite foreign key", async () => {
+    const migration = await readFile(
+      new URL(
+        "./migrations/0079_protect_lesson_module_publication_ownership.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+    const uniqueConstraint =
+      'ALTER TABLE "modules" ADD CONSTRAINT "modules_id_course_publication_unique"';
+    const ownershipForeignKey =
+      'ALTER TABLE "lessons" ADD CONSTRAINT "lessons_module_course_publication_fk"';
+
+    expect(migration).toContain(uniqueConstraint);
+    expect(migration).toContain(ownershipForeignKey);
+    expect(migration.indexOf(uniqueConstraint)).toBeLessThan(
+      migration.indexOf(ownershipForeignKey)
+    );
+    expect(migration).toContain(
+      'FOREIGN KEY ("module_id","course_publication_id") REFERENCES "public"."modules"("id","course_publication_id")'
+    );
+  });
 });

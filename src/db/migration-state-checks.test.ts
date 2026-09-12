@@ -11,7 +11,7 @@ describe("migration state checks", () => {
   it("covers the Module and Publication ownership constraint", () => {
     const [ownershipCheck] = courseContentMigrationStateChecks;
 
-    expect(courseContentMigrationStateChecks).toHaveLength(1);
+    expect(courseContentMigrationStateChecks).toHaveLength(2);
     expect(ownershipCheck?.migration).toBe(
       "0078_protect_module_course_publication_ownership"
     );
@@ -20,6 +20,20 @@ describe("migration state checks", () => {
     );
     expect(ownershipCheck?.statement).toContain(
       "modules_course_publication_course_fk"
+    );
+  });
+
+  it("covers the Lesson, Module and Publication ownership constraint", () => {
+    const ownershipCheck = courseContentMigrationStateChecks[1];
+
+    expect(ownershipCheck?.migration).toBe(
+      "0079_protect_lesson_module_publication_ownership"
+    );
+    expect(ownershipCheck?.statement).toContain(
+      "modules_id_course_publication_unique"
+    );
+    expect(ownershipCheck?.statement).toContain(
+      "lessons_module_course_publication_fk"
     );
   });
 

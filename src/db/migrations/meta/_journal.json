@@ -554,6 +554,13 @@
       "when": 1789225677625,
       "tag": "0078_protect_module_course_publication_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1789228933506,
+      "tag": "0079_protect_lesson_module_publication_ownership",
+      "breakpoints": true
     }
   ]
 }

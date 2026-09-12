@@ -40,7 +40,7 @@ describe("Course availability actions", () => {
 
   it("parses the availability form and authenticates an Admin", async () => {
     const formData = new FormData();
-    formData.set("courseId", "course-1");
+    formData.set("courseId", "00000000-0000-4000-8000-000000000001");
     formData.set("preset", "sales_paused");
     formData.set("showInCatalog", "on");
 
@@ -51,7 +51,7 @@ describe("Course availability actions", () => {
     });
     expect(dependencies.setCourseAvailability).toHaveBeenCalledWith({
       actorUserId: "admin-1",
-      courseId: "course-1",
+      courseId: "00000000-0000-4000-8000-000000000001",
       launchDate: null,
       launchLandingUrl: null,
       preset: "sales_paused",
@@ -66,16 +66,28 @@ describe("Course availability actions", () => {
     dependencies.archiveCourse.mockResolvedValue({ preset: "archived" });
     dependencies.restoreCourse.mockResolvedValue({ preset: "sales_paused" });
 
-    await archiveCourseAction("course-1");
-    await restoreCourseAction("course-1");
+    await archiveCourseAction("00000000-0000-4000-8000-000000000001");
+    await restoreCourseAction("00000000-0000-4000-8000-000000000001");
 
     expect(dependencies.archiveCourse).toHaveBeenCalledWith({
       actorUserId: "admin-1",
-      courseId: "course-1",
+      courseId: "00000000-0000-4000-8000-000000000001",
     });
     expect(dependencies.restoreCourse).toHaveBeenCalledWith({
       actorUserId: "admin-1",
-      courseId: "course-1",
+      courseId: "00000000-0000-4000-8000-000000000001",
     });
+  });
+
+  it("rejects an invalid Course identifier before changing availability", async () => {
+    const formData = new FormData();
+    formData.set("courseId", "course-1");
+    formData.set("preset", "sales_paused");
+
+    await expect(saveCourseAvailabilityAction(formData)).resolves.toEqual({
+      message: "O campo courseId é inválido.",
+      ok: false,
+    });
+    expect(dependencies.setCourseAvailability).not.toHaveBeenCalled();
   });
 });

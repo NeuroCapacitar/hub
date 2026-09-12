@@ -1,6 +1,8 @@
 import { LessonAuthoringError } from "./lesson-authoring-errors";
 
 const INTEGER_PATTERN = /^-?\d+$/;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CONTENT_STATUSES = new Set(["draft", "active", "archived"]);
 
 export type AuthoringContentStatus = "active" | "archived" | "draft";
@@ -21,6 +23,56 @@ const getStringValue = (formData: FormData, key: string): string | null => {
 
 export const readAuthoringString = (formData: FormData, key: string): string =>
   getStringValue(formData, key) ?? "";
+
+export const parseAuthoringUuid = (value: unknown, field: string): string => {
+  if (typeof value !== "string") {
+    throw new LessonAuthoringError(`O campo ${field} é inválido.`);
+  }
+
+  const normalized = value.trim();
+  if (!UUID_PATTERN.test(normalized)) {
+    throw new LessonAuthoringError(`O campo ${field} é inválido.`);
+  }
+
+  return normalized;
+};
+
+export const readAuthoringUuid = ({
+  field,
+  formData,
+  required = false,
+  requiredMessage,
+}: {
+  field: string;
+  formData: FormData;
+  required?: boolean;
+  requiredMessage?: string;
+}): string | null => {
+  const value = readAuthoringString(formData, field);
+  if (!value) {
+    if (required) {
+      throw new LessonAuthoringError(
+        requiredMessage ?? `Informe o campo ${field}.`
+      );
+    }
+    return null;
+  }
+
+  return parseAuthoringUuid(value, field);
+};
+
+export const parseAuthoringUuidList = (
+  value: unknown,
+  field: string
+): string[] => {
+  if (!Array.isArray(value)) {
+    throw new LessonAuthoringError(`O campo ${field} é inválido.`);
+  }
+
+  return value.map((item, index) =>
+    parseAuthoringUuid(item, `${field}[${index}]`)
+  );
+};
 
 export const readRequiredAuthoringString = ({
   field,

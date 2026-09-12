@@ -1880,15 +1880,15 @@ Deve ser tratado com cuidado.
 
 Antes de adicionar qualquer constraint, executar em PostgreSQL descartável e depois, no processo operacional aprovado, em Staging.
 
-> **Relatório de implementação — status: preflight Development concluído; Staging e Production pendentes.**
+> **Relatório de implementação — status: A08 e A09 implementados no Development; Staging e Production pendentes.**
 >
-> **Feito:** O preflight somente-leitura foi executado no Development com o guard de destino do projeto: 53 Módulos conferem com suas Publicações, nenhum Módulo está divergente e nenhuma Aula aponta para uma Publicação diferente da do Módulo.
+> **Feito:** O preflight somente-leitura foi executado no Development com o guard de destino do projeto: 53 Módulos conferem com suas Publicações, nenhum Módulo está divergente, e 82 Aulas não têm Publicação diferente da do Módulo.
 >
 > **Não feito:** O preflight ainda não foi executado em banco descartável, Staging ou Production; nenhuma linha legada precisou ser corrigida.
 >
 > **Diferença/motivo:** Como o Development estava íntegro, a migration foi aplicada somente nele. A promoção para Staging/Production continua seguindo o fluxo de release, com novo preflight no alvo.
 >
-> **Verificação:** `bun run db:migrate:development`, `bun run db:migrations:check` e `bun run db:migrations:inspect -- --environment=development` passaram; as constraints foram confirmadas como validadas no PostgreSQL.
+> **Verificação:** `bun run db:migrate:development`, `bun run db:migrations:check` e `bun run db:migrations:inspect -- --environment=development` passaram; as constraints de Módulo e Aula foram confirmadas como validadas no PostgreSQL.
 
 ### Módulos inconsistentes
 
@@ -2066,15 +2066,15 @@ course_publication_id da publicação B
 
 ---
 
-> **Relatório de implementação — status: implementado para Módulos; A09 permanece separado.**
+> **Relatório de implementação — status: implementado para Módulos e Aulas no Development.**
 >
-> **Feito:** O schema e a migration adicionam a unique composta de `course_publications(id, course_id)` e a FK composta de `modules(course_publication_id, course_id)`. O inspector de migrations também valida a presença das duas constraints.
+> **Feito:** O schema e as migrations adicionam a unique composta de `course_publications(id, course_id)` com a FK composta de `modules(course_publication_id, course_id)`, e a unique composta de `modules(id, course_publication_id)` com a FK composta de `lessons(module_id, course_publication_id)`. O inspector de migrations valida as quatro partes.
 >
-> **Não feito:** Não foi adicionada a FK composta de `lessons(module_id, course_publication_id)` contra `modules(id, course_publication_id)`; essa proteção pertence ao A09. Staging e Production ainda aguardam promoção controlada.
+> **Não feito:** Staging e Production ainda aguardam promoção controlada após o preflight de cada ambiente. Não houve correção automática de dados.
 >
-> **Diferença/motivo:** O preflight do Development retornou zero inconsistências, permitindo aplicar a proteção nesse ambiente. Não houve correção automática de dados nem aplicação em ambientes persistentes superiores.
+> **Diferença/motivo:** O preflight do Development retornou zero inconsistências, permitindo aplicar as duas proteções nesse ambiente. A09 foi implementado separadamente, sem misturar regras de produto com a integridade estrutural.
 >
-> **Verificação:** `bun run db:migrations:check`, testes de contrato da migration e `db:migrations:inspect` passaram; a constraint rejeitou uma combinação Curso/Publicação inválida em transação revertida.
+> **Verificação:** `bun run db:migrations:check`, testes de contrato das migrations e `db:migrations:inspect` passaram; as constraints rejeitaram combinações inválidas em transações revertidas.
 
 # 9.7 Não remover imediatamente as FKs simples
 
@@ -2231,15 +2231,15 @@ Isso é UX, não regra de servidor.
 
 ---
 
-> **Relatório de implementação — status: confirmado e parcialmente corrigido.**
+> **Relatório de implementação — status: COMPLETO NO ESCOPO DE AUTHORING — APROVADO.**
 >
-> **Feito:** Foram encontradas conversões permissivas de strings e números em authoring.
+> **Feito:** A entrada do authoring passou a validar IDs UUID, inteiros, status, booleanos e listas de reordenação no limite das ações administrativas de conteúdo. A validação ocorre antes de consultas ao banco e antes do processamento de conteúdo ou uploads.
 >
-> **Não feito:** Não foi convertido todo o authoring para schemas UUID completos.
+> **Não feito:** Não foram alteradas ações administrativas independentes de Course/Módulo/Aula, como Financeiro, FAQ e banners; elas permanecem com seus próprios contratos. Não foi adicionado um schema monolítico para substituir todos os contratos existentes.
 >
-> **Diferença/motivo:** A correção atacou os campos que podiam alterar título, ordem, status, booleanos e duração sem validar formato.
+> **Diferença/motivo:** Foi criado um parser pequeno e reutilizável em `authoring-input.ts`, sem adicionar Zod ou duplicar regras. O `courseId` continua opcional apenas no formulário de criação de Curso; quando presente, precisa ser UUID.
 >
-> **Verificação:** Testes adversariais de FormData passaram.
+> **Verificação:** Testes de parser, authoring, actions e disponibilidade passaram; typecheck e Ultracite também passaram.
 
 # 10.1 Dependência
 
@@ -2306,15 +2306,15 @@ Reutilizar parsers de domínio existentes em vez de duplicar regra.
 
 ---
 
-> **Relatório de implementação — status: parcial.**
+> **Relatório de implementação — status: implementado no escopo de Course authoring.**
 >
-> **Feito:** Título, duração de acesso, workload override e pagamento numérico passaram a ser validados no servidor.
+> **Feito:** Título, duração de acesso, workload override, pagamento numérico e `courseId` opcional passaram a ser validados no servidor. Ações de publicação, certificado e pasta JMVStream também validam o `courseId` antes da operação.
 >
-> **Não feito:** IDs UUID e todos os enums de disponibilidade não foram introduzidos porque os formulários atuais não os expõem integralmente e o banco ainda é a autoridade de tipo.
+> **Não feito:** Não foi criado um parser genérico para todos os campos de ações administrativas fora do authoring de Course; os presets de disponibilidade continuam usando sua allowlist existente.
 >
-> **Diferença/motivo:** Não foram inventados contratos para campos inexistentes no fluxo atual.
+> **Diferença/motivo:** O identificador ausente continua significando criação; somente um identificador presente é validado como UUID.
 >
-> **Verificação:** Testes de authoring e typecheck passaram.
+> **Verificação:** Testes de authoring, parser e ações passaram; typecheck passou.
 
 # 10.4 Module schema
 
@@ -2338,15 +2338,15 @@ Isso pertence ao PR anterior.
 
 ---
 
-> **Relatório de implementação — status: parcialmente implementado.**
+> **Relatório de implementação — status: implementado.**
 >
-> **Feito:** Título, curso presente, ordem positiva, release mode, delay e status foram validados.
+> **Feito:** Título, `courseId`, `moduleId` quando presente, ordem positiva, modo de liberação, atraso estritamente decimal, status e ownership foram validados no servidor.
 >
-> **Não feito:** Validação lexical de UUID não foi adicionada.
+> **Não feito:** Nenhuma alteração de produto foi adicionada ao fluxo de edição ou movimentação de Módulos.
 >
-> **Diferença/motivo:** O banco continua rejeitando tipos inválidos e a checagem de ownership ocorre separadamente.
+> **Diferença/motivo:** O parser é aplicado na Server Action antes de chamar o authoring; a checagem de ownership continua sendo responsabilidade da operação transacional.
 >
-> **Verificação:** Testes adversariais de módulo passaram.
+> **Verificação:** Testes adversariais de módulo e casos de formatos numéricos incomuns passaram.
 
 # 10.5 Lesson schema
 
@@ -2365,15 +2365,15 @@ status conhecido
 
 ---
 
-> **Relatório de implementação — status: parcialmente implementado.**
+> **Relatório de implementação — status: implementado.**
 >
-> **Feito:** Título, ordem positiva, booleano `isRequired`, status e duração não negativa foram validados.
+> **Feito:** `moduleId` obrigatório, `lessonId` opcional, título, ordem positiva, booleano `isRequired`, status, duração não negativa e identificadores das ações de vídeo foram validados antes de processar conteúdo ou mídia.
 >
-> **Não feito:** Não foi adicionada validação UUID dedicada.
+> **Não feito:** O conteúdo rico continua usando seus parsers específicos; não foi criado um contrato monolítico para todo o FormData da Aula.
 >
-> **Diferença/motivo:** Aula existente também passa por conferência de publicação e Curso alvo.
+> **Diferença/motivo:** A validação de ID ficou na entrada da Server Action, enquanto a Aula existente continua passando pela conferência de Publicação e Curso alvo.
 >
-> **Verificação:** Testes de authoring e input passaram.
+> **Verificação:** Testes de authoring, input e ações passaram.
 
 # 10.6 Erros
 
@@ -2434,19 +2434,31 @@ isRequired inesperado
 
 > **Relatório de implementação — status: implementado.**
 >
-> **Feito:** Foram cobertos vazio, espaços, zero, negativo, decimal/texto inválido, status arbitrário, booleanos e hidden inputs.
+> **Feito:** Foram cobertos vazio, espaços, zero, negativo, decimal/texto inválido, notação numérica incomum, UUID inválido, listas de UUID, status arbitrário, booleanos e hidden inputs.
 >
-> **Não feito:** Não foram adicionados casos de todos os UUID inválidos possíveis.
+> **Não feito:** Não foram enumeradas todas as combinações possíveis de objetos malformados recebidos pelas ações de upload; cada operação de provider continua com sua validação própria.
 >
-> **Diferença/motivo:** O banco continua sendo a última barreira para tipos UUID até existir parser dedicado.
+> **Diferença/motivo:** UUIDs de Course/Módulo/Aula agora têm parser dedicado antes do banco; a validação final de existência e ownership continua no banco e no domínio.
 >
-> **Verificação:** Testes de authoring-input e authoring passaram.
+> **Verificação:** Testes de `authoring-input`, authoring, actions e disponibilidade passaram.
 
 # 10.8 Hidden inputs
 
 Adicionar pelo menos um teste cuja intenção seja explicitamente:
 
 > hidden input é dado não confiável.
+
+---
+
+> **Relatório de implementação — status: implementado.**
+>
+> **Feito:** Os parsers e as ações foram preparados para tratar hidden inputs, IDs de reordenação e valores enviados fora do navegador como não confiáveis.
+>
+> **Não feito:** Não foi criado um teste E2E de adulteração de requisição; os testes unitários de `FormData` cobrem a fronteira lógica.
+>
+> **Diferença/motivo:** A proteção foi colocada antes do authoring e dos efeitos externos, mantendo o fluxo simples.
+>
+> **Verificação:** Testes adversariais de `FormData` passaram.
 
 ---
 

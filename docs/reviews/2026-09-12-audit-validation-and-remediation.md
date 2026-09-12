@@ -69,15 +69,14 @@ Implementado no working tree:
 - A06/A07/A22/PR 04: draft e published são lidos separadamente sob lock e
   transação; authoring e recálculo compartilham o mesmo client antes do commit;
   o Aluno recebe a carga horária oficial e override `0` é preservado.
-- A08/PR 05: ownership de Módulo é conferido no servidor e também protegido
-  por FK composta no Development; o preflight encontrou 53 Módulos
-  consistentes. A08 está completo no código e no Development. A09 permanece
-  separado para a proteção relacional de Aulas; Staging e Production aguardam
-  preflight e release controlado.
-- A10/PR 06 parcial: parsers server-side para strings, inteiros, status,
-  booleanos e campos de authoring foram extraídos e cobertos por testes; a
-  consulta de banco ainda é a autoridade final para tipos UUID e invariantes
-  não migradas.
+- A08/A09/PR 05: ownership de Módulo e Aula é conferido no servidor e também
+  protegido por FKs compostas no Development; o preflight encontrou 53
+  Módulos e 82 Aulas consistentes. A08 e A09 estão completos no código e no
+  Development. Staging e Production aguardam preflight e release controlado.
+- A10/PR 06: parsers server-side para strings, inteiros, UUIDs, status,
+  booleanos e campos de authoring foram extraídos e cobertos por testes; IDs
+  são validados antes do banco e de efeitos externos, enquanto o banco continua
+  sendo a autoridade final para existência e invariantes de dados.
 - A11/PR 08, A12/PR 07 e A13/A14/PR 09: preview Admin propaga o contexto até
   materiais privados e mantém 404 para contextos indevidos; slug é alocado sob
   lock transacional; CTA e fallback de certificado foram alinhados.
@@ -92,10 +91,6 @@ Ainda não implementado ou não verificável neste ambiente:
   Ranges continuam fora do escopo; `max_position_seconds` não é certificado de
   visualização. Player JMVStream real, PostgreSQL persistente e E2E continuam
   não verificados.
-- A09/PR 05: ainda não houve preflight em PostgreSQL descartável, Staging ou
-  Production para a constraint de Aula; a FK composta de Aulas e a migration
-  correspondente continuam pendentes. O A08 foi validado no Development com a
-  migration 0078 e não teve correção automática de dados.
 - A15/PR 10: não foi executada jornada E2E por teclado; os testes existentes
   cobrem axe e interações parciais. Isso continua sendo lacuna de assurance,
   não prova de não conformidade.
@@ -119,8 +114,8 @@ Verificação da implementação no working tree:
 | A06 | Draft pode vazar workload para `courses.workload_hours` | COMPLETO — APROVADO, P1 | `recalculateCourseWorkloadHoursWithClient` em `src/features/courses/server.ts` lê draft e published separadamente e preserva a publicação vigente | O vazamento do draft foi corrigido e a projeção também é sincronizada quando o override é salvo ou removido |
 | A07 | UI do Aluno ignora override de workload | COMPLETO — APROVADO, P2 | dashboard, catálogo e overview usam a carga efetiva; duração do conteúdo permanece separada | PR 04 aplicado; catálogo usa snapshot publicado como fallback, Admin usa carga efetiva no preview e testes cobrem override |
 | A08 | Módulo pode divergir entre Curso e Publicação | COMPLETO NO DEVELOPMENT — APROVADO, P1 | `saveModule` confere ownership persistido; preflight encontrou 0 divergências em 53 Módulos; migration 0078 adiciona FK composta | Proteção server-side e relacional aplicadas no Development; promover após preflight dos ambientes persistentes |
-| A09 | Aula pode ser movida implicitamente entre Cursos | CONFIRMADO, achado adicional P1 | `saveLesson` valida Aula e módulo alvo separadamente e persiste o relacionamento alvo sem comparar Curso/publicação | PR 05 deve proibir cross-course; movimento entre Cursos exige operação explícita |
-| A10 | Authoring depende de validação do browser | CONFIRMADO, P2 | título de Curso/Módulo, `sortOrder`, status inválido e alguns IDs passam por parsers permissivos em `src/features/admin/authoring.ts` | PR 06 aprovado com schemas/parsers dedicados e sem reabsorver ownership |
+| A09 | Aula pode ser movida implicitamente entre Cursos | COMPLETO NO DEVELOPMENT — APROVADO, P1 | `saveLesson` compara ownership no servidor; preflight encontrou 0 divergências em 82 Aulas; migration 0079 adiciona FK composta | Proteção server-side e relacional aplicadas no Development; promover após preflight dos ambientes persistentes |
+| A10 | Authoring depende de validação do browser | COMPLETO NO ESCOPO DE AUTHORING — APROVADO, P2 | `authoring-input.ts` valida textos, inteiros, UUIDs, status e booleanos; actions validam IDs antes do authoring, banco ou providers | PR 06 aplicado com parsers dedicados; ações fora de Course/Módulo/Aula permanecem fora do escopo |
 | A11 | Preview Admin não abre materiais privados | CONFIRMADO, P2 | links não carregam `preview`; Route Handlers chamam `assertProtectedLessonAccess` depois do preview | PR 08 aprovado, com autorização explícita e URLs privadas |
 | A12 | Alocação de slug tem corrida | CONFIRMADO, P3 | `resolveUniqueCourseSlug` consulta pelo pool antes do `BEGIN`/`INSERT` em `authoring.ts` | PR 07 aprovado com lock/retry que cubra colisão de constraint |
 | A13 | CTA “Rever trilha” leva à próxima aula | CONFIRMADO, P3 | página do Curso usa somente `progressPercent`, embora o link seja `nextLessonId` | PR 09 aprovado |

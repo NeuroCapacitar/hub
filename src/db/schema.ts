@@ -540,6 +540,10 @@ export const modules = pgTable(
       table.coursePublicationId,
       table.sortOrder
     ),
+    unique("modules_id_course_publication_unique").on(
+      table.id,
+      table.coursePublicationId
+    ),
     foreignKey({
       columns: [table.coursePublicationId, table.courseId],
       foreignColumns: [coursePublications.id, coursePublications.courseId],
@@ -606,6 +610,11 @@ export const lessons = pgTable(
       table.moduleId,
       table.sortOrder
     ),
+    foreignKey({
+      columns: [table.moduleId, table.coursePublicationId],
+      foreignColumns: [modules.id, modules.coursePublicationId],
+      name: "lessons_module_course_publication_fk",
+    }).onDelete("cascade"),
   ]
 );
 
