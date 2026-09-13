@@ -1,3 +1,5 @@
+import { getNonProductionSentryProblems } from "./sentry-environment";
+
 const PRODUCTION_NEON_COMPUTE = "ep-hidden-tooth-ac843qc2";
 const PRODUCTION_JMVSTREAM_PLAN_ID = "OD-20912";
 const DEVELOPMENT_PRIVATE_BUCKET = "hub-development-private";
@@ -206,28 +208,6 @@ const getJmvstreamProblems = (environment: Environment): string[] => {
   return problems;
 };
 
-const DEVELOPMENT_FORBIDDEN_SENTRY_KEYS = [
-  "DEVELOPMENT_SENTRY_PROJECT_ID",
-  "NEXT_PUBLIC_SENTRY_DSN",
-  "NEXT_PUBLIC_SENTRY_RELEASE",
-  "SENTRY_AUTH_TOKEN",
-  "SENTRY_DSN",
-  "SENTRY_ORG",
-  "SENTRY_PROJECT",
-  "SENTRY_PROJECT_ID",
-  "SENTRY_READINESS_ALERT_NAME",
-  "SENTRY_READINESS_AUTH_TOKEN",
-  "SENTRY_READINESS_SECRET",
-  "STAGING_SENTRY_PROJECT_ID",
-] as const;
-
-const getDevelopmentSentryProblems = (environment: Environment): string[] =>
-  DEVELOPMENT_FORBIDDEN_SENTRY_KEYS.flatMap((key) =>
-    hasConfiguredValue(environment, key)
-      ? [`${key} must not be set in local Development`]
-      : []
-  );
-
 const getFirstPartySecretProblems = (environment: Environment): string[] =>
   (
     [
@@ -306,7 +286,7 @@ export const getDevelopmentEnvironmentProblems = (
     ...getResendProblems(environment),
     ...getAsaasProblems(environment),
     ...getJmvstreamProblems(environment),
-    ...getDevelopmentSentryProblems(environment),
+    ...getNonProductionSentryProblems(environment, "Development"),
     ...getFirstPartySecretProblems(environment),
   ];
 

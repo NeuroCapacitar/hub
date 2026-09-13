@@ -29,6 +29,7 @@ const CANONICAL_DOCUMENT_PATHS = [
   "docs/integrations/resend.md",
   "docs/integrations/resend-templates.md",
   "docs/operations/environment-and-local-development.md",
+  "docs/operations/code-review-with-coderabbit.md",
   "docs/operations/shared-development-and-release-guide.md",
   "docs/operations/release-flow.md",
   "docs/operations/production-release-guide.md",

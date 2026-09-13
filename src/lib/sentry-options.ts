@@ -1,13 +1,11 @@
 import type {
   Breadcrumb,
   ErrorEvent,
+  Metric,
   SpanJSON,
   TransactionEvent,
 } from "@sentry/core";
-import {
-  isFullSentryRelease,
-  isSentryRuntimeEnabled,
-} from "./sentry-deployment";
+import { isFullSentryRelease } from "./sentry-deployment";
 
 const SENTRY_TRACE_SAMPLE_RATE = 0.1;
 const CERTIFICATE_CODE = /\bPRT-[0-9A-Z-]{6,}\b/giu;
@@ -24,6 +22,8 @@ const SENSITIVE_ATTRIBUTE_KEY =
 const REDACTED_EMAIL = "[email]";
 const REDACTED_TOKEN = "Bearer [token]";
 const CIRCULAR_REFERENCE = "[circular]";
+const SENSITIVE_METRIC_ATTRIBUTE_KEY =
+  /authorization|cookie|email|name|password|payload|secret|signature|signed.?url|token|url|user.?name|^user$/iu;
 
 const normalizeTelemetryText = (value: string): string => {
   const withoutCertificateQuery = value.replace(
@@ -123,22 +123,42 @@ const sanitizeSentrySpan = (span: SpanJSON): SpanJSON => {
   return { ...sanitized, data: sanitizeSpanData(sanitized.data) };
 };
 
+const sanitizeSentryMetric = (metric: Metric): Metric => {
+  const attributes = Object.fromEntries(
+    Object.entries(metric.attributes ?? {})
+      .filter(([key]) => !SENSITIVE_METRIC_ATTRIBUTE_KEY.test(key))
+      .map(([key, value]) => [
+        key,
+        typeof value === "string" ? normalizeTelemetryText(value) : value,
+      ])
+      .filter(
+        ([, value]) =>
+          typeof value === "string" ||
+          typeof value === "number" ||
+          typeof value === "boolean"
+      )
+  );
+
+  return {
+    ...metric,
+    attributes,
+  };
+};
+
 export const getSentryOptions = (
   dsn: string | undefined,
   environment?: string,
   release?: string
 ) => {
-  const protectedEnvironment =
-    environment === "production" ||
-    environment === "staging" ||
-    process.env.NODE_ENV === "production";
-  if (dsn && protectedEnvironment && !isFullSentryRelease(release)) {
+  const isProductionEnvironment = environment === "production";
+  if (dsn && isProductionEnvironment && !isFullSentryRelease(release)) {
     throw new Error("Sentry release must be the full deployment Git SHA.");
   }
 
   return {
     beforeSend: sanitizeSentryEvent,
     beforeBreadcrumb: sanitizeSentryBreadcrumb,
+    beforeSendMetric: sanitizeSentryMetric,
     beforeSendSpan: sanitizeSentrySpan,
     beforeSendTransaction: sanitizeSentryTransaction,
     dataCollection: {
@@ -154,7 +174,7 @@ export const getSentryOptions = (
       userInfo: false,
     },
     dsn,
-    enabled: isSentryRuntimeEnabled({ dsn }),
+    enabled: Boolean(dsn && isProductionEnvironment),
     ...(environment ? { environment } : {}),
     ...(release ? { release } : {}),
     sendDefaultPii: false,

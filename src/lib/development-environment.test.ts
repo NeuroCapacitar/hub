@@ -43,6 +43,23 @@ describe("Development environment contract", () => {
     ).toEqual([]);
   });
 
+  it("rejects Production-only Sentry configuration", () => {
+    const problems = getDevelopmentEnvironmentProblems({
+      ...COMPLETE_DEVELOPMENT_ENVIRONMENT,
+      NEXT_PUBLIC_SENTRY_DSN: "https://public@example.ingest.sentry.io/1",
+      SENTRY_AUTH_TOKEN: "configured-production-build-token",
+      SENTRY_DSN: "https://secret@example.ingest.sentry.io/1",
+    });
+
+    expect(problems).toEqual(
+      expect.arrayContaining([
+        "NEXT_PUBLIC_SENTRY_DSN must not be set in Development",
+        "SENTRY_AUTH_TOKEN must not be set in Development",
+        "SENTRY_DSN must not be set in Development",
+      ])
+    );
+  });
+
   it.each([
     ["https://api.asaas.com", "production"],
     ["http://api-sandbox.asaas.com", "http"],
@@ -132,26 +149,6 @@ describe("Development environment contract", () => {
     });
 
     expect(problems).toEqual([]);
-  });
-
-  it("keeps Sentry disabled in local Development", () => {
-    const problems = getDevelopmentEnvironmentProblems({
-      ...COMPLETE_DEVELOPMENT_ENVIRONMENT,
-      DEVELOPMENT_SENTRY_PROJECT_ID: "4511999999999999",
-      NEXT_PUBLIC_SENTRY_DSN:
-        "https://public@example.ingest.sentry.io/4511951566798848",
-      SENTRY_DSN: "https://secret@example.ingest.sentry.io/4511951566798848",
-      SENTRY_AUTH_TOKEN: "development-sentry-auth-token",
-    });
-
-    expect(problems).toEqual(
-      expect.arrayContaining([
-        "DEVELOPMENT_SENTRY_PROJECT_ID must not be set in local Development",
-        "NEXT_PUBLIC_SENTRY_DSN must not be set in local Development",
-        "SENTRY_DSN must not be set in local Development",
-        "SENTRY_AUTH_TOKEN must not be set in local Development",
-      ])
-    );
   });
 
   it("requires explicit email and job configuration", () => {

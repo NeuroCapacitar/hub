@@ -5,10 +5,6 @@ const dependencies = vi.hoisted(() => ({
   getServerEnv: vi.fn(),
   getSentryOptions: vi.fn(),
   init: vi.fn(),
-  isSentryRuntimeEnabled: vi.fn(
-    ({ dsn }: { dsn: string | undefined }) =>
-      process.env.NODE_ENV === "production" && Boolean(dsn)
-  ),
   logRequestFailure: vi.fn(),
   resolveSentryRelease: vi.fn(),
   setTag: vi.fn(),
@@ -28,7 +24,6 @@ vi.mock("./lib/env", () => ({
   getServerEnv: dependencies.getServerEnv,
 }));
 vi.mock("./lib/sentry-deployment", () => ({
-  isSentryRuntimeEnabled: dependencies.isSentryRuntimeEnabled,
   resolveSentryRelease: dependencies.resolveSentryRelease,
 }));
 vi.mock("./lib/sentry-options", () => ({
@@ -37,31 +32,33 @@ vi.mock("./lib/sentry-options", () => ({
 
 import { onRequestError, register } from "./instrumentation";
 
-const TEST_SENTRY_DSN = "https://public@example.test/1";
-
-const setEnvironmentValue = (
-  key: "NEXT_RUNTIME" | "NODE_ENV" | "SENTRY_DSN" | "VERCEL_TARGET_ENV",
-  value: string | undefined
-): void => {
+const setEnvironmentValue = (key: string, value: string | undefined): void => {
   if (value === undefined) {
-    Reflect.deleteProperty(process.env, key);
+    delete process.env[key];
     return;
   }
-  Reflect.set(process.env, key, value);
+
+  process.env[key] = value;
 };
 
-const snapshotEnvironment = () => ({
-  NEXT_RUNTIME: process.env.NEXT_RUNTIME,
-  NODE_ENV: process.env.NODE_ENV,
-  SENTRY_DSN: process.env.SENTRY_DSN,
-  VERCEL_TARGET_ENV: process.env.VERCEL_TARGET_ENV,
-});
+const withProductionEnvironment = async (
+  callback: () => Promise<void>
+): Promise<void> => {
+  const previous = {
+    NODE_ENV: process.env.NODE_ENV,
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    VERCEL_TARGET_ENV: process.env.VERCEL_TARGET_ENV,
+  };
+  setEnvironmentValue("NODE_ENV", "production");
+  setEnvironmentValue("VERCEL_ENV", "production");
+  setEnvironmentValue("VERCEL_TARGET_ENV", undefined);
 
-const restoreEnvironment = (
-  snapshot: ReturnType<typeof snapshotEnvironment>
-): void => {
-  for (const [key, value] of Object.entries(snapshot)) {
-    setEnvironmentValue(key as keyof typeof snapshot, value);
+  try {
+    await callback();
+  } finally {
+    setEnvironmentValue("NODE_ENV", previous.NODE_ENV);
+    setEnvironmentValue("VERCEL_ENV", previous.VERCEL_ENV);
+    setEnvironmentValue("VERCEL_TARGET_ENV", previous.VERCEL_TARGET_ENV);
   }
 };
 
@@ -71,23 +68,22 @@ describe("instrumentation", () => {
   });
 
   it("validates the environment and initializes Sentry in the Node startup context", async () => {
-    const snapshot = snapshotEnvironment();
-    setEnvironmentValue("NEXT_RUNTIME", "nodejs");
-    setEnvironmentValue("NODE_ENV", "production");
-    setEnvironmentValue("SENTRY_DSN", TEST_SENTRY_DSN);
-    setEnvironmentValue("VERCEL_TARGET_ENV", "production");
-    dependencies.resolveSentryRelease.mockReturnValue("a".repeat(40));
-    dependencies.getSentryOptions.mockReturnValue({ enabled: true });
+    await withProductionEnvironment(async () => {
+      const previousRuntime = process.env.NEXT_RUNTIME;
+      process.env.NEXT_RUNTIME = "nodejs";
+      dependencies.resolveSentryRelease.mockReturnValue("a".repeat(40));
+      dependencies.getSentryOptions.mockReturnValue({ enabled: true });
 
-    try {
-      await register();
-    } finally {
-      restoreEnvironment(snapshot);
-    }
+      try {
+        await register();
+      } finally {
+        setEnvironmentValue("NEXT_RUNTIME", previousRuntime);
+      }
+    });
 
     expect(dependencies.getServerEnv).toHaveBeenCalledOnce();
     expect(dependencies.getSentryOptions).toHaveBeenCalledWith(
-      TEST_SENTRY_DSN,
+      process.env.SENTRY_DSN,
       "production",
       "a".repeat(40)
     );
@@ -95,57 +91,56 @@ describe("instrumentation", () => {
   });
 
   it("initializes Sentry with Edge-safe options in the Edge startup context", async () => {
-    const snapshot = snapshotEnvironment();
-    setEnvironmentValue("NEXT_RUNTIME", "edge");
-    setEnvironmentValue("NODE_ENV", "production");
-    setEnvironmentValue("SENTRY_DSN", TEST_SENTRY_DSN);
-    setEnvironmentValue("VERCEL_TARGET_ENV", "production");
-    dependencies.resolveSentryRelease.mockReturnValue("b".repeat(40));
-    dependencies.getSentryOptions.mockReturnValue({ enabled: true });
+    await withProductionEnvironment(async () => {
+      const previousRuntime = process.env.NEXT_RUNTIME;
+      process.env.NEXT_RUNTIME = "edge";
+      dependencies.resolveSentryRelease.mockReturnValue("b".repeat(40));
+      dependencies.getSentryOptions.mockReturnValue({ enabled: true });
 
-    try {
-      await register();
-    } finally {
-      restoreEnvironment(snapshot);
-    }
+      try {
+        await register();
+      } finally {
+        setEnvironmentValue("NEXT_RUNTIME", previousRuntime);
+      }
+    });
 
     expect(dependencies.getServerEnv).not.toHaveBeenCalled();
     expect(dependencies.getSentryOptions).toHaveBeenCalledWith(
-      TEST_SENTRY_DSN,
+      process.env.SENTRY_DSN,
       "production",
       "b".repeat(40)
     );
     expect(dependencies.init).toHaveBeenCalledWith({ enabled: true });
   });
 
-  it("does not initialize or capture Sentry in local Development", async () => {
-    const snapshot = snapshotEnvironment();
-    setEnvironmentValue("NEXT_RUNTIME", "nodejs");
-    setEnvironmentValue("NODE_ENV", "development");
-    setEnvironmentValue("SENTRY_DSN", undefined);
-    setEnvironmentValue("VERCEL_TARGET_ENV", undefined);
+  it("does not initialize Sentry outside Production", async () => {
+    const previousRuntime = process.env.NEXT_RUNTIME;
+    const previousNodeEnvironment = process.env.NODE_ENV;
+    const previousVercelEnvironment = process.env.VERCEL_ENV;
+    const previousVercelTargetEnvironment = process.env.VERCEL_TARGET_ENV;
+    setEnvironmentValue("NEXT_RUNTIME", "edge");
+    setEnvironmentValue("NODE_ENV", "test");
+    setEnvironmentValue("VERCEL_ENV", "preview");
+    setEnvironmentValue("VERCEL_TARGET_ENV", "staging");
 
     try {
       await register();
-      onRequestError(
-        new Error("local failure"),
-        { headers: {}, method: "GET", path: "/" },
-        {} as never
-      );
     } finally {
-      restoreEnvironment(snapshot);
+      setEnvironmentValue("NEXT_RUNTIME", previousRuntime);
+      setEnvironmentValue("NODE_ENV", previousNodeEnvironment);
+      setEnvironmentValue("VERCEL_ENV", previousVercelEnvironment);
+      setEnvironmentValue("VERCEL_TARGET_ENV", previousVercelTargetEnvironment);
     }
 
-    expect(dependencies.getServerEnv).toHaveBeenCalledOnce();
+    expect(dependencies.getSentryOptions).not.toHaveBeenCalled();
     expect(dependencies.init).not.toHaveBeenCalled();
-    expect(dependencies.captureRequestError).not.toHaveBeenCalled();
   });
 
   it("keeps the safe correlation ID in the Sentry event scope", () => {
-    const snapshot = snapshotEnvironment();
+    const previousNodeEnvironment = process.env.NODE_ENV;
+    const previousVercelEnvironment = process.env.VERCEL_ENV;
     setEnvironmentValue("NODE_ENV", "production");
-    setEnvironmentValue("SENTRY_DSN", TEST_SENTRY_DSN);
-    setEnvironmentValue("VERCEL_TARGET_ENV", "production");
+    setEnvironmentValue("VERCEL_ENV", "production");
     dependencies.logRequestFailure.mockReturnValue("correlation-123");
     const error = new Error("synthetic failure");
     const request = {
@@ -163,7 +158,8 @@ describe("instrumentation", () => {
     try {
       onRequestError(error, request, context);
     } finally {
-      restoreEnvironment(snapshot);
+      setEnvironmentValue("NODE_ENV", previousNodeEnvironment);
+      setEnvironmentValue("VERCEL_ENV", previousVercelEnvironment);
     }
 
     expect(dependencies.setTag).toHaveBeenCalledWith(
@@ -175,5 +171,30 @@ describe("instrumentation", () => {
       request,
       context
     );
+  });
+
+  it("does not capture request errors outside Production", () => {
+    const previousNodeEnvironment = process.env.NODE_ENV;
+    const previousVercelEnvironment = process.env.VERCEL_ENV;
+    setEnvironmentValue("NODE_ENV", "test");
+    setEnvironmentValue("VERCEL_ENV", "preview");
+
+    try {
+      onRequestError(
+        new Error("non-production failure"),
+        { headers: {}, method: "GET", path: "/health" },
+        {
+          revalidateReason: undefined,
+          routerKind: "App Router",
+          routePath: "/health",
+          routeType: "route",
+        }
+      );
+    } finally {
+      setEnvironmentValue("NODE_ENV", previousNodeEnvironment);
+      setEnvironmentValue("VERCEL_ENV", previousVercelEnvironment);
+    }
+
+    expect(dependencies.captureRequestError).not.toHaveBeenCalled();
   });
 });

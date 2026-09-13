@@ -3300,7 +3300,7 @@ porque isso seria semanticamente incorreto.
 >
 > **Diferença/motivo:** A validação dinâmica foi mantida limitada ao mapa explicitamente definido como canônico; a ordem de leitura e a lista de revisões não foram transformadas automaticamente em gates.
 >
-> **Verificação:** `bun run docs:check` aprovou 44 documentos; o mapa possui 38 links de domínio, integração, operação e decisão, todos cobertos pela lista do checker.
+> **Verificação:** `bun run docs:check` aprovou 45 documentos; o mapa possui 39 links de domínio, integração, operação e decisão, todos cobertos pela lista do checker.
 
 # 15.5 Critério
 
