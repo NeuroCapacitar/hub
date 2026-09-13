@@ -49,6 +49,7 @@ import { CourseWorkloadDialog } from "./course-workload-dialog";
 
 export interface CourseData {
   accessDurationMonths: number;
+  calculatedWorkloadHours?: number;
   coverImage?: unknown;
   description: string | null;
   id: string;
@@ -100,9 +101,8 @@ export function CourseSettingsForm({
   const [paymentMaxInstallmentCount, setPaymentMaxInstallmentCount] = useState(
     course.paymentMaxInstallmentCount.toString()
   );
-  const manualWorkloadHours = workloadHoursOverride
-    ? Number(workloadHoursOverride)
-    : null;
+  const manualWorkloadHours =
+    workloadHoursOverride.trim() === "" ? null : Number(workloadHoursOverride);
   const configuredInstallmentCount = Number(paymentMaxInstallmentCount);
   const validInstallmentCount = Number.isFinite(configuredInstallmentCount)
     ? configuredInstallmentCount
@@ -243,7 +243,9 @@ export function CourseSettingsForm({
                     Carga horária
                   </FieldLabel>
                   <CourseWorkloadDialog
-                    calculatedHours={course.workloadHours}
+                    calculatedHours={
+                      course.calculatedWorkloadHours ?? course.workloadHours
+                    }
                     compact
                     onValueChange={(value) => {
                       setWorkloadHoursOverride(value?.toString() ?? "");

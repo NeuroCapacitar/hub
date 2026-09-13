@@ -51,11 +51,31 @@ describe("admin actions and schema", () => {
     );
 
     expect(modulesReorder).toContain(
-      "lockCourseContentRelease(client, courseId)"
+      "lockCourseContentRelease(client, normalizedCourseId)"
     );
     expect(lessonsReorder).toContain(
-      "lockCourseContentRelease(client, courseId)"
+      "lockCourseContentRelease(client, normalizedCourseId)"
     );
+  });
+
+  it("validates authoring identifiers before database and provider calls", async () => {
+    const source = await readFile(
+      new URL("./actions.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(source).toContain(
+      'readAuthoringUuid({ field: "courseId", formData })'
+    );
+    expect(source).toContain(
+      'readAuthoringUuid({ field: "moduleId", formData });'
+    );
+    expect(source).toContain(
+      'readAuthoringUuid({ field: "lessonId", formData })'
+    );
+    expect(source).toContain("parseAuthoringUuidList(");
+    expect(source).toContain("parseLessonReorderGroups(reorderGroups)");
+    expect(source).toContain('parseAuthoringUuid(input?.lessonId, "lessonId")');
   });
 
   it("keeps delayed publication behind the phased rollout gate", async () => {

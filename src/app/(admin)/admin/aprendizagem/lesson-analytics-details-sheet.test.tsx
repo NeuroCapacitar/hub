@@ -14,6 +14,7 @@ const lesson: LessonAnalyticsLessonReport = {
     medianCheckpointPercent: 70,
     medianHoursToComplete: 1.75,
     medianHoursToNextLesson: 2,
+    playingSeconds: 5400,
     started: 8,
   },
   courseAverageViewingPercent: 62.5,
@@ -26,6 +27,7 @@ const lesson: LessonAnalyticsLessonReport = {
     medianHoursToComplete: 1.5,
     medianHoursToNextLesson: 2,
     moduleTitle: "Módulo 1",
+    playingSeconds: 3600,
     publicationNumber: 2,
     publicationStatus: "published",
     started: 4,
@@ -44,6 +46,7 @@ const lesson: LessonAnalyticsLessonReport = {
       medianHoursToComplete: 1.5,
       medianHoursToNextLesson: 2,
       moduleTitle: "Módulo 1",
+      playingSeconds: 3600,
       publicationNumber: 2,
       publicationStatus: "published",
       started: 4,
@@ -57,6 +60,7 @@ const lesson: LessonAnalyticsLessonReport = {
       medianHoursToComplete: 2,
       medianHoursToNextLesson: null,
       moduleTitle: "Módulo antigo",
+      playingSeconds: 1800,
       publicationNumber: 1,
       publicationStatus: "retired",
       started: 4,
@@ -115,6 +119,13 @@ describe("LessonAnalyticsDetailsSheet", () => {
     expect(document.body.textContent).toContain("v1");
     expect(document.body.textContent).toContain("Retirada");
     expect(document.body.textContent).toContain("CM");
+    expect(document.body.textContent).toContain("TR");
+    expect(
+      document.querySelector('abbr[title="Matrículas ativas"]')
+    ).toBeNull();
+    expect(
+      document.querySelector('abbr[title="Tempo reproduzido total"]')
+    ).not.toBeNull();
     expect(
       document.querySelector('abbr[title="Checkpoint mediano"]')
     ).not.toBeNull();

@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { connect, lockEnrollmentAggregate, resolveLessonAccessWithClient } =
-  vi.hoisted(() => ({
-    connect: vi.fn(),
-    lockEnrollmentAggregate: vi.fn(),
-    resolveLessonAccessWithClient: vi.fn(),
-  }));
+const {
+  connect,
+  lockEnrollmentAggregate,
+  query,
+  resolveLessonAccessWithClient,
+} = vi.hoisted(() => ({
+  connect: vi.fn(),
+  lockEnrollmentAggregate: vi.fn(),
+  query: vi.fn(),
+  resolveLessonAccessWithClient: vi.fn(),
+}));
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/db", () => ({ getPool: () => ({ connect }) }));
+vi.mock("@/db", () => ({ getPool: () => ({ connect, query }) }));
 vi.mock("@/features/enrollments/enrollment-aggregate-lock", () => ({
   lockEnrollmentAggregate,
 }));
@@ -17,6 +22,7 @@ vi.mock("@/features/enrollments/access", () => ({
 }));
 
 import {
+  assertAdminPreviewLessonAccess,
   assertProtectedLessonAccess,
   LessonAccessDeniedError,
 } from "./protected-lesson-access";
@@ -75,5 +81,24 @@ describe("protected lesson access revalidation", () => {
     expect(client.query).toHaveBeenCalledWith("rollback");
     expect(client.query).not.toHaveBeenCalledWith("commit");
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it("requires the lesson and module to share a publication for admin preview", async () => {
+    query.mockResolvedValue({ rows: [] });
+
+    await expect(
+      assertAdminPreviewLessonAccess({ lessonId: "lesson-1" })
+    ).rejects.toBeInstanceOf(LessonAccessDeniedError);
+
+    query.mockResolvedValue({ rows: [{ id: "lesson-1" }] });
+    await expect(
+      assertAdminPreviewLessonAccess({ lessonId: "lesson-1" })
+    ).resolves.toBeUndefined();
+    expect(query).toHaveBeenLastCalledWith(
+      expect.stringContaining(
+        "m.course_publication_id = l.course_publication_id"
+      ),
+      ["lesson-1"]
+    );
   });
 });

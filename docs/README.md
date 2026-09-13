@@ -71,9 +71,13 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 - [ADR-0008: analytics opcional de aprendizagem](adr/0008-optional-learning-analytics.md)
 - [ADR-0009: disponibilidade comercial e interesse](adr/0009-course-availability-and-sale-interest.md)
 - [ADR-0010: liberação temporal relativa por Módulo](adr/0010-relative-module-content-release.md)
+- [ADR-0011: sequência com Aulas opcionais não bloqueadoras](adr/0011-optional-lesson-progression.md)
+- [ADR-0012: progresso linear validado em vídeo](adr/0012-linear-validated-video-progress.md)
 
 ### Revisões
 
+- [Plano mestre de correção com relatório de implementação](reviews/2026-09-12-master-plan-with-implementation-report.md)
+- [Validação da auditoria técnica, arquitetural e de produto de 2026-09-12](reviews/2026-09-12-audit-validation-and-remediation.md)
 - [Requalificação de prontidão e higiene operacional em 2026-09-03](reviews/2026-09-03-readiness-remediation-requalification.md)
 - [Revisão final de Production Readiness da liberação por Módulo](reviews/2026-09-06-module-content-release-production-readiness-review.md)
 - [Pesquisa externa da liberação por Módulo](reviews/2026-09-06-module-content-release-external-research.md)

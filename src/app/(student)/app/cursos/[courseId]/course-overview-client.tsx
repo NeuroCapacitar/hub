@@ -29,6 +29,7 @@ interface LessonData {
   hasVideo: boolean;
   id: string;
   isCompleted: boolean;
+  isRequired?: boolean;
   thumbnailUrl?: string | null;
   title: string;
   watchedPercent: number;
@@ -36,11 +37,14 @@ interface LessonData {
 
 interface ModuleData {
   availableAt: Date | null;
+  completedRequiredLessonCount: number;
   description: string | null;
   id: string;
   lessonCount: number;
   lessons: LessonData[];
+  progressPercent: number;
   releaseState: "available" | "invalid" | "time_locked";
+  requiredLessonCount: number;
   sortOrder: number;
   title: string;
   totalDurationSeconds: number;
@@ -142,6 +146,7 @@ export function CourseOverviewClient({
         durationText={formatLessonDuration(lesson.durationSeconds)}
         fallbackImageUrl={courseThumbnailUrl ?? null}
         hasVideo={lesson.hasVideo}
+        isRequired={lesson.isRequired ?? true}
         key={lesson.id}
         {...(status === "locked" && lockReason ? { lockReason } : {})}
         status={status}
@@ -221,14 +226,7 @@ export function CourseOverviewClient({
         ) : (
           <div className="flex flex-col">
             {modules.map((moduleData, index) => {
-              const completedCount = moduleData.lessons.filter(
-                (l) => l.isCompleted
-              ).length;
               const totalCount = moduleData.lessonCount;
-              const progressPercent =
-                totalCount > 0
-                  ? Math.round((completedCount / totalCount) * 100)
-                  : 0;
               const totalSeconds = moduleData.totalDurationSeconds;
               const isTimeLocked = moduleData.releaseState === "time_locked";
               let releaseDescription: string | null = null;
@@ -296,12 +294,12 @@ export function CourseOverviewClient({
                         </div>
                         <div className="flex items-center gap-3 md:justify-end">
                           <Progress
-                            aria-label={`Progresso do módulo ${moduleData.title}: ${progressPercent}%`}
+                            aria-label={`Progresso do módulo ${moduleData.title}: ${moduleData.progressPercent}%`}
                             className="h-2 w-32 bg-muted md:w-24"
-                            value={progressPercent}
+                            value={moduleData.progressPercent}
                           />
                           <span className="font-semibold text-xs">
-                            {progressPercent}%
+                            {moduleData.progressPercent}%
                           </span>
                         </div>
                       </div>

@@ -1,4 +1,8 @@
 import { LessonAuthoringError } from "@/features/admin/lesson-authoring-errors";
+import {
+  readAuthoringPositiveInteger,
+  readAuthoringString,
+} from "./authoring-input";
 
 export interface LessonDraftInput {
   description: string | null;
@@ -7,13 +11,7 @@ export interface LessonDraftInput {
   title: string;
 }
 
-const readString = (formData: FormData, key: string): string =>
-  String(formData.get(key) ?? "").trim();
-
-const readNumber = (formData: FormData, key: string, fallback = 1): number => {
-  const value = Number(formData.get(key));
-  return Number.isFinite(value) ? value : fallback;
-};
+const readString = readAuthoringString;
 
 export const normalizeLessonDraftInput = (
   formData: FormData
@@ -33,7 +31,7 @@ export const normalizeLessonDraftInput = (
   return {
     description,
     moduleId,
-    sortOrder: readNumber(formData, "sortOrder", 1),
+    sortOrder: readAuthoringPositiveInteger(formData, "sortOrder", 1),
     title,
   };
 };

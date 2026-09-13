@@ -97,7 +97,7 @@ describe("content release PostgreSQL surfaces", () => {
       recordLessonWatchProgress({
         currentSeconds: 10,
         durationSeconds: 120,
-        eventName: "timeupdate",
+        eventName: "jmvplayerout-status",
         lessonId: fixture.futureLessonId,
         userId: fixture.userId,
       })
@@ -354,7 +354,7 @@ describe("content release PostgreSQL surfaces", () => {
       watch = recordLessonWatchProgress({
         currentSeconds: 10,
         durationSeconds: 120,
-        eventName: "timeupdate",
+        eventName: "jmvplayerout-status",
         lessonId: fixture.immediateLessonId,
         userId: fixture.userId,
       });

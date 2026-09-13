@@ -263,6 +263,7 @@ export interface AdminStatementImportProgress {
 
 export interface AdminCourse {
   accessDurationMonths: number;
+  calculatedWorkloadHours?: number;
   catalogVisibility: "hidden" | "listed";
   certificateEnabled: boolean;
   coverImage: unknown;
@@ -1224,9 +1225,26 @@ const readCourses = async (
     title: string;
     workload_hours: number;
     workload_hours_override: number | null;
+    published_workload_hours: number | null;
+    draft_workload_hours: number | null;
   }>(
     `
       select courses.*,
+        (
+          select publication.workload_hours_snapshot
+          from course_publications publication
+          where publication.course_id = courses.id
+            and publication.status = 'published'
+          limit 1
+        ) as published_workload_hours,
+        (
+          select publication.workload_hours_snapshot
+          from course_publications publication
+          where publication.course_id = courses.id
+            and publication.status = 'draft'
+          order by publication.publication_number desc
+          limit 1
+        ) as draft_workload_hours,
         (
           exists (
             select 1 from orders o
@@ -1285,35 +1303,43 @@ const readCourses = async (
     values.length > 0 ? values : undefined
   );
 
-  return rows.map((row) => ({
-    accessDurationMonths: row.access_duration_months,
-    catalogVisibility: row.catalog_visibility,
-    certificateEnabled: row.certificate_enabled,
-    description: row.description,
-    hasCommercialHistory: row.has_commercial_history,
-    id: row.id,
-    interestCount: row.interest_count,
-    interestNotificationsSent: row.interest_notifications_sent,
-    launchDate: row.launch_date,
-    launchLandingUrl: row.launch_landing_url,
-    paymentAllowCreditCard: row.payment_allow_credit_card,
-    paymentAllowPix: row.payment_allow_pix,
-    paymentMaxInstallmentCount: row.payment_max_installment_count,
-    priceInCents: row.price_in_cents,
-    pendingCertificateReconciliationCount:
-      row.pending_certificate_reconciliation_count,
-    pendingCheckoutCancellations: row.pending_checkout_cancellations,
-    pendingInterestNotifications: row.pending_interest_notifications,
-    salesStatus: row.sales_status,
-    slug: row.slug,
-    status: row.status,
-    subtitle: row.subtitle,
-    coverImage: row.cover_image_json,
-    thumbnailUrl: row.thumbnail_url,
-    title: row.title,
-    workloadHours: row.workload_hours,
-    workloadHoursOverride: row.workload_hours_override,
-  }));
+  return rows.map((row) => {
+    const calculatedWorkloadHours =
+      row.published_workload_hours ??
+      row.draft_workload_hours ??
+      row.workload_hours;
+
+    return {
+      accessDurationMonths: row.access_duration_months,
+      calculatedWorkloadHours,
+      catalogVisibility: row.catalog_visibility,
+      certificateEnabled: row.certificate_enabled,
+      description: row.description,
+      hasCommercialHistory: row.has_commercial_history,
+      id: row.id,
+      interestCount: row.interest_count,
+      interestNotificationsSent: row.interest_notifications_sent,
+      launchDate: row.launch_date,
+      launchLandingUrl: row.launch_landing_url,
+      paymentAllowCreditCard: row.payment_allow_credit_card,
+      paymentAllowPix: row.payment_allow_pix,
+      paymentMaxInstallmentCount: row.payment_max_installment_count,
+      priceInCents: row.price_in_cents,
+      pendingCertificateReconciliationCount:
+        row.pending_certificate_reconciliation_count,
+      pendingCheckoutCancellations: row.pending_checkout_cancellations,
+      pendingInterestNotifications: row.pending_interest_notifications,
+      salesStatus: row.sales_status,
+      slug: row.slug,
+      status: row.status,
+      subtitle: row.subtitle,
+      coverImage: row.cover_image_json,
+      thumbnailUrl: row.thumbnail_url,
+      title: row.title,
+      workloadHours: row.workload_hours_override ?? calculatedWorkloadHours,
+      workloadHoursOverride: row.workload_hours_override,
+    };
+  });
 };
 
 const readCourseCatalogCards = async ({

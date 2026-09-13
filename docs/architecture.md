@@ -110,10 +110,10 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 
 1. `getStudentCourseAccessStatus` e `resolveCourseAccess` negam acesso sem Conta/Matrícula válidas.
 2. `getStudentCourseOverview` projeta Módulos futuros sem seus detalhes; `resolveLessonAccess` é a fronteira temporal única.
-3. `isLessonAvailable` aplica sequência depois da decisão temporal.
-4. `recordLessonWatchProgress` registra posição; evento JMVStream pode concluir em 98%.
+3. `isLessonAvailable` aplica sequência depois da decisão temporal e só considera Aulas obrigatórias anteriores como pré-requisito; opcionais não bloqueiam.
+4. `recordLessonWatchProgress` separa retomada, posição máxima, fronteira linear e tempo de reprodução; somente a fronteira validada pode concluir por vídeo em 100%.
 5. `completeLesson` permite conclusão manual.
-6. `calculateCourseProgress` calcula percentual e próxima Aula.
+6. `calculateCourseProgress` calcula percentual obrigatório; a próxima Aula é a primeira pendente disponível em ordem, inclusive opcional.
 
 ### Publicação de mídia
 

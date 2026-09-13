@@ -533,6 +533,34 @@
       "when": 1788980097750,
       "tag": "0075_installment_schedule_and_observed_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1789209157532,
+      "tag": "0076_linear_validated_video_progress",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1789209803228,
+      "tag": "0077_analytics_completion_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1789225677625,
+      "tag": "0078_protect_module_course_publication_ownership",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1789228933506,
+      "tag": "0079_protect_lesson_module_publication_ownership",
+      "breakpoints": true
     }
   ]
 }

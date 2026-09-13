@@ -45,6 +45,7 @@ const course = {
   isInterested: false,
   launchDate: "2026-10-01",
   launchLandingUrl: null,
+  lessonCount: 0,
   nextLessonId: null,
   priceInCents: 10_000,
   progressPercent: 0,

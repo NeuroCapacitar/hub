@@ -5,6 +5,7 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -12,6 +13,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -208,11 +210,16 @@ export const learningAnalyticsEventTypeEnum = pgEnum(
   [
     "lesson_started",
     "watch_checkpoint",
+    "watch_progress",
     "lesson_completed",
     "resource_open_failed",
     "player_error",
   ]
 );
+export const lessonCompletionSourceEnum = pgEnum("lesson_completion_source", [
+  "manual",
+  "video",
+]);
 export const jmvstreamFolderTypeEnum = pgEnum("jmvstream_folder_type", [
   "course",
   "module",
@@ -484,6 +491,7 @@ export const coursePublications = pgTable(
       table.courseId,
       table.publicationNumber
     ),
+    unique("course_publications_id_course_unique").on(table.id, table.courseId),
     uniqueIndex("course_publications_one_published_per_course_idx")
       .on(table.courseId)
       .where(sql`${table.status} = 'published'`),
@@ -532,6 +540,15 @@ export const modules = pgTable(
       table.coursePublicationId,
       table.sortOrder
     ),
+    unique("modules_id_course_publication_unique").on(
+      table.id,
+      table.coursePublicationId
+    ),
+    foreignKey({
+      columns: [table.coursePublicationId, table.courseId],
+      foreignColumns: [coursePublications.id, coursePublications.courseId],
+      name: "modules_course_publication_course_fk",
+    }).onDelete("cascade"),
     check(
       "modules_release_delay_days_non_negative",
       sql`${table.releaseDelayDays} >= 0`
@@ -593,6 +610,11 @@ export const lessons = pgTable(
       table.moduleId,
       table.sortOrder
     ),
+    foreignKey({
+      columns: [table.moduleId, table.coursePublicationId],
+      foreignColumns: [modules.id, modules.coursePublicationId],
+      name: "lessons_module_course_publication_fk",
+    }).onDelete("cascade"),
   ]
 );
 
@@ -838,6 +860,7 @@ export const lessonProgress = pgTable(
     lessonId: uuid("lesson_id")
       .notNull()
       .references(() => lessons.id, { onDelete: "cascade" }),
+    completionSource: lessonCompletionSourceEnum("completion_source"),
     completedAt: timestamp("completed_at", tz).defaultNow().notNull(),
     ...timestamps,
   },
@@ -861,11 +884,27 @@ export const lessonWatchProgress = pgTable(
       .notNull()
       .references(() => lessons.id, { onDelete: "cascade" }),
     currentSeconds: integer("current_seconds").default(0).notNull(),
+    resumePositionSeconds: integer("resume_position_seconds")
+      .default(0)
+      .notNull(),
     maxPositionSeconds: integer("max_position_seconds").default(0).notNull(),
+    validatedPositionSeconds: integer("validated_position_seconds")
+      .default(0)
+      .notNull(),
+    playingTimeSeconds: integer("playing_time_seconds").default(0).notNull(),
     durationSeconds: integer("duration_seconds").default(0).notNull(),
     watchedPercent: integer("watched_percent").default(0).notNull(),
     lastEventName: text("last_event_name"),
     lastEventAt: timestamp("last_event_at", tz).defaultNow().notNull(),
+    trackingSessionId: text("tracking_session_id"),
+    lastEventSequence: integer("last_event_sequence").default(0).notNull(),
+    awaitingPlaybackAfterSeek: boolean("awaiting_playback_after_seek")
+      .default(false)
+      .notNull(),
+    linearProgressBlocked: boolean("linear_progress_blocked")
+      .default(false)
+      .notNull(),
+    trackingVersion: integer("tracking_version").default(0).notNull(),
     completedByVideoAt: timestamp("completed_by_video_at", tz),
     ...timestamps,
   },
@@ -881,12 +920,32 @@ export const lessonWatchProgress = pgTable(
       sql`${table.currentSeconds} >= 0`
     ),
     check(
+      "lesson_watch_progress_resume_position_seconds_non_negative",
+      sql`${table.resumePositionSeconds} >= 0`
+    ),
+    check(
       "lesson_watch_progress_duration_seconds_non_negative",
       sql`${table.durationSeconds} >= 0`
     ),
     check(
       "lesson_watch_progress_max_position_seconds_non_negative",
       sql`${table.maxPositionSeconds} >= 0`
+    ),
+    check(
+      "lesson_watch_progress_validated_position_seconds_non_negative",
+      sql`${table.validatedPositionSeconds} >= 0`
+    ),
+    check(
+      "lesson_watch_progress_playing_time_seconds_non_negative",
+      sql`${table.playingTimeSeconds} >= 0`
+    ),
+    check(
+      "lesson_watch_progress_last_event_sequence_non_negative",
+      sql`${table.lastEventSequence} >= 0`
+    ),
+    check(
+      "lesson_watch_progress_tracking_version_valid",
+      sql`${table.trackingVersion} in (0, 1)`
     ),
     check(
       "lesson_watch_progress_percent_bounds",
@@ -928,6 +987,8 @@ export const learningAnalyticsEvents = pgTable(
       .notNull()
       .references(() => lessons.id, { onDelete: "cascade" }),
     checkpointPercent: integer("checkpoint_percent"),
+    playingSeconds: integer("playing_seconds").default(0).notNull(),
+    completionSource: lessonCompletionSourceEnum("completion_source"),
     errorCode: text("error_code"),
     occurredAt: timestamp("occurred_at", tz).defaultNow().notNull(),
     createdAt: timestamp("created_at", tz).defaultNow().notNull(),
@@ -949,6 +1010,10 @@ export const learningAnalyticsEvents = pgTable(
       "learning_analytics_events_checkpoint_percent_bounds",
       sql`${table.checkpointPercent} is null or (${table.checkpointPercent} >= 0 and ${table.checkpointPercent} <= 100)`
     ),
+    check(
+      "learning_analytics_events_playing_seconds_non_negative",
+      sql`${table.playingSeconds} >= 0`
+    ),
   ]
 );
 
@@ -967,6 +1032,7 @@ export const learningAnalyticsDailyMetrics = pgTable(
       .references(() => lessons.id, { onDelete: "cascade" }),
     eventCount: integer("event_count").notNull(),
     uniqueEnrollmentCount: integer("unique_enrollment_count").notNull(),
+    playingSeconds: integer("playing_seconds").default(0).notNull(),
     ...timestamps,
   },
   (table) => [

@@ -21,6 +21,11 @@ import {
   saveLesson,
   saveModule,
 } from "@/features/admin/authoring";
+import {
+  parseAuthoringUuid,
+  parseAuthoringUuidList,
+  readAuthoringUuid,
+} from "@/features/admin/authoring-input";
 import type { CertificateTemplateActionState } from "@/features/admin/certificate-template-action-state";
 import {
   getExpectedCertificateTemplateActionMessage,
@@ -174,6 +179,7 @@ export type CourseContentReorderResult =
 
 const REORDER_FAILURE_MESSAGE =
   "Nao foi possivel salvar a nova ordem. Tente novamente.";
+const MAX_POSTGRES_INTEGER = 2_147_483_647;
 
 const hasExactlyTheSameIds = (
   actualIds: string[],
@@ -182,6 +188,47 @@ const hasExactlyTheSameIds = (
   actualIds.length === expectedIds.length &&
   new Set(actualIds).size === actualIds.length &&
   actualIds.every((id) => expectedIds.includes(id));
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const parseLessonReorderGroups = (value: unknown): LessonReorderGroup[] => {
+  if (!Array.isArray(value)) {
+    throw new Error("Invalid lesson order.");
+  }
+
+  return value.map((group, index) => {
+    if (!isRecord(group)) {
+      throw new Error("Invalid lesson order.");
+    }
+
+    return {
+      lessonIds: parseAuthoringUuidList(
+        group.lessonIds,
+        `reorderGroups[${index}].lessonIds`
+      ),
+      moduleId: parseAuthoringUuid(
+        group.moduleId,
+        `reorderGroups[${index}].moduleId`
+      ),
+    };
+  });
+};
+
+const getTemporaryPositiveOrderBase = (
+  currentOrders: readonly number[],
+  itemCount: number
+): number => {
+  const currentMaximum = currentOrders.reduce(
+    (maximum, order) => Math.max(maximum, order),
+    0
+  );
+  const base = currentMaximum + itemCount + 1;
+  if (base + Math.max(0, itemCount - 1) > MAX_POSTGRES_INTEGER) {
+    throw new Error("A ordem do conteúdo excede o limite suportado.");
+  }
+  return base;
+};
 
 const getActionCorrelationId = async (): Promise<string> =>
   createCorrelationId((await headers()).get(CORRELATION_ID_HEADER));
@@ -228,6 +275,7 @@ const revalidateEnrollmentAdminPaths = (): void => {
 
 export const saveCourseAction = async (formData: FormData): Promise<void> => {
   const session = await requireRole(["admin"]);
+  readAuthoringUuid({ field: "courseId", formData });
   const { courseId } = await saveCourse({
     actorUserId: session.user.id,
     formData,
@@ -253,9 +301,10 @@ export const createCoursePublicationDraftAction = async (
 ): Promise<CoursePublicationActionResult> => {
   try {
     const session = await requireRole(["admin"]);
+    const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
     await createCoursePublicationDraft({
       actorUserId: session.user.id,
-      courseId,
+      courseId: normalizedCourseId,
     });
     revalidateAdmin();
     return { ok: true };
@@ -272,9 +321,10 @@ export const publishCoursePublicationAction = async (
 ): Promise<CoursePublicationActionResult> => {
   try {
     const session = await requireRole(["admin"]);
+    const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
     const result = await publishCoursePublication({
       actorUserId: session.user.id,
-      courseId,
+      courseId: normalizedCourseId,
     });
 
     if (result === "no_draft") {
@@ -296,6 +346,13 @@ export const publishCoursePublicationAction = async (
 
 export const saveModuleAction = async (formData: FormData): Promise<void> => {
   const session = await requireRole(["admin"]);
+  readAuthoringUuid({
+    field: "courseId",
+    formData,
+    required: true,
+    requiredMessage: "Informe o Curso.",
+  });
+  readAuthoringUuid({ field: "moduleId", formData });
   await saveModule({ actorUserId: session.user.id, formData });
   revalidateAdmin();
 };
@@ -304,6 +361,12 @@ export const createLessonDraftAction = async (
   formData: FormData
 ): Promise<void> => {
   const session = await requireRole(["admin"]);
+  readAuthoringUuid({
+    field: "moduleId",
+    formData,
+    required: true,
+    requiredMessage: "Informe o módulo da aula.",
+  });
   const { courseId, lessonId } = await createLessonDraft({
     actorUserId: session.user.id,
     formData,
@@ -318,9 +381,16 @@ export const saveLessonAction = async (
   formData: FormData
 ): Promise<LessonSaveActionResult> => {
   const correlationId = await getActionCorrelationId();
-  const submittedLessonId = String(formData.get("lessonId") ?? "").trim();
 
   try {
+    const submittedLessonId =
+      readAuthoringUuid({ field: "lessonId", formData }) ?? "";
+    readAuthoringUuid({
+      field: "moduleId",
+      formData,
+      required: true,
+      requiredMessage: "Informe o módulo da aula.",
+    });
     const saved = await observeOperation({
       ...(submittedLessonId ? { aggregateId: submittedLessonId } : {}),
       correlationId,
@@ -358,7 +428,8 @@ export const ensureJmvstreamCourseFolderAction = async (
   courseId: string
 ): Promise<void> => {
   await requireRole(["admin"]);
-  await ensureJmvstreamCourseFolder(courseId);
+  const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+  await ensureJmvstreamCourseFolder(normalizedCourseId);
   revalidateAdmin();
 };
 
@@ -374,8 +445,12 @@ export const initJmvstreamUploadAction = async (input: {
   await requireRole(["admin"]);
 
   try {
+    const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
     return {
-      data: await initJmvstreamUpload(input),
+      data: await initJmvstreamUpload({
+        ...input,
+        lessonId: normalizedLessonId,
+      }),
       ok: true,
     };
   } catch (error) {
@@ -405,7 +480,16 @@ export const completeJmvstreamUploadAction = async (input: {
   videoHash: string;
 }): Promise<void> => {
   await requireRole(["admin"]);
-  await completeJmvstreamUpload(input);
+  const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
+  const normalizedUploadSessionId = parseAuthoringUuid(
+    input?.uploadSessionId,
+    "uploadSessionId"
+  );
+  await completeJmvstreamUpload({
+    ...input,
+    lessonId: normalizedLessonId,
+    uploadSessionId: normalizedUploadSessionId,
+  });
   revalidateAdmin();
 };
 
@@ -413,7 +497,8 @@ export const syncJmvstreamLessonPlayerAction = async (input: {
   lessonId: string;
 }): Promise<{ playerUrl: null | string; ready: boolean }> => {
   await requireRole(["admin"]);
-  const result = await syncJmvstreamLessonPlayer(input.lessonId);
+  const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
+  const result = await syncJmvstreamLessonPlayer(normalizedLessonId);
 
   if (result.ready) {
     revalidateAdmin();
@@ -426,13 +511,14 @@ export const removeJmvstreamVideoFromLessonAction = async (input: {
   lessonId: string;
 }): Promise<{ deletePending: boolean }> => {
   const session = await requireRole(["admin"]);
+  const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
   const { courseId, deletePending } = await removeLessonVideo({
     actorUserId: session.user.id,
-    lessonId: input.lessonId,
+    lessonId: normalizedLessonId,
   });
   revalidateAdmin();
   revalidatePath(
-    buildAdminLessonEditPath({ courseId, lessonId: input.lessonId.trim() })
+    buildAdminLessonEditPath({ courseId, lessonId: normalizedLessonId })
   );
 
   return { deletePending };
@@ -451,7 +537,8 @@ export const discardJmvstreamUploadAction = async (input: {
   assetId: string;
 }): Promise<void> => {
   await requireRole(["admin"]);
-  await discardJmvstreamUpload(input);
+  const normalizedAssetId = parseAuthoringUuid(input?.assetId, "assetId");
+  await discardJmvstreamUpload({ ...input, assetId: normalizedAssetId });
   revalidateAdmin();
 };
 
@@ -461,8 +548,9 @@ export const retryJmvstreamDeleteAction = async ({
   assetId: string;
 }): Promise<{ error: string; ok: false } | { ok: true }> => {
   await requireRole(["admin"]);
+  const normalizedAssetId = parseAuthoringUuid(assetId, "assetId");
   try {
-    await retryJmvstreamAssetDelete(assetId);
+    await retryJmvstreamAssetDelete(normalizedAssetId);
     revalidateAdmin();
     return { ok: true };
   } catch (error) {
@@ -1221,7 +1309,8 @@ export const disableCertificateForCourseAction = async (
   courseId: string
 ): Promise<void> => {
   const session = await requireRole(["admin"]);
-  await disableCertificateForCourse(courseId, session.user.id);
+  const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+  await disableCertificateForCourse(normalizedCourseId, session.user.id);
   revalidateAdmin();
 };
 
@@ -1229,7 +1318,8 @@ export const enableCertificateForCourseAction = async (
   courseId: string
 ): Promise<void> => {
   const session = await requireRole(["admin"]);
-  await enableCertificateForCourse(courseId, session.user.id);
+  const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+  await enableCertificateForCourse(normalizedCourseId, session.user.id);
   revalidateAdmin();
 };
 
@@ -1240,15 +1330,20 @@ export const reorderModulesAction = async (
   const correlationId = await getActionCorrelationId();
 
   try {
+    const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+    const normalizedOrderedModuleIds = parseAuthoringUuidList(
+      orderedModuleIds,
+      "orderedModuleIds"
+    );
     await observeOperation({
-      aggregateId: courseId,
+      aggregateId: normalizedCourseId,
       correlationId,
       execute: async () => {
         const session = await requireRole(["admin"]);
         const client = await getPool().connect();
         try {
           await client.query("BEGIN");
-          await lockCourseContentRelease(client, courseId);
+          await lockCourseContentRelease(client, normalizedCourseId);
           const expectedModules = await client.query<{
             id: string;
             sort_order: number;
@@ -1262,29 +1357,37 @@ export const reorderModulesAction = async (
               order by m.sort_order
               for update
             `,
-            [courseId]
+            [normalizedCourseId]
           );
 
           if (
             !hasExactlyTheSameIds(
-              orderedModuleIds,
+              normalizedOrderedModuleIds,
               expectedModules.rows.map((module) => module.id)
             )
           ) {
             throw new Error("Invalid module order.");
           }
 
-          for (let i = 0; i < orderedModuleIds.length; i++) {
+          const temporaryOrderBase = getTemporaryPositiveOrderBase(
+            expectedModules.rows.map((module) => module.sort_order),
+            normalizedOrderedModuleIds.length
+          );
+          for (let i = 0; i < normalizedOrderedModuleIds.length; i++) {
             await client.query(
               "update modules set sort_order = $1 where id = $2 and course_id = $3",
-              [-(i + 1), orderedModuleIds[i], courseId]
+              [
+                temporaryOrderBase + i,
+                normalizedOrderedModuleIds[i],
+                normalizedCourseId,
+              ]
             );
           }
 
-          for (let i = 0; i < orderedModuleIds.length; i++) {
+          for (let i = 0; i < normalizedOrderedModuleIds.length; i++) {
             await client.query(
               "update modules set sort_order = $1, updated_at = now() where id = $2 and course_id = $3",
-              [i + 1, orderedModuleIds[i], courseId]
+              [i + 1, normalizedOrderedModuleIds[i], normalizedCourseId]
             );
           }
 
@@ -1298,7 +1401,7 @@ export const reorderModulesAction = async (
             metadata: {
               changes: {
                 order: {
-                  after: orderedModuleIds.map(
+                  after: normalizedOrderedModuleIds.map(
                     (moduleId) => moduleTitleById.get(moduleId) ?? moduleId
                   ),
                   before: [...expectedModules.rows]
@@ -1308,7 +1411,7 @@ export const reorderModulesAction = async (
               },
               targetLabelAfter: "Conteúdo do Curso",
             },
-            targetId: courseId,
+            targetId: normalizedCourseId,
             targetType: "course",
           });
           await client.query("COMMIT");
@@ -1337,17 +1440,21 @@ export const reorderLessonsAction = async (
   const correlationId = await getActionCorrelationId();
 
   try {
+    const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+    const normalizedReorderGroups = parseLessonReorderGroups(reorderGroups);
     await observeOperation({
-      aggregateId: courseId,
+      aggregateId: normalizedCourseId,
       correlationId,
       execute: async () => {
         const session = await requireRole(["admin"]);
         const client = await getPool().connect();
         try {
           await client.query("BEGIN");
-          await lockCourseContentRelease(client, courseId);
-          const moduleIds = reorderGroups.map((group) => group.moduleId);
-          const orderedLessonIds = reorderGroups.flatMap(
+          await lockCourseContentRelease(client, normalizedCourseId);
+          const moduleIds = normalizedReorderGroups.map(
+            (group) => group.moduleId
+          );
+          const orderedLessonIds = normalizedReorderGroups.flatMap(
             (group) => group.lessonIds
           );
 
@@ -1371,7 +1478,7 @@ export const reorderLessonsAction = async (
               where m.course_id = $1 and m.id = any($2::uuid[]) and cp.status = 'draft'
               for update
             `,
-            [courseId, moduleIds]
+            [normalizedCourseId, moduleIds]
           );
 
           if (modules.rows.length !== moduleIds.length) {
@@ -1414,16 +1521,19 @@ export const reorderLessonsAction = async (
             throw new Error("Invalid lesson order.");
           }
 
-          let temporaryOrder = -1;
-          for (const lessonId of orderedLessonIds) {
+          const temporaryOrderBase = getTemporaryPositiveOrderBase(
+            expectedLessons.rows.map((lesson) => lesson.sort_order),
+            orderedLessonIds.length
+          );
+          for (let i = 0; i < orderedLessonIds.length; i++) {
+            const lessonId = orderedLessonIds[i];
             await client.query(
               "update lessons set sort_order = $1 where id = $2",
-              [temporaryOrder, lessonId]
+              [temporaryOrderBase + i, lessonId]
             );
-            temporaryOrder--;
           }
 
-          for (const group of reorderGroups) {
+          for (const group of normalizedReorderGroups) {
             for (let i = 0; i < group.lessonIds.length; i++) {
               await client.query(
                 "update lessons set sort_order = $1, module_id = $3, updated_at = now() where id = $2",
@@ -1447,7 +1557,7 @@ export const reorderLessonsAction = async (
             metadata: {
               changes: {
                 order: {
-                  after: reorderGroups.flatMap((group) =>
+                  after: normalizedReorderGroups.flatMap((group) =>
                     group.lessonIds.map((lessonId) =>
                       formatLessonOrder(group.moduleId, lessonId)
                     )
@@ -1459,7 +1569,7 @@ export const reorderLessonsAction = async (
               },
               targetLabelAfter: "Conteúdo do Curso",
             },
-            targetId: courseId,
+            targetId: normalizedCourseId,
             targetType: "course",
           });
           await client.query("COMMIT");

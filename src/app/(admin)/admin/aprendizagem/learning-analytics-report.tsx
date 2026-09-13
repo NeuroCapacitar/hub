@@ -39,6 +39,7 @@ import { getLearningAnalyticsPeriodLabel } from "@/features/learning-analytics/p
 import {
   formatLearningAnalyticsHours,
   formatLearningAnalyticsPercent,
+  formatLearningAnalyticsPlayingTime,
 } from "@/features/learning-analytics/presentation";
 import type {
   LearningAnalyticsCourseOption,
@@ -171,8 +172,8 @@ function LearningAnalyticsLessonsTable({
 }): React.JSX.Element {
   return (
     <>
-      <div className="rounded-lg border">
-        <Table className="min-w-[900px]">
+      <div className="overflow-x-auto rounded-lg border">
+        <Table className="min-w-[1040px]">
           <TableCaption className="sr-only">
             Desempenho das Aulas do Curso {course.title}
           </TableCaption>
@@ -188,6 +189,12 @@ function LearningAnalyticsLessonsTable({
               </TableHead>
               <TableHead className="whitespace-nowrap text-right">
                 Checkpoint
+              </TableHead>
+              <TableHead
+                className="whitespace-nowrap text-right"
+                title="Soma da reprodução normal registrada no período"
+              >
+                Tempo reproduzido
               </TableHead>
               <TableHead className="whitespace-nowrap text-right">
                 Erros
@@ -230,6 +237,11 @@ function LearningAnalyticsLessonsTable({
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
+                    {formatLearningAnalyticsPlayingTime(
+                      lesson.aggregate.playingSeconds
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
                     {lesson.aggregate.errorCount}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -252,7 +264,7 @@ function LearningAnalyticsLessonsTable({
               ))
             ) : (
               <TableRow>
-                <TableCell className="h-56 p-0" colSpan={9}>
+                <TableCell className="h-56 p-0" colSpan={10}>
                   <Empty className="rounded-none border-0 p-8">
                     <EmptyHeader>
                       <EmptyMedia variant="icon">
@@ -339,8 +351,8 @@ export function LearningAnalyticsReport({
                 description="Use o resumo e a tabela para identificar Aulas que precisam de revisão e acompanhar o efeito das versões publicadas."
                 details={[
                   "Inícios, conclusões e erros são somados entre todas as versões da mesma Aula.",
-                  "Visualização média do Curso considera cada Aula ativa: conclusão vale 100%, ausência de registro vale 0% e o maior checkpoint da versão assistida entra no cálculo.",
-                  "Checkpoint e tempos são medianas calculadas sobre os registros disponíveis no período selecionado. Eventos brutos ficam disponíveis por até 12 meses.",
+                  "Visualização média do Curso considera cada Aula ativa: conclusão vale 100%, ausência de registro vale 0% e a fronteira linear validada entra no cálculo.",
+                  "Checkpoint e tempos de calendário são medianas calculadas sobre os registros disponíveis no período selecionado. Tempo reproduzido soma a reprodução normal registrada, pode incluir reprises e não representa o tempo até concluir. Eventos brutos ficam disponíveis por até 12 meses.",
                   "Abra Detalhes para comparar cada versão e seu status. Dados de Alunos, Contas e e-mails não aparecem aqui.",
                 ]}
                 title="Como ler o relatório de aprendizagem"

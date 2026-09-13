@@ -55,12 +55,14 @@ const courseOverview = (
     id: "course-1",
     subtitle: "Subtítulo",
     title: "Curso de teste",
+    workloadHours: 1,
   },
   modules: [],
   nextLessonId: null,
   nextReleaseAt: null,
   progressPercent: 100,
   studentName: "Maria Silva",
+  lessonCount: 1,
   totalCount: 1,
   ...overrides,
 });
@@ -158,6 +160,41 @@ describe("StudentCourseOverviewPage certificate feedback", () => {
     expect(markup).toContain("Conferir nome no perfil");
     expect(markup).not.toContain("/certificados/");
     expect(markup).not.toContain("Atualizar status");
+  });
+
+  it("labels a partially completed course as continue when a next lesson exists", async () => {
+    const markup = await renderPage({
+      certificate: "",
+      overview: courseOverview({
+        certificateCode: null,
+        certificateRenderStatus: null,
+        nextLessonId: "lesson-2",
+        progressPercent: 50,
+      }),
+    });
+
+    expect(markup).toContain("Continuar curso");
+    expect(markup).not.toContain("Rever trilha");
+  });
+
+  it("does not promise a certificate when it is disabled and course copy is empty", async () => {
+    const markup = await renderPage({
+      certificate: "",
+      overview: courseOverview({
+        certificateCode: null,
+        certificateEnabled: false,
+        course: {
+          description: null,
+          id: "course-1",
+          subtitle: null,
+          title: "Curso sem certificado",
+          workloadHours: 1,
+        },
+      }),
+    });
+
+    expect(markup).toContain("conclua sua trilha");
+    expect(markup).not.toContain("liberar o certificado");
   });
 
   it("does not repeat the next release in the course header", async () => {

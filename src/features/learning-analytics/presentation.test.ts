@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildLearningAnalyticsKpis,
   buildLessonAnalyticsLessonReports,
+  formatLearningAnalyticsPlayingTime,
 } from "./presentation";
 import type { LessonAnalyticsMetric } from "./types";
 
@@ -24,6 +25,7 @@ const metric = (
   medianHoursToNextLesson: 1,
   moduleSortOrder: 1,
   moduleTitle: "Módulo 1",
+  playingSeconds: 3600,
   publicationNumber: 2,
   publicationStatus: "published",
   started: 6,
@@ -67,6 +69,7 @@ describe("learning analytics presentation", () => {
     expect(reports[0]?.aggregate.started).toBe(12);
     expect(reports[0]?.aggregate.errorCount).toBe(0);
     expect(reports[0]?.aggregate.medianCheckpointPercent).toBe(50);
+    expect(reports[0]?.aggregate.playingSeconds).toBe(7200);
     expect(
       reports[0]?.versions.map((version) => version.publicationNumber)
     ).toEqual([2, 1]);
@@ -108,5 +111,13 @@ describe("learning analytics presentation", () => {
       lessonsWithErrors: 2,
       lessonsWithoutStarts: 0,
     });
+  });
+
+  it("formats reproduced time with a compact human-readable unit", () => {
+    expect(formatLearningAnalyticsPlayingTime(3 * 3600 + 12 * 60)).toBe(
+      "3 h 12 min"
+    );
+    expect(formatLearningAnalyticsPlayingTime(42 * 60)).toBe("42 min");
+    expect(formatLearningAnalyticsPlayingTime(8)).toBe("8 s");
   });
 });

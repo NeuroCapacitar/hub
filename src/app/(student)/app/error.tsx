@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { createCorrelationId } from "@/lib/observability";
 import { route } from "@/lib/routes";
+import { isSentryRuntimeEnabled } from "@/lib/sentry-deployment";
 
 export default function StudentAreaError({
   error,
@@ -19,7 +20,13 @@ export default function StudentAreaError({
 
   useEffect(() => {
     headingRef.current?.focus();
-    captureException(error, { tags: { correlation_id: correlationId } });
+    if (
+      isSentryRuntimeEnabled({
+        dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      })
+    ) {
+      captureException(error, { tags: { correlation_id: correlationId } });
+    }
   }, [correlationId, error]);
 
   return (

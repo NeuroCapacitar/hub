@@ -1,0 +1,1 @@
+ALTER TABLE "learning_analytics_events" ADD COLUMN "completion_source" "lesson_completion_source";

@@ -24,6 +24,12 @@ Ele não executa em cada `push` para `main` ou `staging`. O merge em `staging`
 possui somente uma operação separada para aplicar migrations no banco persistente
 de Staging; essa operação não repete os testes.
 
+Quando um release depende da árvore final de um merge, a verificação precisa
+existir para o SHA dessa árvore. Um check verde apenas no head de um PR não é
+substituto: execute a CI manualmente para a referência candidata quando
+necessário e só avance depois que o check `CI` verde estiver associado ao SHA
+exato.
+
 ## Banco de teste
 
 Cada job usa o service container PostgreSQL 18 do próprio runner. São criados

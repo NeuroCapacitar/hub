@@ -29,7 +29,7 @@ import {
   assertMaxReleaseDelayFitsAccessDuration,
   assertValidReleaseDelayDays,
 } from "@/features/courses/module-content-release";
-import { recalculateCourseWorkloadHours } from "@/features/courses/server";
+import { recalculateCourseWorkloadHoursWithClient } from "@/features/courses/server";
 import { createCourseSlug } from "@/features/courses/slug";
 import { parseCourseWorkloadOverride } from "@/features/courses/workload";
 import {
@@ -71,20 +71,19 @@ import {
 import { parseStagedAdminImageReference } from "@/features/storage/staged-image-upload";
 import { consumeStagedAdminImageUpload } from "@/features/storage/staged-image-upload-registry";
 import { getServerEnv } from "@/lib/env";
+import {
+  type AuthoringContentStatus,
+  readAuthoringContentStatus,
+  readAuthoringNonNegativeInteger,
+  readAuthoringPositiveInteger,
+  readAuthoringRequiredBoolean,
+  readAuthoringString,
+  readRequiredAuthoringString,
+} from "./authoring-input";
 
 const CREATED_CONTENT_STATUS = "draft";
 const PUBLISHED_CONTENT_STATUS = "active";
-const ARCHIVED_CONTENT_STATUS = "archived";
-const CONTENT_STATUSES = new Set([
-  CREATED_CONTENT_STATUS,
-  PUBLISHED_CONTENT_STATUS,
-  ARCHIVED_CONTENT_STATUS,
-]);
-
-type ContentStatus =
-  | typeof CREATED_CONTENT_STATUS
-  | typeof PUBLISHED_CONTENT_STATUS
-  | typeof ARCHIVED_CONTENT_STATUS;
+type ContentStatus = AuthoringContentStatus;
 
 interface AuthoringFormInput {
   actorUserId: string;
@@ -137,6 +136,8 @@ interface LessonAuditSnapshot {
 
 interface LessonAuditDatabaseRow {
   content_json: unknown;
+  course_id: string;
+  course_publication_id: string;
   description: string | null;
   duration_seconds: number;
   id: string;
@@ -225,27 +226,28 @@ const getContentFingerprint = (content: unknown): string | null => {
     .slice(0, 16);
 };
 
-const readString = (formData: FormData, key: string): string =>
-  String(formData.get(key) ?? "").trim();
-
-const readNumber = (formData: FormData, key: string, fallback = 0): number => {
-  const value = Number(formData.get(key));
-  return Number.isFinite(value) ? value : fallback;
-};
+const readString = readAuthoringString;
 
 const readModuleReleaseDelayDays = (formData: FormData): number => {
-  if (readString(formData, "releaseMode") === "immediate") {
+  const releaseMode = readString(formData, "releaseMode");
+  if (releaseMode === "immediate") {
     return 0;
   }
-
-  const rawValue = readString(formData, "releaseDelayDays");
-  const value = Number(rawValue);
-  if (!(rawValue && Number.isSafeInteger(value) && value >= 0)) {
-    throw new Error("Informe uma quantidade inteira e não negativa de dias.");
+  if (releaseMode !== "delayed") {
+    throw new LessonAuthoringError("O modo de liberação do Módulo é inválido.");
   }
 
-  assertValidReleaseDelayDays(value);
-  return value;
+  try {
+    const value = readAuthoringNonNegativeInteger(formData, "releaseDelayDays");
+    assertValidReleaseDelayDays(value);
+    return value;
+  } catch (error) {
+    if (error instanceof LessonAuthoringError) {
+      throw new Error("Informe uma quantidade inteira e não negativa de dias.");
+    }
+
+    throw error;
+  }
 };
 
 const normalizeLessonContentForSave = ({
@@ -287,13 +289,8 @@ const assertLessonHasContent = ({
   );
 };
 
-const readLessonRequired = (formData: FormData): boolean => {
-  if (!formData.has("isRequired")) {
-    return true;
-  }
-
-  return formData.getAll("isRequired").includes("on");
-};
+const readLessonRequired = (formData: FormData): boolean =>
+  readAuthoringRequiredBoolean(formData, "isRequired", true);
 
 const parseJsonFormField = (formData: FormData, key: string): unknown => {
   const value = readString(formData, key);
@@ -356,31 +353,32 @@ const publishCourseCover = async (
   );
 };
 
-const readContentStatus = (formData: FormData): ContentStatus => {
-  const status = readString(formData, "status");
-
-  if (CONTENT_STATUSES.has(status)) {
-    return status as ContentStatus;
-  }
-
-  return CREATED_CONTENT_STATUS;
-};
+const readContentStatus = (formData: FormData): ContentStatus =>
+  readAuthoringContentStatus(formData, CREATED_CONTENT_STATUS);
 
 const readCourseFormValues = (formData: FormData): CourseFormValues => {
   const paymentOffer = formData.has("paymentOfferPresent")
     ? parseCoursePaymentOffer({
         allowCreditCard: formData.has("paymentAllowCreditCard"),
         allowPix: formData.has("paymentAllowPix"),
-        maxInstallmentCount: readNumber(
+        maxInstallmentCount: readAuthoringNonNegativeInteger(
           formData,
           "paymentMaxInstallmentCount",
           1
         ),
       })
     : DEFAULT_COURSE_PAYMENT_OFFER;
+  const title = readString(formData, "title");
+  if (!title) {
+    throw new LessonAuthoringError("Informe o título do Curso.", "title");
+  }
 
   return {
-    accessDurationMonths: readNumber(formData, "accessDurationMonths", 12),
+    accessDurationMonths: readAuthoringPositiveInteger(
+      formData,
+      "accessDurationMonths",
+      12
+    ),
     description: readString(formData, "description") || null,
     workloadHoursOverride: parseCourseWorkloadOverride(
       readString(formData, "workloadHoursOverride")
@@ -390,7 +388,7 @@ const readCourseFormValues = (formData: FormData): CourseFormValues => {
     paymentMaxInstallmentCount: paymentOffer.maxInstallmentCount,
     priceInCents: parseCoursePriceToCents(readString(formData, "price")),
     subtitle: readString(formData, "subtitle") || null,
-    title: readString(formData, "title"),
+    title,
   };
 };
 
@@ -439,13 +437,19 @@ const withCourseContentReleaseLock = async <T>(
   }
 };
 
-const resolveUniqueCourseSlug = async (title: string): Promise<string> => {
+const resolveUniqueCourseSlug = async (
+  client: PoolClient,
+  title: string
+): Promise<string> => {
+  await client.query(
+    "select pg_advisory_xact_lock(hashtextextended('course-slug-allocation', 0))"
+  );
   const baseSlug = createCourseSlug(title);
   let candidate = baseSlug;
   let suffix = 2;
 
   while (true) {
-    const existing = await getPool().query<{ id: string }>(
+    const existing = await client.query<{ id: string }>(
       "select id from courses where slug = $1 limit 1",
       [candidate]
     );
@@ -1213,6 +1217,48 @@ const getLessonR2ObjectKeys = async (lessonId: string): Promise<string[]> => {
   return getLessonContentStorageKeys(rows[0]?.content_json);
 };
 
+const assertExistingLessonTargetMatches = ({
+  currentLesson,
+  currentModule,
+}: {
+  currentLesson: LessonAuditDatabaseRow | undefined;
+  currentModule:
+    | {
+        course_id: string;
+        course_publication_id: string;
+        id: string;
+      }
+    | undefined;
+}): void => {
+  if (!(currentLesson && currentModule)) {
+    throw new LessonAuthoringError(
+      "A Aula não pode ser movida entre Cursos ou publicações."
+    );
+  }
+  if (
+    currentLesson.course_id !== currentModule.course_id ||
+    currentLesson.course_publication_id !== currentModule.course_publication_id
+  ) {
+    throw new LessonAuthoringError(
+      "A Aula não pode ser movida entre Cursos ou publicações."
+    );
+  }
+};
+
+const recalculateCourseWorkloadForTransaction = async (
+  client: PoolClient,
+  courseIds: readonly (string | null)[]
+): Promise<void> => {
+  const uniqueCourseIds = [
+    ...new Set(
+      courseIds.filter((courseId): courseId is string => Boolean(courseId))
+    ),
+  ];
+  for (const courseId of uniqueCourseIds) {
+    await recalculateCourseWorkloadHoursWithClient(client, courseId);
+  }
+};
+
 const getCourseR2ObjectKeys = async (courseId: string): Promise<string[]> => {
   const [courseResult, lessonResult] = await Promise.all([
     getPool().query<{ cover_image_json: unknown }>(
@@ -1686,6 +1732,7 @@ const runCourseUpdateTransaction = async ({
         targetType: "course",
       });
     }
+    await recalculateCourseWorkloadHoursWithClient(client, courseId);
     await client.query("commit");
     return {
       coverImage: currentCoverImage,
@@ -1780,10 +1827,10 @@ const createNewCourse = async ({
       : parseCourseCoverFormField(formData);
     uploadedCoverImage = coverFile ? coverImage : null;
     const insertedThumbnailUrl = getCourseCoverUrl({ courseId, coverImage });
-    const slug = await resolveUniqueCourseSlug(values.title);
     const client = await getPool().connect();
     try {
       await client.query("begin");
+      const slug = await resolveUniqueCourseSlug(client, values.title);
       const inserted = await client.query<{ id: string }>(
         `
           insert into courses (
@@ -1884,6 +1931,7 @@ const createNewCourse = async ({
         targetId: createdCourseId,
         targetType: "course",
       });
+      await recalculateCourseWorkloadHoursWithClient(client, courseId);
       await client.query("commit");
     } catch (error) {
       await client.query("rollback");
@@ -1958,8 +2006,6 @@ export const saveCourse = async ({
     await persistCourse(null);
   }
 
-  await recalculateCourseWorkloadHours(savedCourseId);
-
   await ensureJmvstreamCourseFolder(savedCourseId);
 
   return { courseId: savedCourseId };
@@ -1971,9 +2017,16 @@ export const saveModule = async ({
 }: AuthoringFormInput): Promise<void> => {
   const moduleId = readString(formData, "moduleId");
   const courseId = readString(formData, "courseId");
-  const title = readString(formData, "title");
+  if (!courseId) {
+    throw new LessonAuthoringError("Informe o Curso.");
+  }
+  const title = readRequiredAuthoringString({
+    field: "title",
+    formData,
+    label: "o título do Módulo",
+  });
   const description = readString(formData, "description") || null;
-  const sortOrder = readNumber(formData, "sortOrder", 1);
+  const sortOrder = readAuthoringPositiveInteger(formData, "sortOrder", 1);
   const releaseDelayDays = readModuleReleaseDelayDays(formData);
   const status = moduleId
     ? readContentStatus(formData)
@@ -1995,8 +2048,8 @@ export const saveModule = async ({
           title: string;
         }>(
           `
-            select m.id, m.course_id, m.title, m.description, m.sort_order,
-                   m.status, m.release_delay_days
+            select m.id, m.course_id, m.course_publication_id, m.title,
+                   m.description, m.sort_order, m.status, m.release_delay_days
             from modules m
             join course_publications cp on cp.id = m.course_publication_id
             where m.id = $1 and cp.status = 'draft'
@@ -2010,28 +2063,24 @@ export const saveModule = async ({
             "Modulo nao pertence a uma versao em rascunho."
           );
         }
+        if (current.rows[0].course_id !== courseId) {
+          throw new LessonAuthoringError(
+            "O módulo não pertence ao Curso informado."
+          );
+        }
 
         await client.query(
           `
             update modules
-            set course_id = $1,
-                title = $2,
-                description = $3,
-                sort_order = $4,
-                status = $5,
-                release_delay_days = $6,
+            set title = $1,
+                description = $2,
+                sort_order = $3,
+                status = $4,
+                release_delay_days = $5,
                 updated_at = now()
-            where id = $7
+            where id = $6
           `,
-          [
-            courseId,
-            title,
-            description,
-            sortOrder,
-            status,
-            releaseDelayDays,
-            moduleId,
-          ]
+          [title, description, sortOrder, status, releaseDelayDays, moduleId]
         );
         const changes = getAuditChanges({
           courseId: { after: courseId, before: current.rows[0].course_id },
@@ -2064,12 +2113,12 @@ export const saveModule = async ({
             targetType: "module",
           });
         }
+        await recalculateCourseWorkloadForTransaction(client, [
+          courseId,
+          previousCourseId,
+        ]);
       }
     );
-    await recalculateCourseWorkloadHours(courseId);
-    if (previousCourseId && previousCourseId !== courseId) {
-      await recalculateCourseWorkloadHours(previousCourseId);
-    }
     return;
   }
 
@@ -2167,9 +2216,9 @@ export const saveModule = async ({
       targetId: insertedModule.rows[0]?.id,
       targetType: "module",
     });
+    await recalculateCourseWorkloadForTransaction(client, [courseId]);
     return insertedModule;
   });
-  await recalculateCourseWorkloadHours(courseId);
 };
 
 export const createLessonDraft = async ({
@@ -2269,10 +2318,10 @@ export const createLessonDraft = async ({
         targetId: lessonId,
         targetType: "lesson",
       });
+      await recalculateCourseWorkloadHoursWithClient(client, courseId);
       return lessonId;
     }
   );
-  await recalculateCourseWorkloadHours(courseId);
 
   return { courseId, lessonId };
 };
@@ -2324,7 +2373,7 @@ export const saveLesson = async ({
   const durationBreakdown = calculateLessonDurationBreakdown({
     textDocument: contentJson?.document ?? null,
     videoDurationSeconds: hasVideoContent
-      ? readNumber(formData, "durationSeconds")
+      ? readAuthoringNonNegativeInteger(formData, "durationSeconds", 0)
       : 0,
   });
   const status = existingLessonId
@@ -2332,7 +2381,7 @@ export const saveLesson = async ({
     : CREATED_CONTENT_STATUS;
   const isPublished = status === PUBLISHED_CONTENT_STATUS;
   const isRequired = readLessonRequired(formData);
-  const sortOrder = readNumber(formData, "sortOrder", 1);
+  const sortOrder = readAuthoringPositiveInteger(formData, "sortOrder", 1);
   const moduleId = readString(formData, "moduleId");
   await assertLessonTargetPublicationIsEditable({ moduleId });
   const module = await getCourseAndPublicationForModule(moduleId);
@@ -2371,12 +2420,14 @@ export const saveLesson = async ({
       if (existingLessonId) {
         currentLesson = await client.query<LessonAuditDatabaseRow>(
           `
-            select l.id, l.module_id, l.title, l.description,
+            select l.id, l.module_id, m.course_id, l.course_publication_id,
+                   l.title, l.description,
                    l.video_provider, l.video_external_id, l.video_embed_url,
                    l.content_json, l.duration_seconds, l.video_duration_seconds,
                    l.text_duration_seconds, l.text_word_count, l.sort_order,
                    l.status, l.is_published, l.is_required
             from lessons l
+            join modules m on m.id = l.module_id
             join course_publications cp on cp.id = l.course_publication_id
             where l.id = $1 and cp.status = 'draft'
             limit 1
@@ -2391,9 +2442,13 @@ export const saveLesson = async ({
         }
       }
 
-      const currentModule = await client.query<{ id: string }>(
+      const currentModule = await client.query<{
+        course_id: string;
+        course_publication_id: string;
+        id: string;
+      }>(
         `
-          select m.id
+          select m.id, m.course_id, m.course_publication_id
           from modules m
           join course_publications cp on cp.id = m.course_publication_id
           where m.id = $1 and cp.status = 'draft'
@@ -2406,6 +2461,12 @@ export const saveLesson = async ({
         throw new LessonAuthoringError(
           "Prepare alteracoes antes de editar conteudo publicado."
         );
+      }
+      if (existingLessonId) {
+        assertExistingLessonTargetMatches({
+          currentLesson: currentLesson?.rows[0],
+          currentModule: currentModule.rows[0],
+        });
       }
 
       if (existingLessonId) {
@@ -2491,6 +2552,10 @@ export const saveLesson = async ({
             targetType: "lesson",
           });
         }
+        await recalculateCourseWorkloadForTransaction(client, [
+          moduleCourseId,
+          previousCourseId,
+        ]);
         return existingLessonId;
       }
 
@@ -2553,18 +2618,13 @@ export const saveLesson = async ({
         targetId: insertedLessonId,
         targetType: "lesson",
       });
+      await recalculateCourseWorkloadForTransaction(client, [moduleCourseId]);
       return insertedLessonId;
     }
   );
   savedLessonId = persistedLessonId;
 
   if (existingLessonId) {
-    if (moduleCourseId) {
-      await recalculateCourseWorkloadHours(moduleCourseId);
-    }
-    if (previousCourseId && previousCourseId !== moduleCourseId) {
-      await recalculateCourseWorkloadHours(previousCourseId);
-    }
     await cleanupUpdatedLessonAssets({
       contentJson,
       lessonId: existingLessonId,
@@ -2572,8 +2632,6 @@ export const saveLesson = async ({
       shouldDeleteJmvstreamAsset,
       shouldKeepJmvstreamAsset,
     });
-  } else if (moduleCourseId) {
-    await recalculateCourseWorkloadHours(moduleCourseId);
   }
 
   await consumeUploadedLessonResources({
@@ -2705,8 +2763,8 @@ export const removeLessonVideo = async ({
         targetType: "lesson",
       });
     }
+    await recalculateCourseWorkloadForTransaction(client, [courseId]);
   });
-  await recalculateCourseWorkloadHours(courseId);
 
   return { courseId, deletePending: deleteResult.failed > 0 };
 };

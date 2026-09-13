@@ -37,6 +37,7 @@ import {
 import {
   formatLearningAnalyticsHours,
   formatLearningAnalyticsPercent,
+  formatLearningAnalyticsPlayingTime,
 } from "@/features/learning-analytics/presentation";
 import type {
   LessonAnalyticsLessonReport,
@@ -59,11 +60,6 @@ const VERSION_METRIC_COLUMNS: ReadonlyArray<{
   label: string;
 }> = [
   {
-    abbreviation: "MA",
-    getValue: (metric) => String(metric.activeEnrollments),
-    label: "Matrículas ativas",
-  },
-  {
     abbreviation: "I",
     getValue: (metric) => String(metric.started),
     label: "Iniciaram",
@@ -78,6 +74,12 @@ const VERSION_METRIC_COLUMNS: ReadonlyArray<{
     getValue: (metric) =>
       formatLearningAnalyticsPercent(metric.medianCheckpointPercent),
     label: "Checkpoint mediano",
+  },
+  {
+    abbreviation: "TR",
+    getValue: (metric) =>
+      formatLearningAnalyticsPlayingTime(metric.playingSeconds),
+    label: "Tempo reproduzido total",
   },
   {
     abbreviation: "TC",
@@ -106,7 +108,7 @@ function VersionMetricHeader({
   label: string;
 }): React.JSX.Element {
   return (
-    <TableHead className="px-1 text-right text-[11px]">
+    <TableHead className="px-0.5 text-right text-[10px]">
       <Tooltip>
         <TooltipTrigger asChild>
           <abbr className="cursor-help font-medium no-underline" title={label}>
@@ -129,16 +131,16 @@ function VersionMetricsTable({
   return (
     <TooltipProvider delayDuration={250}>
       <div className="max-w-full overflow-hidden rounded-lg border">
-        <Table className="w-full table-fixed text-[11px]">
+        <Table className="w-full table-fixed text-[10px]">
           <TableCaption className="sr-only">
             Métricas da Aula {lessonTitle} por versão
           </TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead className="whitespace-nowrap px-1 text-[11px]">
+              <TableHead className="w-10 whitespace-nowrap px-0.5 text-[10px]">
                 Versão
               </TableHead>
-              <TableHead className="whitespace-nowrap px-1 text-[11px]">
+              <TableHead className="w-16 whitespace-nowrap px-0.5 text-[10px]">
                 Status
               </TableHead>
               {VERSION_METRIC_COLUMNS.map((column) => (
@@ -159,12 +161,12 @@ function VersionMetricsTable({
                 <TableRow
                   key={`${metric.publicationNumber}-${metric.publicationStatus}`}
                 >
-                  <TableRowHeader className="whitespace-nowrap px-1">
+                  <TableRowHeader className="whitespace-nowrap px-0.5">
                     v{metric.publicationNumber}
                   </TableRowHeader>
-                  <TableCell className="px-1 text-center">
+                  <TableCell className="px-0.5 text-center">
                     <Badge
-                      className="whitespace-normal px-1 text-center text-[10px]"
+                      className="whitespace-normal px-0.5 text-center text-[10px]"
                       variant={presentation.variant}
                     >
                       {presentation.label}
@@ -172,7 +174,7 @@ function VersionMetricsTable({
                   </TableCell>
                   {VERSION_METRIC_COLUMNS.map((column) => (
                     <TableCell
-                      className="px-1 text-right tabular-nums"
+                      className="px-0.5 text-right tabular-nums"
                       key={column.abbreviation}
                     >
                       {column.getValue(metric)}
@@ -260,8 +262,9 @@ export function LessonAnalyticsDetailsSheet({
               </div>
               <p className="mt-2 max-w-full break-words text-muted-foreground text-sm">
                 Publicada é a versão vigente. Passe o cursor sobre as siglas
-                para ver o nome completo da métrica. O período selecionado é{" "}
-                {periodLabel.toLowerCase()}.
+                para ver o nome completo da métrica. TR é o tempo reproduzido
+                total: soma da reprodução normal no período, incluindo reprises.
+                O período selecionado é {periodLabel.toLowerCase()}.
               </p>
               <div className="mt-4">
                 <VersionMetricsTable

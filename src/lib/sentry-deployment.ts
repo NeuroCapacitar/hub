@@ -82,3 +82,11 @@ export const resolveSentryBuildConfiguration = (
 
 export const isFullSentryRelease = (value: string | undefined): boolean =>
   Boolean(value && FULL_GIT_SHA.test(value));
+
+export const isSentryRuntimeEnabled = ({
+  dsn,
+  nodeEnvironment = process.env.NODE_ENV,
+}: {
+  dsn: string | undefined;
+  nodeEnvironment?: string | undefined;
+}): boolean => nodeEnvironment === "production" && Boolean(dsn?.trim());

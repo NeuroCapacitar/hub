@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isSentryRuntimeEnabled,
   resolveSentryBuildConfiguration,
   resolveSentryRelease,
 } from "./sentry-deployment";
@@ -42,5 +43,25 @@ describe("Sentry deployment configuration", () => {
       })
     ).toBe("b".repeat(40));
     expect(resolveSentryRelease({ SENTRY_RELEASE: "abc1234" })).toBeUndefined();
+  });
+
+  it("enables runtime capture only for a production Node environment", () => {
+    const dsn = "https://public@example.ingest.sentry.io/1";
+
+    expect(
+      isSentryRuntimeEnabled({ dsn, nodeEnvironment: "development" })
+    ).toBe(false);
+    expect(isSentryRuntimeEnabled({ dsn, nodeEnvironment: "test" })).toBe(
+      false
+    );
+    expect(isSentryRuntimeEnabled({ dsn, nodeEnvironment: "production" })).toBe(
+      true
+    );
+    expect(
+      isSentryRuntimeEnabled({
+        dsn: undefined,
+        nodeEnvironment: "production",
+      })
+    ).toBe(false);
   });
 });

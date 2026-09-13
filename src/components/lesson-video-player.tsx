@@ -27,6 +27,14 @@ const SYNC_INTERVAL_MS = 1500;
 const WATCH_PROGRESS_INTERVAL_MS = 10_000;
 const WATCH_PROGRESS_PERCENT_STEP = 5;
 
+const createTrackingSessionId = (): string => {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `video-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
 export function LessonVideoPlayer({
   children,
   durationSeconds,
@@ -53,8 +61,11 @@ export function LessonVideoPlayer({
   const completedByVideoRef = useRef(false);
   const hasRestoredPositionRef = useRef(false);
   const isRestoringPositionRef = useRef(false);
+  const latestPlayerEventRef = useRef<JmvstreamPlayerEvent | null>(null);
+  const trackingSessionIdRef = useRef<string | null>(null);
+  const eventSequenceRef = useRef(0);
   const lastWatchProgressSyncRef = useRef({
-    percent: initialWatchedPercent,
+    positionPercent: initialWatchedPercent,
     syncedAt: 0,
   });
   const [, startTransition] = useTransition();
@@ -119,20 +130,24 @@ export function LessonVideoPlayer({
   );
 
   const handlePlayerEvent = useCallback(
-    (playerEvent: JmvstreamPlayerEvent) => {
+    (playerEvent: JmvstreamPlayerEvent, forceSync = false) => {
       const now = Date.now();
       if (isPreview) {
         setWatchedPercent((currentPercent) =>
-          Math.max(currentPercent, playerEvent.watchedPercent)
+          Math.max(currentPercent, playerEvent.positionPercent)
         );
         return;
       }
 
       const shouldSyncWatchProgress =
+        forceSync ||
+        playerEvent.eventName === "jmvplayerout-pause" ||
+        playerEvent.eventName === "jmvplayerout-skip" ||
         playerEvent.eventName === "jmvplayerout-end" ||
         now - lastWatchProgressSyncRef.current.syncedAt >=
           WATCH_PROGRESS_INTERVAL_MS ||
-        playerEvent.watchedPercent - lastWatchProgressSyncRef.current.percent >=
+        playerEvent.positionPercent -
+          lastWatchProgressSyncRef.current.positionPercent >=
           WATCH_PROGRESS_PERCENT_STEP;
 
       if (!shouldSyncWatchProgress || completedByVideoRef.current) {
@@ -140,9 +155,15 @@ export function LessonVideoPlayer({
       }
 
       lastWatchProgressSyncRef.current = {
-        percent: playerEvent.watchedPercent,
+        positionPercent: playerEvent.positionPercent,
         syncedAt: now,
       };
+      let trackingSessionId = trackingSessionIdRef.current;
+      if (!trackingSessionId) {
+        trackingSessionId = createTrackingSessionId();
+        trackingSessionIdRef.current = trackingSessionId;
+      }
+      const eventSequence = ++eventSequenceRef.current;
 
       startTransition(async () => {
         try {
@@ -150,7 +171,10 @@ export function LessonVideoPlayer({
             currentSeconds: playerEvent.currentSeconds,
             durationSeconds: playerEvent.durationSeconds,
             eventName: playerEvent.eventName,
+            eventSequence,
+            isPaused: playerEvent.isPaused,
             lessonId,
+            trackingSessionId,
           });
 
           setWatchedPercent((currentPercent) =>
@@ -179,7 +203,7 @@ export function LessonVideoPlayer({
         } catch {
           setProgressSaveError(true);
           lastWatchProgressSyncRef.current = {
-            percent: watchedPercent,
+            positionPercent: watchedPercent,
             syncedAt: 0,
           };
         }
@@ -187,6 +211,35 @@ export function LessonVideoPlayer({
     },
     [isPreview, lessonId, router, watchedPercent]
   );
+
+  useEffect(() => {
+    if (isPreview) {
+      return;
+    }
+
+    const saveLastKnownPosition = () => {
+      const latestPlayerEvent = latestPlayerEventRef.current;
+      if (latestPlayerEvent) {
+        handlePlayerEvent(latestPlayerEvent, true);
+      }
+    };
+
+    const saveOnVisibilityChange = () => {
+      if (document.visibilityState !== "hidden") {
+        return;
+      }
+
+      saveLastKnownPosition();
+    };
+
+    document.addEventListener("visibilitychange", saveOnVisibilityChange);
+    window.addEventListener("pagehide", saveLastKnownPosition);
+
+    return () => {
+      document.removeEventListener("visibilitychange", saveOnVisibilityChange);
+      window.removeEventListener("pagehide", saveLastKnownPosition);
+    };
+  }, [handlePlayerEvent, isPreview]);
 
   useEffect(() => {
     if (!playerUrl) {
@@ -222,6 +275,7 @@ export function LessonVideoPlayer({
       }
 
       if (playerEvent) {
+        latestPlayerEventRef.current = playerEvent;
         restorePlayerPosition();
         if (isRestoringPositionRef.current) {
           isRestoringPositionRef.current = false;

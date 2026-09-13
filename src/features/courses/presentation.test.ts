@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   deriveCourseWorkloadHours,
   formatCourseWorkload,
+  formatCourseWorkloadHours,
   getCourseAccessPresentation,
   getStudentCatalogAccessPresentation,
+  getStudentCourseActionLabel,
   getStudentCoursePrimaryHref,
   groupStudentCatalogCourses,
   summarizeCoursePublicationReadiness,
@@ -20,7 +22,7 @@ describe("course presentation helpers", () => {
     expect(presentation).toEqual({
       tone: "completed",
       label: "Curso concluído",
-      helper: "Certificado pronto para emitir ou baixar.",
+      helper: "Todas as aulas obrigatórias foram concluídas.",
     });
   });
 
@@ -82,6 +84,21 @@ describe("course presentation helpers", () => {
         nextLessonId: null,
       })
     ).toBe("/app/cursos/course-1");
+  });
+
+  it("labels the primary course action from the progress destination", () => {
+    expect(
+      getStudentCourseActionLabel({ hasNextLesson: true, progressPercent: 0 })
+    ).toBe("Iniciar curso");
+    expect(
+      getStudentCourseActionLabel({ hasNextLesson: true, progressPercent: 50 })
+    ).toBe("Continuar curso");
+    expect(
+      getStudentCourseActionLabel({
+        hasNextLesson: false,
+        progressPercent: 100,
+      })
+    ).toBe("Rever trilha");
   });
 
   it("groups catalog courses by learning state", () => {
@@ -159,5 +176,11 @@ describe("course presentation helpers", () => {
     expect(formatCourseWorkload(5400)).toBe("1h 30min");
     expect(formatCourseWorkload(5401)).toBe("1h 31min");
     expect(formatCourseWorkload(7200)).toBe("2h");
+  });
+
+  it("formats the official workload in whole hours", () => {
+    expect(formatCourseWorkloadHours(0)).toBe("0h");
+    expect(formatCourseWorkloadHours(20)).toBe("20h");
+    expect(formatCourseWorkloadHours(Number.NaN)).toBe("0h");
   });
 });

@@ -52,6 +52,7 @@ describe("LearningAnalyticsPage", () => {
         medianHoursToNextLesson: null,
         moduleSortOrder: 1,
         moduleTitle: "Módulo 1",
+        playingSeconds: 1800,
         publicationNumber: 2,
         publicationStatus: "published",
         started: 2,
@@ -76,6 +77,7 @@ describe("LearningAnalyticsPage", () => {
         medianHoursToNextLesson: 1,
         moduleSortOrder: 1,
         moduleTitle: "Módulo 1",
+        playingSeconds: 2400,
         publicationNumber: 2,
         publicationStatus: "published",
         started: 2,
@@ -100,6 +102,7 @@ describe("LearningAnalyticsPage", () => {
         medianHoursToNextLesson: null,
         moduleSortOrder: 1,
         moduleTitle: "Módulo 1 antigo",
+        playingSeconds: 900,
         publicationNumber: 1,
         publicationStatus: "retired",
         started: 1,
@@ -124,6 +127,7 @@ describe("LearningAnalyticsPage", () => {
     expect(markup).not.toContain("1–2 de 2 Aulas");
     expect(markup).toContain("Aulas sem início");
     expect(markup).toContain("Visualização média do Curso");
+    expect(markup).toContain("Tempo reproduzido");
     expect(markup).toContain("Visualização média do Curso: 63%");
     expect(markup).toContain('data-slot="progress"');
     expect(markup).not.toContain("Conclusão mais rápida");

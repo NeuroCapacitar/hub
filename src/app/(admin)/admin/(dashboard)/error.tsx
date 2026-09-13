@@ -4,6 +4,7 @@ import { captureException } from "@sentry/nextjs";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { createCorrelationId } from "@/lib/observability";
+import { isSentryRuntimeEnabled } from "@/lib/sentry-deployment";
 
 export default function AdminDashboardError({
   error,
@@ -17,7 +18,13 @@ export default function AdminDashboardError({
 
   useEffect(() => {
     headingRef.current?.focus();
-    captureException(error, { tags: { correlation_id: correlationId } });
+    if (
+      isSentryRuntimeEnabled({
+        dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      })
+    ) {
+      captureException(error, { tags: { correlation_id: correlationId } });
+    }
   }, [correlationId, error]);
 
   return (

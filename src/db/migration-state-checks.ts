@@ -4,6 +4,22 @@ export interface MigrationStateCheck {
   statement: string;
 }
 
+export const courseContentMigrationStateChecks: readonly MigrationStateCheck[] =
+  [
+    {
+      check: "ownership relacional de Modulo e Publicacao",
+      migration: "0078_protect_module_course_publication_ownership",
+      statement:
+        "select exists (select 1 from pg_constraint where conrelid = 'public.course_publications'::regclass and conname = 'course_publications_id_course_unique' and contype = 'u' and convalidated) and exists (select 1 from pg_constraint where conrelid = 'public.modules'::regclass and conname = 'modules_course_publication_course_fk' and contype = 'f' and convalidated) as present",
+    },
+    {
+      check: "ownership relacional de Aula, Modulo e Publicacao",
+      migration: "0079_protect_lesson_module_publication_ownership",
+      statement:
+        "select exists (select 1 from pg_constraint where conrelid = 'public.modules'::regclass and conname = 'modules_id_course_publication_unique' and contype = 'u' and convalidated) and exists (select 1 from pg_constraint where conrelid = 'public.lessons'::regclass and conname = 'lessons_module_course_publication_fk' and contype = 'f' and convalidated) as present",
+    },
+  ];
+
 export const certificateMigrationStateChecks: readonly MigrationStateCheck[] = [
   {
     check: "templates e artefatos imutaveis de certificados",

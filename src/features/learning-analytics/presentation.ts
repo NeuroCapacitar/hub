@@ -32,6 +32,7 @@ const toVersionMetric = (
   medianHoursToComplete: metric.medianHoursToComplete,
   medianHoursToNextLesson: metric.medianHoursToNextLesson,
   moduleTitle: metric.moduleTitle,
+  playingSeconds: metric.playingSeconds,
   publicationNumber: metric.publicationNumber,
   publicationStatus: metric.publicationStatus,
   started: metric.started,
@@ -50,6 +51,10 @@ const toAggregateMetric = (
   medianCheckpointPercent: current.aggregateMedianCheckpointPercent,
   medianHoursToComplete: current.aggregateMedianHoursToComplete,
   medianHoursToNextLesson: current.aggregateMedianHoursToNextLesson,
+  playingSeconds: versions.reduce(
+    (total, version) => total + version.playingSeconds,
+    0
+  ),
   started: versions.reduce((total, version) => total + version.started, 0),
 });
 
@@ -121,6 +126,23 @@ export const buildLearningAnalyticsKpis = (
 
 export const formatLearningAnalyticsHours = (value: number | null): string =>
   value === null ? "—" : `${value.toFixed(1)} h`;
+
+export const formatLearningAnalyticsPlayingTime = (seconds: number): string => {
+  const safeSeconds = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  if (hours > 0) {
+    return minutes > 0 ? `${hours} h ${minutes} min` : `${hours} h`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes} min`;
+  }
+
+  return `${remainingSeconds} s`;
+};
 
 export const formatLearningAnalyticsPercent = (value: number | null): string =>
   value === null ? "—" : `${Math.round(value)}%`;

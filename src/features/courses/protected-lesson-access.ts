@@ -45,3 +45,27 @@ export const assertProtectedLessonAccess = async ({
     client.release();
   }
 };
+
+export const assertAdminPreviewLessonAccess = async ({
+  lessonId,
+}: {
+  lessonId: string;
+}): Promise<void> => {
+  const { rows } = await getPool().query<{ id: string }>(
+    `
+      select l.id
+      from lessons l
+      join modules m
+        on m.id = l.module_id
+       and m.course_publication_id = l.course_publication_id
+      join course_publications cp on cp.id = l.course_publication_id
+      where l.id = $1
+      limit 1
+    `,
+    [lessonId]
+  );
+
+  if (!rows[0]) {
+    throw new LessonAccessDeniedError();
+  }
+};
