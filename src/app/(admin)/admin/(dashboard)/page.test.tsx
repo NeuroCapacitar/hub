@@ -48,10 +48,13 @@ const emptyOperations = {
         accepted: 0,
         bounced: 0,
         complained: 0,
-        deadLetters: 0,
         delivered: 0,
-        oldestRetryAt: null,
-        retrying: 0,
+        resendWebhook: {
+          deadLetters: 0,
+          oldestDeadLetterAt: null,
+          oldestRetryAt: null,
+          retrying: 0,
+        },
       },
       outbox: {
         deadLetters: 0,
@@ -311,6 +314,14 @@ describe("AdminPage", () => {
           processingJmvUploadCount: 4,
           backlog: {
             ...emptyOperations.integrations.backlog,
+            emailDelivery: {
+              ...emptyOperations.integrations.backlog.emailDelivery,
+              resendWebhook: {
+                ...emptyOperations.integrations.backlog.emailDelivery
+                  .resendWebhook,
+                deadLetters: 1,
+              },
+            },
             webhooks: {
               ...emptyOperations.integrations.backlog.webhooks,
               failed: 2,
@@ -347,10 +358,12 @@ describe("AdminPage", () => {
     expect(markup).toContain("Certificados sem emissão");
     expect(markup).toContain("Concluído em");
     expect(markup).toContain("Webhooks em retry");
+    expect(markup).toContain("Eventos de e-mail em dead letter");
     expect(markup).toContain("Acessos vencendo em 30 dias");
     expect(markup).toContain("Solicitações de suporte");
     expect(markup).toContain("Entregue");
     expect(markup).toContain('href="/admin/operacao#jmvstream"');
+    expect(markup).toContain('href="/admin/operacao#resend-webhooks"');
     expect(markup).not.toContain('href="/admin/configuracoes"');
     expect(markup).toContain('href="/admin/cursos/course-1?tab=content"');
   });

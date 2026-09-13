@@ -117,6 +117,25 @@ acionam reenvio ou alteram Conta, Matrícula ou Pedido. Retenção: eventos
 processados/ignorados 180 dias, dead letter 365 dias e mensagens terminais 365
 dias, em lotes de 500 e sem apagar mensagem com evento pendente.
 
+### Ownership e investigação
+
+O Resend é a autoridade para detalhes de aceitação, entrega, bounce, supressão,
+reputação, logs e replay do webhook. O Hub é a autoridade para a intenção do
+envio, a associação com o agregado e a projeção local do último estado
+conhecido. A inbox `resend_webhook_events` não é uma cópia do Dashboard; ela
+existe porque o endpoint pode responder `200` antes do worker terminar.
+
+No **Admin > Operação**, um evento Resend não reconciliado deve mostrar apenas
+metadados seguros e encaminhar o Admin ao portal Resend para detalhe ou replay.
+Uma falha local de correlação ou processamento deve ser corrigida no Hub antes
+de repetir o evento. Um bounce, supressão, falha técnica ou problema de domínio
+deve ser investigado no Resend, enquanto uma mensagem errada, uma intenção
+indevida ou uma associação incorreta continuam sendo responsabilidade do Hub.
+
+Falha de e-mail não revoga acesso, invalida Certificado ou bloqueia conteúdo.
+Retries e replays precisam indicar se reaplicam o evento local ou repetem um
+efeito externo; não há retry genérico para eventos Resend sem essa distinção.
+
 ### Development
 
 Development entrega mensagens reais usando o domínio verificado

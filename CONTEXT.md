@@ -122,6 +122,28 @@ Controle de opt-out do Aluno para os eventos técnicos opcionais. Por padrão, a
 **Métrica agregada de aprendizagem**
 Contagem ou medida por Aula e Publicação de Curso que não apresenta Conta, Matrícula, Aluno, e-mail ou lista de inatividade.
 
+## Integrações e operação
+
+**Provedor**
+
+Serviço externo responsável pela execução técnica de uma integração do Hub, como entrega de e-mail ou processamento de vídeo. Não é a autoridade sobre as regras de negócio do Hub.
+
+**Projeção de integração**
+
+Estado local resumido do último resultado conhecido de um Provedor, mantido para contexto, reconciliação e decisão do Hub. Não substitui o estado externo.
+
+**Evento de Provedor não reconciliado**
+
+Notificação externa recebida pelo Hub que ainda não foi associada ou consolidada no estado local. Exige investigação, mas não prova sozinho que o efeito externo falhou.
+
+**Operação técnica do Provedor**
+
+Detalhe de entrega, reputação, conversão, armazenamento, player ou outro processamento específico do serviço externo.
+
+**Operação de negócio do Hub**
+
+Intenção, associação, acesso, publicação, conclusão, Certificado, idempotência ou consequência de produto que o Hub deve decidir.
+
 ## Durações
 
 **Duração pedagógica da Aula**  

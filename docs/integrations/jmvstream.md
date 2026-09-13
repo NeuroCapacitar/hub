@@ -95,6 +95,12 @@ ele não expira uploads nem altera `jmvstream_video_assets`. A tela exibe apenas
 pendências/falhas locais acionáveis e aponta a operadora para o portal JMVStream
 quando a investigação pertence ao provider.
 
+O portal JMVStream é a autoridade para processamento, conversão, armazenamento,
+player, thumbnail e detalhes técnicos do ativo. O Hub é a autoridade para a
+associação do ativo com a Aula, a publicação e o efeito de uma falha na
+experiência do Aluno. A tela não deve reproduzir logs ou controles do provedor;
+deve mostrar o estado local mínimo e encaminhar o detalhe externo ao portal.
+
 ## Falhas e recuperação
 
 - 401/403 => conferir resource/token e autenticação, sem expor valores;

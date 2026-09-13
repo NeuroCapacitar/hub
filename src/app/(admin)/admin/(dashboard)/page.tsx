@@ -257,10 +257,10 @@ const getDashboardIssues = ({
   });
   add(attention, {
     actionLabel: "Abrir Operação",
-    count: backlog.emailDelivery.deadLetters,
+    count: backlog.emailDelivery.resendWebhook.deadLetters,
     description:
       "Eventos de entrega de e-mail não atualizaram o estado local e exigem investigação.",
-    href: "/admin/operacao",
+    href: "/admin/operacao#resend-webhooks",
     label: "Eventos de e-mail em dead letter",
     tone: "attention",
   });
@@ -353,10 +353,10 @@ const getDashboardIssues = ({
   });
   add(watch, {
     actionLabel: "Abrir Operação",
-    count: backlog.emailDelivery.retrying,
+    count: backlog.emailDelivery.resendWebhook.retrying,
     description:
       "Eventos de entrega aguardam nova tentativa ou correlação do provedor.",
-    href: "/admin/operacao",
+    href: "/admin/operacao#resend-webhooks",
     label: "Eventos de e-mail em retry",
     tone: "watch",
   });

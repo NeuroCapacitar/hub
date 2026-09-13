@@ -181,6 +181,14 @@ Depois de 24 horas, o Resend não consegue mais deduplicar a mesma chave. Antes 
 A Administração do Hub é a dona operacional de dead letters, inclusive
 `auth.account-activation`, e incidentes de e-mail.
 
+Essa seção de dead letter descreve a **Outbox**. Eventos de lifecycle recebidos
+do Resend possuem uma inbox separada, `resend_webhook_events`, com estados e
+causas próprias. Um dead letter Resend significa que o evento externo não foi
+reconciliado localmente ou chegou com schema inválido; não significa que exista
+uma mensagem da Outbox aguardando reprocessamento. O detalhe técnico e o replay
+do evento podem ser feitos no portal Resend, mas a correção de correlação,
+intenção ou estado local pertence ao Hub.
+
 ## Retenção
 
 Cada execução do consumidor remove:
