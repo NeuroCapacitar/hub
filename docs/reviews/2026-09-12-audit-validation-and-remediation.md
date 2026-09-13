@@ -61,14 +61,21 @@ Implementado no working tree:
   início quando a Aula concluída é a última do currículo; a trilha e o cabeçalho
   da Aula identificam `Obrigatória` ou `Opcional` em texto discreto: ao lado do
   tempo na trilha e antes da descrição no cabeçalho.
-- A03/A04/A05/A21/PR 03: `skip` não avança a fronteira linear validada;
+- A03/A04/A05/PR 03: `skip` não avança a fronteira linear validada;
   retomada, posição máxima e tempo de reprodução são separados; reprodução
   posterior ao salto entra em analytics; conclusão automática exige a fronteira
   linear em 100%; a origem manual/vídeo é registrada. Não foram criados ranges e
   o histórico antigo não foi tratado como validado.
-- A06/A07/A22/PR 04: draft e published são lidos separadamente sob lock e
-  transação; authoring e recálculo compartilham o mesmo client antes do commit;
-  o Aluno recebe a carga horária oficial e override `0` é preservado.
+- A21/PR 03: a premissa de que o payload do navegador é prova confiável foi
+  rejeitada. O servidor usa o payload apenas como sinal bruto, aplica allowlist,
+  duração autoritativa, sessão, sequência e fronteira linear. A21 está completo
+  e aprovado; não há prova de atenção humana nem execução com o player real nesta
+  sessão.
+- A06/A07/PR 04: draft e published são lidos separadamente sob lock e
+  transação; o Aluno recebe a carga horária oficial e override `0` é preservado.
+- A22/PR 04: authoring e recálculo compartilham o mesmo client antes do commit e
+  adquirem locks de Curso em ordem estável. A22 está completo e aprovado;
+  concorrência real em PostgreSQL continua como assurance pendente.
 - A08/A09/PR 05: ownership de Módulo e Aula é conferido no servidor e também
   protegido por FKs compostas no Development; o preflight encontrou 53
   Módulos e 82 Aulas consistentes. A08 e A09 estão completos no código e no
@@ -82,21 +89,42 @@ Implementado no working tree:
   E2E de navegador ainda pendente como assurance.
 - A12/PR 07: slug é alocado sob lock transacional e A12 está completo no
   código e aprovado; teste concorrente real permanece como assurance pendente.
-- A13/A14/PR 09: CTA e fallback de certificado foram alinhados.
-- A16/A17/A18/A19/PR 11-12: checkpoints e runbooks ficaram temporais e
-  staging-first, o checker cobre o índice canônico e releases exigem CI do SHA
-  exato, sem fallback para SHA de PR.
+- A13/PR 09: CTA de iniciar, continuar e rever foi alinhado ao destino real;
+  A13 e A14 estão completos e aprovados. O fallback de certificado é condicionado
+  à configuração do Curso.
+- A15/PR 10: foi criada uma suíte dedicada de jornadas somente por teclado,
+  mantendo Axe separado. A15 está completo e aprovado no código de testes, mas a
+  execução E2E permanece pendente neste ambiente por falta de `E2E_DATABASE_URL`
+  e `.e2e-fixture.json`; isso continua sendo lacuna de assurance, não prova de
+  não conformidade.
+- A16/PR 11: o `release-state.md` passou a identificar checkpoints com data e
+  linguagem temporal. A16 está completo e aprovado; os contratos operacionais
+  passaram 9 testes.
+- A17/PR 12: o release normal agora exige CI/check-run do SHA exato de Staging e
+  interrompe se Staging mudar durante a execução. A17 está completo e aprovado;
+  não houve execução real do workflow no GitHub.
+- A18/PR 11: o `docs:check` atual cobre os 44 documentos canônicos, incluindo
+  ADR-0009 a ADR-0012 e os runbooks adicionados depois do ADR-0008, além de
+  conferir dinamicamente o mapa canônico. A18 está completo e aprovado nesse
+  escopo; `DESIGN.md` é canônico e aparece na ordem de leitura, mas ainda não
+  está no mapa nem em `CANONICAL_DOCUMENT_PATHS`.
+- A19/PR 11-12: o conflito específico alegado no guia vigente não foi
+  reproduzido; os runbooks ativos estão staging-first. O checklist histórico do
+  primeiro deploy preserva instruções antigas, mas avisa que não serve para
+  releases comuns. A19 está completo e aprovado.
 
-Ainda não implementado ou não verificável neste ambiente:
+Ainda não verificável neste ambiente:
 
 - A03/D2: a fronteira linear validada, a retomada separada, o tempo de
   reprodução e a origem manual/vídeo foram implementados no working tree.
   Ranges continuam fora do escopo; `max_position_seconds` não é certificado de
   visualização. Player JMVStream real, PostgreSQL persistente e E2E continuam
   não verificados.
-- A15/PR 10: não foi executada jornada E2E por teclado; os testes existentes
-  cobrem axe e interações parciais. Isso continua sendo lacuna de assurance,
-  não prova de não conformidade.
+- A15/PR 10: os testes de jornada por teclado foram criados em
+  `tests/e2e/keyboard-accessibility.spec.ts`, mas não foram executados contra o
+  navegador porque faltam `E2E_DATABASE_URL` e `.e2e-fixture.json`. A suíte Axe
+  continua preservada; isso continua sendo lacuna de assurance, não prova de não
+  conformidade.
 
 Verificação da implementação no working tree:
 
@@ -121,16 +149,16 @@ Verificação da implementação no working tree:
 | A10 | Authoring depende de validação do browser | COMPLETO NO ESCOPO DE AUTHORING — APROVADO, P2 | `authoring-input.ts` valida textos, inteiros, UUIDs, status e booleanos; actions validam IDs antes do authoring, banco ou providers | PR 06 aplicado com parsers dedicados; ações fora de Course/Módulo/Aula permanecem fora do escopo |
 | A11 | Preview Admin não abre materiais privados | COMPLETO — APROVADO, P2 | `getPreviewAwareHref`, Route Handlers e `assertAdminPreviewLessonAccess` preservam e autorizam o preview privado; 55 testes passaram | PR 08 aplicado; E2E de navegador real permanece como lacuna de assurance, sem ampliar para `support` |
 | A12 | Alocação de slug tem corrida | COMPLETO — APROVADO, P3 | `resolveUniqueCourseSlug(client, title)` adquire lock transacional antes de consultar candidatos; teste de authoring confirma a ordem | PR 07 aplicado com lock transacional; teste com dois clientes PostgreSQL reais permanece como assurance pendente |
-| A13 | CTA “Rever trilha” leva à próxima aula | CONFIRMADO, P3 | página do Curso usa somente `progressPercent`, embora o link seja `nextLessonId` | PR 09 aprovado |
-| A14 | Fallback promete certificado desligado | CONFIRMADO, P3 | fallback de descrição em `src/app/(student)/app/cursos/[courseId]/page.tsx`; painel só existe com `certificateEnabled` | PR 09 aprovado |
-| A15 | Axe não prova jornadas completas por teclado | LACUNA CONFIRMADA; BUG NÃO PROVADO, P2/P3 | `tests/e2e/accessibility.spec.ts` faz scans axe; jornadas keyboard-only completas não existem | PR 10 aprovado como assurance gap; não declarar conformidade WCAG |
-| A16 | `release-state.md` pode ser lido como estado atual apesar de ser checkpoint | CONFIRMADO, P3 | checkpoint de 2026-09-03 afirma `main`/Production antigos; refs atuais são `7631035` | PR 11 aprovado com linguagem temporal; não espelhar HEAD automaticamente |
-| A17 | Release normal pode promover árvore sem CI do SHA exato | CONFIRMADO como lacuna de assurance, P3 | `deploy-vercel.yml` aceita fallback de CI do `candidate_ci_head_sha` e promove `staging_sha` | PR 12 aprovado; exigir check-run/atestação do candidato exato sem CI completa em push |
-| A18 | `docs:check` não cobre todo o índice canônico | CONFIRMADO, P3 | `docs/README.md` lista ADR-0009/0010 e runbooks adicionais; `scripts/check-docs.ts` termina em ADR-0008 | Sprint documental antes de tratar o checker como gate completo |
-| A19 | Runbooks de branch possuem instruções conflitantes | CONFIRMADO, P2/P3 | `shared-development-and-release-guide.md` ainda usa `git switch main` em trechos operacionais, enquanto `release-flow.md` exige fluxo staging-first | PR 11 deve corrigir os trechos e seus testes, não apenas `release-state.md` |
-| A20 | O plano iguala progresso vivo a certificado histórico | REJEITADO como invariante global | Plano, seção 18, contrasta com ADR-0007 e o snapshot histórico de Certificado | Reescrever a Invariante 1: igualdade vale para elegibilidade corrente, nunca para histórico |
-| A21 | Payload de vídeo recebido do navegador é prova confiável | REJEITADO | Server Action aceita duração/posição/evento do cliente; `recordLessonWatchProgress` faz apenas validação de faixa | PR de vídeo deve validar allowlist e duração autoritativa; não tratar ranges client-side como prova |
-| A22 | Recálculo de workload é serializado com a mutação de authoring | CONFIRMADO no baseline; CORRIGIDO no working tree | authoring agora chama `recalculateCourseWorkloadHoursWithClient` antes do commit dentro da mesma transação e lock; o helper público mantém a transação própria para chamadas isoladas | Cobrir concorrência real quando houver PostgreSQL disponível |
+| A13 | CTA “Rever trilha” leva à próxima aula | COMPLETO — APROVADO, P3 | página do Curso e Dashboard distinguem iniciar, continuar e rever conforme `nextLessonId`; 24 testes específicos passaram | PR 09 aplicado; a própria página da trilha não exibe CTA redundante quando não há próxima Aula |
+| A14 | Fallback promete certificado desligado | COMPLETO — APROVADO, P3 | fallback de descrição e painel em `src/app/(student)/app/cursos/[courseId]/page.tsx` dependem de `certificateEnabled`; teste confirma copy sem promessa indevida | PR 09 aplicado; não houve alteração na regra de emissão |
+| A15 | Axe não prova jornadas completas por teclado | COMPLETO — APROVADO; E2E REAL PENDENTE COMO ASSURANCE, P2/P3 | `tests/e2e/accessibility.spec.ts` mantém os scans Axe e `tests/e2e/keyboard-accessibility.spec.ts` cobre Login, Dashboard/Curso/Aula, bloqueio, detalhe móvel, diálogo administrativo e certificado | PR 10 aplicado; execução exige `E2E_DATABASE_URL` e `.e2e-fixture.json`; não declarar conformidade WCAG sem execução e julgamento humano |
+| A16 | `release-state.md` pode ser lido como estado atual apesar de ser checkpoint | COMPLETO — APROVADO, P3 | o título e as afirmações do checkpoint usam data explícita; o contrato operacional exige `No checkpoint de 2026-09-03` e rejeita `O commit atual de \`main\`` na seção corrente; 9 testes passaram | PR 11 aplicado; não espelhar HEAD automaticamente nem declarar o checkpoint como estado vivo |
+| A17 | Release normal pode promover árvore sem CI do SHA exato | COMPLETO — APROVADO, P3 | `deploy-vercel.yml` congela o candidato em `VERIFIED_STAGING_SHA`, confirma que Staging não mudou, consulta `check-runs?check_name=CI` para o próprio SHA e publica o mesmo candidato; 21 testes de workflow passaram | PR 12 aplicado; execução real no GitHub e deploy não foram feitos nesta sessão; não aceitar CI de branch ou SHA de PR como substituto |
+| A18 | `docs:check` não cobre todo o índice canônico | COMPLETO NO ESCOPO DO MAPA — APROVADO, P3 | `scripts/check-docs.ts` contém os 44 caminhos atuais e `validateCanonicalIndexCoverage` compara os 38 links do `## Mapa canônico` do `docs/README.md` com a lista do checker; `bun run docs:check` passou | A alegação original ficou desatualizada após a ampliação do checker; permanece a decisão sobre incluir `DESIGN.md`, hoje canônico na ordem de leitura, no mapa e no gate |
+| A19 | Runbooks de branch possuem instruções conflitantes | COMPLETO — APROVADO, P3 | `shared-development-and-release-guide.md` orienta `origin/staging` e não contém `git switch main`; `release-flow.md` e `production-release-guide.md` seguem o fluxo vigente. `vercel-first-launch-checklist.md` contém o fluxo histórico antigo, mas o classifica como reconstrução e manda usar o tutorial atual para releases comuns | A alegação específica não foi reproduzida no runbook vigente; o checklist histórico permanece preservado com o aviso existente |
+| A20 | O plano iguala progresso vivo a certificado histórico | COMPLETO — APROVADO, P2/P3 | A Invariante 1 agora separa a projeção de progresso obrigatório da elegibilidade e do histórico de Certificado; ADR-0006/0007 sustentam a distinção | Não alterar o ciclo de Certificado; igualdade só vale entre superfícies de progresso vivo que usam a mesma projeção corrente |
+| A21 | Payload de vídeo recebido do navegador é prova confiável | PREMISSA REJEITADA — COMPLETO — APROVADO, P2/P3 | `recordLessonWatchProgress` valida evento, limites, sessão e sequência; usa `videoDurationSeconds` persistido, deriva a fronteira e ignora `skip` para conclusão; 29 testes direcionados passaram | PR 03 aplicado; eventos do navegador continuam sinais técnicos, não prova de atenção humana; player JMVStream real e concorrência PostgreSQL permanecem não verificados |
+| A22 | Recálculo de workload é serializado com a mutação de authoring | COMPLETO — APROVADO, P2/P3 | authoring chama `recalculateCourseWorkloadHoursWithClient` antes do commit dentro da mesma transação e lock; `lockCoursesContentRelease` ordena múltiplos Cursos; 19 testes focados passaram | PR 04 aplicado; teste concorrente com dois clients PostgreSQL reais ainda não foi executado |
 
 ### Achados não sustentados
 
@@ -261,8 +289,9 @@ expand/contract, sem reinterpretar o histórico.
 - Centralizar iniciar/continuar/rever sem ampliar o DTO de catálogo sem
   consumidor.
 - Tornar fallback de descrição condicional ao Certificado.
-- Adicionar keyboard journeys complementares ao axe quando houver fixture e
-  banco E2E disponíveis; não abrir URL local visualmente neste ambiente.
+- Executar a suíte de keyboard journeys já criada como complemento ao axe quando
+  houver fixture e banco E2E disponíveis; não abrir URL local visualmente neste
+  ambiente.
 
 ### Sprint 7 — operação e release assurance
 

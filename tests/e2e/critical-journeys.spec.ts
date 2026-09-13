@@ -1234,24 +1234,3 @@ test("admin manages a student from the course context Sheet", async ({
   await expect(studentSheet.getByText("Detalhes da matrícula")).toBeVisible();
   await expect(studentSheet.getByText("Acesso na plataforma")).toHaveCount(0);
 });
-
-test("keyboard reaches the login form and student sidebar", async ({
-  page,
-}) => {
-  const fixture = await readFixture();
-  await page.goto("/entrar");
-  await page.keyboard.press("Tab");
-  await expect(page.getByLabel("E-mail")).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(page.getByLabel("Senha")).toBeFocused();
-
-  await signIn(page, fixture.studentWithGrant, APP_URL_PATTERN);
-  await expect(page.getByRole("link", { name: "Início" })).toBeVisible();
-  await page.keyboard.press("Tab");
-  const skipLink = page.getByRole("link", {
-    name: "Pular para o conteúdo principal",
-  });
-  await expect(skipLink).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(page.locator("#main-content")).toBeFocused();
-});

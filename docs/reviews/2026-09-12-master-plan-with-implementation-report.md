@@ -1382,7 +1382,7 @@ O servidor deriva o progresso validado e o tempo contabilizado.
 
 ---
 
-> **Relatório de implementação — status: implementado.**
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
 >
 > **Feito:** O servidor valida allowlist, limites numéricos, duração persistida, sessão e sequência; deriva fronteira, tempo e percentual validado; duração ausente gera no-op seguro.
 >
@@ -1390,7 +1390,7 @@ O servidor deriva o progresso validado e o tempo contabilizado.
 >
 > **Diferença/motivo:** O cliente continua enviando sinais, mas o servidor calcula a fronteira e o tempo; `skip` e percentual arbitrário não são aceitos como prova.
 >
-> **Verificação:** Testes SQL cobrem skip, fronteira bloqueada, reprodução posterior, tempo e origem manual; migration check passou.
+> **Verificação:** 29 testes direcionados de regras, Server Action e gravação SQL passaram, cobrindo skip, fronteira bloqueada, reprodução posterior, tempo, evento inválido, duração autoritativa e origem manual.
 
 # 7.11 Nova regra automática
 
@@ -1612,7 +1612,7 @@ mas o código tenta procurar as duas no array.
 
 ---
 
-> **Relatório de implementação — status: confirmado e corrigido.**
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
 >
 > **Feito:** Foi reproduzido no código: a query limitava a uma publicação e a lógica tentava encontrar draft e published no mesmo array.
 >
@@ -1727,6 +1727,23 @@ Preferir que a mudança aconteça dentro da mesma fronteira transacional que def
 > **Diferença/motivo:** A alteração evitou tocar em histórico, grants, enrollment ou certificado.
 >
 > **Verificação:** Testes de publicação e certificado passaram.
+
+# 8.5.1 A22 — Serializar recálculo de carga horária com o authoring
+
+O recálculo da carga horária não pode usar outro client ou outra transação depois
+da alteração de Curso, Módulo ou Aula. Se isso acontecer, duas alterações podem
+calcular valores diferentes e o último resultado pode sobrescrever o valor
+correto.
+
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
+>
+> **Feito:** O authoring inicia uma transação, adquire o lock de conteúdo do Curso, grava a alteração, recalcula a carga com o mesmo client e só então faz commit. Alterações que envolvem mais de um Curso adquirem os locks em ordem estável para reduzir risco de deadlock. O helper público isolado continua abrindo sua própria transação e lock.
+>
+> **Não feito:** Não foi executado um teste concorrente com dois clients PostgreSQL reais. Não foi feito backfill de valores antigos.
+>
+> **Diferença/motivo:** O recálculo passou a ser uma etapa da mesma operação transacional do authoring, em vez de uma operação posterior independente. A criação inicial de um Curso também recalcula antes do commit; como o ID ainda não está exposto, não existe conteúdo concorrente conhecido nesse ponto.
+>
+> **Verificação:** 19 testes focados de authoring e workload passaram, cobrindo locks, transação, draft/publicado e recálculo no mesmo fluxo. Concorrência real continua como assurance pendente.
 
 # 8.6 Bug B — UI ignora override
 
@@ -2835,15 +2852,15 @@ Dashboard e overview devem utilizar o mesmo helper.
 
 ---
 
-> **Relatório de implementação — status: implementado.**
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
 >
 > **Feito:** CTA agora escolhe iniciar, continuar ou rever conforme progresso e próxima aula.
 >
-> **Não feito:** Não foi criado um campo público separado para cada tipo de próxima Aula; a navegação visual e a recomendação pós-conclusão têm responsabilidades diferentes.
+> **Não feito:** Não foi criado um campo público separado para cada tipo de próxima Aula; a navegação visual e a recomendação pós-conclusão têm responsabilidades diferentes. A página que já representa a trilha não exibe um botão redundante quando não há próxima Aula nem certificado.
 >
-> **Diferença/motivo:** A recomendação do PR 02 agora considera a decisão aprovada, enquanto este PR mantém a copy de iniciar, continuar ou rever sem reimplementar a regra de acesso.
+> **Diferença/motivo:** A recomendação do PR 02 agora considera a decisão aprovada, enquanto este PR mantém a copy de iniciar, continuar ou rever sem reimplementar a regra de acesso. No Dashboard, `Rever` retorna à trilha; na própria trilha, o botão não é necessário.
 >
-> **Verificação:** Testes da página, apresentação e próxima recomendação passaram.
+> **Verificação:** Testes da página, Dashboard, apresentação e próxima recomendação passaram.
 
 > **Relatório de implementação — identificação de obrigatoriedade: implementado.**
 >
@@ -2871,7 +2888,7 @@ certificateEnabled = false
 
 Corrigir:
 
-> **Relatório de implementação — status: implementado.**
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
 >
 > **Feito:** Fallback é condicional a `certificateEnabled`.
 >
@@ -2879,7 +2896,7 @@ Corrigir:
 >
 > **Diferença/motivo:** A UI não promete certificado quando o recurso está desligado.
 >
-> **Verificação:** Testes cobrem certificado ligado e desligado.
+> **Verificação:** Testes cobrem certificado ligado e desligado; Cursos com certificado desativado não exibem a promessa de liberação.
 
 ### Certificado ligado
 
@@ -3000,15 +3017,15 @@ Não transformar `accessibility.spec.ts` em um arquivo gigante.
 
 ---
 
-> **Relatório de implementação — status: não implementado.**
+> **Relatório de implementação — status: COMPLETO — APROVADO; execução E2E real pendente como assurance.**
 >
-> **Feito:** A lacuna foi confirmada e documentada; testes de acessibilidade axe existentes foram preservados.
+> **Feito:** Foi criado `tests/e2e/keyboard-accessibility.spec.ts` com jornadas somente por teclado para login, Dashboard, Curso, Aula, bloqueio da próxima Aula, detalhe móvel, diálogo administrativo e certificado público. O teste parcial que estava misturado em `critical-journeys.spec.ts` foi movido para a suíte dedicada. Os testes Axe existentes foram preservados.
 >
-> **Não feito:** Não foi criado novo arquivo de keyboard journeys.
+> **Não feito:** As jornadas ainda não foram executadas no navegador neste ambiente.
 >
-> **Diferença/motivo:** Não havia ambiente E2E e a instrução do projeto proíbe abrir URL local como apoio visual.
+> **Diferença/motivo:** O fluxo administrativo testa um Sheet e seu menu por teclado, sem alterar dados compartilhados. O diálogo de edição de módulo exigiria preparar um rascunho e produziria mutação na fixture E2E; os controles do formulário continuam cobertos pelos testes de componente. A execução E2E depende de `E2E_DATABASE_URL` e `.e2e-fixture.json`, ausentes nesta sessão. A restrição de não abrir URL local como apoio visual também foi respeitada.
 >
-> **Verificação:** O relatório classifica A15 como assurance gap.
+> **Verificação:** `bun x ultracite check`, `bun run typecheck` e `git diff --check` passaram. O comando Playwright não pôde listar ou executar os testes porque `E2E_DATABASE_URL` não está configurada.
 
 # 14.2 Jornada 1 — Login
 
@@ -3090,15 +3107,15 @@ sem mouse.
 
 ---
 
-> **Relatório de implementação — status: não executado.**
+> **Relatório de implementação — status: COMPLETO — APROVADO; execução E2E real pendente como assurance.**
 >
-> **Feito:** Foi revisada a existência de testes de contrato e interações parciais.
+> **Feito:** As cinco áreas previstas foram representadas na suíte dedicada: Login; Dashboard até Curso e Aula; controles e bloqueios da Aula; diálogo administrativo com recuperação de foco; e certificado até as ações públicas. O cenário móvel abre o conteúdo da Aula com Enter.
 >
-> **Não feito:** Login, dashboard, aula, admin e certificado não foram percorridos end-to-end por teclado.
+> **Não feito:** Essas áreas ainda não foram percorridas em uma execução E2E real.
 >
-> **Diferença/motivo:** Axe não foi tratado como prova suficiente, em linha com o W3C.
+> **Diferença/motivo:** Axe continua sendo tratado como sinal automatizado complementar, não como prova suficiente. A execução ficou pendente por falta de `E2E_DATABASE_URL` e `.e2e-fixture.json`; não foram inventadas credenciais nem usado banco compartilhado.
 >
-> **Verificação:** Nenhum claim de conformidade WCAG foi feito.
+> **Verificação:** A suíte de testes foi validada por lint e TypeScript; o relatório não declara conformidade WCAG nem sucesso de navegador sem a execução correspondente.
 
 # 14.7 Dialogs/dropdowns
 
@@ -3183,15 +3200,15 @@ Essas frases envelhecem assim que `main` avança.
 
 ---
 
-> **Relatório de implementação — status: confirmado e corrigido.**
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
 >
 > **Feito:** O documento misturava checkpoint observado com estado atual.
 >
-> **Não feito:** Não foi atualizado automaticamente para HEAD nem declarado como deploy atual.
+> **Não feito:** Não foi atualizado automaticamente para HEAD nem declarado como deploy atual. Também não foi criado um mecanismo para reescrever automaticamente todo o histórico documental.
 >
 > **Diferença/motivo:** A linguagem passou a registrar o momento observado, preservando deployed/verified/documented como conceitos distintos.
 >
-> **Verificação:** Testes de contrato operacional e `docs:check` passaram.
+> **Verificação:** Os testes de contrato operacional passaram: 2 arquivos e 9 testes. `docs:check` também passou.
 
 # 15.1 Não atualizar `deployed_commit` para HEAD indiscriminadamente
 
@@ -3275,15 +3292,15 @@ porque isso seria semanticamente incorreto.
 
 ---
 
-> **Relatório de implementação — status: implementado.**
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
 >
-> **Feito:** O checker agora cobre todos os caminhos canônicos listados no índice.
+> **Feito:** O checker agora cobre todos os caminhos do `## Mapa canônico`, incluindo ADR-0009 a ADR-0012 e os runbooks adicionados depois do ADR-0008. A cobertura do mapa é comparada dinamicamente com a lista do checker.
 >
-> **Não feito:** Não foi criado gate de deploy novo além do contrato existente.
+> **Não feito:** `DESIGN.md` aparece na ordem de leitura e possui frontmatter canônico, mas ainda não está no `## Mapa canônico` nem em `CANONICAL_DOCUMENT_PATHS`; também não foi criado gate de deploy novo além do contrato existente.
 >
-> **Diferença/motivo:** Foi adicionada validação dinâmica da cobertura do mapa canônico.
+> **Diferença/motivo:** A validação dinâmica foi mantida limitada ao mapa explicitamente definido como canônico; a ordem de leitura e a lista de revisões não foram transformadas automaticamente em gates.
 >
-> **Verificação:** `bun run docs:check` aprovou 41 documentos.
+> **Verificação:** `bun run docs:check` aprovou 44 documentos; o mapa possui 38 links de domínio, integração, operação e decisão, todos cobertos pela lista do checker.
 
 # 15.5 Critério
 
@@ -3335,7 +3352,7 @@ fast-forward de main para o mesmo SHA
 
 ---
 
-> **Relatório de implementação — status: implementado.**
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
 >
 > **Feito:** O release normal exige CI/check-run do SHA exato candidato.
 >
@@ -3343,7 +3360,7 @@ fast-forward de main para o mesmo SHA
 >
 > **Diferença/motivo:** O fallback para SHA de PR foi removido porque não prova a árvore promovida.
 >
-> **Verificação:** Testes de workflows e contrato Vercel passaram.
+> **Verificação:** Testes de workflows e contrato Vercel passaram; a execução real do workflow no GitHub não foi feita nesta sessão.
 
 # 16.3 Arquivos
 
@@ -3448,21 +3465,36 @@ Não é “mais CI”.
 
 ---
 
+# 16.8 A19 — Requalificar instruções de branch nos runbooks
+
+O achado original dizia que o guia de desenvolvimento compartilhado ainda usava
+`git switch main`, em conflito com o fluxo `staging-first`.
+
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
+>
+> **Feito:** O guia vigente de desenvolvimento orienta derivar branches de `origin/staging`, não trabalhar diretamente em `main` ou `staging` e abrir o PR normal para `staging`. O `release-flow.md` é declarado como autoridade e descreve `feature → staging → main → Production`.
+>
+> **Não feito:** O checklist histórico `vercel-first-launch-checklist.md` não foi reescrito. Ele ainda contém instruções do primeiro deploy, como PR direto para `main` e `confirm_production`, mas informa no início que a configuração está concluída e que o documento não deve ser usado para releases comuns.
+>
+> **Diferença/motivo:** A alegação específica sobre `git switch main` não foi reproduzida no runbook vigente. A instrução de manter `main` durante `Migrate Neon development` pertence à execução desse workflow pós-merge e não ao fluxo de desenvolvimento ou release. O checklist histórico foi preservado como evidência de reconstrução.
+>
+> **Verificação:** Busca nos runbooks canônicos não encontrou `git switch main`; `shared-development-and-release-guide.md`, `release-flow.md` e `production-release-guide.md` estão alinhados. `bun run docs:check` passou.
+
 # 17. Revisão arquitetural transversal depois dos PRs
 
 Depois das correções, fazer uma revisão específica para procurar regra duplicada.
 
 ---
 
-> **Relatório de implementação — status: parcialmente concluído.**
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
 >
-> **Feito:** Foram revisados progresso, sequência, workload, vídeo e ownership sem tocar pagamentos, grants, enrollment ou histórico.
+> **Feito:** Foram revisados progresso, sequência, workload, vídeo e ownership sem tocar pagamentos, grants, enrollment ou histórico. A projeção de progresso usa `calculateCourseProgress` nas superfícies principais; as regras de sequência ficam em helpers próprios; workload oficial, duração de conteúdo, posição de vídeo e fronteira validada permanecem separados; authoring revalida ownership no servidor e no banco.
 >
-> **Não feito:** Sequência opcional, cobertura real, constraints e E2E continuam pendentes.
+> **Não feito:** Não foi criado um verificador automático de duplicação arquitetural. As garantias de player real, concorrência PostgreSQL, constraints nos ambientes persistentes e E2E continuam como assurance pendente nos itens específicos. A etiqueta curta do Dashboard (`Iniciar`, `Continuar`, `Rever`, `Aguardando`) não foi unificada com a copy longa do overview porque inclui uma variação visual própria para cards compactos.
 >
-> **Diferença/motivo:** A revisão transversal não transformou decisões não ratificadas em código.
+> **Diferença/motivo:** A revisão distinguiu duplicação de regra de apresentação intencional. A “próxima Aula” visual pode apontar para uma aula bloqueada, enquanto a recomendação automática procura a próxima aula disponível; unificar esses valores apagaria uma diferença de produto já aprovada.
 >
-> **Verificação:** O relatório consolidado lista A01-A22 e os STOPs.
+> **Verificação:** Buscas transversais no código e 43 testes focados de progresso, sequência, workload e apresentação passaram. O relatório consolidado lista A01-A22 e os STOPs.
 
 # 17.1 Progresso
 
@@ -3551,14 +3583,36 @@ Criar uma suíte mental de invariantes.
 ## Invariante 1
 
 ```text
-progress dashboard
+progresso vivo do Dashboard
 ==
-progress course
+progresso vivo do Curso
 ==
-progress module policy
-==
-certificate eligibility policy
+projeção canônica de progresso obrigatório
+
+e, separadamente:
+
+elegibilidade de Certificado
+!=
+percentual vivo atual
 ```
+
+O primeiro grupo deve usar a mesma projeção de aulas obrigatórias para
+representar o progresso corrente. Elegibilidade de Certificado é uma política
+própria e pode depender de `CourseCompletion`, configuração do Curso, template,
+perfil emissor e demais regras do ciclo de Certificado. O Certificado emitido é
+histórico e não deve ser recalculado porque o currículo vivo mudou.
+
+---
+
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
+>
+> **Feito:** A equivalência foi limitada às superfícies de progresso vivo que consomem a mesma projeção obrigatória. A elegibilidade e o histórico de Certificado foram separados.
+>
+> **Não feito:** Não foi alterado o ciclo de emissão, revogação, reemissão ou reconciliação de Certificados.
+>
+> **Diferença/motivo:** `CourseCompletion` registra uma conclusão histórica independente do percentual atual; uma nova publicação pode reduzir o progresso vivo sem invalidar o Certificado existente. Cursos sem Certificado habilitado também não devem transformar 100% em emissão automática.
+>
+> **Verificação:** ADR-0006 e ADR-0007 registram snapshots e a distinção entre conclusão histórica e currículo vivo; a auditoria classifica a igualdade global como não sustentada.
 
 ---
 
@@ -3657,15 +3711,15 @@ no fluxo normal.
 
 ---
 
-> **Relatório de implementação — status: respeitado.**
+> **Relatório de implementação — status: COMPLETO — APROVADO.**
 >
-> **Feito:** Certificados, CourseCompletion, Pagamentos, Outbox, R2 e Auth não foram refatorados incidentalmente.
+> **Feito:** Certificados, CourseCompletion, Pagamentos, Outbox, R2 e Auth não foram refatorados incidentalmente; a Invariante 1 foi corrigida para não igualar progresso vivo a Certificado histórico.
 >
 > **Não feito:** Não foram feitos ajustes oportunistas fora da auditoria.
 >
 > **Diferença/motivo:** A redução de escopo protege contra regressões em domínios não comprovadamente defeituosos.
 >
-> **Verificação:** A suíte completa permaneceu verde.
+> **Verificação:** A separação é sustentada pelos ADRs de Certificado e versionamento curricular e pelo relatório da auditoria; não foi feito claim de que a suíte completa esteja verde neste working tree.
 
 # 19. O que não deve ser refatorado junto
 
