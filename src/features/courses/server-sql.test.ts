@@ -58,6 +58,7 @@ const createCourseOverviewRow = ({
   certificateCode = "CERT-1",
   completedAt = null,
   courseThumbnailUrl = null,
+  decisionNow = new Date("2026-01-01T00:00:00.000Z"),
   isRequired = true,
   lessonId,
   lessonThumbnailUrl = null,
@@ -68,6 +69,7 @@ const createCourseOverviewRow = ({
   certificateCode?: string | null;
   completedAt?: Date | null;
   courseThumbnailUrl?: string | null;
+  decisionNow?: Date;
   isRequired?: boolean;
   lessonId: string;
   lessonThumbnailUrl?: string | null;
@@ -87,6 +89,7 @@ const createCourseOverviewRow = ({
   course_slug: "course-one",
   course_subtitle: "Subtitle",
   course_title: "Course one",
+  decision_now: decisionNow,
   duration_seconds: 120,
   expires_at: expiresAt,
   is_required: isRequired,
