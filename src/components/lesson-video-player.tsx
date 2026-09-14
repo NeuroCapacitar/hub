@@ -9,7 +9,10 @@ import {
   useState,
   useTransition,
 } from "react";
-import { recordLessonWatchProgressAction } from "@/app/(student)/app/actions";
+import {
+  recordLessonWatchProgressAction,
+  startLessonWatchSessionAction,
+} from "@/app/(student)/app/actions";
 import { LessonFocusContainer } from "@/components/lesson-focus-mode";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import {
@@ -27,32 +30,28 @@ const SYNC_INTERVAL_MS = 1500;
 const WATCH_PROGRESS_INTERVAL_MS = 10_000;
 const WATCH_PROGRESS_PERCENT_STEP = 5;
 
-const createTrackingSessionId = (): string => {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `video-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-};
-
 export function LessonVideoPlayer({
   children,
   durationSeconds,
+  initialLinearProgressBlocked = false,
   initialPositionSeconds,
   initialWatchedPercent,
   isPreview,
   lessonId,
   title,
+  videoDurationSeconds,
   videoEmbedUrl,
   videoProvider,
 }: {
   children: React.ReactNode;
   durationSeconds: number;
+  initialLinearProgressBlocked?: boolean;
   initialPositionSeconds: number;
   initialWatchedPercent: number;
   isPreview: boolean;
   lessonId: string;
   title: string;
+  videoDurationSeconds: number;
   videoEmbedUrl: string | null;
   videoProvider: string | null;
 }): React.JSX.Element {
@@ -62,7 +61,9 @@ export function LessonVideoPlayer({
   const hasRestoredPositionRef = useRef(false);
   const isRestoringPositionRef = useRef(false);
   const latestPlayerEventRef = useRef<JmvstreamPlayerEvent | null>(null);
+  const resumePositionSecondsRef = useRef(initialPositionSeconds);
   const trackingSessionIdRef = useRef<string | null>(null);
+  const isTrackingSessionInactiveRef = useRef(false);
   const eventSequenceRef = useRef(0);
   const lastWatchProgressSyncRef = useRef({
     positionPercent: initialWatchedPercent,
@@ -72,7 +73,12 @@ export function LessonVideoPlayer({
   const [displayDurationSeconds, setDisplayDurationSeconds] =
     useState(durationSeconds);
   const [progressSaveError, setProgressSaveError] = useState(false);
+  const [linearProgressBlocked, setLinearProgressBlocked] = useState(
+    initialLinearProgressBlocked
+  );
   const [watchedPercent, setWatchedPercent] = useState(initialWatchedPercent);
+  const automaticCompletionUnavailable =
+    videoProvider === "jmvstream" && videoDurationSeconds <= 0;
   const playerUrl = useMemo(() => {
     if (!(videoEmbedUrl && videoProvider === "jmvstream")) {
       return null;
@@ -98,12 +104,17 @@ export function LessonVideoPlayer({
   }, [playerOrigin]);
 
   const restorePlayerPosition = useCallback(() => {
-    if (hasRestoredPositionRef.current || !playerOrigin) {
+    if (
+      hasRestoredPositionRef.current ||
+      !playerOrigin ||
+      !latestPlayerEventRef.current ||
+      !(isPreview || trackingSessionIdRef.current)
+    ) {
       return;
     }
 
     const jumpMessage = createJmvstreamPlayerJumpMessage(
-      initialPositionSeconds
+      resumePositionSecondsRef.current
     );
     if (!jumpMessage) {
       return;
@@ -112,7 +123,7 @@ export function LessonVideoPlayer({
     iframeRef.current?.contentWindow?.postMessage(jumpMessage, playerOrigin);
     hasRestoredPositionRef.current = true;
     isRestoringPositionRef.current = true;
-  }, [initialPositionSeconds, playerOrigin]);
+  }, [isPreview, playerOrigin]);
 
   const handleDetectedDuration = useCallback(
     (detectedSeconds: number) => {
@@ -158,10 +169,9 @@ export function LessonVideoPlayer({
         positionPercent: playerEvent.positionPercent,
         syncedAt: now,
       };
-      let trackingSessionId = trackingSessionIdRef.current;
-      if (!trackingSessionId) {
-        trackingSessionId = createTrackingSessionId();
-        trackingSessionIdRef.current = trackingSessionId;
+      const trackingSessionId = trackingSessionIdRef.current;
+      if (isTrackingSessionInactiveRef.current || !trackingSessionId) {
+        return;
       }
       const eventSequence = ++eventSequenceRef.current;
 
@@ -176,6 +186,13 @@ export function LessonVideoPlayer({
             lessonId,
             trackingSessionId,
           });
+
+          setLinearProgressBlocked(result.linearProgressBlocked);
+          if (!result.trackingSessionActive) {
+            isTrackingSessionInactiveRef.current = true;
+            setProgressSaveError(false);
+            return;
+          }
 
           setWatchedPercent((currentPercent) =>
             Math.max(currentPercent, result.watchedPercent)
@@ -211,6 +228,60 @@ export function LessonVideoPlayer({
     },
     [isPreview, lessonId, router, watchedPercent]
   );
+
+  useEffect(() => {
+    if (isPreview || videoProvider !== "jmvstream" || !videoEmbedUrl) {
+      return;
+    }
+
+    let cancelled = false;
+    completedByVideoRef.current = false;
+    isTrackingSessionInactiveRef.current = false;
+    hasRestoredPositionRef.current = false;
+    isRestoringPositionRef.current = false;
+    latestPlayerEventRef.current = null;
+    resumePositionSecondsRef.current = initialPositionSeconds;
+    trackingSessionIdRef.current = null;
+    eventSequenceRef.current = 0;
+    lastWatchProgressSyncRef.current = {
+      positionPercent: initialWatchedPercent,
+      syncedAt: 0,
+    };
+
+    startLessonWatchSessionAction({ lessonId })
+      .then((session) => {
+        if (cancelled) {
+          return;
+        }
+
+        resumePositionSecondsRef.current = session.resumePositionSeconds;
+        trackingSessionIdRef.current = session.trackingSessionId;
+        eventSequenceRef.current = 0;
+        setLinearProgressBlocked(session.isLinearProgressBlocked);
+        setWatchedPercent((currentPercent) =>
+          Math.max(currentPercent, session.watchedPercent)
+        );
+        setProgressSaveError(false);
+        restorePlayerPosition();
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProgressSaveError(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    initialPositionSeconds,
+    initialWatchedPercent,
+    isPreview,
+    lessonId,
+    restorePlayerPosition,
+    videoEmbedUrl,
+    videoProvider,
+  ]);
 
   useEffect(() => {
     if (isPreview) {
@@ -323,6 +394,20 @@ export function LessonVideoPlayer({
           ? "Não foi possível salvar o progresso agora. Continuaremos tentando enquanto você assiste."
           : ""}
       </p>
+
+      {linearProgressBlocked ? (
+        <p className="mx-auto w-full max-w-5xl px-5 pb-3 text-muted-foreground text-sm sm:px-8 lg:px-0">
+          Para concluir automaticamente, volte ao início e reproduza o trecho
+          sem avançar. Você também pode concluir a aula manualmente.
+        </p>
+      ) : null}
+
+      {automaticCompletionUnavailable ? (
+        <p className="mx-auto w-full max-w-5xl px-5 pb-3 text-muted-foreground text-sm sm:px-8 lg:px-0">
+          A duração do vídeo ainda não foi sincronizada. Você pode concluir a
+          aula manualmente.
+        </p>
+      ) : null}
 
       {children}
     </>

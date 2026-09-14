@@ -41,6 +41,9 @@ import {
 const unavailableAggregate = (): OutboxDeliveryError =>
   new OutboxDeliveryError("aggregate_not_deliverable", { retryable: false });
 
+const unavailableSupportRequest = (): OutboxSupersededError =>
+  new OutboxSupersededError("support_request_unavailable");
+
 const deliveryFailure = (): OutboxDeliveryError =>
   new OutboxDeliveryError("resend_delivery_failed", { retryable: true });
 
@@ -584,7 +587,7 @@ const deliverSupportRequest = async ({
   }
   const data = await getSupportRequestDeliveryData(payload.requestId);
   if (!data) {
-    throw unavailableAggregate();
+    throw unavailableSupportRequest();
   }
   await sendSupportRequestEmail({
     ...(data.course_title ? { courseTitle: data.course_title } : {}),

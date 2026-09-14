@@ -7,7 +7,10 @@ import { setCourseSaleInterest } from "@/features/courses/availability-server";
 import { canMutateStudentExperience } from "@/features/courses/preview";
 import {
   completeLesson,
+  type LessonWatchProgressResult,
+  type LessonWatchSessionResult,
   recordLessonWatchProgress,
+  startLessonWatchSession,
 } from "@/features/courses/server";
 import { setLearningAnalyticsPreference } from "@/features/learning-analytics/server";
 import { scheduleOutboxDrainAfterResponse } from "@/features/outbox/background-drain";
@@ -69,12 +72,7 @@ export const recordLessonWatchProgressAction = async ({
   isPaused?: boolean;
   lessonId: string;
   trackingSessionId?: string;
-}): Promise<{
-  completed: boolean;
-  courseId: string;
-  nextLessonId: string | null;
-  watchedPercent: number;
-}> => {
+}): Promise<LessonWatchProgressResult & { certificateIssued: boolean }> => {
   const session = await requireSession();
 
   if (!canMutateStudentExperience(session.role)) {
@@ -101,6 +99,27 @@ export const recordLessonWatchProgressAction = async ({
   }
 
   return result;
+};
+
+export const startLessonWatchSessionAction = async ({
+  lessonId,
+}: {
+  lessonId: string;
+}): Promise<LessonWatchSessionResult> => {
+  const session = await requireSession();
+
+  if (!canMutateStudentExperience(session.role)) {
+    throw new Error("O preview do aluno não permite gravar progresso.");
+  }
+
+  if (!lessonId) {
+    throw new Error("Aula inválida.");
+  }
+
+  return await startLessonWatchSession({
+    lessonId,
+    userId: session.user.id,
+  });
 };
 
 export const sendSupportRequestAction = async (

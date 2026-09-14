@@ -170,6 +170,14 @@ exatamente uma vez além da janela.
 
 Somente Admin pode usar `retryOutbox`. A página **Admin > Operação** lista dead letters sem expor payload. O reprocessamento exige motivo, não permite editar payload e grava `outbox.requeued` em `audit_logs` na mesma transação.
 
+Para `email.support-request`, se a solicitação original já não existir, a
+entrega não tenta chamar o Resend: termina como `support_request_unavailable` e
+o worker move a mensagem para `superseded`. A tela identifica que o reprocessamento
+não é possível e oferece ao Admin a ação explícita **Encerrar sem reprocessar**.
+Essa ação é atômica, grava `outbox.superseded` com somente o motivo e preserva no
+payload apenas o identificador técnico que já existia; nome, e-mail, assunto e
+mensagem nunca são copiados para a Outbox ou para a auditoria.
+
 Depois de 24 horas, o Resend não consegue mais deduplicar a mesma chave. Antes de reprocessar uma mensagem antiga, a administradora deve confirmar o estado do agregado e aceitar explicitamente o risco de e-mail duplicado. Não reprocessar automaticamente um resultado ambíguo.
 
 1. Confira tópico, tentativas, código de erro e data da última tentativa.
@@ -177,6 +185,11 @@ Depois de 24 horas, o Resend não consegue mais deduplicar a mesma chave. Antes 
 3. Para erro de versão ou agregado ausente, corrija a causa antes de reprocessar.
 4. Registre motivo no formulário; o sistema reativa uma vez a mesma mensagem.
 5. Confira a próxima execução do cron e o estado final.
+
+Se o tópico for `email.support-request` e a origem tiver sido removida, não há
+reenvio possível nem desejável. Confirme `support_request_unavailable` e use
+**Encerrar sem reprocessar**; não recrie a solicitação apenas para fazer a
+mensagem passar.
 
 A Administração do Hub é a dona operacional de dead letters, inclusive
 `auth.account-activation`, e incidentes de e-mail.
@@ -196,7 +209,7 @@ Cada execução do consumidor remove:
 - mensagens `delivered` há mais de 30 dias;
 - mensagens `dead_letter` cuja última falha tem mais de 180 dias;
 - mensagens `superseded` há mais de 30 dias;
-- auditorias `outbox.requeued` com mais de 180 dias.
+- auditorias `outbox.requeued` e `outbox.superseded` com mais de 180 dias.
 
 Essa retenção cobre somente a outbox e sua auditoria operacional. Não autoriza apagar auditorias financeiras, dados de Conta ou outros registros sujeitos a política jurídica própria.
 

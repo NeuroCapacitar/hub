@@ -86,6 +86,15 @@ Agrupamento ordenado de Aulas dentro de Curso e unidade de disponibilidade tempo
 **Aula**  
 Unidade ordenada de aprendizagem que pode combinar vídeo, texto rico e materiais.
 
+**Identidade curricular (`curriculum_key`)**
+Chave pedagógica estável que liga a mesma Aula entre publicações do mesmo Curso. Mudança grande de conteúdo cria outra identidade.
+
+**Identidade de mídia**
+Combinação do provedor e do identificador persistido do vídeo que permite reconhecer a mesma mídia entre publicações. URL manual sem identificador estável não prova continuidade.
+
+**Discussão da Aula**
+Thread de comentários que acompanha Curso + identidade curricular, sem copiar registros quando uma publicação nova materializa outra Aula física.
+
 **Progresso**  
 Evidência de consumo de Aulas e Curso. Não é direito de acesso.
 

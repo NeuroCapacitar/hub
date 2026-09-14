@@ -74,6 +74,7 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 - [ADR-0011: sequência com Aulas opcionais não bloqueadoras](adr/0011-optional-lesson-progression.md)
 - [ADR-0012: progresso linear validado em vídeo](adr/0012-linear-validated-video-progress.md)
 - [ADR-0013: ownership operacional entre Hub e provedores](adr/0013-provider-and-hub-operational-ownership.md)
+- [ADR-0014: identidade de Aula e estado entre publicações](adr/0014-lesson-identity-and-state-across-publications.md)
 
 ### Revisões
 

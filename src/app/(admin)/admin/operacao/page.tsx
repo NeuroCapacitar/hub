@@ -953,8 +953,12 @@ export default async function AdminOperationsPage({
                         </TableCell>
                         <TableCell className="text-right">
                           <OutboxDeadLetterDialog
+                            canReprocess={message.canReprocess}
                             canRetry={data.canRetryOutbox}
                             message={message}
+                            reprocessBlockedReason={
+                              message.reprocessBlockedReason
+                            }
                           />
                         </TableCell>
                       </TableRow>

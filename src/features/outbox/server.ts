@@ -274,12 +274,56 @@ export const requeueDeadLetterMessage = async ({
       where id = $1
         and status = 'dead_letter'
         and manual_reprocess_count = 0
+        and (
+          topic <> 'email.support-request'
+          or exists (
+            select 1
+            from support_requests
+            where outbox_messages.aggregate_type = 'support_request'
+              and support_requests.id::text = outbox_messages.aggregate_id
+          )
+        )
       returning id
     `,
     [messageId]
   );
 
   if (!requeued.rows[0]) {
+    const state = await client.query<{
+      manual_reprocess_count: number;
+      source_exists: boolean;
+      status: string;
+      topic: string;
+    }>(
+      `
+        select message.status,
+               message.topic,
+               message.manual_reprocess_count,
+        case
+                 when message.topic = 'email.support-request' then exists (
+                   select 1
+                   from support_requests
+                   where message.aggregate_type = 'support_request'
+                     and support_requests.id::text = message.aggregate_id
+                 )
+                 else true
+               end as source_exists
+        from outbox_messages message
+        where message.id = $1
+      `,
+      [messageId]
+    );
+    const stateRow = state.rows[0];
+    if (
+      stateRow?.status === "dead_letter" &&
+      stateRow.manual_reprocess_count === 0 &&
+      stateRow.topic === "email.support-request" &&
+      !stateRow.source_exists
+    ) {
+      throw new Error(
+        "A solicitação de suporte original não está mais disponível para reprocessamento."
+      );
+    }
     throw new Error(
       "A mensagem não está elegível para reprocessamento manual."
     );
@@ -305,6 +349,82 @@ export const requeueDeadLetterMessage = async ({
     `,
     [actorUserId, messageId, reason]
   );
+};
+
+export const supersedeUnavailableSupportDeadLetter = async ({
+  actorUserId,
+  client,
+  messageId,
+}: {
+  actorUserId: string;
+  client: OutboxQueryClient;
+  messageId: string;
+}): Promise<void> => {
+  const superseded = await client.query<{ id: string }>(
+    `
+      update outbox_messages
+      set status = 'superseded',
+          superseded_at = now(),
+          delivered_at = null,
+          locked_at = null,
+          locked_by = null,
+          last_error_code = 'support_request_unavailable',
+          last_error_at = now(),
+          updated_at = now()
+      where id = $1
+        and status = 'dead_letter'
+        and topic = 'email.support-request'
+        and aggregate_type = 'support_request'
+        and jsonb_typeof(payload) = 'object'
+        and payload ->> 'requestId' = aggregate_id
+        and not exists (
+          select 1
+          from support_requests
+          where outbox_messages.aggregate_type = 'support_request'
+            and support_requests.id::text = outbox_messages.aggregate_id
+        )
+      returning id
+    `,
+    [messageId]
+  );
+
+  if (!superseded.rows[0]) {
+    throw new Error(
+      "A mensagem não está elegível para encerramento sem reprocessamento."
+    );
+  }
+
+  await client.query(
+    `
+      insert into audit_logs (actor_user_id, action, target_type, target_id, metadata)
+      values ($1, 'outbox.superseded', 'outbox_message', $2, jsonb_build_object('reason', $3::text))
+    `,
+    [actorUserId, messageId, "support_request_unavailable"]
+  );
+};
+
+export const supersedeUnavailableSupportDeadLetterMessage = async ({
+  actorUserId,
+  messageId,
+}: {
+  actorUserId: string;
+  messageId: string;
+}): Promise<void> => {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    await supersedeUnavailableSupportDeadLetter({
+      actorUserId,
+      client,
+      messageId,
+    });
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 export const reprocessOutboxDeadLetter = async ({
@@ -340,12 +460,18 @@ export const reprocessOutboxDeadLetter = async ({
 
 export interface OutboxDeadLetterMessage {
   attempts: number;
+  canReprocess: boolean;
   createdAt: Date;
   id: string;
   lastErrorAt: Date | null;
   lastErrorCode: string | null;
+  reprocessBlockedReason: OutboxReprocessBlockedReason | null;
   topic: string;
 }
+
+export type OutboxReprocessBlockedReason =
+  | "manual_reprocess_already_used"
+  | "support_request_unavailable";
 
 export interface OutboxDeadLetterPage {
   hasNextPage: boolean;
@@ -370,15 +496,41 @@ export const listOutboxDeadLetters = async ({
     : 20;
   const result = await getPool().query<{
     attempts: number;
+    can_reprocess: boolean;
     created_at: Date;
     id: string;
     last_error_at: Date | null;
     last_error_code: string | null;
+    manual_reprocess_count: number;
+    reprocess_blocked_reason: OutboxReprocessBlockedReason | null;
     topic: string;
     total_count: number;
   }>(
     `
       select id, topic, attempts, last_error_code, last_error_at, created_at,
+             manual_reprocess_count,
+             case
+               when manual_reprocess_count = 0 and (
+                 topic <> 'email.support-request'
+                 or exists (
+                   select 1
+                   from support_requests
+                   where outbox_messages.aggregate_type = 'support_request'
+                     and support_requests.id::text = outbox_messages.aggregate_id
+                 )
+               ) then true
+               else false
+             end as can_reprocess,
+             case
+               when manual_reprocess_count > 0 then 'manual_reprocess_already_used'
+               when topic = 'email.support-request' and not exists (
+                 select 1
+                 from support_requests
+                 where outbox_messages.aggregate_type = 'support_request'
+                   and support_requests.id::text = outbox_messages.aggregate_id
+               ) then 'support_request_unavailable'
+               else null
+             end as reprocess_blocked_reason,
              count(*) over()::int as total_count
       from outbox_messages
       where status = 'dead_letter'
@@ -399,10 +551,12 @@ export const listOutboxDeadLetters = async ({
     hasNextPage: result.rows.length > normalizedPageSize,
     messages: result.rows.slice(0, normalizedPageSize).map((row) => ({
       attempts: row.attempts,
+      canReprocess: row.can_reprocess,
       createdAt: row.created_at,
       id: row.id,
       lastErrorAt: row.last_error_at,
       lastErrorCode: row.last_error_code,
+      reprocessBlockedReason: row.reprocess_blocked_reason,
       topic: row.topic,
     })),
     page: normalizedPage,
@@ -443,7 +597,7 @@ export const pruneOutboxRecords = async (): Promise<{
       getPool().query(
         `
         delete from audit_logs
-        where action = 'outbox.requeued'
+        where action in ('outbox.requeued', 'outbox.superseded')
           and created_at < now() - interval '180 days'
       `
       ),

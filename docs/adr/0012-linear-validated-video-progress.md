@@ -16,6 +16,17 @@ O limiar de 100% mantém uma regra inequívoca no contrato atual, que trabalha c
 
 A retomada usa o último ponto válido reproduzido. Um `skip` para frente não substitui essa posição até que exista reprodução real depois do salto. `max_position_seconds` é preservado como posição máxima observada e compatibilidade histórica, mas não é usado para retomada, progresso validado ou conclusão automática. Conclusões manuais e automáticas devem ser identificáveis nos analytics. Registros históricos de posição não são tratados como progresso validado.
 
+O servidor emite um token para cada sessão de vídeo. A sessão mais recentemente
+aberta assume a titularidade da linha de watch; uma sequência válida da sessão
+anterior não pode recuperar essa titularidade nem alterar a retomada. O cliente
+encerra o envio quando recebe essa resposta de sessão inativa, mas a proteção
+principal permanece no servidor.
+
+Para registros legados da migration 0076 (`tracking_version = 0`), a posição de
+retomada é preservada, porém a fronteira validada continua em zero até que o
+Aluno reproduza linearmente desde o início. Não há backfill silencioso e a
+conclusão manual não é removida.
+
 Não serão persistidos ranges de cobertura nesta etapa. Se o produto futuramente quiser creditar trechos assistidos fora de ordem, essa será uma decisão e uma mudança de modelo separadas.
 
 ## Consequências

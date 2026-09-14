@@ -128,6 +128,60 @@ describe("lesson content", () => {
     });
   });
 
+  it("accepts server-authorized inherited R2 attachments and previews", () => {
+    const formData = new FormData();
+    formData.set("textDocument", JSON.stringify(richTextDocument));
+    formData.set("resourceStorage[]", "r2");
+    formData.set("resourceId[]", "resource-inherited");
+    formData.set("resourceLabel[]", "Apostila herdada");
+    formData.set("resourceKey[]", "lessons/lesson-old/resources/apostila.pdf");
+    formData.set("resourceFileName[]", "apostila.pdf");
+    formData.set("resourceContentType[]", "application/pdf");
+    formData.set(
+      "resourcePreview[]",
+      JSON.stringify({
+        contentType: "image/webp",
+        height: 180,
+        key: "lessons/lesson-old/resources/apostila-preview.webp",
+        sizeBytes: 4096,
+        width: 320,
+      })
+    );
+    formData.set("resourceSizeBytes[]", "1024");
+
+    expect(
+      normalizeLessonContentFromForm({
+        formData,
+        inheritedResourceKeys: new Set([
+          "lessons/lesson-old/resources/apostila.pdf",
+          "lessons/lesson-old/resources/apostila-preview.webp",
+        ]),
+        lessonId: "lesson-new",
+      })
+    ).toEqual({
+      type: "text",
+      document: richTextDocument,
+      resources: [
+        {
+          contentType: "application/pdf",
+          fileName: "apostila.pdf",
+          id: "resource-inherited",
+          key: "lessons/lesson-old/resources/apostila.pdf",
+          label: "Apostila herdada",
+          preview: {
+            contentType: "image/webp",
+            height: 180,
+            key: "lessons/lesson-old/resources/apostila-preview.webp",
+            sizeBytes: 4096,
+            width: 320,
+          },
+          sizeBytes: 1024,
+          storage: "r2",
+        },
+      ],
+    });
+  });
+
   it("stores an R2 attachment as the only lesson content", () => {
     const emptyDocument = { type: "doc", content: [{ type: "paragraph" }] };
     const formData = new FormData();

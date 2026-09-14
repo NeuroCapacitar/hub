@@ -130,14 +130,14 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 1. `getStudentCourseAccessStatus` e `resolveCourseAccess` negam acesso sem Conta/Matrícula válidas.
 2. `getStudentCourseOverview` projeta Módulos futuros sem seus detalhes; `resolveLessonAccess` é a fronteira temporal única.
 3. `isLessonAvailable` aplica sequência depois da decisão temporal e só considera Aulas obrigatórias anteriores como pré-requisito; opcionais não bloqueiam.
-4. `recordLessonWatchProgress` separa retomada, posição máxima, fronteira linear e tempo de reprodução; somente a fronteira validada pode concluir por vídeo em 100%.
+4. `recordLessonWatchProgress` separa retomada, posição máxima, fronteira linear e tempo de reprodução; somente a fronteira validada pode concluir por vídeo em 100%. A sessão é emitida pelo servidor, a última abertura vence e eventos de sessão antiga são ignorados.
 5. `completeLesson` permite conclusão manual.
 6. `calculateCourseProgress` calcula percentual obrigatório; a próxima Aula é a primeira pendente disponível em ordem, inclusive opcional.
 
 ### Publicação de mídia
 
 - JMVStream: app inicia multipart, navegador envia partes diretamente às URLs assinadas, app confirma e sincroniza player.
-- R2 privado: app assina upload/download por objeto; navegador transfere sem proxy de payload. Anexos de Aula registram uma sessão vinculada à Aula/Admin, reemitem a URL para a mesma chave uma vez e usam fallback server-side somente até 4 MiB; a confirmação por HEAD precede o salvamento.
+- R2 privado: app assina upload/download por objeto; navegador transfere sem proxy de payload. Anexos de Aula registram uma sessão vinculada à Aula/Admin, reemitem a URL para a mesma chave uma vez e usam fallback server-side somente até 4 MiB; a confirmação por HEAD precede o salvamento. Um recurso já referenciado pode ser reutilizado por Aula clonada apenas quando Curso e `curriculum_key` coincidem; referências de publicações `published` e `retired` protegem o objeto contra limpeza.
 - R2 público: `publishR2Object` copia do bucket privado para o público; URL pública vem de `R2_PUBLIC_BASE_URL`.
 
 ### Certificado, analytics e manutenção
@@ -179,6 +179,8 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 - `outbox_messages` registra efeitos de e-mail críticos com chave idempotente, lease e
   dead letter; `auth.account-activation` persiste apenas IDs locais e cria token no
   callback Better Auth. Recuperação pública e ativação legada continuam fora da outbox;
+- suporte cujo agregado foi removido termina como `support_request_unavailable` e pode
+  ser encerrado explicitamente pelo Admin como `superseded`, sem payload com PII;
 - transições terminais da outbox são fenced por `locked_by`; perda do lease encerra o
   lote sem contabilizar sucesso/falha, e `certificate.render` terminaliza mensagem e
   Certificado de forma atômica;
