@@ -64,8 +64,8 @@ describe("publication continuity PostgreSQL behavior", () => {
       `insert into course_publications (
          id, course_id, publication_number, status, title_snapshot, published_at
        ) values
-         ($1, $3, 1, 'retired', 'Continuity course', $5),
-         ($2, $3, 2, 'published', 'Continuity course', $4)`,
+         ($1, $3, 1, 'retired', 'Continuity course', $5::timestamptz),
+         ($2, $3, 2, 'published', 'Continuity course', $4::timestamptz)`,
       [firstPublicationId, secondPublicationId, courseId, now, now]
     );
     await pool.query(
