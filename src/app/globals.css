@@ -123,8 +123,8 @@ html {
   --muted-foreground: var(--support-foreground);
   --accent: var(--brand-orange);
   --accent-foreground: oklch(0.237 0.025 204.4);
-  --selection: oklch(0.675 0.143 54 / 0.45);
-  --selection-foreground: oklch(0.237 0.025 204.4);
+  --selection: var(--brand-petroleum);
+  --selection-foreground: var(--brand-cream);
   --focus: var(--brand-cream);
   --focus-foreground: oklch(0.237 0.025 204.4);
   --link: var(--brand-orange);
@@ -196,8 +196,8 @@ body {
   --muted-foreground: var(--support-foreground);
   --accent: var(--brand-orange);
   --accent-foreground: oklch(0.237 0.025 204.4);
-  --selection: oklch(0.675 0.143 54 / 0.45);
-  --selection-foreground: oklch(0.237 0.025 204.4);
+  --selection: var(--brand-petroleum);
+  --selection-foreground: var(--brand-cream);
   --focus: var(--brand-cream);
   --focus-foreground: oklch(0.237 0.025 204.4);
   --link: var(--brand-orange);

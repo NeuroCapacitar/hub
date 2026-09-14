@@ -1,8 +1,8 @@
 ---
 status: canonical
 owner: design-and-engineering
-last_verified_commit: 9d0450a275d5bdacfaa44e306ca1ad8958053c89
-last_verified_at: 2026-09-07
+last_verified_commit: 106377c22baf164a55b94601555ab68ef46366a1
+last_verified_at: 2026-09-14
 ---
 
 # Sistema visual do NeuroCapacitar Hub
@@ -47,8 +47,9 @@ devem ser copiadas:
 Há decisões do Hub que prevalecem sobre a referência externa:
 
 - o produto é dark-only neste escopo e não possui seletor visual de tema;
-- o autoplay da mídia da tela de acesso é autorizado com controle explícito de
-  pausa, retomada e interação equivalente por teclado e toque;
+- o autoplay da mídia da tela de acesso é autorizado e pausa exclusivamente
+  enquanto o ponteiro está sobre a imagem; a navegação manual usa indicadores e
+  arraste;
 - a navegação da mídia da tela de acesso usa indicadores compactos centralizados,
   com o estado ativo alongado, sem setas laterais;
 
@@ -576,9 +577,9 @@ no scroll.
 
 O carrossel de banners do Dashboard mantém o autoplay existente de seis
 segundos. A mídia da tela de acesso também possui autorização explícita para
-autoplay de seis segundos, com pausa em hover e foco, controle acessível de
-pausa/retomada e navegação manual por indicadores. Outros carrosséis continuam
-exigindo decisão específica de produto e interação correspondente.
+autoplay de seis segundos, com pausa exclusivamente em hover e navegação manual
+por indicadores e arraste, sem botão visual de play/pausa. Outros carrosséis
+continuam exigindo decisão específica de produto e interação correspondente.
 
 O `Button`, `Input`, `Textarea`, `Select` e `Progress` atuais já possuem
 transições limitadas às propriedades relevantes. Preserve esses contratos e não

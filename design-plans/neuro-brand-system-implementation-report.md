@@ -1,17 +1,18 @@
 # Relatório de implementação: sistema visual NeuroCapacitar Hub
 
-> Estado: implementado na worktree `codex/design-system-refactor`
-> Baseline: `aa3119c28414100e9d18b1b85bf55607d722225c`
+> Estado: implementação concluída; validação visual e de contraste final pendente
+> Baseline: `423528c3e6d65608e99bc1a06789615a576811d7`
 > Data: 2026-09-14
-> Worktree: `C:\Users\Junior\.config\superpowers\worktrees\hub\design-system-refactor`
+> Integração: branch `codex/brand-system-and-favicons`
 
 ## Resultado
 
-O plano corrigido foi implementado sem alterar a worktree principal e sem
-introduzir uma biblioteca visual paralela.
+O plano corrigido foi implementado sem introduzir uma biblioteca visual
+paralela.
 
-O sistema agora separa anchors de marca dos papéis funcionais. A mudança
-visual mais ampla é a promoção do laranja para ação principal, enquanto areia,
+O sistema agora separa anchors de marca dos papéis funcionais. O laranja é
+promovido a `primary` para ênfase, seleção e progresso, enquanto
+`button-primary` permanece petróleo para ações principais de botão. Areia,
 oliva, terracota e petróleo recebem usos delimitados. Estados técnicos
 continuam independentes.
 
@@ -66,9 +67,8 @@ Alterações visíveis em:
 - `/app/checkout/sucesso`;
 - certificado público e seu status de preparação/validação.
 
-A feature dinâmica de mídia de Auth que existe como alteração independente na
-worktree principal não foi duplicada nesta branch; apenas os assets estáticos
-de plataforma foram incorporados.
+A feature dinâmica de mídia de Auth já existente no baseline foi preservada e
+não foi duplicada; os assets estáticos de plataforma também foram mantidos.
 
 ### Fase 5: aprendizagem
 
@@ -178,11 +178,11 @@ Em `/admin/configuracoes/design-system`, a equipe pode revisar:
 - `bun install --frozen-lockfile`: 550 pacotes instalados.
 - `bun run check`: passou.
 - `bun run typecheck`: passou.
-- `bun run docs:check`: passou; 47 documentos canônicos válidos.
+- `bun run docs:check`: passou; 48 documentos canônicos válidos.
 - Testes focados iniciais: 42/42 passaram.
 - Testes focados de regressão após ajustes: 46/46 passaram.
-- Suíte completa: 418 arquivos, 2.899 testes, 0 falhas.
-- `NEXT_PUBLIC_APP_URL=http://localhost:3000 bun run build`: passou.
+- `bun run verify:quick`: passou; 429 arquivos, 2.939 testes, 0 falhas.
+- `bun run verify`: passou; build Next.js e Knip também concluídos sem falhas.
 - `git diff --check`: sem erros de whitespace.
 
 A primeira tentativa de build sem `NEXT_PUBLIC_APP_URL` falhou pela validação
@@ -195,12 +195,11 @@ passou compilação, TypeScript, coleta de páginas e otimização.
   criada e o build/testes confirmam sua integração, mas a revisão humana de
   viewport estreito e contraste deve ser feita ao abrir a rota em ambiente
   autorizado.
-- `DESIGN.md` mantém o `last_verified_commit` canônico anterior porque esta
-  implementação ainda não foi commitada; o hash deve ser atualizado no commit
-  de integração.
+- `DESIGN.md` aponta para o commit de implementação integrado neste change set.
 - O relatório original e os arquivos de pesquisa permanecem como artefatos de
   referência; não foram sobrescritos.
-- A branch ainda não foi commitada ou integrada, conforme a autorização atual.
+- A integração com `staging` segue o fluxo de PR documentado; a inspeção visual
+  manual permanece um gate humano separado dos testes automatizados.
 
 ## Refinamentos posteriores
 

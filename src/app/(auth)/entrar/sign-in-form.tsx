@@ -86,7 +86,6 @@ export function SignInForm(): React.JSX.Element {
           <FieldLabel htmlFor="email">E-mail</FieldLabel>
           <Input
             aria-describedby={error ? "sign-in-error" : undefined}
-            aria-invalid={error ? true : undefined}
             autoComplete="email"
             className="h-11"
             id="email"
@@ -100,7 +99,6 @@ export function SignInForm(): React.JSX.Element {
           <FieldLabel htmlFor="password">Senha</FieldLabel>
           <PasswordInput
             aria-describedby={error ? "sign-in-error" : undefined}
-            aria-invalid={error ? true : undefined}
             autoComplete="current-password"
             className="h-11"
             id="password"
