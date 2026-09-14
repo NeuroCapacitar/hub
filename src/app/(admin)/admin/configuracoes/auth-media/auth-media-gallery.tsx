@@ -184,7 +184,9 @@ export function AuthMediaGallery({
     }
 
     const previousSlides = slides;
-    const nextSlides = arrayMove(slides, oldIndex, newIndex);
+    const nextSlides = arrayMove(slides, oldIndex, newIndex).map(
+      (slide, index) => ({ ...slide, sortOrder: index + 1 })
+    );
     setSlides(nextSlides);
     startTransition(async () => {
       try {

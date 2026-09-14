@@ -50,4 +50,25 @@ describe("PasswordInput", () => {
     expect(toggle.getAttribute("aria-label")).toBe("Mostrar senha");
     act(() => root.unmount());
   });
+
+  it("disables the visibility control with the password input", () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    act(() =>
+      root.render(<PasswordInput disabled id="password" name="password" />)
+    );
+
+    const input = container.querySelector<HTMLInputElement>("input");
+    const toggle = container.querySelector<HTMLButtonElement>("button");
+    if (!(input && toggle)) {
+      throw new Error(
+        "Campo de senha ou controle de visibilidade não encontrado."
+      );
+    }
+
+    expect(input.disabled).toBe(true);
+    expect(toggle.disabled).toBe(true);
+
+    act(() => root.unmount());
+  });
 });

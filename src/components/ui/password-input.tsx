@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 export function PasswordInput({
   className,
+  disabled,
   id,
   ...props
 }: React.ComponentProps<typeof Input>): React.JSX.Element {
@@ -18,6 +19,7 @@ export function PasswordInput({
       <Input
         {...props}
         className={cn("pe-11", className)}
+        disabled={disabled}
         id={id}
         type={isVisible ? "text" : "password"}
       />
@@ -26,6 +28,7 @@ export function PasswordInput({
         aria-label={isVisible ? "Ocultar senha" : "Mostrar senha"}
         aria-pressed={isVisible}
         className="absolute inset-y-0 end-0 flex w-11 items-center justify-center rounded-e-lg text-muted-foreground outline-none transition-[background-color,color,scale] hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/70 active:scale-[0.96]"
+        disabled={disabled}
         onClick={() => setIsVisible((visible) => !visible)}
         onPointerDown={(event) => event.preventDefault()}
         type="button"

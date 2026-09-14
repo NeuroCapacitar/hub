@@ -259,4 +259,68 @@ describe("authentication media actions", () => {
       })
     );
   });
+
+  it("restores public access when the activity transaction fails", async () => {
+    dependencies.poolQuery.mockResolvedValue({
+      rows: [
+        {
+          blur_data_url: "blur",
+          id: SLIDE_ID,
+          image_url: IMAGE_KEY,
+          is_active: false,
+          sort_order: 1,
+        },
+      ],
+    });
+    const databaseError = new Error("database unavailable");
+    dependencies.clientQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockRejectedValueOnce(databaseError)
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(
+      toggleAuthMediaActiveAction(
+        createFormData({ isActive: "on", slideId: SLIDE_ID })
+      )
+    ).rejects.toBe(databaseError);
+
+    expect(
+      dependencies.synchronizeAuthMediaPublicObject
+    ).toHaveBeenNthCalledWith(1, { isActive: true, key: IMAGE_KEY });
+    expect(
+      dependencies.synchronizeAuthMediaPublicObject
+    ).toHaveBeenNthCalledWith(2, { isActive: false, key: IMAGE_KEY });
+  });
+
+  it("restores public access when deleting a slide transaction fails", async () => {
+    dependencies.poolQuery.mockResolvedValue({
+      rows: [
+        {
+          blur_data_url: "blur",
+          id: SLIDE_ID,
+          image_url: IMAGE_KEY,
+          is_active: true,
+          sort_order: 1,
+        },
+      ],
+    });
+    const databaseError = new Error("database unavailable");
+    dependencies.clientQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockRejectedValueOnce(databaseError)
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(
+      deleteAuthMediaAction(createFormData({ slideId: SLIDE_ID }))
+    ).rejects.toBe(databaseError);
+
+    expect(
+      dependencies.synchronizeAuthMediaPublicObject
+    ).toHaveBeenNthCalledWith(1, { isActive: false, key: IMAGE_KEY });
+    expect(
+      dependencies.synchronizeAuthMediaPublicObject
+    ).toHaveBeenNthCalledWith(2, { isActive: true, key: IMAGE_KEY });
+  });
 });

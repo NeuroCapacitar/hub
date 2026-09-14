@@ -397,6 +397,10 @@ export const toggleAuthMediaActiveAction = async (
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
+    await synchronizeAuthMediaPublicObject({
+      isActive: previous.is_active,
+      key: previous.image_url,
+    }).catch(() => undefined);
     throw error;
   } finally {
     client.release();
@@ -450,6 +454,10 @@ export const deleteAuthMediaAction = async (
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
+    await synchronizeAuthMediaPublicObject({
+      isActive: previous.is_active,
+      key: previous.image_url,
+    }).catch(() => undefined);
     throw error;
   } finally {
     client.release();
