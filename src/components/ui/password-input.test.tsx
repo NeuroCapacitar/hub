@@ -37,17 +37,23 @@ describe("PasswordInput", () => {
     expect(input.type).toBe("password");
     expect(input.value).toBe("senha-secreta");
     expect(input.autocomplete).toBe("current-password");
-    expect(toggle.getAttribute("aria-label")).toBe("Mostrar senha");
+    expect(toggle.getAttribute("aria-label")).toBe(
+      "Mostrar conteúdo confidencial"
+    );
 
     act(() => toggle.click());
     expect(input.type).toBe("text");
     expect(input.value).toBe("senha-secreta");
-    expect(toggle.getAttribute("aria-label")).toBe("Ocultar senha");
+    expect(toggle.getAttribute("aria-label")).toBe(
+      "Ocultar conteúdo confidencial"
+    );
     expect(toggle.getAttribute("aria-pressed")).toBe("true");
 
     act(() => toggle.click());
     expect(input.type).toBe("password");
-    expect(toggle.getAttribute("aria-label")).toBe("Mostrar senha");
+    expect(toggle.getAttribute("aria-label")).toBe(
+      "Mostrar conteúdo confidencial"
+    );
     act(() => root.unmount());
   });
 

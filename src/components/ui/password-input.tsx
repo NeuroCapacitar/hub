@@ -25,12 +25,17 @@ export function PasswordInput({
       />
       <button
         aria-controls={id}
-        aria-label={isVisible ? "Ocultar senha" : "Mostrar senha"}
+        aria-label={
+          isVisible
+            ? "Ocultar conteúdo confidencial"
+            : "Mostrar conteúdo confidencial"
+        }
         aria-pressed={isVisible}
         className="absolute inset-y-0 end-0 flex w-11 items-center justify-center rounded-e-lg text-muted-foreground outline-none transition-[background-color,color,scale] hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/70 active:scale-[0.96]"
         disabled={disabled}
         onClick={() => setIsVisible((visible) => !visible)}
         onPointerDown={(event) => event.preventDefault()}
+        title={isVisible ? "Ocultar senha" : "Mostrar senha"}
         type="button"
       >
         <HugeiconsIcon

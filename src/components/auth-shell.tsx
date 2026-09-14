@@ -34,7 +34,6 @@ export function AuthShell({
           </div>
         </section>
         <section
-          aria-label="Mídia da tela de acesso"
           className={cn(
             "relative hidden min-h-[36rem] items-stretch overflow-hidden p-3 lg:flex lg:min-h-0",
             mediaOrder
