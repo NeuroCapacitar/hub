@@ -33,7 +33,8 @@ export type OutboxSupersededReason =
   | "expiry_generation_changed"
   | "expiry_inactive"
   | "expiry_payload_v1"
-  | "expiry_window_elapsed";
+  | "expiry_window_elapsed"
+  | "support_request_unavailable";
 
 export class OutboxSupersededError extends Error {
   readonly code: OutboxSupersededReason;

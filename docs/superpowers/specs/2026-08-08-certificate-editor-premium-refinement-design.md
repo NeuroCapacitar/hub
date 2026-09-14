@@ -106,7 +106,7 @@ the override existed.
   close behavior through the existing Sheet primitive.
 - Overlap is an actionable warning, never a save blocker.
 - Upload replacement/removal is explicit and preserves the old asset until success.
-- Reduced-motion preferences remain respected by existing transitions.
+- Existing transitions remain unchanged.
 
 ## Verification contract
 

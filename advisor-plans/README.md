@@ -14,6 +14,7 @@ pessoa responsável autorize sua execução.
 
 | Plano | Escopo | Status | Dependência |
 |---|---|---|---|
+| [Alinhamento Hub e provedores](provider-vs-hub-operational-alignment-plan-2026-09-13.md) | Ownership operacional, Resend, JMVStream e Admin | in-progress | [pesquisa de responsabilidade](provider-vs-hub-operational-responsibility-research-2026-09-13.md) |
 | [Sentry somente em Production](sentry-production-only-observability-2026-09-11.md) | Sentry, alertas, readiness, privacidade e volume | in-progress | ajustes externos e janela de observação |
 | [Padronização do Admin](admin-surface-standardization-2026-09-09.md) | Superfícies administrativas | complete | — |
 | [Auditoria final do Financeiro](financial-final-ui-audit-2026-09-09.md) | `/admin/financeiro` | implemented | — |

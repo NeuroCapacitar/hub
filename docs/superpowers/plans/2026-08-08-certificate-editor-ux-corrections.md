@@ -84,7 +84,7 @@
 - [ ] Remove the nested double-frame treatment where it does not add hierarchy; preserve one subtle image outline and concentric radii.
 - [ ] Replace `transition-all` with the exact switch properties that change.
 - [ ] Normalize Portuguese copy and punctuation, add `autocomplete` to signer inputs, and use `text-wrap`/`tabular-nums` where values change.
-- [ ] Preserve reduced-motion behavior and existing press scale values.
+- [ ] Preserve existing motion behavior and press scale values.
 
 ### Task 7: Verification
 

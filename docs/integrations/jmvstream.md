@@ -95,6 +95,12 @@ ele não expira uploads nem altera `jmvstream_video_assets`. A tela exibe apenas
 pendências/falhas locais acionáveis e aponta a operadora para o portal JMVStream
 quando a investigação pertence ao provider.
 
+O portal JMVStream é a autoridade para processamento, conversão, armazenamento,
+player, thumbnail e detalhes técnicos do ativo. O Hub é a autoridade para a
+associação do ativo com a Aula, a publicação e o efeito de uma falha na
+experiência do Aluno. A tela não deve reproduzir logs ou controles do provedor;
+deve mostrar o estado local mínimo e encaminhar o detalhe externo ao portal.
+
 ## Falhas e recuperação
 
 - 401/403 => conferir resource/token e autenticação, sem expor valores;
@@ -120,7 +126,9 @@ reduz despertares do Neon sem remover a recuperação automática.
 O Hub persiste a posição observada (`current_seconds`), a posição de retomada
 (`resume_position_seconds`), a maior posição observada (`max_position_seconds`),
 a fronteira linear validada (`validated_position_seconds`) e o tempo de
-reprodução (`playing_time_seconds`). Depois de receber um evento válido do player
+reprodução (`playing_time_seconds`). A abertura do player começa por um handshake
+server-side que cria um token de sessão; a última sessão aberta vence e eventos
+com token anterior são ignorados. Depois de receber um evento válido do player
 em resposta a `jmvplayer-sync`, envia `jmvplayer-jump` com a posição de retomada
 (`jump`) para restaurar a Aula sem iniciar nem concluir automaticamente. A
 primeira resposta após o salto é descartada pela gravação de progresso para
@@ -136,6 +144,20 @@ a posição máxima observada; `watched_percent`, para registros do tracking nov
 tratados como validados. Nenhum desses valores prova atenção humana. Um `skip` não avança a fronteira linear nem
 libera conclusão automática; a reprodução posterior pode aumentar o tempo
 analítico, mas precisa retornar ao trecho pendente para continuar a fronteira.
+
+Quando uma nova publicação materializa outra Aula, o watch só é projetado se
+Curso, `curriculum_key`, provedor JMVStream e `video_external_id` não vazio forem
+iguais. Tempo reproduzido, sessão e sequência não atravessam a publicação. Link
+manual sem identificador começa do zero. Registros legados preservam a retomada,
+mas não ganham validação retroativa: se a retomada estiver no meio, o player
+explica que a conclusão automática exige reproduzir linearmente desde o início;
+a conclusão manual continua disponível.
+
+Vídeo JMVStream identificado só pode ser publicado com duração positiva
+persistida. Link manual pode ser publicado sem duração, mas fica restrito à
+conclusão manual até a duração ser sincronizada. A duração detectada pelo
+player é somente uma proposta para a autoria; ela não substitui a decisão de
+publicação nem a autoridade server-side.
 
 O comando é documentado na página oficial de eventos do player, marcada pelo próprio provedor como referência antiga; ele deve ser confirmado contra um player real antes de promover uma mudança de versão da integração.
 

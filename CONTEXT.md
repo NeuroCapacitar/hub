@@ -54,6 +54,12 @@ Revogação manual de acesso a Curso específico; não bloqueia automaticamente 
 **Bloqueio de plataforma**  
 Suspensão da Conta na experiência do Aluno, mais ampla que bloqueio de Matrícula e sem apagar histórico.
 
+## Acesso à plataforma
+
+**Mídia da tela de acesso**
+Imagem visual administrada para compor a entrada pública do Hub. Não contém
+CTA, texto editorial ou dados do Aluno e não concede acesso por si só.
+
 **Revisão financeira**  
 Fila humana quando o sistema não pode aplicar evento financeiro com segurança, como conflito entre estados terminais ou valor divergente.
 
@@ -85,6 +91,15 @@ Agrupamento ordenado de Aulas dentro de Curso e unidade de disponibilidade tempo
 
 **Aula**  
 Unidade ordenada de aprendizagem que pode combinar vídeo, texto rico e materiais.
+
+**Identidade curricular (`curriculum_key`)**
+Chave pedagógica estável que liga a mesma Aula entre publicações do mesmo Curso. Mudança grande de conteúdo cria outra identidade.
+
+**Identidade de mídia**
+Combinação do provedor e do identificador persistido do vídeo que permite reconhecer a mesma mídia entre publicações. URL manual sem identificador estável não prova continuidade.
+
+**Discussão da Aula**
+Thread de comentários que acompanha Curso + identidade curricular, sem copiar registros quando uma publicação nova materializa outra Aula física.
 
 **Progresso**  
 Evidência de consumo de Aulas e Curso. Não é direito de acesso.
@@ -121,6 +136,28 @@ Controle de opt-out do Aluno para os eventos técnicos opcionais. Por padrão, a
 
 **Métrica agregada de aprendizagem**
 Contagem ou medida por Aula e Publicação de Curso que não apresenta Conta, Matrícula, Aluno, e-mail ou lista de inatividade.
+
+## Integrações e operação
+
+**Provedor**
+
+Serviço externo responsável pela execução técnica de uma integração do Hub, como entrega de e-mail ou processamento de vídeo. Não é a autoridade sobre as regras de negócio do Hub.
+
+**Projeção de integração**
+
+Estado local resumido do último resultado conhecido de um Provedor, mantido para contexto, reconciliação e decisão do Hub. Não substitui o estado externo.
+
+**Evento de Provedor não reconciliado**
+
+Notificação externa recebida pelo Hub que ainda não foi associada ou consolidada no estado local. Exige investigação, mas não prova sozinho que o efeito externo falhou.
+
+**Operação técnica do Provedor**
+
+Detalhe de entrega, reputação, conversão, armazenamento, player ou outro processamento específico do serviço externo.
+
+**Operação de negócio do Hub**
+
+Intenção, associação, acesso, publicação, conclusão, Certificado, idempotência ou consequência de produto que o Hub deve decidir.
 
 ## Durações
 

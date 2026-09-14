@@ -3164,7 +3164,7 @@ Criar pequena seção no runbook de acessibilidade com:
 - zoom;
 - leitor de tela básico quando disponível;
 - mobile;
-- reduced motion.
+- motion behavior.
 
 Não declarar:
 

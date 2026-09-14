@@ -104,9 +104,12 @@ duração, disponibilidade, Módulos, Aulas, ordenação e publicação. O hist�
 do evento e mantém a referência técnica do alvo sem mostrar payload bruto ou identidade
 de Aluno.
 
-Use **Admin > Operação** para o estado atual das filas e para recuperar webhook ou Outbox.
-Uma ação de recuperação exige motivo e aparece depois no histórico de Auditoria; as duas
-páginas têm responsabilidades diferentes e não devem ser usadas como substitutas.
+Use **Admin > Operação** para o estado atual das filas locais, eventos Resend,
+webhooks Asaas e saúde JMVStream. A página deve indicar quando a próxima ação
+é no Hub e quando o detalhe ou replay pertence ao portal do provedor. Ações
+locais de recuperação exigem motivo e aparecem depois no histórico de Auditoria;
+as páginas e portais têm responsabilidades diferentes e não devem ser usadas
+como substitutas.
 
 ## Sinais, dona e resposta
 
@@ -263,7 +266,7 @@ As Server Actions de reordenação do conteúdo usam o mesmo cabeçalho e emitem
 - `GET /api/health/ready` é readiness: exige `Authorization: Bearer <HEALTHCHECK_SECRET>` quando o segredo existe. Em produção, segredo ausente, conexão indisponível ou schema incompatível retorna 503 sem detalhes.
 - A readiness usa conexão com timeout de um segundo, transação somente leitura e exige no journal `drizzle.__drizzle_migrations` a migration mínima declarada em `src/db/migration-state.ts`. Providers externos não bloqueiam cada request.
 
-RED é calculado por `operation`: taxa de eventos, `outcome=failure` e `durationMs`. Saturação vem do snapshot administrativo: outbox pendente/dead letter, webhooks Asaas prontos, em retry ou falhos, checkouts e reembolsos incertos e vídeo pendente, com a idade do item mais antigo.
+RED é calculado por `operation`: taxa de eventos, `outcome=failure` e `durationMs`. Saturação vem do snapshot administrativo: outbox pendente/dead letter, eventos Resend em retry ou dead letter, webhooks Asaas prontos, em retry ou falhos, checkouts e reembolsos incertos e vídeo pendente, com a idade do item mais antigo.
 
 Os eventos de liberação temporal são sinais de log estruturado, não uma fila
 persistida. O painel de logs/Sentry deve alertar por aumento sustentado de
@@ -275,6 +278,8 @@ administrativo não deve ser interpretada como ausência de eventos; a correlaç
 O snapshot emite códigos operacionais sem PII, com limiares internos nomeados:
 
 - `outbox_dead_letter`: existe ao menos uma mensagem em `dead_letter`, severidade crítica;
+- `email_delivery_dead_letter`: existe ao menos um evento Resend em `dead_letter`; a severidade inicial é alta para ocorrência isolada e só deve ser crítica quando houver acúmulo persistente ou impacto operacional amplo;
+- `email_delivery_retry_stale`: evento Resend em retry há pelo menos uma hora, severidade alta;
 - `outbox_pending_stale`: mensagem pendente há pelo menos 15 minutos, severidade `warning`, ou há pelo menos 60 minutos, severidade `critical`;
 - `webhook_ready_stale`: evento `received`/`processing` há pelo menos 15 minutos;
 - `webhook_retry_stale`: evento `retryable` há pelo menos 6 horas;

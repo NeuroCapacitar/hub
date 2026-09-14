@@ -98,7 +98,7 @@ descontadas do recebível.
 - conversão para o decimal em reais acontece somente na borda HTTP e deve ser exata;
 - o contrato atual do endpoint marca `imageBase64` como obrigatória em cada item;
 - o adapter rasteriza para PNG o logo institucional versionado em
-  `public/protear/logo-negativo.svg` e envia o Base64 bruto resultante em cada item.
+  `public/brand/logo-negativo.svg` e envia o Base64 bruto resultante em cada item.
   O checkout não depende de capa do Curso, URL externa, dado pessoal ou imagem
   fornecida pela Compradora;
 - o resultado histórico do Sandbox sem `imageBase64` não é evidência suficiente para

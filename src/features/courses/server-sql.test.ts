@@ -50,6 +50,7 @@ import {
   getStudentLessonWorkspace,
   recalculateCourseWorkloadHours,
   recordLessonWatchProgress,
+  startLessonWatchSession,
 } from "./server";
 
 const expiresAt = new Date("2027-01-01T00:00:00.000Z");
@@ -442,6 +443,7 @@ describe("student experience reads", () => {
       studentName: "Aluno Teste",
       totalCount: 3,
     });
+    expect(overview?.course.title).toBe("Course one");
     expect(overview?.modules[0]?.lessons).toMatchObject([
       {
         availability: { kind: "available" },
@@ -466,6 +468,13 @@ describe("student experience reads", () => {
     });
     expect(query.mock.calls[0]?.[0]).toContain(
       "completed_lesson.curriculum_key = l.curriculum_key"
+    );
+    expect(query.mock.calls[0]?.[0]).toContain("c.title as course_title");
+    expect(query.mock.calls[0]?.[0]).toContain(
+      "watched_lesson.video_external_id = l.video_external_id"
+    );
+    expect(query.mock.calls[0]?.[0]).toContain(
+      "watched_publication.status in ('published', 'retired')"
     );
   });
 
@@ -733,6 +742,7 @@ describe("student experience reads", () => {
         isCompleted: false,
       },
     ]);
+    expect(query.mock.calls[0]?.[0]).toContain("c.title as course_title");
   });
 
   it("enforces lesson sequence for enrolled students", async () => {
@@ -1049,6 +1059,183 @@ describe("student experience reads", () => {
 });
 
 describe("course completion writes", () => {
+  it("starts a server-owned video session before accepting player events", async () => {
+    query.mockImplementation((sql: string) => {
+      if (sql.includes("select m.course_id")) {
+        return { rows: [{ course_id: "course-1" }] };
+      }
+      return { rows: [] };
+    });
+    clientQuery.mockImplementation((sql: string) => {
+      if (sql.includes("with target_course")) {
+        return {
+          rows: [createLessonRow({ lessonId: "lesson-2", lessonSortOrder: 2 })],
+        };
+      }
+      if (sql.includes("from lesson_watch_progress")) {
+        return { rows: [] };
+      }
+      return { rows: [] };
+    });
+
+    await expect(
+      startLessonWatchSession({
+        lessonId: "lesson-2",
+        userId: "student-1",
+      })
+    ).resolves.toMatchObject({
+      isLinearProgressBlocked: false,
+      resumePositionSeconds: 0,
+      trackingSessionId: expect.any(String),
+      watchedPercent: 0,
+    });
+    expect(
+      clientQuery.mock.calls.some(([sql]) =>
+        String(sql).includes("insert into lesson_watch_progress")
+      )
+    ).toBe(true);
+  });
+
+  it("projects compatible watch state from the previous publication", async () => {
+    query.mockImplementation((sql: string) => {
+      if (sql.includes("select m.course_id")) {
+        return { rows: [{ course_id: "course-1" }] };
+      }
+      return { rows: [] };
+    });
+    let watchReads = 0;
+    clientQuery.mockImplementation((sql: string) => {
+      if (sql.includes("with target_course")) {
+        return {
+          rows: [
+            {
+              ...createLessonRow({
+                lessonId: "lesson-current",
+                lessonSortOrder: 2,
+                videoDurationSeconds: 120,
+              }),
+              video_external_id: "video-shared",
+              video_provider: "jmvstream",
+            },
+          ],
+        };
+      }
+      if (sql.includes("from lesson_watch_progress")) {
+        watchReads += 1;
+        if (watchReads === 1) {
+          return { rows: [] };
+        }
+        return {
+          rows: [
+            {
+              awaiting_playback_after_seek: false,
+              current_seconds: 58,
+              duration_seconds: 120,
+              last_event_sequence: 4,
+              linear_progress_blocked: false,
+              max_position_seconds: 70,
+              playing_time_seconds: 55,
+              resume_position_seconds: 60,
+              source_lesson_id: "lesson-previous",
+              tracking_session_id: "old-session",
+              tracking_version: 1,
+              validated_position_seconds: 50,
+              watched_percent: 41,
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+
+    await expect(
+      startLessonWatchSession({
+        lessonId: "lesson-current",
+        userId: "student-1",
+      })
+    ).resolves.toMatchObject({
+      isLinearProgressBlocked: false,
+      resumePositionSeconds: 60,
+      trackingSessionId: expect.any(String),
+      watchedPercent: 41,
+    });
+    expect(
+      clientQuery.mock.calls.some(
+        ([sql, parameters]) =>
+          String(sql).includes("insert into lesson_watch_progress") &&
+          Array.isArray(parameters) &&
+          parameters[2] === 60 &&
+          parameters[5] === 50
+      )
+    ).toBe(true);
+  });
+
+  it("ignores an event from a session that no longer owns the lesson", async () => {
+    query.mockImplementation((sql: string) => {
+      if (sql.includes("select m.course_id")) {
+        return { rows: [{ course_id: "course-1" }] };
+      }
+      return { rows: [] };
+    });
+    const lessonRows = [
+      createLessonRow({
+        lessonId: "lesson-2",
+        lessonSortOrder: 2,
+        videoDurationSeconds: 1000,
+      }),
+    ];
+    clientQuery.mockImplementation((sql: string) => {
+      if (sql.includes("with target_course")) {
+        return { rows: lessonRows };
+      }
+      if (sql.includes("from lesson_watch_progress")) {
+        return {
+          rows: [
+            {
+              awaiting_playback_after_seek: false,
+              current_seconds: 100,
+              duration_seconds: 1000,
+              last_event_sequence: 1,
+              linear_progress_blocked: false,
+              max_position_seconds: 100,
+              playing_time_seconds: 100,
+              resume_position_seconds: 100,
+              source_lesson_id: "lesson-2",
+              tracking_session_id: "new-session",
+              tracking_version: 1,
+              validated_position_seconds: 100,
+              watched_percent: 10,
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+
+    await expect(
+      recordLessonWatchProgress({
+        currentSeconds: 80,
+        durationSeconds: 1000,
+        eventName: "jmvplayerout-status",
+        eventSequence: 2,
+        isPaused: false,
+        lessonId: "lesson-2",
+        trackingSessionId: "old-session",
+        userId: "student-1",
+      })
+    ).resolves.toMatchObject({
+      completed: false,
+      linearProgressBlocked: false,
+      trackingSessionActive: false,
+      watchedPercent: 10,
+    });
+    expect(
+      clientQuery.mock.calls.some(([sql]) =>
+        String(sql).includes("insert into lesson_watch_progress")
+      )
+    ).toBe(false);
+  });
+
   it("rejects unrecognized video events before touching the database", async () => {
     await expect(
       recordLessonWatchProgress({

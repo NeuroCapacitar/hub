@@ -21,7 +21,7 @@ certificado, expiração e suporte.
 
 ## Evidências de branding utilizadas
 
-- Logo oficial: `public/protear/logo-negativo.svg`.
+- Logo oficial: `public/brand/logo-negativo.svg`.
 - Fundo principal do produto: `#0f2224`.
 - Superfície/card: `#162b2d` no produto e branco nas superfícies de leitura.
 - Teal primário: `#326c71`.
@@ -35,7 +35,7 @@ certificado, expiração e suporte.
   sans-serif` como fallback seguro, sem carregar fonte remota.
 
 O logo será referenciado por URL HTTPS absoluta e pública:
-`https://app.neurocapacitar.com.br/protear/logo-negativo.svg`. O HTML terá
+`https://app.neurocapacitar.com.br/brand/logo-negativo.svg`. O HTML terá
 `alt="PROTEA-R"`, dimensões explícitas e `display:block` para clientes de email.
 
 ## Direção visual aprovada

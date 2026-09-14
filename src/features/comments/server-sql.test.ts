@@ -78,6 +78,21 @@ describe("lesson comments SQL contracts", () => {
     expect(readSection).toContain('client.query("COMMIT")');
   });
 
+  it("reads and validates discussions by Course and curricular identity", async () => {
+    const source = await readFile(
+      new URL("./server.ts", import.meta.url),
+      "utf8"
+    );
+    const readSection = source.slice(
+      source.indexOf("export const getLessonComments"),
+      source.indexOf("export const createLessonComment")
+    );
+
+    expect(readSection).toContain("curriculum_key");
+    expect(readSection).toContain("course_id");
+    expect(source).toContain("discussion: {");
+  });
+
   it("filters hidden comments from non-moderators while preserving moderator review", async () => {
     const source = await readFile(
       new URL("./server.ts", import.meta.url),

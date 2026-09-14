@@ -377,6 +377,45 @@ describe("admin authoring", () => {
         COURSE_ACTIVATION_UPDATE_PATTERN.test(String(sql))
       )
     ).toBe(false);
+    const readinessSql = query.mock.calls.find(
+      ([sql]) =>
+        String(sql).includes("from lessons l") &&
+        String(sql).includes("readiness_failure")
+    )?.[0];
+    expect(String(readinessSql)).toContain(
+      "nullif(l.video_external_id, '') is not null"
+    );
+  });
+
+  it("rejects publication when a JMVStream lesson has no persisted duration", async () => {
+    query.mockImplementation((sql: string) => {
+      if (
+        sql.includes("from course_publications") &&
+        sql.includes("for update")
+      ) {
+        return { rows: [{ id: "publication-1" }] };
+      }
+      if (sql.includes("from lessons") && sql.includes("video_provider")) {
+        return {
+          rows: [
+            {
+              id: "lesson-1",
+              lesson_title: "Aula sem duração",
+              module_title: "Módulo 1",
+              readiness_failure: "duration",
+              video_external_id: "video-1",
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+
+    await expect(
+      publishCoursePublication({ actorUserId: "admin-1", courseId: "course-1" })
+    ).rejects.toThrow("Aula sem duração");
+    expect(publishR2Object).not.toHaveBeenCalled();
   });
 
   it("rejects a published schedule that cannot fit an open Course access window", async () => {
@@ -964,6 +1003,9 @@ describe("admin authoring", () => {
 
   it("creates modules as drafts regardless of submitted status", async () => {
     query.mockImplementation((sql: string) => {
+      if (sql.includes("select coalesce(max(sort_order), 0) + 1")) {
+        return { rows: [{ next_sort_order: 3 }] };
+      }
       if (sql.includes("insert into modules")) {
         return { rows: [{ id: "module-1" }] };
       }
@@ -974,7 +1016,7 @@ describe("admin authoring", () => {
     formData.set("courseId", "course-1");
     formData.set("title", "Modulo novo");
     formData.set("description", "Descricao");
-    formData.set("sortOrder", "1");
+    formData.set("sortOrder", "999");
     formData.set("status", "active");
     formData.set("releaseMode", "immediate");
     formData.set("releaseDelayDays", "residual invalid value");
@@ -988,7 +1030,7 @@ describe("admin authoring", () => {
         "course-publication-draft",
         "Modulo novo",
         "Descricao",
-        1,
+        3,
         "draft",
         0,
       ]
@@ -999,11 +1041,10 @@ describe("admin authoring", () => {
       )?.[0]
     );
     expect(insertSql).toContain("release_delay_days");
-    expect(insertSql).toContain(
-      "on conflict (course_publication_id, sort_order)"
-    );
-    expect(insertSql).toContain(
-      "release_delay_days = excluded.release_delay_days"
+    expect(insertSql).not.toContain("on conflict");
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("select coalesce(max(sort_order), 0) + 1"),
+      ["course-publication-draft"]
     );
     expect(recalculateCourseWorkloadHoursWithClient).toHaveBeenCalledWith(
       expect.anything(),
@@ -1016,6 +1057,9 @@ describe("admin authoring", () => {
     MAX_RELEASE_DELAY_DAYS,
   ])("accepts a delayed module release of %i days", async (releaseDelayDays) => {
     query.mockImplementation((sql: string) => {
+      if (sql.includes("select coalesce(max(sort_order), 0) + 1")) {
+        return { rows: [{ next_sort_order: 1 }] };
+      }
       if (sql.includes("insert into modules")) {
         return { rows: [{ id: "module-1" }] };
       }
@@ -1452,6 +1496,77 @@ describe("admin authoring", () => {
     );
   });
 
+  it("saves a cloned lesson while keeping a resource from the previous publication", async () => {
+    const inheritedContent = {
+      document: textDocument,
+      resources: [
+        {
+          contentType: "application/pdf",
+          fileName: "shared.pdf",
+          id: "resource-0",
+          key: "lessons/lesson-old/resources/shared.pdf",
+          label: "Shared",
+          sizeBytes: 100,
+          storage: "r2",
+        },
+      ],
+      type: "text",
+    };
+    query.mockImplementation((sql: string) => {
+      if (sql.includes("source_lesson.content_json")) {
+        return { rows: [{ content_json: inheritedContent }] };
+      }
+      if (sql.includes("select content_json from lessons")) {
+        return { rows: [{ content_json: inheritedContent }] };
+      }
+      if (sql.includes("select video_embed_url")) {
+        return { rows: [] };
+      }
+      if (sql.includes("select m.course_id")) {
+        return { rows: [{ course_id: "course-1" }] };
+      }
+
+      return versioningQueryResult(sql) ?? { rows: [] };
+    });
+    const formData = new FormData();
+    formData.set("lessonId", "lesson-new");
+    formData.set("moduleId", "module-1");
+    formData.set("title", "Aula clonada atualizada");
+    formData.set("description", "Descricao");
+    formData.set("textDocument", JSON.stringify(textDocument));
+    formData.set("sortOrder", "2");
+    formData.set("status", "draft");
+    formData.set("isRequired", "false");
+    formData.set("resourceStorage[]", "r2");
+    formData.set("resourceId[]", "resource-0");
+    formData.set("resourceLabel[]", "Shared");
+    formData.set("resourceKey[]", "lessons/lesson-old/resources/shared.pdf");
+    formData.set("resourceFileName[]", "shared.pdf");
+    formData.set("resourceContentType[]", "application/pdf");
+    formData.set("resourceSizeBytes[]", "100");
+
+    await expect(
+      saveLesson({ actorUserId: "admin-1", formData })
+    ).resolves.toEqual({ courseId: "course-1", lessonId: "lesson-new" });
+
+    const updateCall = query.mock.calls.find(([sql]) =>
+      String(sql).includes("update lessons")
+    );
+    expect(JSON.parse(String(updateCall?.[1]?.[8]))).toMatchObject({
+      resources: [
+        expect.objectContaining({
+          key: "lessons/lesson-old/resources/shared.pdf",
+        }),
+      ],
+    });
+    expect(getLessonResourceUpload).not.toHaveBeenCalled();
+    expect(confirmLessonResourceUpload).toHaveBeenCalledWith({
+      contentType: "application/pdf",
+      key: "lessons/lesson-old/resources/shared.pdf",
+      sizeBytes: 100,
+    });
+  });
+
   it("does not delete an R2 resource still referenced by a published course version", async () => {
     const previousContent = {
       document: textDocument,
@@ -1482,7 +1597,9 @@ describe("admin authoring", () => {
       if (sql.includes("select content_json from lessons")) {
         return { rows: [{ content_json: previousContent }] };
       }
-      if (sql.includes("published_publication.status = 'published'")) {
+      if (
+        sql.includes("published_publication.status in ('published', 'retired')")
+      ) {
         return { rows: [{ content_json: previousContent }] };
       }
       if (sql.includes("select m.course_id")) {

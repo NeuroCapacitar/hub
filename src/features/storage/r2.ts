@@ -10,6 +10,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { buildAuthMediaObjectKey } from "@/features/auth-media/contract";
 import type { CourseCoverImage } from "@/features/storage/course-cover";
 import type { CourseCoverFile } from "@/features/storage/course-cover-upload";
 import type {
@@ -565,6 +566,73 @@ export const getPublicMediaUrl = (key: string): string => {
   });
 };
 
+export interface R2ObjectSummary {
+  key: string;
+  lastModified: Date;
+}
+
+const listR2Objects = async ({
+  bucketName,
+  config,
+  logicalPrefix,
+}: {
+  bucketName: string;
+  config: R2Config;
+  logicalPrefix: string;
+}): Promise<R2ObjectSummary[]> => {
+  const objects: R2ObjectSummary[] = [];
+  const client = getR2Client(config);
+  let continuationToken: string | undefined;
+
+  do {
+    const page = await client.send(
+      new ListObjectsV2Command({
+        Bucket: bucketName,
+        ContinuationToken: continuationToken,
+        Prefix: config.namespace.toPhysicalPrefix(logicalPrefix),
+      })
+    );
+
+    for (const object of page.Contents ?? []) {
+      if (!(object.Key && object.LastModified)) {
+        continue;
+      }
+      objects.push({
+        key: config.namespace.toLogicalKey(object.Key),
+        lastModified: object.LastModified,
+      });
+    }
+
+    continuationToken = page.IsTruncated
+      ? page.NextContinuationToken
+      : undefined;
+  } while (continuationToken);
+
+  return objects;
+};
+
+export const listPrivateR2Objects = async (
+  logicalPrefix: string
+): Promise<R2ObjectSummary[]> => {
+  const config = getR2Config();
+  return await listR2Objects({
+    bucketName: config.bucketName,
+    config,
+    logicalPrefix,
+  });
+};
+
+export const listPublicR2Objects = async (
+  logicalPrefix: string
+): Promise<R2ObjectSummary[]> => {
+  const config = getPublicR2Config();
+  return await listR2Objects({
+    bucketName: config.publicBucketName,
+    config,
+    logicalPrefix,
+  });
+};
+
 export const checkR2ObjectStorage = async (): Promise<void> => {
   const config = getR2Config();
   const client = getR2Client(config);
@@ -776,6 +844,36 @@ export const uploadDashboardBannerFile = async ({
       Body: Buffer.from(buffer),
       Bucket: config.bucketName,
       ContentType: file.type,
+      Key: config.namespace.toPhysicalKey(key),
+    })
+  );
+
+  return { blurDataUrl, key };
+};
+
+export const uploadAuthMediaFile = async ({
+  file,
+  slideId,
+}: {
+  file: File;
+  slideId: string;
+}): Promise<{ blurDataUrl: string; key: string }> => {
+  const { createAuthMediaBlurDataUrl, validateAuthMediaImageFile } =
+    await import("@/features/storage/auth-media-image");
+  const key = buildAuthMediaObjectKey(slideId, randomUUID());
+  await validateAuthMediaImageFile(file);
+  const [blurDataUrl, buffer] = await Promise.all([
+    createAuthMediaBlurDataUrl(file),
+    file.arrayBuffer(),
+  ]);
+  const config = getR2Config();
+
+  await getR2Client(config).send(
+    new PutObjectCommand({
+      Body: Buffer.from(buffer),
+      Bucket: config.bucketName,
+      CacheControl: "public, max-age=31536000, immutable",
+      ContentType: "image/webp",
       Key: config.namespace.toPhysicalKey(key),
     })
   );

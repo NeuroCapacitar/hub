@@ -561,6 +561,13 @@
       "when": 1789228933506,
       "tag": "0079_protect_lesson_module_publication_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1789374578831,
+      "tag": "0080_auth_media_slides",
+      "breakpoints": true
     }
   ]
 }

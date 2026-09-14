@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/table";
 import { getAdminOperationsData } from "@/features/admin/server";
 import { getWebhookStatusPresentation } from "@/features/admin/status-presentation";
+import { RESEND_WEBHOOKS_PORTAL_URL } from "@/features/email-delivery/portal";
 import { JMVSTREAM_PORTAL_URL } from "@/features/jmvstream/portal";
 import {
   getJmvstreamHealthSummary,
@@ -64,14 +65,14 @@ const ALERT_PRESENTATION: Record<
   email_delivery_dead_letter: {
     description:
       "Eventos de entrega não atualizaram o estado local e exigem investigação.",
-    href: "#outros-sinais",
-    title: "Entrega de e-mail em dead letter",
+    href: "#resend-webhooks",
+    title: "Eventos Resend em dead letter",
   },
   email_delivery_retry_stale: {
     description:
       "Eventos de entrega estão aguardando correlação há mais de uma hora.",
-    href: "#outros-sinais",
-    title: "Entrega de e-mail atrasada",
+    href: "#resend-webhooks",
+    title: "Eventos Resend atrasados",
   },
   outbox_dead_letter: {
     description:
@@ -153,13 +154,13 @@ const getAlertContext = (
   switch (code) {
     case "email_delivery_dead_letter":
       return {
-        count: backlog.emailDelivery.deadLetters,
-        oldestAt: backlog.emailDelivery.oldestRetryAt,
+        count: backlog.emailDelivery.resendWebhook.deadLetters,
+        oldestAt: backlog.emailDelivery.resendWebhook.oldestDeadLetterAt,
       };
     case "email_delivery_retry_stale":
       return {
-        count: backlog.emailDelivery.retrying,
-        oldestAt: backlog.emailDelivery.oldestRetryAt,
+        count: backlog.emailDelivery.resendWebhook.retrying,
+        oldestAt: backlog.emailDelivery.resendWebhook.oldestRetryAt,
       };
     case "outbox_dead_letter":
       return { count: backlog.outbox.deadLetters, oldestAt: null };
@@ -199,14 +200,19 @@ const getAlertContext = (
 
 const getPageHref = ({
   outboxPage,
+  resendPage,
   webhookPage,
   webhookSearch,
 }: {
   outboxPage: number;
+  resendPage: number;
   webhookPage: number;
   webhookSearch: string;
 }): string => {
   const params = new URLSearchParams();
+  if (resendPage > 1) {
+    params.set("resendPage", String(resendPage));
+  }
   if (webhookPage > 1) {
     params.set("webhookPage", String(webhookPage));
   }
@@ -304,9 +310,11 @@ export default async function AdminOperationsPage({
   const webhookSearch = firstSearchParameter(params.webhookQ).trim();
   const webhookPage = parsePage(firstSearchParameter(params.webhookPage));
   const outboxPage = parsePage(firstSearchParameter(params.outboxPage));
+  const resendPage = parsePage(firstSearchParameter(params.resendPage));
   const [data, jmvstreamHealth] = await Promise.all([
     getAdminOperationsData({
       outboxPage,
+      resendPage,
       webhookPage,
       webhookSearch,
     }),
@@ -517,6 +525,9 @@ export default async function AdminOperationsPage({
               {outboxPage > 1 ? (
                 <input name="outboxPage" type="hidden" value={outboxPage} />
               ) : null}
+              {resendPage > 1 ? (
+                <input name="resendPage" type="hidden" value={resendPage} />
+              ) : null}
               <div className="grid min-w-0 flex-1 gap-1.5 sm:max-w-xl">
                 <label className="type-label" htmlFor="webhook-search">
                   Buscar webhook
@@ -536,6 +547,7 @@ export default async function AdminOperationsPage({
                     href={route(
                       getPageHref({
                         outboxPage,
+                        resendPage,
                         webhookPage: 1,
                         webhookSearch: "",
                       })
@@ -658,6 +670,7 @@ export default async function AdminOperationsPage({
                         href={route(
                           getPageHref({
                             outboxPage,
+                            resendPage,
                             webhookPage: data.webhookEvents.page - 1,
                             webhookSearch,
                           })
@@ -677,7 +690,189 @@ export default async function AdminOperationsPage({
                         href={route(
                           getPageHref({
                             outboxPage,
+                            resendPage,
                             webhookPage: data.webhookEvents.page + 1,
+                            webhookSearch,
+                          })
+                        )}
+                      >
+                        Próximos
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button disabled size="sm" variant="outline">
+                      Próximos
+                    </Button>
+                  )}
+                </nav>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="min-w-0" id="resend-webhooks">
+          <CardHeader className="pb-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1">
+                  <CardTitle as="h2" className="text-base">
+                    Eventos Resend em dead letter
+                  </CardTitle>
+                  <FinanceHelp
+                    description="A lista mostra eventos do Resend que não foram reconciliados no estado local do Hub."
+                    details={[
+                      "Detalhes técnicos e replay ficam no Dashboard Resend.",
+                      "Confira a correlação no Hub antes de repetir um evento.",
+                      "Esse estado não é a fila de mensagens da Outbox.",
+                    ]}
+                    title="Eventos Resend em dead letter"
+                  />
+                </div>
+                <CardDescription>
+                  Eventos que exigem investigação entre o Resend e o estado
+                  local do Hub.
+                </CardDescription>
+              </div>
+              <Button asChild size="sm" variant="outline">
+                <Link
+                  href={RESEND_WEBHOOKS_PORTAL_URL}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  Abrir Resend
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border">
+              <Table className="min-w-[980px]">
+                <TableCaption className="sr-only">
+                  Eventos Resend em dead letter
+                </TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Evento</TableHead>
+                    <TableHead>Falha</TableHead>
+                    <TableHead>Recebido</TableHead>
+                    <TableHead>Tentativas</TableHead>
+                    <TableHead className="w-1">Portal</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.resendWebhookDeadLetters.events.length > 0 ? (
+                    data.resendWebhookDeadLetters.events.map((event) => (
+                      <TableRow key={event.id}>
+                        <TableRowHeader className="min-w-72">
+                          <span className="font-medium text-sm">
+                            {event.eventType}
+                          </span>
+                          <span className="type-code mt-1 block break-all text-muted-foreground">
+                            Evento: {event.providerEventId}
+                          </span>
+                          <span className="type-code mt-1 block break-all text-muted-foreground">
+                            {event.correlationId
+                              ? `Correlação: ${event.correlationId}`
+                              : "Sem correlação local"}
+                          </span>
+                        </TableRowHeader>
+                        <TableCell className="min-w-48">
+                          <span className="type-code break-words">
+                            {event.lastErrorCode ?? "não informada"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="min-w-48 text-muted-foreground text-xs tabular-nums">
+                          <time dateTime={event.receivedAt.toISOString()}>
+                            {formatDateTime(event.receivedAt)}
+                          </time>
+                          <span className="mt-1 block">
+                            Atualizado: {formatDateTime(event.updatedAt)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground tabular-nums">
+                          {event.attempts}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button asChild size="sm" variant="ghost">
+                            <Link
+                              href={RESEND_WEBHOOKS_PORTAL_URL}
+                              rel="noopener noreferrer"
+                              target="_blank"
+                            >
+                              Resend
+                            </Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell className="h-48 p-0" colSpan={5}>
+                        <Empty className="rounded-none border-0 p-8">
+                          <EmptyHeader>
+                            <EmptyTitle as="h3">
+                              Nenhum evento Resend em dead letter
+                            </EmptyTitle>
+                            <EmptyDescription>
+                              Não há eventos Resend aguardando investigação
+                              local.
+                            </EmptyDescription>
+                          </EmptyHeader>
+                        </Empty>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <Separator className="mt-4" />
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
+              <span
+                aria-live="polite"
+                className="text-muted-foreground text-sm"
+              >
+                {getResultSummary({
+                  count: data.resendWebhookDeadLetters.events.length,
+                  label: "evento Resend em dead letter",
+                  page: data.resendWebhookDeadLetters.page,
+                  pageSize: data.resendWebhookDeadLetters.pageSize,
+                  totalCount: data.resendWebhookDeadLetters.totalCount,
+                })}
+              </span>
+              {data.resendWebhookDeadLetters.page > 1 ||
+              data.resendWebhookDeadLetters.hasNextPage ? (
+                <nav
+                  aria-label="Paginação de eventos Resend"
+                  className="flex gap-2"
+                >
+                  {data.resendWebhookDeadLetters.page > 1 ? (
+                    <Button asChild size="sm" variant="outline">
+                      <Link
+                        href={route(
+                          getPageHref({
+                            outboxPage,
+                            resendPage: data.resendWebhookDeadLetters.page - 1,
+                            webhookPage,
+                            webhookSearch,
+                          })
+                        )}
+                      >
+                        Anteriores
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button disabled size="sm" variant="outline">
+                      Anteriores
+                    </Button>
+                  )}
+                  {data.resendWebhookDeadLetters.hasNextPage ? (
+                    <Button asChild size="sm" variant="outline">
+                      <Link
+                        href={route(
+                          getPageHref({
+                            outboxPage,
+                            resendPage: data.resendWebhookDeadLetters.page + 1,
+                            webhookPage,
                             webhookSearch,
                           })
                         )}
@@ -758,8 +953,12 @@ export default async function AdminOperationsPage({
                         </TableCell>
                         <TableCell className="text-right">
                           <OutboxDeadLetterDialog
+                            canReprocess={message.canReprocess}
                             canRetry={data.canRetryOutbox}
                             message={message}
+                            reprocessBlockedReason={
+                              message.reprocessBlockedReason
+                            }
                           />
                         </TableCell>
                       </TableRow>
@@ -813,6 +1012,7 @@ export default async function AdminOperationsPage({
                         href={route(
                           getPageHref({
                             outboxPage: data.outboxDeadLetters.page - 1,
+                            resendPage,
                             webhookPage,
                             webhookSearch,
                           })
@@ -832,6 +1032,7 @@ export default async function AdminOperationsPage({
                         href={route(
                           getPageHref({
                             outboxPage: data.outboxDeadLetters.page + 1,
+                            resendPage,
                             webhookPage,
                             webhookSearch,
                           })
@@ -892,11 +1093,15 @@ export default async function AdminOperationsPage({
                 <p className="text-muted-foreground">
                   Retry:{" "}
                   <strong className="text-foreground tabular-nums">
-                    {backlog.emailDelivery.retrying.toLocaleString("pt-BR")}
+                    {backlog.emailDelivery.resendWebhook.retrying.toLocaleString(
+                      "pt-BR"
+                    )}
                   </strong>{" "}
                   · Dead letter:{" "}
                   <strong className="text-foreground tabular-nums">
-                    {backlog.emailDelivery.deadLetters.toLocaleString("pt-BR")}
+                    {backlog.emailDelivery.resendWebhook.deadLetters.toLocaleString(
+                      "pt-BR"
+                    )}
                   </strong>
                 </p>
               </CardContent>

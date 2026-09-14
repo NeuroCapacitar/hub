@@ -176,10 +176,11 @@ describe("certificate lifecycle reasons", () => {
             {
               background_key: "templates/background.webp",
               completed_at: completedAt,
-              course_title: "Curso",
+              course_title: "Curso atual",
               issuer_cnpj: "00.000.000/0001-00",
               issuer_display_name: "Emissora",
               issuer_legal_name: "Emissora LTDA",
+              publication_course_title: "Curso histórico",
               signature_key: null,
               signer_name: null,
               signer_role: null,
@@ -223,6 +224,7 @@ describe("certificate lifecycle reasons", () => {
 
     expect(values?.[3]).toMatch(CERTIFICATE_CODE_PATTERN);
     expect(values?.[2]).toBe("publication-origin");
+    expect(values?.[5]).toBe("Curso atual");
     expect(values?.[6]).toBe(24);
     expect(snapshot.completion.completedAt).toBe(completedAt.toISOString());
     expect(snapshot.course.workloadHours).toBe(24);

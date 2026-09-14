@@ -11,6 +11,10 @@ import {
 } from "@/features/certificates/server";
 import { CONTENT_RELEASE_NEXT_MODULE_LATERAL_SQL } from "@/features/courses/content-release-sql";
 import type { ContentReleaseMode } from "@/features/courses/module-content-release";
+import {
+  listResendWebhookDeadLetters,
+  type ResendWebhookDeadLetterPage,
+} from "@/features/email-delivery/admin";
 import { getJmvstreamAssetsForLesson } from "@/features/jmvstream/server";
 import {
   getOperationalBacklogSnapshot,
@@ -2711,6 +2715,7 @@ const readAuditLogs = async ({
           a.target_type,
           a.target_id,
           case a.target_type
+            when 'auth_media_slide' then 'Mídia da tela de acesso'
             when 'banner' then (select button_text from dashboard_banners where id::text = a.target_id)
             when 'course' then (select title from courses where id::text = a.target_id)
             when 'course_publication' then (
@@ -2848,6 +2853,7 @@ const readAuditLogs = async ({
             a.target_type,
             a.target_id,
             case a.target_type
+              when 'auth_media_slide' then 'Mídia da tela de acesso'
               when 'banner' then (select button_text from dashboard_banners where id::text = a.target_id)
               when 'course' then (select title from courses where id::text = a.target_id)
               when 'course_publication' then (
@@ -3445,10 +3451,12 @@ export const getAdminWebhookEvents = async (
 
 export const getAdminOperationsData = async ({
   outboxPage = 1,
+  resendPage = 1,
   webhookPage = 1,
   webhookSearch = "",
 }: {
   outboxPage?: number;
+  resendPage?: number;
   webhookPage?: number;
   webhookSearch?: string;
 } = {}): Promise<{
@@ -3456,21 +3464,28 @@ export const getAdminOperationsData = async ({
   canRetryWebhook: boolean;
   operationalBacklog: OperationalBacklogSnapshot;
   outboxDeadLetters: OutboxDeadLetterPage;
+  resendWebhookDeadLetters: ResendWebhookDeadLetterPage;
   webhookEvents: AdminWebhookEventPage;
 }> => {
   const session = await requirePermission("viewGlobalAudit");
-  const [operationalBacklog, outboxDeadLetters, webhookEvents] =
-    await Promise.all([
-      getOperationalBacklogSnapshot(),
-      listOutboxDeadLetters({ page: outboxPage }),
-      readAdminWebhookEvents({ page: webhookPage, search: webhookSearch }),
-    ]);
+  const [
+    operationalBacklog,
+    outboxDeadLetters,
+    resendWebhookDeadLetters,
+    webhookEvents,
+  ] = await Promise.all([
+    getOperationalBacklogSnapshot(),
+    listOutboxDeadLetters({ page: outboxPage }),
+    listResendWebhookDeadLetters({ page: resendPage }),
+    readAdminWebhookEvents({ page: webhookPage, search: webhookSearch }),
+  ]);
 
   return {
     canRetryOutbox: canPerform(session.role, "retryOutbox"),
     canRetryWebhook: canPerform(session.role, "retryWebhook"),
     operationalBacklog,
     outboxDeadLetters,
+    resendWebhookDeadLetters,
     webhookEvents,
   };
 };

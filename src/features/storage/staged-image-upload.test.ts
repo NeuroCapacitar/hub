@@ -5,6 +5,25 @@ import {
 } from "./staged-image-upload";
 
 describe("staged admin image upload", () => {
+  it("creates a scoped key for authentication media", () => {
+    expect(
+      buildStagedAdminImageUpload({
+        actorUserId: "user-1",
+        aggregateId: "c989d54d-d13f-46a1-89ed-2069d7c1c45b",
+        contentType: "image/webp",
+        fileName: "acesso.webp",
+        nonce: "upload-1",
+        purpose: "auth-media",
+        sizeBytes: 1024,
+      })
+    ).toEqual(
+      expect.objectContaining({
+        key: "uploads/admin-images/user-1/auth-media-slide/c989d54d-d13f-46a1-89ed-2069d7c1c45b/auth-media/upload-1-acesso.webp",
+        purpose: "auth-media",
+      })
+    );
+  });
+
   it("creates an actor-scoped private key for an allowed image", () => {
     expect(
       buildStagedAdminImageUpload({

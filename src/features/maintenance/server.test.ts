@@ -6,6 +6,7 @@ const dependencies = vi.hoisted(() => ({
     events: 0,
     messages: 0,
   }),
+  reconcileAuthMediaStorage: vi.fn().mockResolvedValue(0),
   reconcileCertificateTemplateAssets: vi.fn(),
   reconcileRevokedCertificateArtifacts: vi.fn(),
   reconcileStagedAdminImageUploads: vi.fn(),
@@ -24,6 +25,9 @@ vi.mock("@/features/certificates/artifact-reconciliation", () => ({
 vi.mock("@/features/certificates/template-asset-cleanup", () => ({
   reconcileCertificateTemplateAssets:
     dependencies.reconcileCertificateTemplateAssets,
+}));
+vi.mock("@/features/auth-media/storage", () => ({
+  reconcileAuthMediaStorage: dependencies.reconcileAuthMediaStorage,
 }));
 vi.mock("@/features/storage/staged-image-reconciliation", () => ({
   reconcileStagedAdminImageUploads:
@@ -92,6 +96,7 @@ describe("runMaintenance", () => {
     dependencies.getPool.mockReturnValue({ query });
 
     await expect(runMaintenance()).resolves.toEqual({
+      authMediaObjectsReconciled: 0,
       certificateTemplateAssetsRemoved: 9,
       checkoutReservationsRemoved: 10,
       deadlineReached: false,
@@ -180,6 +185,7 @@ describe("runMaintenance", () => {
       expect.stringContaining("maintenance.executed"),
       [
         JSON.stringify({
+          authMediaObjectsReconciled: 0,
           certificateTemplateAssetsRemoved: 9,
           checkoutReservationsRemoved: 10,
           deadlineReached: false,

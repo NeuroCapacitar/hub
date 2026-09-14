@@ -1574,10 +1574,13 @@ describe("admin read projections", () => {
               accepted: 0,
               bounced: 0,
               complained: 0,
-              deadLetters: 0,
               delivered: 0,
-              oldestRetryAt: null,
-              retrying: 0,
+              resendWebhook: {
+                deadLetters: 0,
+                oldestDeadLetterAt: null,
+                oldestRetryAt: null,
+                retrying: 0,
+              },
             },
             outbox: {
               deadLetters: 0,

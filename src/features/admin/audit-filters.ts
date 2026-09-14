@@ -9,6 +9,7 @@ export type AdminAuditSource = (typeof ADMIN_AUDIT_SOURCES)[number];
 
 export const ADMIN_AUDIT_TARGET_TYPES = [
   "all",
+  "auth_media_slide",
   "banner",
   "certificate",
   "certificate_template",
@@ -58,6 +59,7 @@ export const ADMIN_AUDIT_TARGET_LABELS: Record<
   Exclude<AdminAuditTargetType, "all">,
   string
 > = {
+  auth_media_slide: "Mídia da tela de acesso",
   banner: "Banner",
   certificate: "Certificado",
   certificate_template: "Modelo de Certificado",

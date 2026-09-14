@@ -285,6 +285,9 @@ function LessonMainContent({
       <div className="flex flex-col">
         <LessonVideoPlayer
           durationSeconds={data.lesson.durationSeconds}
+          initialLinearProgressBlocked={
+            data.lesson.watchProgress?.isLinearProgressBlocked ?? false
+          }
           initialPositionSeconds={
             data.lesson.watchProgress?.resumePositionSeconds ?? 0
           }
@@ -292,6 +295,7 @@ function LessonMainContent({
           isPreview={Boolean(previewMode)}
           lessonId={data.lesson.id}
           title={data.lesson.title}
+          videoDurationSeconds={data.lesson.videoDurationSeconds}
           videoEmbedUrl={lessonView.videoEmbedUrl}
           videoProvider={data.lesson.videoProvider}
         >

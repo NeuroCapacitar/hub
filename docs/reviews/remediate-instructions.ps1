@@ -165,7 +165,7 @@ foreach ($entry in Import-Csv -LiteralPath $ledgerPath) {
         }
         if ($name -eq 'better-ui') {
             $updated = $updated.Replace('Use exactly these values:', 'When consistent with the existing motion system, an example starting point is:')
-            $updated = $updated.Replace('bounce must always be `0`.', 'use the project''s spring settings and reduced-motion behavior.')
+            $updated = $updated.Replace('bounce must always be `0`.', 'use the project''s spring settings and existing motion behavior.')
             $updated = $updated.Replace('Always use `0.96`. Never use a value smaller than `0.95`: anything below feels exaggerated.', 'Treat this value as an example, not a constraint. Match the established interaction and accessibility requirements; avoid adding motion where it does not help.')
             $updated = [regex]::Replace($updated, '(?m)^Always present changes as a markdown table[^\r\n]*', 'Report material changes and evidence concisely. Use a Before/After table when comparison helps; short prose or a list is appropriate for a small change.')
             $updated = $updated.Replace('Group all confirmed findings by principle. Use a markdown table with **Severity**, **Location**, **Before**, **After**, and **Why** columns. Never use separate "Before:" / "After:" lines.', 'Group confirmed findings when useful. Include severity, location, evidence and impact; choose a table or concise prose based on the size of the review.')

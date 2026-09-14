@@ -44,10 +44,13 @@ devem ser copiadas:
   projeto;
 - uso de um cabeçalho de relatório no lugar da navegação autenticada do Hub.
 
-Há duas decisões do Hub que prevalecem sobre a referência externa:
+Há decisões do Hub que prevalecem sobre a referência externa:
 
 - o produto é dark-only neste escopo e não possui seletor visual de tema;
-- não adicionar `prefers-reduced-motion` neste projeto.
+- o autoplay da mídia da tela de acesso é autorizado com controle explícito de
+  pausa, retomada e interação equivalente por teclado e toque;
+- a navegação da mídia da tela de acesso usa indicadores compactos centralizados,
+  com o estado ativo alongado, sem setas laterais;
 
 As capas de Cursos e a mídia visual existente de Aulas são conteúdo visual do
 produto. Seus gradientes, blur, escala e sombras existentes podem permanecer;
@@ -72,7 +75,7 @@ contrato correspondente, nunca por uma troca visual automática.
 O favicon file-based da aplicação é
 [src/app/icon.svg](src/app/icon.svg). Ele é uma composição técnica do fundo
 escuro do Hub com o mark aprovado atualmente disponível em
-`public/protear/logo-negativo.svg`; não é autorização para criar uma nova logo
+`public/brand/logo-negativo.svg`; não é autorização para criar uma nova logo
 ou para usar a identidade de um Curso como nome global. Se surgir um mark
 dedicado da NeuroCapacitar, substitua somente a composição do ícone e preserve
 o contrato `app/icon.svg` do Next.js.
@@ -540,6 +543,7 @@ no scroll.
 
 - usar movimento somente para mudança de estado, foco, hover, continuidade ou
   confirmação da ação;
+- não consultar preferências de movimento do sistema para alterar a animação;
 - nunca mover imagem de capa ou mídia de Aula no hover como requisito de
   entendimento;
 - transicionar propriedades específicas, como fazem os primitives existentes;
@@ -547,12 +551,12 @@ no scroll.
 - `animate-spin` pode indicar carregamento e `animate-pulse` pode indicar
   skeleton, desde que o texto de estado também exista quando necessário;
 - não adicionar uma biblioteca de animação para microinteração;
-- não adicionar `prefers-reduced-motion` neste projeto.
 
-O carrossel de banners do dashboard mantém o autoplay existente de seis
-segundos nesta linha de trabalho por decisão explícita de escopo. Não adicionar
-novos carrosséis com autoplay sem uma decisão específica de produto e sem
-definir a interação correspondente.
+O carrossel de banners do Dashboard mantém o autoplay existente de seis
+segundos. A mídia da tela de acesso também possui autorização explícita para
+autoplay de seis segundos, com pausa em hover e foco, controle acessível de
+pausa/retomada e navegação manual por indicadores. Outros carrosséis continuam
+exigindo decisão específica de produto e interação correspondente.
 
 O `Button`, `Input`, `Textarea`, `Select` e `Progress` atuais já possuem
 transições limitadas às propriedades relevantes. Preserve esses contratos e não
@@ -579,6 +583,9 @@ os substitua por uma transição ampla.
   espaço;
 - capas e mídia visual de conteúdo podem usar a exceção registrada neste
   documento;
+- a mídia da tela de acesso é decorativa, usa moldura própria, aceita crop sem
+  deformação e mantém fallback local quando não há slide ativo ou a mídia
+  publicada falha;
 - Hugeicons é o único kit de ícones instalado e deve manter peso e escala
   coerentes;
 - ícones ao lado de texto são auxiliares e ficam ocultos da árvore acessível;
@@ -623,8 +630,8 @@ Antes de considerar uma interface pronta, confirme:
 - copy visível está em português, com termos do glossário e acentuação correta;
 - não há cor, ícone ou movimento funcionando como único indicador;
 - efeitos de capas e mídia de Aulas permanecem somente onde a exceção permite;
-- não há `prefers-reduced-motion`, `transition-all`, gradiente decorativo novo
-  ou CSS de marca Vercel;
+- não há `transition-all`, gradiente decorativo novo ou CSS de marca
+  Vercel;
 - a ordem de leitura funciona sem estilos e a navegação por teclado mantém o
   foco visível.
 

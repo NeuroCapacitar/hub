@@ -32,6 +32,11 @@ export interface LessonCommentView {
   updatedAt: Date;
 }
 
+export interface LessonDiscussionIdentity {
+  courseId: string;
+  curriculumKey: string;
+}
+
 export const normalizeCommentBody = (value: string): string => {
   const body = value.trim();
 
@@ -49,13 +54,23 @@ export const normalizeCommentBody = (value: string): string => {
 };
 
 export const validateReplyTarget = ({
+  discussion,
   lessonId,
   parent,
 }: {
+  discussion?: LessonDiscussionIdentity;
   lessonId: string;
-  parent: Pick<LessonCommentRecord, "id" | "lessonId" | "parentId">;
+  parent: Pick<LessonCommentRecord, "id" | "lessonId" | "parentId"> & {
+    discussion?: LessonDiscussionIdentity;
+  };
 }): void => {
-  if (parent.lessonId !== lessonId) {
+  const isSameDiscussion =
+    discussion &&
+    parent.discussion &&
+    discussion.courseId === parent.discussion.courseId &&
+    discussion.curriculumKey === parent.discussion.curriculumKey;
+
+  if (parent.lessonId !== lessonId && !isSameDiscussion) {
     throw new Error("Comentario de origem invalido.");
   }
 

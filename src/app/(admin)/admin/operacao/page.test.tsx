@@ -33,10 +33,13 @@ const emptyBacklog = {
     accepted: 5,
     bounced: 0,
     complained: 0,
-    deadLetters: 0,
     delivered: 4,
-    oldestRetryAt: null,
-    retrying: 0,
+    resendWebhook: {
+      deadLetters: 0,
+      oldestDeadLetterAt: null,
+      oldestRetryAt: null,
+      retrying: 0,
+    },
   },
   outbox: {
     deadLetters: 0,
@@ -99,6 +102,13 @@ describe("AdminOperationsPage", () => {
         pageSize: 20,
         totalCount: 1,
       },
+      resendWebhookDeadLetters: {
+        events: [],
+        hasNextPage: false,
+        page: 1,
+        pageSize: 20,
+        totalCount: 0,
+      },
       webhookEvents: {
         events: [],
         hasNextPage: false,
@@ -127,5 +137,81 @@ describe("AdminOperationsPage", () => {
     expect(markup).toContain("Abrir cursos");
     expect(markup).toContain("Abrir Financeiro");
     expect(markup).not.toContain("Alterações administrativas recentes");
+  });
+
+  it("shows the Resend dead-letter queue separately from the Outbox", async () => {
+    dependencies.getJmvstreamHealthSummary.mockResolvedValue({
+      auth: "ok",
+      failedDeletes: 0,
+      failedUploads: 0,
+      folderCount: 0,
+      message: "JMVStream conectada e galerias acessíveis.",
+      orphanFolders: 0,
+      pendingDeletes: 0,
+      processingUploads: 0,
+    });
+    dependencies.getAdminOperationsData.mockResolvedValue({
+      canRetryOutbox: true,
+      canRetryWebhook: true,
+      operationalBacklog: {
+        ...emptyBacklog,
+        alerts: [{ code: "email_delivery_dead_letter", severity: "high" }],
+        emailDelivery: {
+          ...emptyBacklog.emailDelivery,
+          resendWebhook: {
+            ...emptyBacklog.emailDelivery.resendWebhook,
+            deadLetters: 1,
+            oldestDeadLetterAt: new Date("2026-09-01T12:00:00Z"),
+          },
+        },
+      },
+      outboxDeadLetters: {
+        hasNextPage: false,
+        messages: [],
+        page: 1,
+        pageSize: 20,
+        totalCount: 0,
+      },
+      resendWebhookDeadLetters: {
+        events: [
+          {
+            attempts: 12,
+            correlationId: "0198d6f4-c2a5-7000-8000-000000000001",
+            eventType: "email.delivered",
+            id: "0198d6f4-c2a5-7000-8000-000000000002",
+            lastErrorCode: "email_message_unresolved",
+            occurredAt: new Date("2026-09-01T12:00:00Z"),
+            providerEventId: "svix-event-1",
+            providerMessageId: "resend-message-1",
+            receivedAt: new Date("2026-09-01T12:00:01Z"),
+            updatedAt: new Date("2026-09-02T12:00:00Z"),
+          },
+        ],
+        hasNextPage: false,
+        page: 1,
+        pageSize: 20,
+        totalCount: 1,
+      },
+      webhookEvents: {
+        events: [],
+        hasNextPage: false,
+        page: 1,
+        pageSize: 20,
+        search: "",
+        totalCount: 0,
+      },
+    });
+
+    const markup = renderToStaticMarkup(
+      await AdminOperationsPage({
+        searchParams: Promise.resolve({}),
+      })
+    );
+
+    expect(markup).toContain("Eventos Resend em dead letter");
+    expect(markup).toContain("email_message_unresolved");
+    expect(markup).toContain('href="#resend-webhooks"');
+    expect(markup).toContain('href="https://resend.com/webhooks"');
+    expect(markup).not.toContain("Mensagem em dead letter");
   });
 });

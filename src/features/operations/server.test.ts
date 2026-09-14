@@ -20,6 +20,9 @@ describe("operational backlog snapshot", () => {
             email_complained: "1",
             email_delivered: "6",
             email_webhook_dead_letters: "2",
+            email_webhook_oldest_dead_letter_at: new Date(
+              "2026-07-20T09:00:00.000Z"
+            ),
             email_webhook_oldest_retry_at: new Date("2026-07-21T10:00:00.000Z"),
             email_webhook_retrying: "3",
             oldest_outbox_at: new Date("2026-07-20T10:00:00.000Z"),
@@ -51,7 +54,7 @@ describe("operational backlog snapshot", () => {
       alerts: [
         { code: "outbox_dead_letter", severity: "critical" },
         { code: "outbox_pending_stale", severity: "critical" },
-        { code: "email_delivery_dead_letter", severity: "critical" },
+        { code: "email_delivery_dead_letter", severity: "high" },
         { code: "email_delivery_retry_stale", severity: "high" },
         { code: "webhook_ready_stale", severity: "high" },
         { code: "webhook_retry_stale", severity: "high" },
@@ -67,10 +70,13 @@ describe("operational backlog snapshot", () => {
         accepted: 7,
         bounced: 4,
         complained: 1,
-        deadLetters: 2,
         delivered: 6,
-        oldestRetryAt: new Date("2026-07-21T10:00:00.000Z"),
-        retrying: 3,
+        resendWebhook: {
+          deadLetters: 2,
+          oldestDeadLetterAt: new Date("2026-07-20T09:00:00.000Z"),
+          oldestRetryAt: new Date("2026-07-21T10:00:00.000Z"),
+          retrying: 3,
+        },
       },
       videos: {
         oldestPendingAt: new Date("2026-07-20T11:00:00.000Z"),
@@ -103,6 +109,36 @@ describe("operational backlog snapshot", () => {
     expect(snapshot.alerts).toEqual([
       { code: "outbox_dead_letter", severity: "critical" },
     ]);
+  });
+
+  it("separates a Resend dead letter from the Outbox queue", async () => {
+    const now = new Date("2026-07-21T12:00:00.000Z");
+    const pool = dependencies.getPool();
+    pool.query.mockResolvedValueOnce({
+      rows: [
+        {
+          dead_letters: "0",
+          email_webhook_dead_letters: "1",
+          email_webhook_oldest_dead_letter_at: new Date(
+            "2026-07-20T12:00:00.000Z"
+          ),
+          outbox_ready: "0",
+        },
+      ],
+    });
+
+    await expect(
+      getOperationalBacklogSnapshot({ now: () => now })
+    ).resolves.toMatchObject({
+      alerts: [{ code: "email_delivery_dead_letter", severity: "high" }],
+      emailDelivery: {
+        resendWebhook: {
+          deadLetters: 1,
+          oldestDeadLetterAt: new Date("2026-07-20T12:00:00.000Z"),
+        },
+      },
+      outbox: { deadLetters: 0 },
+    });
   });
 
   it.each([
