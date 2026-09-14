@@ -72,8 +72,8 @@ describe("publication continuity PostgreSQL behavior", () => {
       `insert into modules (
          id, course_id, course_publication_id, title, sort_order, status
        ) values
-         ($1, $3, $5, 'First module', 1, 'active'),
-         ($2, $3, $6, 'Second module', 1, 'active')`,
+         ($1, $3, $4, 'First module', 1, 'active'),
+         ($2, $3, $5, 'Second module', 1, 'active')`,
       [
         firstModuleId,
         secondModuleId,
