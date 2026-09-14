@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 const dependencies = vi.hoisted(() => ({
+  getAdminAuthMediaData: vi.fn(),
   getAdminBannersData: vi.fn(),
   getAdminFaqData: vi.fn(),
   getAdminSettingsData: vi.fn(),
@@ -19,11 +20,17 @@ vi.mock("@/features/admin/server", () => ({
   getAdminFaqData: dependencies.getAdminFaqData,
   getAdminSettingsData: dependencies.getAdminSettingsData,
 }));
+vi.mock("@/features/auth-media/server", () => ({
+  getAdminAuthMediaData: dependencies.getAdminAuthMediaData,
+}));
 vi.mock("@/lib/auth-permissions", () => ({
   requirePermission: dependencies.requirePermission,
 }));
 vi.mock("./banners/banner-gallery", () => ({
   BannerGallery: () => <div>Banners renderizados</div>,
+}));
+vi.mock("./auth-media/auth-media-gallery", () => ({
+  AuthMediaGallery: () => <div>Mídias de acesso renderizadas</div>,
 }));
 vi.mock("./faq/faq-dialogs", () => ({
   FaqCreateDialog: () => <button type="button">Nova pergunta</button>,
@@ -52,6 +59,7 @@ describe("AdminSettingsPage", () => {
       },
     });
     dependencies.getAdminBannersData.mockResolvedValue({ banners: [] });
+    dependencies.getAdminAuthMediaData.mockResolvedValue({ slides: [] });
     dependencies.getAdminFaqData.mockResolvedValue({ faqs: [] });
   });
 
@@ -65,6 +73,7 @@ describe("AdminSettingsPage", () => {
     expect(markup).toContain("Ver histórico");
     expect(markup).toContain("Conteúdo editorial");
     expect(markup).toContain("Banners renderizados");
+    expect(markup).toContain("Mídias de acesso renderizadas");
     expect(markup).toContain("FAQs renderizadas");
     expect(markup).not.toContain("JMVStream");
     expect(dependencies.requirePermission).toHaveBeenCalledWith(

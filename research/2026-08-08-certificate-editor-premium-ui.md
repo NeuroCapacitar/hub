@@ -270,7 +270,7 @@ Não persistir um `groupId` só para organizar o inspector. Grupos de Figma/Slid
 - foco visível na linha, overlay e inputs; `aria-live` para upload/salvamento;
 - botão de salvar preserva label durante loading (`Salvando…`, `Publicando…`), sem trocar apenas por ícone;
 - aviso de alterações não salvas antes de sair, já existente no formulário;
-- `prefers-reduced-motion` para abertura de Sheet/Dialog e feedback de arraste;
+- transições existentes para abertura de Sheet/Dialog e feedback de arraste;
 - testes de teclado para lista, switch, inputs, slider, Escape, undo e retorno de foco;
 - teste de zoom e viewport estreita sem dois scroll containers concorrentes.
 

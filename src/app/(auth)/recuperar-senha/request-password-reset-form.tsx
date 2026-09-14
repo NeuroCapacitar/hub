@@ -82,11 +82,12 @@ export function RequestPasswordResetForm(): React.JSX.Element {
   return (
     <form aria-busy={isSubmitting} onSubmit={handleSubmit}>
       <fieldset className="contents" disabled={isSubmitting}>
-        <FieldGroup>
+        <FieldGroup className="gap-5">
           <Field>
             <FieldLabel htmlFor="email">E-mail</FieldLabel>
             <Input
               autoComplete="email"
+              className="h-11"
               id="email"
               name="email"
               required

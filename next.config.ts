@@ -84,6 +84,7 @@ const nextConfig: NextConfig = {
   ...(allowedDevOrigins?.length ? { allowedDevOrigins } : {}),
   ...(deploymentId ? { deploymentId } : {}),
   images: {
+    qualities: [75, 90],
     remotePatterns: [
       {
         hostname: "cdn.vod.br1.jmvstream.com",

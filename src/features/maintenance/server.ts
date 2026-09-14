@@ -1,4 +1,5 @@
 import { getPool } from "@/db";
+import { reconcileAuthMediaStorage } from "@/features/auth-media/storage";
 import { reconcileRevokedCertificateArtifacts } from "@/features/certificates/artifact-reconciliation";
 import { reconcileCertificateTemplateAssets } from "@/features/certificates/template-asset-cleanup";
 import { pruneEmailDeliveryRecords } from "@/features/email-delivery/server";
@@ -12,6 +13,7 @@ import {
 } from "@/lib/timezone";
 
 interface MaintenanceResult {
+  authMediaObjectsReconciled: number;
   certificateTemplateAssetsRemoved: number;
   checkoutReservationsRemoved: number;
   deadlineReached: boolean;
@@ -30,6 +32,7 @@ interface MaintenanceResult {
 }
 
 const emptyMaintenanceResult = (): MaintenanceResult => ({
+  authMediaObjectsReconciled: 0,
   certificateTemplateAssetsRemoved: 0,
   checkoutReservationsRemoved: 0,
   deadlineReached: false,
@@ -213,6 +216,13 @@ export const runMaintenance = async ({
     return result;
   }
   result.stagedAdminImagesRemoved = await reconcileStagedAdminImageUploads({
+    shouldContinue: canContinue,
+  });
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  result.authMediaObjectsReconciled = await reconcileAuthMediaStorage({
     shouldContinue: canContinue,
   });
 

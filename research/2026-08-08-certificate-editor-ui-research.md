@@ -295,7 +295,7 @@ Para a lista de campos:
 - drawer/responsive layout dedicado para mobile;
 - teste com teclado, leitor de tela e touch assistive technology;
 - telemetria de campos alterados, resets e warnings (sem registrar dados pessoais desnecessários);
-- teste de viewport mobile, laptop e ultrawide e revisão de motion com `prefers-reduced-motion`.
+- teste de viewport mobile, laptop e ultrawide e revisão das transições.
 
 ## Critérios de aceite de UX/UI
 

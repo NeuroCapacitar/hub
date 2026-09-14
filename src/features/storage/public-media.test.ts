@@ -21,6 +21,15 @@ describe("public media URLs", () => {
     ).toBe("https://media.protear.com/courses/course-1/cover/upload-card.webp");
   });
 
+  it("allows published authentication media", () => {
+    expect(
+      buildPublicMediaUrl({
+        baseUrl: "https://media.neurocapacitar.com.br",
+        key: "auth-media/slide-1.webp",
+      })
+    ).toBe("https://media.neurocapacitar.com.br/auth-media/slide-1.webp");
+  });
+
   it("rejects keys that cannot be safely exposed from the public bucket", () => {
     expect(() =>
       buildPublicMediaUrl({
