@@ -186,7 +186,7 @@ export default async function AdminCoursesPage({
 
               return (
                 <article
-                  className="group relative flex aspect-[24/25] w-full max-w-[340px] shrink-0 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-colors hover:border-primary/50"
+                  className="group relative flex aspect-[24/25] w-full max-w-[340px] shrink-0 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-colors hover:border-border/80"
                   key={course.id}
                 >
                   <div className="absolute inset-0 z-0">
@@ -202,7 +202,7 @@ export default async function AdminCoursesPage({
                       />
                     ) : (
                       <>
-                        <div className="absolute inset-0 bg-linear-to-br from-card via-card/95 to-primary/20" />
+                        <div className="absolute inset-0 bg-linear-to-br from-card via-card/95 to-secondary/70" />
                         <div className="absolute top-[20%] -right-4 select-none opacity-10 transition-transform duration-500 group-hover:scale-105">
                           <span className="font-black text-[8rem] leading-none tracking-tighter">
                             {getInitials(course.title)}

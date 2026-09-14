@@ -3,10 +3,10 @@
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import { PasswordInput } from "@/components/password-input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import {
   getNewPasswordValidationError,
   PASSWORD_MIN_LENGTH,
@@ -166,24 +166,22 @@ export function ResetPasswordForm({
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="password">Nova senha</FieldLabel>
-            <Input
+            <PasswordInput
               autoComplete="new-password"
               id="password"
               minLength={PASSWORD_MIN_LENGTH}
               name="password"
               required
-              type="password"
             />
           </Field>
           <Field>
             <FieldLabel htmlFor="confirmation">Confirmar senha</FieldLabel>
-            <Input
+            <PasswordInput
               autoComplete="new-password"
               id="confirmation"
               minLength={PASSWORD_MIN_LENGTH}
               name="confirmation"
               required
-              type="password"
             />
           </Field>
         </FieldGroup>

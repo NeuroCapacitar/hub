@@ -21,7 +21,7 @@ export default function RequestPasswordResetPage(): React.JSX.Element {
     <AuthShell>
       <Card className="mx-auto w-full max-w-sm">
         <CardHeader>
-          <CardTitle as="h1" className="type-page-title">
+          <CardTitle as="h1" variant="page">
             Recuperar senha
           </CardTitle>
           <CardDescription>

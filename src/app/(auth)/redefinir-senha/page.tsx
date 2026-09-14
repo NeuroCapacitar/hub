@@ -28,7 +28,7 @@ export default async function ResetPasswordPage({
     <AuthShell>
       <Card className="mx-auto w-full max-w-sm">
         <CardHeader>
-          <CardTitle as="h1" className="type-page-title">
+          <CardTitle as="h1" variant="page">
             Definir nova senha
           </CardTitle>
           <CardDescription>{PASSWORD_MIN_LENGTH_MESSAGE}</CardDescription>

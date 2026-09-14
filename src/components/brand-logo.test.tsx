@@ -7,6 +7,6 @@ describe("BrandLogo", () => {
     const markup = renderToStaticMarkup(<BrandLogo />);
 
     expect(markup).toContain('alt="NeuroCapacitar"');
-    expect(markup).toContain('src="/protear/logo-negativo.svg"');
+    expect(markup).toContain('src="/brand/logo-negativo.svg"');
   });
 });

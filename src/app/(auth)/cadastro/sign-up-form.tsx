@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { PasswordInput } from "@/components/password-input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -106,26 +107,24 @@ export function SignUpForm(): React.JSX.Element {
         </Field>
         <Field>
           <FieldLabel htmlFor="password">Senha</FieldLabel>
-          <Input
+          <PasswordInput
             autoComplete="new-password"
             id="password"
             minLength={PASSWORD_MIN_LENGTH}
             name="password"
             required
-            type="password"
           />
         </Field>
         <Field>
           <FieldLabel htmlFor="passwordConfirmation">
             Confirmar senha
           </FieldLabel>
-          <Input
+          <PasswordInput
             autoComplete="new-password"
             id="passwordConfirmation"
             minLength={PASSWORD_MIN_LENGTH}
             name="passwordConfirmation"
             required
-            type="password"
           />
         </Field>
       </FieldGroup>

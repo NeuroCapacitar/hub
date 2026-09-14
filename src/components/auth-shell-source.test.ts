@@ -26,5 +26,7 @@ describe("authentication routes", () => {
 
     expect(source).toContain('from "@/components/brand-logo"');
     expect(source).toContain("<BrandLogo");
+    expect(source).toContain('from "@/lib/brand"');
+    expect(source).toContain("PLATFORM_LOGIN_IMAGE_SRC");
   });
 });

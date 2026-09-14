@@ -29,7 +29,7 @@ export default async function SignUpPage(): Promise<React.JSX.Element> {
     <AuthShell>
       <Card className="mx-auto w-full max-w-sm bg-card/95">
         <CardHeader>
-          <CardTitle as="h1" className="type-page-title">
+          <CardTitle as="h1" variant="page">
             Crie sua conta
           </CardTitle>
           <CardDescription>
