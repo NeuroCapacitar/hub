@@ -268,7 +268,7 @@ function PanelLayoutInner({
                               src={userImage}
                             />
                           ) : null}
-                          <AvatarFallback className="rounded-full bg-primary text-primary-foreground">
+                          <AvatarFallback className="rounded-full bg-secondary text-secondary-foreground">
                             {initials}
                           </AvatarFallback>
                         </Avatar>
@@ -298,7 +298,7 @@ function PanelLayoutInner({
                                 src={userImage}
                               />
                             ) : null}
-                            <AvatarFallback className="rounded-full bg-primary text-primary-foreground">
+                            <AvatarFallback className="rounded-full bg-secondary text-secondary-foreground">
                               {initials}
                             </AvatarFallback>
                           </Avatar>

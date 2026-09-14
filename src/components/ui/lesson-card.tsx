@@ -79,7 +79,7 @@ export function LessonCard({
           "relative isolate aspect-[16/10] w-full overflow-hidden rounded-lg bg-muted transition-[opacity,filter]",
           "after:pointer-events-none after:absolute after:inset-0 after:z-20 after:rounded-[inherit] after:shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)] dark:after:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]",
           !isLocked &&
-            "after:transition-shadow after:duration-300 group-hover:after:shadow-[inset_0_0_0_2px_var(--primary)]",
+            "after:transition-shadow after:duration-300 group-hover:after:shadow-[inset_0_0_0_2px_var(--progress-active)]",
           isLocked && "opacity-60 grayscale-[50%]"
         )}
       >
@@ -117,7 +117,7 @@ export function LessonCard({
         {status !== "completed" && watchedPercent && watchedPercent > 0 ? (
           <div className="absolute bottom-0 left-0 z-10 h-1.5 w-full bg-background/40 backdrop-blur-sm">
             <div
-              className="h-full bg-primary transition-[width] duration-500 ease-in-out"
+              className="h-full bg-progress-active transition-[width] duration-500 ease-in-out"
               style={{
                 width: `${Math.min(100, Math.max(0, watchedPercent))}%`,
               }}
@@ -128,9 +128,9 @@ export function LessonCard({
         <div className="absolute inset-0 z-10 flex items-center justify-center">
           <div
             className={cn(
-              "flex size-10 items-center justify-center rounded-full bg-primary-foreground/90 text-background shadow-sm backdrop-blur-sm transition-transform duration-300",
+              "flex size-10 items-center justify-center rounded-full bg-foreground/90 text-background shadow-sm backdrop-blur-sm transition-transform duration-300",
               !isLocked && "group-hover:scale-110",
-              isLocked && "bg-primary-foreground/50"
+              isLocked && "bg-foreground/50"
             )}
           >
             <HugeiconsIcon
@@ -192,7 +192,7 @@ function getStatusBadge({
   }
   if (status === "completed") {
     return (
-      <Badge className={className} variant="secondary">
+      <Badge className={className} variant="learning">
         Concluída
       </Badge>
     );

@@ -173,7 +173,6 @@ export function ResetPasswordForm({
               minLength={PASSWORD_MIN_LENGTH}
               name="password"
               required
-              type="password"
             />
           </Field>
           <Field>
@@ -185,7 +184,6 @@ export function ResetPasswordForm({
               minLength={PASSWORD_MIN_LENGTH}
               name="confirmation"
               required
-              type="password"
             />
           </Field>
         </FieldGroup>

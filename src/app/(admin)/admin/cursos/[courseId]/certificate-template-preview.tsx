@@ -428,7 +428,7 @@ export function CertificateTemplatePreview({
             aria-label="Selecionar arte de fundo"
             aria-pressed={backgroundSelected}
             className={cn(
-              "absolute inset-0 z-0 border border-transparent outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+              "absolute inset-0 z-0 border border-transparent outline-none focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 focus-visible:ring-2 focus-visible:ring-background",
               backgroundSelected &&
                 "border-primary/70 ring-2 ring-primary/70 ring-offset-1"
             )}
@@ -503,7 +503,7 @@ export function CertificateTemplatePreview({
               aria-label={`Selecionar ${certificateTemplateFieldLabels[field.field]}`}
               aria-pressed={isSelected}
               className={cn(
-                "absolute cursor-move touch-none select-none rounded-sm border border-transparent bg-transparent p-0 outline-none transition-[box-shadow,border-color] after:pointer-events-none after:absolute after:right-0 after:bottom-0 after:size-2 after:rounded-sm after:bg-primary after:opacity-0 after:transition-opacity focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+                "absolute cursor-move touch-none select-none rounded-sm border border-transparent bg-transparent p-0 outline-none transition-[box-shadow,border-color] after:pointer-events-none after:absolute after:right-0 after:bottom-0 after:size-2 after:rounded-sm after:bg-primary after:opacity-0 after:transition-opacity focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 focus-visible:ring-2 focus-visible:ring-background",
                 isSelected &&
                   "border-primary ring-2 ring-primary ring-offset-1 after:opacity-100",
                 isDragging &&
@@ -670,7 +670,7 @@ export function CertificateTemplatePreview({
       {overflowFieldLabels.length > 0 ? (
         <p
           aria-live="polite"
-          className="pointer-events-none absolute right-2 bottom-2 left-2 rounded-md bg-accent/90 px-2 py-1 text-center font-medium text-accent-foreground text-xs"
+          className="pointer-events-none absolute right-2 bottom-2 left-2 rounded-md bg-warning/90 px-2 py-1 text-center font-medium text-warning-foreground text-xs"
           role="status"
         >
           Texto fora da área: {overflowFieldLabels.join(", ")}. O PDF manterá o

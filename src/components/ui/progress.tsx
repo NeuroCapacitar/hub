@@ -7,9 +7,12 @@ import { cn } from "@/lib/utils";
 
 function Progress({
   className,
+  tone = "active",
   value,
   ...props
-}: React.ComponentProps<typeof ProgressPrimitive.Root>) {
+}: React.ComponentProps<typeof ProgressPrimitive.Root> & {
+  tone?: "active" | "complete";
+}) {
   return (
     <ProgressPrimitive.Root
       className={cn(
@@ -20,8 +23,12 @@ function Progress({
       {...props}
     >
       <ProgressPrimitive.Indicator
-        className="size-full flex-1 bg-primary transition-[width,transform]"
+        className={cn(
+          "size-full flex-1 transition-[width,transform]",
+          tone === "complete" ? "bg-progress-complete" : "bg-progress-active"
+        )}
         data-slot="progress-indicator"
+        data-tone={tone}
         style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
       />
     </ProgressPrimitive.Root>

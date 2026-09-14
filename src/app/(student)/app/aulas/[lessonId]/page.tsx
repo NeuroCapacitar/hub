@@ -836,7 +836,8 @@ function LessonCourseSidebar({
           </div>
           <Progress
             aria-label="Progresso do curso"
-            className="mt-3 h-1 bg-primary/20"
+            className="mt-3 h-1 bg-muted"
+            tone={progressPercent >= 100 ? "complete" : "active"}
             value={progressPercent}
           />
         </div>
