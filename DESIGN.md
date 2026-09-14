@@ -223,11 +223,23 @@ Os tokens semânticos são definidos em `src/app/globals.css` e devem ser usados
 por papel, não por aparência:
 
 - `background`: tela principal;
-- `foreground`: texto principal;
+- `foreground`: texto principal em creme claro já próximo da areia;
+- `support-foreground`: descrições e contexto em um teal-sage transicional,
+  harmonizado com o petróleo sem voltar ao cinza frio;
 - `card` e `card-foreground`: agrupamento real de conteúdo;
 - `popover` e `popover-foreground`: menus, diálogos e superfícies portadas;
 - `muted` e `muted-foreground`: apoio e contexto ainda legível;
-- `primary` e `primary-foreground`: ação principal e seleção atual;
+- `primary` e `primary-foreground`: ênfase de marca, seleção e progresso quando
+  o consumidor explicita esse papel;
+- `button-primary` e `button-primary-foreground`: ação principal dos botões,
+  atualmente em petróleo;
+- `selection` e `selection-foreground`: seleção de texto e controles selecionados;
+- `focus` e `focus-foreground`: indicador de foco de teclado;
+- `progress-active`, `progress-complete` e `learning-complete`: andamento e
+  conclusão de aprendizagem, sem substituir estados técnicos;
+- `link`: links que precisam de ênfase textual;
+- `surface-warm` e `surface-warm-foreground`: superfícies quentes institucionais
+  de uso raro;
 - `secondary` e `secondary-foreground`: ação ou estado secundário;
 - `accent` e `accent-foreground`: ênfase pontual;
 - `destructive`: erro, bloqueio e ação destrutiva;
@@ -243,19 +255,29 @@ separada: `L` expressa luminosidade perceptual, `C` intensidade cromática e
 | Papel | Token atual | Uso autorizado |
 |---|---|---|
 | tela | `--background: oklch(0.237 0.025 204.4)` | fundo contínuo da aplicação |
-| texto principal | `--foreground: oklch(0.949 0.009 197)` | títulos, prosa e controles |
-| superfície | `--card: oklch(0.272 0.027 203.5)` | agrupamento real de conteúdo |
+| texto principal | `--foreground: var(--brand-cream)` | títulos, prosa e controles |
+| superfície | `--card: oklch(0.275 0.022 203)` | agrupamento real de conteúdo |
 | navegação | `--sidebar: oklch(0.221 0.023 205.4)` | sidebar autenticada |
-| ação/seleção | `--primary: oklch(0.495 0.061 202.9)` | ação principal e seleção atual |
-| apoio | `--muted: oklch(0.309 0.033 204.9)` | contexto e placeholders |
-| texto de apoio | `--muted-foreground: oklch(0.702 0.044 199.9)` | informação secundária legível |
-| ênfase | `--accent: oklch(0.675 0.143 54)` | destaque pontual, não texto longo |
+| ação de botão | `--button-primary: var(--brand-petroleum)` | botões principais |
+| ênfase/seleção | `--primary: var(--brand-orange)` | seleção, progresso e atenção explícita |
+| seleção | `--selection: oklch(0.675 0.143 54 / 0.45)` | texto e controles selecionados |
+| foco | `--focus: var(--brand-sand)` | indicador de teclado |
+| apoio | `--muted: oklch(0.305 0.020 203)` | contexto e placeholders |
+| texto de apoio | `--muted-foreground: oklch(0.720 0.018 79)` | informação secundária legível |
+| ênfase | `--accent: var(--brand-orange)` | destaque pontual, não texto longo |
+| progresso ativo | `--progress-active: var(--brand-orange)` | andamento mensurável |
+| conclusão de aprendizagem | `--learning-complete: var(--brand-olive)` | conclusão contextual de Curso/Aula |
 | erro | `--destructive: oklch(0.726 0.122 20.5)` | erro, bloqueio e ação destrutiva |
 | sucesso | `--success: oklch(0.704 0.12 160)` | confirmação explícita |
 | alerta | `--warning: oklch(0.769 0.13 78)` | atenção e risco reversível |
 | informação | `--info: oklch(0.68 0.1 245)` | contexto informativo |
 
-`--border`, `--input`, `--ring` e `--sidebar-*` também usam os mesmos papéis
+Os anchors de marca (`--brand-petroleum`, `--brand-sand`, `--brand-orange`,
+`--brand-olive` e `--brand-terracotta`) documentam a identidade e não devem
+ser consumidos diretamente pelos componentes. Componentes usam os tokens
+funcionais e, quando necessário, um token de componente/estado que os referencia.
+
+`--border`, `--input`, `--ring`, `--focus` e `--sidebar-*` também usam os mesmos papéis
 em OKLCH, inclusive com alpha quando a função é separar sem criar uma nova
 superfície. O tema é dark-only e os blocos `:root` e `.dark` permanecem
 equivalentes até existir uma decisão de produto para outro tema.

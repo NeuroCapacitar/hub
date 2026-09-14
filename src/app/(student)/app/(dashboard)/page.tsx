@@ -339,6 +339,7 @@ function CourseCard({
               <Progress
                 aria-label={`Progresso no curso ${course.title}: ${course.progressPercent}%`}
                 className="h-1"
+                tone={course.progressPercent >= 100 ? "complete" : "active"}
                 value={course.progressPercent}
               />
             </div>

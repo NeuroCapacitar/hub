@@ -3,7 +3,6 @@
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -57,15 +56,9 @@ export function SignInForm(): React.JSX.Element {
         await fetch("/api/auth/sign-out", { method: "POST" }).catch(
           () => undefined
         );
-        toast.error("Acesso bloqueado", {
-          description: "Entre em contato com o suporte para revisar sua conta.",
-          classNames: {
-            toast: "!bg-destructive/10 !border-destructive/30",
-            title: "!text-destructive !font-medium",
-            description: "!text-destructive/80 !text-sm",
-            icon: "!text-destructive",
-          },
-        });
+        setError(
+          "Acesso bloqueado. Entre em contato com o suporte para revisar sua conta."
+        );
         return;
       }
 
@@ -92,6 +85,8 @@ export function SignInForm(): React.JSX.Element {
         <Field>
           <FieldLabel htmlFor="email">E-mail</FieldLabel>
           <Input
+            aria-describedby={error ? "sign-in-error" : undefined}
+            aria-invalid={error ? true : undefined}
             autoComplete="email"
             className="h-11"
             id="email"
@@ -104,26 +99,27 @@ export function SignInForm(): React.JSX.Element {
         <Field>
           <FieldLabel htmlFor="password">Senha</FieldLabel>
           <PasswordInput
+            aria-describedby={error ? "sign-in-error" : undefined}
+            aria-invalid={error ? true : undefined}
             autoComplete="current-password"
             className="h-11"
             id="password"
             name="password"
             placeholder="Digite sua senha…"
             required
-            type="password"
           />
         </Field>
       </FieldGroup>
       {error ? (
         <Alert className="mt-5" variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription id="sign-in-error">{error}</AlertDescription>
         </Alert>
       ) : null}
       <Button className="mt-5 h-12 w-full" loading={isPending} type="submit">
         Entrar
       </Button>
       <Link
-        className="mt-4 inline-flex text-muted-foreground text-sm underline-offset-4 hover:text-foreground hover:underline"
+        className="mt-4 inline-flex text-muted-foreground text-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
         href={route("/recuperar-senha")}
       >
         Esqueci minha senha

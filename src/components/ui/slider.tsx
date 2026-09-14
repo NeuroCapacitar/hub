@@ -47,7 +47,7 @@ function Slider({
         data-slot="slider-track"
       >
         <SliderPrimitive.Range
-          className="absolute select-none bg-primary data-horizontal:h-full data-vertical:w-full"
+          className="absolute select-none bg-selection data-horizontal:h-full data-vertical:w-full"
           data-slot="slider-range"
         />
       </SliderPrimitive.Track>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 import { PageContainer } from "@/components/page-container";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,8 @@ export const revalidate = 0;
 export default function PublicCheckoutSuccessPage(): React.JSX.Element {
   return (
     <PageContainer className="min-h-screen bg-background text-foreground">
-      <section className="max-w-2xl rounded-lg border bg-card p-6">
+      <BrandLogo className="mb-8 h-9 w-auto" preload />
+      <section className="max-w-2xl rounded-2xl border border-border/70 bg-card/90 p-6 shadow-sm sm:p-8">
         <Badge variant="outline">Pagamento em confirmação</Badge>
         <h1 className="type-section-title mt-4">
           Seu acesso está sendo preparado

@@ -178,6 +178,7 @@ export default async function StudentCourseOverviewPage({
                   <Progress
                     aria-label={`Progresso do curso ${data.course.title}: ${data.progressPercent}%`}
                     className="h-1.5"
+                    tone={data.progressPercent >= 100 ? "complete" : "active"}
                     value={data.progressPercent}
                   />
                 </div>

@@ -867,7 +867,7 @@ describe("CertificateTemplateEditor", () => {
     const centerButton = container.querySelector<HTMLButtonElement>(
       '[data-preview-toolbar] button[aria-label="Centralizar horizontalmente no A4"]'
     );
-    expect(centerButton?.className).toContain("focus-visible:ring-3");
+    expect(centerButton?.className).toContain("focus-visible:outline-focus");
     expect(
       container.querySelector(
         '[data-preview-toolbar] [data-visibility-trigger="true"]'
@@ -878,7 +878,7 @@ describe("CertificateTemplateEditor", () => {
     const roleButton = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Cargo do signatário"
     );
-    expect(roleButton?.className).toContain("focus-visible:ring-3");
+    expect(roleButton?.className).toContain("focus-visible:outline-focus");
   });
 
   it("keeps the field inventory out of the main inspector until requested", () => {

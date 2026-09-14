@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BrandLogo } from "@/components/brand-logo";
 import { PageContainer } from "@/components/page-container";
 import { Button } from "@/components/ui/button";
 import { redirectToCheckout } from "./checkout-navigation";
@@ -416,9 +417,10 @@ export function PurchaseHandoffClient({
       as="main"
       className="min-h-screen bg-background text-foreground"
     >
+      <BrandLogo className="mb-8 h-9 w-auto" preload />
       <section
         aria-live="polite"
-        className="max-w-2xl rounded-lg border bg-card p-6"
+        className="max-w-2xl rounded-2xl border border-border/70 bg-card/90 p-6 shadow-sm sm:p-8"
       >
         <h1 className="type-page-title">{courseTitle}</h1>
         {state.kind === "starting" ? (

@@ -121,7 +121,6 @@ export function SignUpForm(): React.JSX.Element {
             minLength={PASSWORD_MIN_LENGTH}
             name="password"
             required
-            type="password"
           />
         </Field>
         <Field>
@@ -135,7 +134,6 @@ export function SignUpForm(): React.JSX.Element {
             minLength={PASSWORD_MIN_LENGTH}
             name="passwordConfirmation"
             required
-            type="password"
           />
         </Field>
       </FieldGroup>

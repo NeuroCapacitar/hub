@@ -50,6 +50,9 @@ interface ModuleData {
   totalDurationSeconds: number;
 }
 
+const getProgressTone = (progressPercent: number): "active" | "complete" =>
+  progressPercent >= 100 ? "complete" : "active";
+
 interface CourseOverviewClientProps {
   courseThumbnailUrl?: string | null;
   modules: ModuleData[];
@@ -296,6 +299,7 @@ export function CourseOverviewClient({
                           <Progress
                             aria-label={`Progresso do módulo ${moduleData.title}: ${moduleData.progressPercent}%`}
                             className="h-2 w-32 bg-muted md:w-24"
+                            tone={getProgressTone(moduleData.progressPercent)}
                             value={moduleData.progressPercent}
                           />
                           <span className="font-semibold text-xs">
