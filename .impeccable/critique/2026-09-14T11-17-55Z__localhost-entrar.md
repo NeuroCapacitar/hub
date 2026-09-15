@@ -37,7 +37,7 @@ Method: dual-agent (A: `01a09f6b-b1be-7c90-b332-9566e6c799b4` · B: `01a09f6b-b5
 
 | Heurística | Score | Observação |
 | --- | ---: | --- |
-| Visibility of system status | 3/4 | Loading e erros existem; bloqueio de conta ainda usa toast transitório. |
+| Visibility of system status | 3/4 | Loading e erros existem; o bloqueio de conta permanece no fluxo com mensagem persistente. |
 | Match system / real world | 4/4 | Labels em português e fluxo de autenticação familiar. |
 | User control and freedom | 3/4 | Recuperação e revelar senha são visíveis; ainda faltam alguns cancelamentos. |
 | Consistency and standards | 3/4 | Papéis estão mais claros; alguns consumidores legítimos de `primary` ainda exigem disciplina. |

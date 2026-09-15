@@ -269,8 +269,8 @@ separada: `L` expressa luminosidade perceptual, `C` intensidade cromática e
 | ação de botão | `--button-primary: var(--brand-petroleum)` | botões principais |
 | foreground de botão | `--button-primary-foreground: var(--brand-cream)` | texto e ícones sobre botões principais |
 | ênfase/seleção | `--primary: var(--brand-orange)` | seleção, progresso e atenção explícita |
-| seleção de texto | `--text-selection: oklch(0.675 0.143 54 / 0.45)` | destaque de texto selecionado |
-| controle selecionado | `--control-selected: oklch(0.675 0.143 54 / 0.45)` | Checkbox, Radio, Switch, Calendar e Slider |
+| seleção de texto | `--text-selection: oklch(0.675 0.143 54)` | destaque de texto selecionado |
+| controle selecionado | `--control-selected: oklch(0.675 0.143 54)` | Checkbox, Radio, Switch, Calendar e Slider |
 | seleção legada | `--selection: var(--control-selected)` | alias temporário de compatibilidade |
 | thumb do Slider | `--slider-thumb: var(--control-selected-foreground)` | foreground do controle de faixa |
 | foco | `--focus: var(--brand-cream)` | indicador de teclado |

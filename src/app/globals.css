@@ -128,9 +128,9 @@ html {
   --muted-foreground: var(--support-foreground);
   --accent: var(--brand-orange);
   --accent-foreground: oklch(0.237 0.025 204.4);
-  --text-selection: oklch(0.675 0.143 54 / 0.45);
+  --text-selection: oklch(0.675 0.143 54);
   --text-selection-foreground: oklch(0.237 0.025 204.4);
-  --control-selected: oklch(0.675 0.143 54 / 0.45);
+  --control-selected: oklch(0.675 0.143 54);
   --control-selected-foreground: oklch(0.237 0.025 204.4);
   --selection: var(--control-selected);
   --selection-foreground: var(--control-selected-foreground);
@@ -206,9 +206,9 @@ body {
   --muted-foreground: var(--support-foreground);
   --accent: var(--brand-orange);
   --accent-foreground: oklch(0.237 0.025 204.4);
-  --text-selection: oklch(0.675 0.143 54 / 0.45);
+  --text-selection: oklch(0.675 0.143 54);
   --text-selection-foreground: oklch(0.237 0.025 204.4);
-  --control-selected: oklch(0.675 0.143 54 / 0.45);
+  --control-selected: oklch(0.675 0.143 54);
   --control-selected-foreground: oklch(0.237 0.025 204.4);
   --selection: var(--control-selected);
   --selection-foreground: var(--control-selected-foreground);

@@ -138,8 +138,8 @@ como consumidor de `accent` global.
 
 | Papel | Consumidores verificados | Risco conhecido | Próxima decisão, fora desta rodada |
 |---|---|---|---|
-| `text-selection` | `::selection` | alpha e contraste dependem do fundo real do texto | manter valor inicial e validar renderização |
-| `control-selected` | `Calendar`, `Checkbox`, `RadioGroup`, `Switch`, `Slider.Range` | estados selecionados precisam continuar distinguíveis em cada superfície | manter valor inicial e validar renderização |
+| `text-selection` | `::selection` | fundo opaco laranja e foreground petróleo mantêm contraste no texto selecionado | manter separado dos controles e validar renderização |
+| `control-selected` | `Calendar`, `Checkbox`, `RadioGroup`, `Switch`, `Slider.Range` | fundo opaco laranja e foreground petróleo mantêm distinção nos estados selecionados | manter separado da seleção textual e validar renderização |
 | `slider-thumb` | `SliderPrimitive.Thumb` | token de componente agora separado de `primary-foreground` | parear com `control-selected-foreground` |
 | `focus`/`ring` | `Button`, `Input`, `Tabs`, editor de certificado, `Select`, `Textarea`, `Checkbox`, `RadioGroup`, `Switch`, `ResourceItemDragHandle`, Slider, Accordion, Table e Sidebar | consumidores simples usam a receita canônica; exceções usam border/outline/ring próprios para preservar geometria | manter a separação e testar cada primitive em teclado |
 | `progress-active` | `Progress`, `LessonCard`, painel de upload/processamento | estado pode ser confundido com ação se usado fora de aprendizagem/processamento | preservar owner e rótulo/valor |

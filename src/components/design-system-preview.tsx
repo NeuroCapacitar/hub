@@ -351,7 +351,7 @@ function ControlSamples(): React.JSX.Element {
 
         <div className="space-y-3 rounded-xl border border-border bg-card p-4">
           <div className="space-y-2">
-            <Label htmlFor="preview-slider">Slider com valor parcial</Label>
+            <p className="font-medium text-sm">Slider com valor parcial</p>
             <Slider
               aria-label="Volume de exemplo"
               defaultValue={[62]}

@@ -24,6 +24,20 @@ describe("selection token contract", () => {
     );
   });
 
+  it("keeps selection surfaces opaque for reliable contrast", async () => {
+    const source = await readFile(
+      new URL("../../app/globals.css", import.meta.url),
+      "utf8"
+    );
+
+    expect(
+      source.match(/--text-selection: oklch\(0\.675 0\.143 54\);/g)
+    ).toHaveLength(2);
+    expect(
+      source.match(/--control-selected: oklch\(0\.675 0\.143 54\);/g)
+    ).toHaveLength(2);
+  });
+
   it.each(
     CONTROL_SELECTION_CONSUMERS
   )("uses control selection tokens in %s", async (relativePath) => {
