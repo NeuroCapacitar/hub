@@ -10,6 +10,7 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        progress: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
         learning:
           "bg-learning-complete text-learning-complete-foreground [a]:hover:bg-learning-complete/80",
         secondary:

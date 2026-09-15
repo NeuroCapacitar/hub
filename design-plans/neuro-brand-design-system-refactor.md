@@ -115,7 +115,7 @@ onde `primary` hoje acumula significados:
 | `background`, `card`, `popover`, `muted` | superfícies estruturais; não recebem cor de ação por conveniência |
 | `foreground`, `muted-foreground` | texto; a areia é candidata, não valor automático |
 | `primary` | alias compatível para ação primária; só será remapeado após a classificação dos consumidores |
-| `selection` | seleção de texto, controle e seleção visual; não depender de `primary` por acidente |
+| `text-selection`, `control-selected` | seleção de texto e controles; não depender de `primary` por acidente |
 | `focus` | indicador de teclado; deve passar contraste contra cada superfície e controle |
 | `link` | links de alta intenção; não assumir que todo `primary` é link |
 | `progress-active` | progresso corrente, candidato a laranja |
@@ -254,9 +254,9 @@ introduzido.
 ### Fase 4: shell, Auth e superfícies públicas
 
 **Arquivos principais:** `src/components/panel-layout.tsx`,
-`src/components/auth-shell.tsx`, `src/lib/brand.ts`, `src/app/icon.svg`,
-`public/brand/*`, páginas de compra, certificado público, manutenção e
-not-found.
+`src/components/auth-shell.tsx`, `src/lib/brand.ts`, `src/app/layout.tsx`,
+`public/brand/*`, `public/favicon/*`, páginas de compra, certificado público,
+manutenção e not-found.
 
 - [ ] Integrar a mudança de assets da worktree principal sem duplicar ou
   apagar a identidade de Curso antes de validar o novo asset.
@@ -399,3 +399,79 @@ mais humana, reconhecível e funcional — mas impede que a implementação trat
 paleta de marca como uma substituição global de tokens. A primeira mudança
 executável deve ser a Fase 0, seguida da fixture isolada; nenhuma troca global
 de `--primary` está autorizada antes desses gates.
+
+## Registro de execução incremental
+
+Este registro complementa as fases acima com unidades pequenas já verificadas.
+Uma fase ampla só deve ser marcada como concluída quando todos os seus gates
+forem satisfeitos; por isso, itens ainda não executados permanecem explícitos.
+
+### Implementado nesta worktree
+
+- [x] Contrato canônico do `DESIGN.md` sincronizado com `globals.css` e assets
+  atuais.
+- [x] Matriz de consumidores de `primary`, `accent`, seleção, foco, progresso,
+  sidebar e charts criada.
+- [x] Thumb do `Slider` desacoplado de `primary-foreground` por meio de
+  `slider-thumb`.
+- [x] Receita de foco canônica aplicada a `Textarea`, `SelectTrigger`,
+  `Checkbox`, `RadioGroupItem`, `Switch` e `ResourceItemDragHandle`.
+- [x] Seleção de texto e seleção de controles separadas em tokens próprios,
+  preservando aliases legados e os valores visuais atuais.
+- [x] Fixture interna ampliada com Checkbox, Radio, Switch, Slider, Select,
+  Textarea, Alert, Empty, Dropdown, Dialog, Table, links, Avatar, upload e
+  comparação entre `background`, `card` e `sidebar`.
+- [x] Chroma de `border` e `input` reduzido mantendo luminosidade, hue e alpha.
+- [x] Variante `Button accent` criada como ação laranja opt-in e demonstrada
+  apenas na fixture interna.
+- [x] Hierarquia da navegação Sidebar refinada: itens não ativos usam
+  `muted-foreground`/`support-foreground` e itens ativos preservam
+  `sidebar-accent`.
+- [x] Variante `Badge progress` criada e aplicada somente ao estado de
+  aprendizagem “Em andamento” no `LessonCard` e na fixture.
+- [x] Badge de acesso do `CourseCard` Student deixou de usar o `default`
+  laranja para acesso normal; expiração e conclusão usam variantes semânticas
+  existentes.
+- [x] Receitas de foco das geometrias próprias de Slider, Accordion, Table e
+  Sidebar foram padronizadas por intenção, preservando hit areas, overflow e
+  thumb.
+- [x] Links de rich text passaram de `var(--primary)` para o token funcional
+  `var(--link)`, mantendo a aparência de marca sem acoplar conteúdo a ação.
+- [x] Favicons reconciliados com os assets já presentes no fluxo de staging:
+  `public/favicon/*` declarado em `src/app/layout.tsx`; o ícone file-based
+  duplicado foi removido.
+- [x] `DESIGN.md`, a matriz de consumidores e o relatório de implementação
+  foram alinhados ao estado real desta worktree.
+
+### Ainda não implementado
+
+- [x] Inventariar consumidores restantes do `Badge default` antes de decidir se
+  ele deve se tornar neutro.
+- [ ] Decidir e migrar individualmente os consumidores restantes de `Badge
+  default` (`Ativo`, `Disponível` e papel `Admin`).
+- [ ] Validar contraste renderizado e alpha de `text-selection` e
+  `control-selected` em todas as superfícies consumidoras.
+- [ ] Validar visualmente a fixture em viewport estreito e conferir contraste
+  renderizado dos controles e superfícies.
+- [ ] Validar visualmente a redução de chroma de `border`/`input` nas superfícies
+  `background`, `card` e `sidebar`.
+- [ ] CTA de produção com `Button variant="accent"` — adiado: o Checkout atual
+  não possui uma ação comercial explícita; não aplicar a variante a ações de
+  acesso, recuperação, verificação ou navegação.
+- [ ] Microacento laranja na Sidebar — adiado; substituído pela diferenciação
+  de ênfase textual entre itens ativos e não ativos.
+- [x] Reconciliar os favicons existentes e suas referências de metadata.
+- [ ] Revisar a disponibilidade de um asset vetorial oficial dedicado —
+  pendente de fornecimento/aprovação da marca; não fabricar um vetor a partir
+  de raster.
+
+### Fechamento técnico desta unidade
+
+- [x] Testes direcionados: 7 arquivos, 26 testes aprovados.
+- [x] Suíte completa: 423 arquivos, 2.926 testes aprovados.
+- [x] `bun run check` e `bun run typecheck` aprovados.
+- [x] `bun run docs:check` aprovado com 47 documentos canônicos válidos.
+- [x] `NEXT_PUBLIC_APP_URL=http://localhost:3002 bun run build` aprovado.
+- [x] Detector mecânico do Impeccable executado sem achados.
+- [ ] Inspeção visual humana em viewport estreito e conferência de contraste
+  renderizado continuam pendentes para revisão pelo usuário.

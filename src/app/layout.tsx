@@ -27,6 +27,32 @@ export const metadata: Metadata = {
   description: `Plataforma de cursos da ${PLATFORM_BRAND} para Alunos e equipe.`,
   applicationName: PLATFORM_NAME,
   metadataBase: new URL(publicAppUrl),
+  icons: {
+    icon: [
+      {
+        url: "/favicon/favicon.svg",
+        type: "image/svg+xml",
+      },
+      {
+        url: "/favicon/favicon-96x96.png",
+        type: "image/png",
+        sizes: "96x96",
+      },
+      {
+        url: "/favicon/favicon.ico",
+        type: "image/x-icon",
+        sizes: "any",
+      },
+    ],
+    shortcut: "/favicon/favicon.ico",
+    apple: [
+      {
+        url: "/favicon/favicon-96x96.png",
+        type: "image/png",
+        sizes: "96x96",
+      },
+    ],
+  },
   ...(stagingPresentation.robots ? { robots: stagingPresentation.robots } : {}),
 };
 

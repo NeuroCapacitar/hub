@@ -47,4 +47,16 @@ describe("Slider", () => {
     ).toEqual(["Minimo", "Maximo"]);
     act(() => root.unmount());
   });
+
+  it("uses a dedicated semantic token for the thumb", () => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    globalThis.ResizeObserver = ResizeObserverMock;
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    act(() => root.render(<Slider aria-label="Volume" value={[50]} />));
+    expect(
+      container.querySelector('[data-slot="slider-thumb"]')?.className
+    ).toContain("bg-slider-thumb");
+    act(() => root.unmount());
+  });
 });
