@@ -9,7 +9,7 @@ last_verified_at: 2026-09-15
 
 ## Escopo e método
 
-Esta pesquisa valida as recomendações do relatório `C:\Users\Junior\Desktop\Relatorio Brand.md` sobre foco, contraste, seleção, tokens, variantes de `Button`, cor em `Badge` e `Progress` e documentação. Foram consultadas em 2026-09-15 fontes primárias atuais: especificações W3C, a especificação estável 2025.10 do Design Tokens Community Group (DTCG) e documentação oficial de GOV.UK, USWDS, Carbon, Atlassian, Storybook e Backstage. As conclusões distinguem requisito normativo, orientação de design system e inferência aplicável ao Hub. Esta pesquisa não redefine o contrato visual nem substitui `DESIGN.md`, código, testes ou decisão de produto.
+Esta pesquisa valida as recomendações do relatório externo de marca recebido em 2026-09-15 sobre foco, contraste, seleção, tokens, variantes de `Button`, cor em `Badge` e `Progress` e documentação. Foram consultadas em 2026-09-15 fontes primárias atuais: especificações W3C, a especificação estável 2025.10 do Design Tokens Community Group (DTCG) e documentação oficial de GOV.UK, USWDS, Carbon, Atlassian, Storybook e Backstage. As conclusões distinguem requisito normativo, orientação de design system e inferência aplicável ao Hub. Esta pesquisa não redefine o contrato visual nem substitui `DESIGN.md`, código, testes ou decisão de produto.
 
 ## Resultado executivo
 
@@ -92,7 +92,7 @@ A recomendação do relatório é validada como mudança de baixo risco: criar u
 
 Cor não pode ser o único meio visual de comunicar informação, ação, resposta ou distinção (WCAG 1.4.1, nível A). Para controles e estados, a informação visual necessária deve atingir 3:1 contra cores adjacentes (1.4.11, AA). [Use of Color](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color), [Non-text Contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)
 
-Uma barra de progresso precisa expor seu valor/estado de forma programática quando aplicável. O papel ARIA `progressbar` define `aria-valuenow`, `aria-valuemin` e `aria-valuemax` quando o valor é determinável; `aria-valuenow` deve ser omitido no caso indeterminado, e o componente precisa de nome acessível. [WAI-ARIA 1.2: progressbar](https://www.w3.org/TR/wai-aria-1.2/#progressbar)
+Uma barra de progresso precisa expor seu valor/estado de forma programática quando aplicável. O papel ARIA `progressbar` deve informar `aria-valuenow` quando o valor for determinável e omiti-lo quando for indeterminado; `aria-valuemin` e `aria-valuemax` são opcionais, assumem 0 e 100 por padrão e só precisam ser definidos explicitamente quando os limites reais forem diferentes. O componente precisa de nome acessível. [WAI-ARIA 1.2: progressbar](https://www.w3.org/TR/wai-aria-1.2/#progressbar)
 
 ### Orientação de design system
 
