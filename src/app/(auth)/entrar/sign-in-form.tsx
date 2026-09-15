@@ -3,11 +3,11 @@
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { PasswordInput } from "@/components/password-input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { route } from "@/lib/routes";
 import { getSignInOutcome } from "./sign-in-result";
 
@@ -81,13 +81,14 @@ export function SignInForm(): React.JSX.Element {
 
   return (
     <form onSubmit={handleSubmit}>
-      <FieldGroup>
+      <FieldGroup className="gap-5">
         <Field>
           <FieldLabel htmlFor="email">E-mail</FieldLabel>
           <Input
             aria-describedby={error ? "sign-in-error" : undefined}
             aria-invalid={error ? true : undefined}
             autoComplete="email"
+            className="h-11"
             id="email"
             name="email"
             placeholder="aluno@exemplo.com"
@@ -101,6 +102,7 @@ export function SignInForm(): React.JSX.Element {
             aria-describedby={error ? "sign-in-error" : undefined}
             aria-invalid={error ? true : undefined}
             autoComplete="current-password"
+            className="h-11"
             id="password"
             name="password"
             placeholder="Digite sua senha…"
@@ -117,7 +119,7 @@ export function SignInForm(): React.JSX.Element {
         Entrar
       </Button>
       <Link
-        className="mt-5 inline-flex text-sm text-support-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+        className="mt-4 inline-flex text-muted-foreground text-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
         href={route("/recuperar-senha")}
       >
         Esqueci minha senha

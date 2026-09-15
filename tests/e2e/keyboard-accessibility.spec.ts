@@ -28,6 +28,9 @@ const signInWithKeyboard = async (
 
   const emailInput = page.getByLabel("E-mail");
   const passwordInput = page.getByLabel("Senha");
+  const passwordVisibilityToggle = page.getByRole("button", {
+    name: "Mostrar conteúdo confidencial",
+  });
   const submitButton = page.getByRole("button", { name: "Entrar" });
 
   await page.keyboard.press("Tab");
@@ -36,6 +39,8 @@ const signInWithKeyboard = async (
   await page.keyboard.press("Tab");
   await expect(passwordInput).toBeFocused();
   await page.keyboard.type(credentials.password);
+  await page.keyboard.press("Tab");
+  await expect(passwordVisibilityToggle).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(submitButton).toBeFocused();
   await page.keyboard.press("Enter");

@@ -54,6 +54,12 @@ Revogação manual de acesso a Curso específico; não bloqueia automaticamente 
 **Bloqueio de plataforma**  
 Suspensão da Conta na experiência do Aluno, mais ampla que bloqueio de Matrícula e sem apagar histórico.
 
+## Acesso à plataforma
+
+**Mídia da tela de acesso**
+Imagem visual administrada para compor a entrada pública do Hub. Não contém
+CTA, texto editorial ou dados do Aluno e não concede acesso por si só.
+
 **Revisão financeira**  
 Fila humana quando o sistema não pode aplicar evento financeiro com segurança, como conflito entre estados terminais ou valor divergente.
 

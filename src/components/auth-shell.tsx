@@ -1,38 +1,54 @@
-import Image from "next/image";
 import type { ReactNode } from "react";
+import { Suspense } from "react";
 import { BrandLogo } from "@/components/brand-logo";
-import { PLATFORM_LOGIN_IMAGE_SRC } from "@/lib/brand";
+import { AuthMediaSlot } from "@/features/auth-media/auth-media-slot";
+import { cn } from "@/lib/utils";
+
+interface AuthShellProps {
+  children: ReactNode;
+  formSide?: "left" | "right";
+}
 
 export function AuthShell({
   children,
-}: {
-  children: ReactNode;
-}): React.JSX.Element {
+  formSide = "right",
+}: AuthShellProps): React.JSX.Element {
+  const contentOrder = formSide === "right" ? "lg:order-2" : "lg:order-1";
+  const mediaOrder = formSide === "right" ? "lg:order-1" : "lg:order-2";
+
   return (
-    <main className="min-h-screen bg-background px-4 py-4 text-foreground sm:px-6 sm:py-6 lg:px-8 lg:py-8">
-      <div className="mx-auto grid min-h-[calc(100dvh-2rem)] w-full max-w-6xl overflow-hidden rounded-3xl border border-border/60 bg-card/40 shadow-sm sm:min-h-[calc(100dvh-3rem)] lg:min-h-[calc(100dvh-4rem)] lg:grid-cols-[minmax(0,1fr)_440px]">
-        <section className="relative hidden min-h-[min(34rem,calc(100dvh-2rem))] overflow-hidden bg-muted lg:block">
-          <Image
-            alt=""
-            className="object-cover"
-            fill
-            priority
-            sizes="(min-width: 1024px) calc(100vw - 440px), 100vw"
-            src={PLATFORM_LOGIN_IMAGE_SRC}
-          />
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-background/10"
-          />
-        </section>
-        <section className="flex min-h-[min(34rem,calc(100dvh-2rem))] items-center bg-background px-6 py-10 text-foreground sm:px-10">
-          <div className="mx-auto flex w-full max-w-sm flex-col gap-6">
+    <main className="min-h-screen bg-background text-foreground">
+      <div className="auth-shell-frame grid grid-cols-1 overflow-hidden shadow-none lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+        <section
+          className={cn(
+            "flex min-h-[36rem] items-center justify-center px-6 py-12 sm:px-10 lg:min-h-0 lg:px-16 xl:px-20",
+            contentOrder
+          )}
+        >
+          <div className="mx-auto flex w-full max-w-[30rem] flex-col gap-8">
             <BrandLogo
-              className="h-10 w-auto max-w-full object-contain object-left"
+              className="h-9 w-auto max-w-full self-center object-contain"
               preload
             />
             {children}
           </div>
+        </section>
+        <section
+          className={cn(
+            "relative hidden min-h-[36rem] items-stretch overflow-hidden p-3 lg:flex lg:min-h-0",
+            mediaOrder
+          )}
+        >
+          <Suspense
+            fallback={
+              <div
+                aria-hidden="true"
+                className="absolute inset-3 rounded-xl bg-muted/40"
+              />
+            }
+          >
+            <AuthMediaSlot />
+          </Suspense>
         </section>
       </div>
     </main>

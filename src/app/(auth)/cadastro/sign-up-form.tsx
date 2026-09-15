@@ -3,11 +3,11 @@
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { PasswordInput } from "@/components/password-input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
   getNewPasswordValidationError,
   PASSWORD_MIN_LENGTH,
@@ -89,15 +89,22 @@ export function SignUpForm(): React.JSX.Element {
 
   return (
     <form onSubmit={handleSubmit}>
-      <FieldGroup>
+      <FieldGroup className="gap-5">
         <Field>
           <FieldLabel htmlFor="name">Nome completo</FieldLabel>
-          <Input autoComplete="name" id="name" name="name" required />
+          <Input
+            autoComplete="name"
+            className="h-11"
+            id="name"
+            name="name"
+            required
+          />
         </Field>
         <Field>
           <FieldLabel htmlFor="email">E-mail</FieldLabel>
           <Input
             autoComplete="email"
+            className="h-11"
             id="email"
             name="email"
             placeholder="aluno@exemplo.com"
@@ -109,6 +116,7 @@ export function SignUpForm(): React.JSX.Element {
           <FieldLabel htmlFor="password">Senha</FieldLabel>
           <PasswordInput
             autoComplete="new-password"
+            className="h-11"
             id="password"
             minLength={PASSWORD_MIN_LENGTH}
             name="password"
@@ -121,6 +129,7 @@ export function SignUpForm(): React.JSX.Element {
           </FieldLabel>
           <PasswordInput
             autoComplete="new-password"
+            className="h-11"
             id="passwordConfirmation"
             minLength={PASSWORD_MIN_LENGTH}
             name="passwordConfirmation"
@@ -137,7 +146,7 @@ export function SignUpForm(): React.JSX.Element {
         Criar conta
       </Button>
       <Link
-        className="mt-5 inline-flex text-muted-foreground text-sm hover:text-foreground"
+        className="mt-4 inline-flex text-muted-foreground text-sm underline-offset-4 hover:text-foreground hover:underline"
         href={route("/entrar")}
       >
         Já tenho uma conta

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   confirmRefundPasswordAction,
@@ -166,7 +167,7 @@ export function RefundOperation({
               <FieldLabel htmlFor={`refund-password-${orderId}`}>
                 Sua senha atual
               </FieldLabel>
-              <Input
+              <PasswordInput
                 autoComplete="current-password"
                 id={`refund-password-${orderId}`}
                 name="password"

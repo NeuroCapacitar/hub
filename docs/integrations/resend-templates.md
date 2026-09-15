@@ -26,9 +26,9 @@ institucional. Cada alias acrescenta uma variação semântica:
 segurança da conta, acesso liberado, atenção à expiração, abertura de vendas,
 conquista de certificado ou solicitação operacional de suporte.
 
-O asset oficial da marca é `public/protear/logo-negativo.svg`, referenciado no
+O asset oficial da marca é `public/brand/logo-negativo.svg`, referenciado no
 HTML Hosted por URL HTTPS absoluta:
-`https://app.neurocapacitar.com.br/protear/logo-negativo.svg`. O HTML sempre
+`https://app.neurocapacitar.com.br/brand/logo-negativo.svg`. O HTML sempre
 deve incluir `alt="PROTEA-R"`, dimensões explícitas, `border="0"` e
 `display:block`. Não usar ngrok, localhost, bucket Development, data URI ou
 fonte externa como dependência da identidade visual compartilhada.

@@ -2,6 +2,7 @@ import {
   MAX_CERTIFICATE_BACKGROUND_BYTES,
   MAX_CERTIFICATE_SIGNATURE_BYTES,
 } from "@/features/certificates/template-image-contract";
+import { AUTH_MEDIA_MAX_BYTES } from "@/features/storage/auth-media-image-contract";
 import { MAX_BANNER_BYTES } from "@/features/storage/banner-image";
 import { MAX_ORIGINAL_COVER_BYTES } from "@/features/storage/course-cover";
 import { sanitizeR2FileName } from "@/features/storage/r2-objects";
@@ -9,6 +10,10 @@ import { sanitizeR2FileName } from "@/features/storage/r2-objects";
 export const STAGED_ADMIN_IMAGE_PREFIX = "uploads/admin-images";
 
 const STAGED_ADMIN_IMAGE_CATALOG = {
+  "auth-media": {
+    aggregateType: "auth-media-slide",
+    maxBytes: AUTH_MEDIA_MAX_BYTES,
+  },
   "certificate-background": {
     aggregateType: "certificate-template",
     maxBytes: MAX_CERTIFICATE_BACKGROUND_BYTES,

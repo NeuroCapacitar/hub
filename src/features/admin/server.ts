@@ -2715,6 +2715,7 @@ const readAuditLogs = async ({
           a.target_type,
           a.target_id,
           case a.target_type
+            when 'auth_media_slide' then 'Mídia da tela de acesso'
             when 'banner' then (select button_text from dashboard_banners where id::text = a.target_id)
             when 'course' then (select title from courses where id::text = a.target_id)
             when 'course_publication' then (
@@ -2852,6 +2853,7 @@ const readAuditLogs = async ({
             a.target_type,
             a.target_id,
             case a.target_type
+              when 'auth_media_slide' then 'Mídia da tela de acesso'
               when 'banner' then (select button_text from dashboard_banners where id::text = a.target_id)
               when 'course' then (select title from courses where id::text = a.target_id)
               when 'course_publication' then (

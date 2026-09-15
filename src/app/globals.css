@@ -261,6 +261,15 @@ body {
 }
 
 @layer components {
+  .auth-shell-frame {
+    width: 100%;
+    max-width: none;
+    min-height: 100vh;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+
   .type-page-title {
     font-size: clamp(1.75rem, 1.6rem + 0.65vw, 2rem);
     font-weight: 650;

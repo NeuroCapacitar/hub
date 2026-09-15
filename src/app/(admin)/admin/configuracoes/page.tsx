@@ -19,9 +19,11 @@ import {
   getAdminFaqData,
   getAdminSettingsData,
 } from "@/features/admin/server";
+import { getAdminAuthMediaData } from "@/features/auth-media/server";
 import { requirePermission } from "@/lib/auth-permissions";
 import { formatDateTime } from "@/lib/formatters";
 import { route } from "@/lib/routes";
+import { AuthMediaGallery } from "./auth-media/auth-media-gallery";
 import { BannerGallery } from "./banners/banner-gallery";
 import {
   CertificateSettingsForm,
@@ -35,13 +37,17 @@ export const dynamic = "force-dynamic";
 export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
   await requirePermission("manageSettings");
 
-  const [data, bannersData, faqData] = await Promise.all([
+  const [data, bannersData, authMediaData, faqData] = await Promise.all([
     getAdminSettingsData(),
     getAdminBannersData(),
+    getAdminAuthMediaData(),
     getAdminFaqData(),
   ]);
 
   const sortedBanners = [...bannersData.banners].sort(
+    (a, b) => a.sortOrder - b.sortOrder
+  );
+  const sortedAuthMediaSlides = [...authMediaData.slides].sort(
     (a, b) => a.sortOrder - b.sortOrder
   );
 
@@ -166,12 +172,27 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
             <FinanceHelp
               description="Gerencie conteúdos compartilhados na área do Aluno. As alterações ficam disponíveis depois que forem salvas."
               details={[
+                "A mídia da tela de acesso aparece na entrada pública e não contém links ou texto promocional.",
                 "Banners aparecem no Dashboard e podem ser reordenados por arraste ou teclado.",
                 "Perguntas frequentes aparecem na área do Aluno e podem ser publicadas ou ocultadas.",
               ]}
               title="Como gerenciar conteúdo editorial"
             />
           </div>
+
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle as="h2" className="text-base">
+                Tela de acesso
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Até cinco imagens 8:7 exibidas na autenticação pública.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AuthMediaGallery initialSlides={sortedAuthMediaSlides} />
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader className="pb-4">

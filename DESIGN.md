@@ -44,10 +44,15 @@ devem ser copiadas:
   projeto;
 - uso de um cabeçalho de relatório no lugar da navegação autenticada do Hub.
 
-Há duas decisões do Hub que prevalecem sobre a referência externa:
+Há decisões do Hub que prevalecem sobre a referência externa:
 
 - o produto é dark-only neste escopo e não possui seletor visual de tema;
 - não adicionar `prefers-reduced-motion` neste projeto.
+- o autoplay da mídia da tela de acesso é autorizado e pausa exclusivamente
+  enquanto o ponteiro está sobre a imagem; a navegação manual usa indicadores e
+  arraste;
+- a navegação da mídia da tela de acesso usa indicadores compactos centralizados,
+  com o estado ativo alongado, sem setas laterais.
 
 As capas de Cursos e a mídia visual existente de Aulas são conteúdo visual do
 produto. Seus gradientes, blur, escala e sombras existentes podem permanecer;
@@ -600,9 +605,10 @@ no scroll.
 - não adicionar `prefers-reduced-motion` neste projeto.
 
 O carrossel de banners do dashboard mantém o autoplay existente de seis
-segundos nesta linha de trabalho por decisão explícita de escopo. Não adicionar
-novos carrosséis com autoplay sem uma decisão específica de produto e sem
-definir a interação correspondente.
+segundos. A mídia da tela de acesso também possui autorização explícita para
+autoplay de seis segundos, com pausa exclusivamente em hover e navegação manual
+por indicadores e arraste, sem botão visual de play/pausa. Outros carrosséis
+continuam exigindo decisão específica de produto e interação correspondente.
 
 O `Button`, `Input`, `Textarea`, `Select` e `Progress` atuais já possuem
 transições limitadas às propriedades relevantes. Preserve esses contratos e não
@@ -629,6 +635,9 @@ os substitua por uma transição ampla.
   espaço;
 - capas e mídia visual de conteúdo podem usar a exceção registrada neste
   documento;
+- a mídia da tela de acesso é decorativa, usa moldura própria, aceita crop sem
+  deformação e mantém fallback local quando não há slide ativo ou a mídia
+  publicada falha;
 - Hugeicons é o único kit de ícones instalado e deve manter peso e escala
   coerentes;
 - ícones ao lado de texto são auxiliares e ficam ocultos da árvore acessível;

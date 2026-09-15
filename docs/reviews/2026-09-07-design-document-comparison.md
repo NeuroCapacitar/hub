@@ -22,8 +22,8 @@ páginas de relatório da Vercel e não devem ser transplantadas para o produto.
 `DESIGN.md` as rejeita intencionalmente.
 
 Há uma divergência deliberada que permanece documentada: a referência oficial
-recomenda respeitar preferências de movimento reduzido
-([fonte oficial, seção “Motion and delight”](https://vercel.com/design.md#motion-and-delight), linhas 267-271), mas a decisão explícita do projeto é não adicionar `prefers-reduced-motion`. A ausência de `prefers-reduced-motion`, `motion-reduce` e `motion-safe` foi confirmada na busca em `src`; o documento final registra essa exceção em vez de importar a regra externa.
+recomenda adaptar o movimento às preferências do sistema
+([fonte oficial, seção “Motion and delight”](https://vercel.com/design.md#motion-and-delight), linhas 267-271), mas a decisão explícita do projeto é não adicionar uma consulta de movimento do sistema. A busca em `src` confirma que essa adaptação não faz parte da implementação; o documento final registra essa escolha em vez de importar a regra externa.
 
 Antes da atualização, as maiores lacunas documentais, sem importar a marca
 Vercel, eram: evidência e metodologia para métricas, regras de alinhamento e
@@ -90,7 +90,7 @@ conflitos antes de criar regras paralelas.
 | Estados e controles | Controles devem ter labels, helpers quando necessários, unidades claras, foco, status vivo, preservação de entrada inválida e último resultado válido; motion deve confirmar estado, não decorar ([calculators](https://vercel.com/design.md#calculators-and-interaction), linhas 244-265; [motion](https://vercel.com/design.md#motion-and-delight), linhas 267-271). | `DESIGN.md:80-95` lista repouso, hover, foco, ativo, desabilitado, carregando, erro e vazio. `src/components/ui/button.tsx:11-25,52-91` implementa foco, estados, `aria-busy`, bloqueio durante loading e preservação do nome da ação. `src/components/ui/field.tsx:99-140,174-221` implementa label, descrição e `role=alert`. | **Alinhada para controles gerais.** O modelo completo de calculadora só é necessário se uma calculadora entrar no produto. |
 | Tabelas | Tabelas devem ser semânticas, caption, largura de evidência, alinhamento idêntico entre cabeçalho e células, baseline, unidades/precisão consistentes, escala comum, labels diretos e alternativa textual ([data and evidence](https://vercel.com/design.md#data-and-evidence), linhas 208-242). | `DESIGN.md:97-106` exige `<table>`, caption, alinhamento numérico, `tabular-nums`, Mono técnico sem forçar quebra e URL para consulta server-side. `src/components/ui/table.tsx:7-19,68-105` fornece table, `scope=col`, `align-baseline` e `TableCaption`. `src/components/ui/data-table.tsx:42-73,132-186,251-273` aplica o mesmo alinhamento a header/célula, `tabular-nums`, estados vazios, contagem viva e paginação. Chamadas amostradas passam captions em `src/app/(admin)/admin/alunos/students-table.tsx:192-200`, `src/app/(admin)/admin/cursos/[courseId]/course-enrollments-table.tsx:100-107` e `src/app/(admin)/admin/aprendizagem/page.tsx:56-85`. | **Alinhada no núcleo; parcial na evidência avançada.** Os usos inspecionados têm captions e números alinhados. O componente ainda permite caption vazio porque renderiza `TableCaption` condicionalmente em `data-table.tsx:184-186`. Faltam regra documental para qualificar unidade/período/denominador, regra de subset neutro auditável e alternativa textual para gráficos. |
 | Calculadoras | Uma calculadora precisa de modelo canônico de estado, fórmulas, unidades, precisão, limites, incrementos, defaults e atualização atômica ([calculators](https://vercel.com/design.md#calculators-and-interaction), linhas 244-265). | Não há seção de calculadoras em `DESIGN.md`, e as jornadas atuais descritas em `PRODUCT.md:25-64` não identificam uma calculadora. | **Fora do escopo atual.** Se surgir uma calculadora, adotar o modelo de estado e a acessibilidade do princípio, não as classes `vbg-*` ou o layout Vercel. |
-| Movimento | Motion deve ser estático por padrão, limitado a mudança de estado/continuidade, sem autoplay, typing, pulso decorativo, parallax ou espetáculo, e deve respeitar movimento reduzido ([motion](https://vercel.com/design.md#motion-and-delight), linhas 267-271). | `DESIGN.md:108-114` rejeitava animação decorativa, restringia transições e não queria biblioteca de microinteração, mas registrava a decisão explícita de não adicionar `prefers-reduced-motion`. `src/components/ui/button.tsx:12,64-71` usa transição de propriedades e spinner de loading; `src/components/ui/sonner.tsx:58-64` usa spinner de loading. | **Divergência deliberada.** A contenção local é compatível, mas a decisão explícita do projeto impede importar a regra externa de movimento reduzido. O documento final mantém essa exceção e reforça a proibição de movimento decorativo. |
+| Movimento | Motion deve ser estático por padrão, limitado a mudança de estado/continuidade, sem autoplay, typing, pulso decorativo, parallax ou espetáculo ([motion](https://vercel.com/design.md#motion-and-delight), linhas 267-271). | `DESIGN.md:108-114` rejeitava animação decorativa, restringia transições e não queria biblioteca de microinteração. `src/components/ui/button.tsx:12,64-71` usa transição de propriedades e spinner de loading; `src/components/ui/sonner.tsx:58-64` usa spinner de loading. | **Alinhada no escopo atual.** A contenção local preserva transições de estado sem importar uma consulta de movimento do sistema. O documento final reforça a proibição de movimento decorativo. |
 | Mídia e ícones | Usar mídia fornecida somente como evidência ou para compreensão; não usar stock, screenshots falsos ou ícones decorativos/tiles coloridos ([media and icons](https://vercel.com/design.md#media-and-icons), linhas 273-275). | `DESIGN.md:26-38,116-126` fixa Hugeicons e regras de alt text, mas não regula stock, screenshot falso ou tile de ícone. `components.json:13` fixa Hugeicons. `src/components/ui/button.tsx:3-4,66-71` usa ícone como parte de ação; `src/components/ui/empty.tsx:28-55` possui a variante `EmptyMedia` com tile `bg-muted`. | **Parcial; regra do tile é específica da Vercel.** A distinção entre ícone informativo e decorativo é útil para o Hub. O tile de estado vazio não prova violação do contrato local nem exige remoção, pois a proibição veio de um guia de relatório Vercel. |
 | Acessibilidade e reflow | Usar landmarks, um h1 descritivo, headings ordenados, skip link, controles nativos, captions, nomes acessíveis, foco visível, alternativa textual, WCAG AA, ordem de fonte e `min-width: 0`; refluír antes de encolher e não esconder overflow ([accessibilidade](https://vercel.com/design.md#accessibility-and-responsive-behavior), linhas 363-370). | `DESIGN.md:59-68,97-126` cobre hierarquia de headings, semântica de tabela, labels, links, botões, foco, vazios, erros e alt text. `src/components/ui/data-table.tsx:149-162` dá label de busca e status vivo; `src/components/ui/field.tsx:129-140,213-221` dá descrição e erro acessível. `src/app/layout.tsx:38-53` confirma a estrutura raiz e `lang=pt-BR`. | **Parcial e aplicável.** Faltam no documento alvo explícito WCAG AA, landmarks/skip link, ordem de fonte, alternativa textual de gráficos e regra de reflow antes de encolher. O `min-w-0` já aparece como requisito local em `DESIGN.md:77-78`. |
 | Revisão e verificação | A Vercel pede inspecionar primeiro viewport, página inteira, temas, reflow e acessibilidade, corrigindo o maior defeito sistêmico antes da entrega; o processo não deve virar conteúdo da página ([inspect and revise privately](https://vercel.com/design.md#inspect-and-revise-privately), linhas 277-292). | `DESIGN.md:128-132` exige diff, testes afetados, `bun run check` e `bun run typecheck`. `AGENTS.md:207-215,231-244` exige testes proporcionais e evidência do comando/risco. `package.json:77-92` confirma os scripts. | **Parcial, adaptar.** O contrato local verifica código e tipos, mas não nomeia explicitamente viewport, reflow, contraste ou acessibilidade em alterações visuais. A inspeção de tema claro não se aplica ao escopo local dark-only (`DESIGN.md:36`), mas reflow e foco continuam aplicáveis. |
@@ -98,22 +98,22 @@ conflitos antes de criar regras paralelas.
 
 ## Conflitos e decisões consolidadas
 
-### 1. Movimento reduzido: divergência explícita do projeto
+### 1. Movimento e transições: decisão explícita do projeto
 
 O documento final combina quatro decisões compatíveis com a fonte oficial:
 sem animação decorativa, transições limitadas, feedback de estado e ausência de
 biblioteca dedicada. Ele também mantém a decisão explícita do projeto de não
-adicionar `prefers-reduced-motion`, mesmo sendo uma divergência da recomendação
-Vercel.
+adicionar uma consulta de movimento do sistema, mesmo sendo uma divergência da
+recomendação Vercel.
 
 O código confirma que a decisão tem efeito prático: `Button` usa transição e
 `animate-spin` durante loading (`src/components/ui/button.tsx:12,64-71`) e o
-Toaster usa spinner (`src/components/ui/sonner.tsx:58-64`), mas a busca em
-`src` não encontrou `prefers-reduced-motion`, `motion-reduce` ou `motion-safe`.
+Toaster usa spinner (`src/components/ui/sonner.tsx:58-64`), e a busca em `src`
+confirma que não há consulta de movimento do sistema.
 
 Disposição: manter a divergência e não adicionar a media query, classes ou
 tokens equivalentes. A contenção de movimento continua obrigatória, sem afirmar
-que o produto oferece uma adaptação de movimento reduzido que não existe.
+que o produto oferece uma adaptação de movimento que não existe.
 
 ### 2. Tema e identidade: divergências intencionais, não defeitos
 
@@ -183,10 +183,10 @@ que o produto oferece uma adaptação de movimento reduzido que não existe.
    Aplicar a inspeção claro/escuro da Vercel somente se o produto abandonar o
    dark-only. **Tratado no documento final.**
 
-8. **Divergência de movimento reduzido.** Manter a proibição explícita de
-   adicionar `prefers-reduced-motion`, conforme decisão do projeto. A regra
-   local não deve ser confundida com compatibilidade integral com a
-   recomendação externa.
+8. **Decisão de movimento.** Manter a proibição explícita de adicionar uma
+   consulta de movimento do sistema, conforme decisão do projeto. A regra local
+   não deve ser confundida com compatibilidade integral com a recomendação
+   externa.
 
 ## Regras da Vercel que não devem ser transplantadas
 
