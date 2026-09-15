@@ -1,20 +1,20 @@
 # Relatório de implementação: sistema visual NeuroCapacitar Hub
 
-> Estado: implementação concluída; validação visual e de contraste final pendente
-> Baseline: `423528c3e6d65608e99bc1a06789615a576811d7`
-> Data: 2026-09-14
-> Integração: branch `codex/brand-system-and-favicons`
+> Estado: implementado e commitado na worktree `codex/design-system-refactor`
+> Commit de implementação: `ef34238`
+> Baseline: `aa3119c28414100e9d18b1b85bf55607d722225c`
+> Data: 2026-09-15
+> Worktree: `C:\Users\Junior\.config\superpowers\worktrees\hub\design-system-refactor`
 
 ## Resultado
 
-O plano corrigido foi implementado sem introduzir uma biblioteca visual
-paralela.
+O plano corrigido foi implementado sem alterar a worktree principal e sem
+introduzir uma biblioteca visual paralela.
 
-O sistema agora separa anchors de marca dos papéis funcionais. O laranja é
-promovido a `primary` para ênfase, seleção e progresso, enquanto
-`button-primary` permanece petróleo para ações principais de botão. Areia,
-oliva, terracota e petróleo recebem usos delimitados. Estados técnicos
-continuam independentes.
+O sistema agora separa anchors de marca dos papéis funcionais. O petróleo foi
+preservado como botão principal; o laranja ficou reservado para ênfase
+funcional explícita, progresso, links e ações opt-in. Areia, oliva, terracota e
+petróleo recebem usos delimitados. Estados técnicos continuam independentes.
 
 ## Fases executadas
 
@@ -38,7 +38,8 @@ Criada a rota administrativa sem item de navegação:
 - [design-system-preview.tsx](../src/components/design-system-preview.tsx)
 
 A fixture cobre ações, badges, estados técnicos, progresso ativo/concluído,
-cards, superfície quente, input, tabs e amostras da paleta.
+cards, superfície quente, input, tabs, controles selecionados, foco, Alert,
+Empty, Dropdown, Dialog, Table, links, Avatar, upload e amostras da paleta.
 
 ### Fase 3: tokens e primitives
 
@@ -50,7 +51,11 @@ Atualizados:
 - [progress.tsx](../src/components/ui/progress.tsx)
 - [tabs.tsx](../src/components/ui/tabs.tsx)
 - checkbox, radio, slider, switch e calendar
-- links, avatares, seleção e foco
+- links, avatares, seleção e foco;
+- receitas próprias de foco para Slider, Accordion, Table e Sidebar;
+- links de rich text no token funcional `link`;
+- seleção de texto separada da seleção de controles;
+- borda e input com chroma reduzido sem trocar seus papéis.
 
 O foco passou a usar uma composição de outline claro e ring de fundo para
 continuar distinguível tanto em controles escuros quanto em ações laranja.
@@ -61,14 +66,17 @@ Alterações visíveis em:
 
 - AuthShell, com shell arredondado, mídia da plataforma e logo global;
 - `public/brand/logo-negativo.svg` e `public/brand/login-capa.webp`;
-- `src/lib/brand.ts` e `src/app/icon.svg`;
+- `src/lib/brand.ts`, `public/favicon/*` e o metadata de
+  `src/app/layout.tsx`;
 - `/comprar/[slug]`;
 - `/checkout/sucesso`;
 - `/app/checkout/sucesso`;
 - certificado público e seu status de preparação/validação.
 
-A feature dinâmica de mídia de Auth já existente no baseline foi preservada e
-não foi duplicada; os assets estáticos de plataforma também foram mantidos.
+A feature dinâmica de mídia de Auth que existe como alteração independente na
+worktree principal não foi duplicada nesta branch; apenas os assets estáticos
+de plataforma foram incorporados. O favicon file-based duplicado foi removido
+após a reconciliação com os assets já presentes em staging.
 
 ### Fase 5: aprendizagem
 
@@ -113,7 +121,8 @@ Financeiro, Auditoria e Operação não receberam marca como legenda de dados.
 
 - Texto principal mais quente, próximo da areia da marca.
 - Cards, muted e bordas menos azulados e mais neutros.
-- Botões primários, links de alta intenção e ações principais em laranja.
+- Botões principais continuam em petróleo; links, progresso e ações de atenção
+  podem usar laranja quando o consumidor explicita esse papel.
 - Foco de teclado mais claro e visível.
 - Seleção de texto e controles com papel próprio.
 - Sidebar com estados ativos menos dependentes de `primary`.
@@ -132,7 +141,8 @@ Rotas `/comprar/[slug]`, `/checkout/sucesso` e `/app/checkout/sucesso`:
 
 - logo da plataforma no topo;
 - card de compra com borda e raio mais refinados;
-- CTA principal laranja;
+- nenhuma ação comercial foi convertida automaticamente: o Checkout atual não
+  possui CTA explícito aprovado para `Button variant="accent"`;
 - estados de indisponibilidade, interesse, processamento e retry dentro da
   mesma hierarquia visual.
 
@@ -155,8 +165,9 @@ Rotas `/comprar/[slug]`, `/checkout/sucesso` e `/app/checkout/sucesso`:
 ### Admin e Support
 
 - Cursos do Admin com hover e fallback menos saturados;
-- ações primárias em laranja;
-- métricas e tabelas com texto areia e superfícies neutras;
+- ações destacadas usam laranja somente quando o papel foi explicitado; o
+  botão padrão continua petróleo;
+- métricas e tabelas usam texto de apoio teal-sage e superfícies neutras;
 - seleção/foco do editor de certificado separados visualmente;
 - upload, processamento e avisos com papéis informativos/warning;
 - Financeiro, Auditoria e Operação preservam semântica própria.
@@ -171,18 +182,19 @@ Em `/admin/configuracoes/design-system`, a equipe pode revisar:
 - progresso ativo e completo;
 - input/foco;
 - tabs;
-- superfície operacional e superfície quente.
+- superfície operacional e superfície quente;
+- Alert, Empty, Dropdown, Dialog, Table, links, Avatar e upload.
 
 ## Verificação executada
 
 - `bun install --frozen-lockfile`: 550 pacotes instalados.
 - `bun run check`: passou.
 - `bun run typecheck`: passou.
-- `bun run docs:check`: passou; 48 documentos canônicos válidos.
-- Testes focados iniciais: 42/42 passaram.
-- Testes focados de regressão após ajustes: 46/46 passaram.
-- `bun run verify:quick`: passou; 429 arquivos, 2.939 testes, 0 falhas.
-- `bun run verify`: passou; build Next.js e Knip também concluídos sem falhas.
+- `bun run docs:check`: passou; 47 documentos canônicos válidos.
+- Testes focados das unidades anteriores: 46/46 passaram.
+- Testes focados desta unidade: 7 arquivos, 26/26 passaram.
+- Suíte completa: 423 arquivos, 2.926 testes, 0 falhas.
+- `NEXT_PUBLIC_APP_URL=http://localhost:3000 bun run build`: passou.
 - `git diff --check`: sem erros de whitespace.
 
 A primeira tentativa de build sem `NEXT_PUBLIC_APP_URL` falhou pela validação
@@ -195,11 +207,15 @@ passou compilação, TypeScript, coleta de páginas e otimização.
   criada e o build/testes confirmam sua integração, mas a revisão humana de
   viewport estreito e contraste deve ser feita ao abrir a rota em ambiente
   autorizado.
-- `DESIGN.md` aponta para o commit de implementação integrado neste change set.
+- `DESIGN.md` e a matriz de consumidores apontam para o commit de implementação
+  `ef34238` como baseline verificável.
 - O relatório original e os arquivos de pesquisa permanecem como artefatos de
   referência; não foram sobrescritos.
-- A integração com `staging` segue o fluxo de PR documentado; a inspeção visual
-  manual permanece um gate humano separado dos testes automatizados.
+- A decisão de migrar os três consumidores restantes de `Badge default` foi
+  preservada como pendência semântica; não foi feita uma troca por aparência.
+- Um asset vetorial oficial dedicado ainda não foi fornecido; nenhum vetor foi
+  fabricado a partir do raster existente.
+- A branch foi commitada localmente, mas ainda não foi integrada ou publicada.
 
 ## Refinamentos posteriores
 
@@ -207,7 +223,7 @@ Após a primeira implementação, a revisão Impeccable orientou uma segunda
 passada:
 
 - `button-primary` permaneceu petróleo, enquanto `primary` continuou laranja
-  para ênfase, seleção e progresso;
+  para ênfase funcional, seleção e progresso;
 - o texto principal passou a usar um creme claro já próximo da areia;
 - `support-foreground` foi refinado para um teal-sage transicional, mais harmônico com o petróleo;
 - cards, muted, secondary e sidebar foram reposicionados entre a escala original

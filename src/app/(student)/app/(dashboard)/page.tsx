@@ -209,22 +209,38 @@ function _InfoPill({
   );
 }
 
-const getCatalogCardLabel = (
-  course: StudentCatalogCourseCard,
-  hasActiveAccess: boolean
-) => {
+const CATALOG_ACCESS_BADGE_VARIANTS = {
+  active: "secondary",
+  completed: "learning",
+  expiring: "warning",
+  locked: "secondary",
+  revoked: "secondary",
+} as const;
+
+const getCatalogCardBadge = (course: StudentCatalogCourseCard) => {
+  const hasActiveAccess = course.accessStatus === "active";
+
   if (course.availabilityPreset === "coming_soon" && !hasActiveAccess) {
-    return "Em breve";
+    return { label: "Em breve", variant: "outline" as const };
   }
+
   if (course.availabilityPreset === "sales_paused" && !hasActiveAccess) {
-    return "Inscrições fechadas";
+    return { label: "Inscrições fechadas", variant: "outline" as const };
   }
-  return getStudentCatalogAccessPresentation({
+
+  const presentation = getStudentCatalogAccessPresentation({
     accessStatus: course.accessStatus,
     expiresAt: course.expiresAt ?? new Date(),
     progressPercent: course.progressPercent,
     revokedReason: course.revokedReason,
-  }).label;
+  });
+
+  return {
+    label: presentation.label,
+    variant: hasActiveAccess
+      ? CATALOG_ACCESS_BADGE_VARIANTS[presentation.tone]
+      : ("outline" as const),
+  };
 };
 
 function CourseCard({
@@ -233,7 +249,7 @@ function CourseCard({
   course: StudentCatalogCourseCard;
 }): React.JSX.Element {
   const hasActiveAccess = course.accessStatus === "active";
-  const accessLabel = getCatalogCardLabel(course, hasActiveAccess);
+  const accessBadge = getCatalogCardBadge(course);
   const primaryHref = route(
     getStudentCoursePrimaryHref({
       courseId: course.courseId,
@@ -289,7 +305,7 @@ function CourseCard({
                 ? ""
                 : "border-card-foreground/30 border-dashed bg-transparent text-card-foreground/80 hover:bg-transparent"
             }
-            variant={hasActiveAccess ? "default" : "outline"}
+            variant={accessBadge.variant}
           >
             {hasActiveAccess && (
               <HugeiconsIcon
@@ -298,7 +314,7 @@ function CourseCard({
                 size={14}
               />
             )}
-            {accessLabel}
+            {accessBadge.label}
           </Badge>
         </div>
 

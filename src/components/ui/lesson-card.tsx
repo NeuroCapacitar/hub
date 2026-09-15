@@ -178,7 +178,7 @@ function getStatusBadge({
 
   if (status === "in_progress") {
     return (
-      <Badge className={className} variant="default">
+      <Badge className={className} variant="progress">
         Em andamento
       </Badge>
     );

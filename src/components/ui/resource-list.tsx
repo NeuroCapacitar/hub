@@ -111,7 +111,7 @@ export function ResourceItemDragHandle({
   return (
     <button
       aria-label={ariaLabel}
-      className="relative flex size-11 shrink-0 cursor-grab items-center justify-center p-0 text-muted-foreground opacity-50 outline-none transition-[color,opacity] hover:text-foreground focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring/50 active:cursor-grabbing group-hover:opacity-100 sm:size-10"
+      className="relative flex size-11 shrink-0 cursor-grab items-center justify-center rounded-md border border-transparent p-0 text-muted-foreground opacity-50 outline-none transition-[color,opacity] hover:text-foreground focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 focus-visible:ring-2 focus-visible:ring-background active:cursor-grabbing group-hover:opacity-100 sm:size-10"
       {...attributes}
       {...listeners}
       type="button"

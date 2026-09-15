@@ -1,8 +1,8 @@
 ---
 status: canonical
 owner: design-and-engineering
-last_verified_commit: 106377c22baf164a55b94601555ab68ef46366a1
-last_verified_at: 2026-09-14
+last_verified_commit: ef34238
+last_verified_at: 2026-09-15
 ---
 
 # Sistema visual do NeuroCapacitar Hub
@@ -47,11 +47,12 @@ devem ser copiadas:
 Há decisões do Hub que prevalecem sobre a referência externa:
 
 - o produto é dark-only neste escopo e não possui seletor visual de tema;
+- não adicionar `prefers-reduced-motion` neste projeto.
 - o autoplay da mídia da tela de acesso é autorizado e pausa exclusivamente
   enquanto o ponteiro está sobre a imagem; a navegação manual usa indicadores e
   arraste;
 - a navegação da mídia da tela de acesso usa indicadores compactos centralizados,
-  com o estado ativo alongado, sem setas laterais;
+  com o estado ativo alongado, sem setas laterais.
 
 As capas de Cursos e a mídia visual existente de Aulas são conteúdo visual do
 produto. Seus gradientes, blur, escala e sombras existentes podem permanecer;
@@ -73,13 +74,13 @@ aplicação inteira. Identificadores técnicos, seeds, aliases e contratos
 externos que ainda contenham `PROTEA-R` só devem ser alterados junto com o
 contrato correspondente, nunca por uma troca visual automática.
 
-O favicon file-based da aplicação é
-[src/app/icon.svg](src/app/icon.svg). Ele é uma composição técnica do fundo
-escuro do Hub com o mark aprovado atualmente disponível em
-`public/brand/logo-negativo.svg`; não é autorização para criar uma nova logo
-ou para usar a identidade de um Curso como nome global. Se surgir um mark
-dedicado da NeuroCapacitar, substitua somente a composição do ícone e preserve
-o contrato `app/icon.svg` do Next.js.
+Os favicons da aplicação vivem em `public/favicon/` e são declarados no
+metadata de [src/app/layout.tsx](src/app/layout.tsx). Os arquivos atuais são
+assets aprovados já presentes no fluxo de release; esta decisão não autoriza
+criar uma nova logo, usar a identidade de um Curso como nome global ou
+substituir o mark por uma composição improvisada. Se surgir um mark dedicado
+da NeuroCapacitar, substitua somente os arquivos de favicon aprovados e
+preserve os formatos e referências metadata existentes.
 
 ## Como interpretar este documento
 
@@ -234,8 +235,19 @@ por papel, não por aparência:
   o consumidor explicita esse papel;
 - `button-primary` e `button-primary-foreground`: ação principal dos botões,
   atualmente em petróleo;
-- `selection` e `selection-foreground`: seleção de texto e controles selecionados;
-- `focus` e `focus-foreground`: indicador de foco de teclado;
+- `Button variant="accent"`: ação laranja opt-in; não remapear o `default`
+  nem migrar consumidores de produção sem uma decisão específica;
+- `text-selection` e `text-selection-foreground`: seleção de texto;
+- `control-selected` e `control-selected-foreground`: controles selecionados;
+- `selection` e `selection-foreground`: aliases de compatibilidade para o papel
+  de controle selecionado;
+- `slider-thumb`: foreground semântico do thumb do Slider, pareado inicialmente
+  com `control-selected-foreground` sem depender de `primary-foreground`;
+- `focus` e `focus-foreground`: indicador de foco de teclado; os controles
+  compartilhados usam borda creme, outline externo e ring de fundo em duas
+  camadas. Slider, Accordion, Table e Sidebar usam a mesma intenção com
+  receitas próprias que preservam thumb, overflow, área de rolagem e hit areas
+  da navegação;
 - `progress-active`, `progress-complete` e `learning-complete`: andamento e
   conclusão de aprendizagem, sem substituir estados técnicos;
 - `link`: links que precisam de ênfase textual;
@@ -257,14 +269,22 @@ separada: `L` expressa luminosidade perceptual, `C` intensidade cromática e
 |---|---|---|
 | tela | `--background: oklch(0.237 0.025 204.4)` | fundo contínuo da aplicação |
 | texto principal | `--foreground: var(--brand-cream)` | títulos, prosa e controles |
-| superfície | `--card: oklch(0.275 0.022 203)` | agrupamento real de conteúdo |
+| superfície | `--card: oklch(0.272 0.027 203.5)` | agrupamento real de conteúdo |
 | navegação | `--sidebar: oklch(0.221 0.023 205.4)` | sidebar autenticada |
 | ação de botão | `--button-primary: var(--brand-petroleum)` | botões principais |
+| foreground de botão | `--button-primary-foreground: var(--brand-cream)` | texto e ícones sobre botões principais |
 | ênfase/seleção | `--primary: var(--brand-orange)` | seleção, progresso e atenção explícita |
-| seleção | `--selection: oklch(0.675 0.143 54 / 0.45)` | texto e controles selecionados |
-| foco | `--focus: var(--brand-sand)` | indicador de teclado |
-| apoio | `--muted: oklch(0.305 0.020 203)` | contexto e placeholders |
-| texto de apoio | `--muted-foreground: oklch(0.720 0.018 79)` | informação secundária legível |
+| seleção de texto | `--text-selection: oklch(0.675 0.143 54)` | destaque de texto selecionado |
+| controle selecionado | `--control-selected: oklch(0.675 0.143 54)` | Checkbox, Radio, Switch, Calendar e Slider |
+| seleção legada | `--selection: var(--control-selected)` | alias temporário de compatibilidade |
+| thumb do Slider | `--slider-thumb: var(--control-selected-foreground)` | foreground do controle de faixa |
+| foco | `--focus: var(--brand-cream)` | indicador de teclado |
+| superfície de apoio | `--muted: oklch(0.309 0.033 204.9)` | contexto e placeholders |
+| texto de apoio | `--muted-foreground: var(--support-foreground)` | informação secundária legível |
+| suporte | `--support-foreground: oklch(0.76 0.035 178)` | descrições, helpers e contexto secundário |
+| ação secundária | `--secondary: oklch(0.395 0.048 203.5)` | ação ou estado secundário |
+| estrutura | `--border: oklch(0.495 0.035 202.9 / 0.24)` | bordas e separadores sutis |
+| entrada | `--input: oklch(0.495 0.035 202.9 / 0.3)` | fundos e bordas de campos |
 | ênfase | `--accent: var(--brand-orange)` | destaque pontual, não texto longo |
 | progresso ativo | `--progress-active: var(--brand-orange)` | andamento mensurável |
 | conclusão de aprendizagem | `--learning-complete: var(--brand-olive)` | conclusão contextual de Curso/Aula |
@@ -273,15 +293,22 @@ separada: `L` expressa luminosidade perceptual, `C` intensidade cromática e
 | alerta | `--warning: oklch(0.769 0.13 78)` | atenção e risco reversível |
 | informação | `--info: oklch(0.68 0.1 245)` | contexto informativo |
 
-Os anchors de marca (`--brand-petroleum`, `--brand-sand`, `--brand-orange`,
-`--brand-olive` e `--brand-terracotta`) documentam a identidade e não devem
-ser consumidos diretamente pelos componentes. Componentes usam os tokens
-funcionais e, quando necessário, um token de componente/estado que os referencia.
+Os anchors oficiais de marca (`--brand-petroleum`, `--brand-sand`,
+`--brand-orange`, `--brand-olive` e `--brand-terracotta`) documentam a
+identidade e não devem ser consumidos diretamente pelos componentes.
+`--brand-cream` é um token de foreground derivado para a aplicação, não um
+anchor adicional do manual. Componentes usam os tokens funcionais e, quando
+necessário, um token de componente/estado que os referencia.
 
 `--border`, `--input`, `--ring`, `--focus` e `--sidebar-*` também usam os mesmos papéis
 em OKLCH, inclusive com alpha quando a função é separar sem criar uma nova
 superfície. O tema é dark-only e os blocos `:root` e `.dark` permanecem
 equivalentes até existir uma decisão de produto para outro tema.
+
+Na navegação principal, itens não ativos usam `muted-foreground`, o mesmo papel
+teal-sage das descrições e textos auxiliares. O item ativo preserva
+`sidebar-accent` e `sidebar-accent-foreground`; hover e foco continuam usando
+os estados próprios da Sidebar.
 
 Use sempre o token semântico (`bg-card`, `text-muted-foreground`,
 `border-border`, `text-success`, `bg-warning/15` etc.), não a cor que hoje
@@ -408,8 +435,10 @@ Ritmo vertical:
 ### Botões e ações
 
 Use `Button` de `src/components/ui/button.tsx`. Ele possui variantes
-`default`, `outline`, `secondary`, `ghost`, `destructive` e `link`, além de
-sizes padrão, `sm`, `lg` e `icon`.
+`default`, `accent`, `outline`, `secondary`, `ghost`, `destructive` e `link`,
+além de sizes padrão, `sm`, `lg` e `icon`. `default` continua sendo o botão
+principal em petróleo; `accent` é uma ação laranja opt-in, reservada a uma
+intenção destacada já aprovada.
 
 - ações usam `<button>`; navegação usa `<a>` ou `Link`;
 - o label comunica a ação sem depender do ícone;
@@ -566,7 +595,6 @@ no scroll.
 
 - usar movimento somente para mudança de estado, foco, hover, continuidade ou
   confirmação da ação;
-- não consultar preferências de movimento do sistema para alterar a animação;
 - nunca mover imagem de capa ou mídia de Aula no hover como requisito de
   entendimento;
 - transicionar propriedades específicas, como fazem os primitives existentes;
@@ -574,8 +602,9 @@ no scroll.
 - `animate-spin` pode indicar carregamento e `animate-pulse` pode indicar
   skeleton, desde que o texto de estado também exista quando necessário;
 - não adicionar uma biblioteca de animação para microinteração;
+- não adicionar `prefers-reduced-motion` neste projeto.
 
-O carrossel de banners do Dashboard mantém o autoplay existente de seis
+O carrossel de banners do dashboard mantém o autoplay existente de seis
 segundos. A mídia da tela de acesso também possui autorização explícita para
 autoplay de seis segundos, com pausa exclusivamente em hover e navegação manual
 por indicadores e arraste, sem botão visual de play/pausa. Outros carrosséis
@@ -653,8 +682,8 @@ Antes de considerar uma interface pronta, confirme:
 - copy visível está em português, com termos do glossário e acentuação correta;
 - não há cor, ícone ou movimento funcionando como único indicador;
 - efeitos de capas e mídia de Aulas permanecem somente onde a exceção permite;
-- não há `transition-all`, gradiente decorativo novo ou CSS de marca
-  Vercel;
+- não há `prefers-reduced-motion`, `transition-all`, gradiente decorativo novo
+  ou CSS de marca Vercel;
 - a ordem de leitura funciona sem estilos e a navegação por teclado mantém o
   foco visível.
 

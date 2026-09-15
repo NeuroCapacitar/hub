@@ -10,7 +10,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <section
       aria-label="Tabela de dados"
-      className="relative w-full overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="relative w-full overflow-x-auto border border-transparent focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 focus-visible:ring-2 focus-visible:ring-background"
       data-slot="table-container"
       {...TABLE_CONTAINER_ACCESSIBILITY_PROPS}
     >

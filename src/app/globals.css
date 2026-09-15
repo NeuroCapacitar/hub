@@ -27,8 +27,13 @@
   --color-support-foreground: var(--support-foreground);
   --color-button-primary: var(--button-primary);
   --color-button-primary-foreground: var(--button-primary-foreground);
+  --color-text-selection: var(--text-selection);
+  --color-text-selection-foreground: var(--text-selection-foreground);
+  --color-control-selected: var(--control-selected);
+  --color-control-selected-foreground: var(--control-selected-foreground);
   --color-selection: var(--selection);
   --color-selection-foreground: var(--selection-foreground);
+  --color-slider-thumb: var(--slider-thumb);
   --color-focus: var(--focus);
   --color-focus-foreground: var(--focus-foreground);
   --color-link: var(--link);
@@ -123,8 +128,13 @@ html {
   --muted-foreground: var(--support-foreground);
   --accent: var(--brand-orange);
   --accent-foreground: oklch(0.237 0.025 204.4);
-  --selection: var(--brand-petroleum);
-  --selection-foreground: var(--brand-cream);
+  --text-selection: oklch(0.675 0.143 54);
+  --text-selection-foreground: oklch(0.237 0.025 204.4);
+  --control-selected: oklch(0.675 0.143 54);
+  --control-selected-foreground: oklch(0.237 0.025 204.4);
+  --selection: var(--control-selected);
+  --selection-foreground: var(--control-selected-foreground);
+  --slider-thumb: var(--control-selected-foreground);
   --focus: var(--brand-cream);
   --focus-foreground: oklch(0.237 0.025 204.4);
   --link: var(--brand-orange);
@@ -142,8 +152,8 @@ html {
   --warning-foreground: oklch(0.18 0.025 204);
   --info: oklch(0.68 0.1 245);
   --info-foreground: oklch(0.18 0.025 204);
-  --border: oklch(0.495 0.061 202.9 / 0.24);
-  --input: oklch(0.495 0.061 202.9 / 0.3);
+  --border: oklch(0.495 0.035 202.9 / 0.24);
+  --input: oklch(0.495 0.035 202.9 / 0.3);
   --ring: var(--focus);
   --chart-1: oklch(0.64 0.12 203);
   --chart-2: var(--brand-orange);
@@ -168,8 +178,8 @@ body {
 }
 
 ::selection {
-  color: var(--selection-foreground);
-  background: var(--selection);
+  color: var(--text-selection-foreground);
+  background: var(--text-selection);
 }
 
 .dark {
@@ -196,8 +206,13 @@ body {
   --muted-foreground: var(--support-foreground);
   --accent: var(--brand-orange);
   --accent-foreground: oklch(0.237 0.025 204.4);
-  --selection: var(--brand-petroleum);
-  --selection-foreground: var(--brand-cream);
+  --text-selection: oklch(0.675 0.143 54);
+  --text-selection-foreground: oklch(0.237 0.025 204.4);
+  --control-selected: oklch(0.675 0.143 54);
+  --control-selected-foreground: oklch(0.237 0.025 204.4);
+  --selection: var(--control-selected);
+  --selection-foreground: var(--control-selected-foreground);
+  --slider-thumb: var(--control-selected-foreground);
   --focus: var(--brand-cream);
   --focus-foreground: oklch(0.237 0.025 204.4);
   --link: var(--brand-orange);
@@ -215,8 +230,8 @@ body {
   --warning-foreground: oklch(0.18 0.025 204);
   --info: oklch(0.68 0.1 245);
   --info-foreground: oklch(0.18 0.025 204);
-  --border: oklch(0.495 0.061 202.9 / 0.24);
-  --input: oklch(0.495 0.061 202.9 / 0.3);
+  --border: oklch(0.495 0.035 202.9 / 0.24);
+  --input: oklch(0.495 0.035 202.9 / 0.3);
   --ring: var(--focus);
   --chart-1: oklch(0.64 0.12 203);
   --chart-2: var(--brand-orange);
