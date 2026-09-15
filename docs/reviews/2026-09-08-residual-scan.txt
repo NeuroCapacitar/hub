@@ -1,0 +1,4 @@
+timestamp=2026-09-08T12:31:53-03:00
+roots=9
+patternCount=20
+residualCount=0
