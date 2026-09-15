@@ -26,9 +26,9 @@ institucional. Cada alias acrescenta uma variação semântica:
 segurança da conta, acesso liberado, atenção à expiração, abertura de vendas,
 conquista de certificado ou solicitação operacional de suporte.
 
-O asset oficial da marca é `public/protear/logo-negativo.svg`, referenciado no
+O asset oficial da marca é `public/brand/logo-negativo.svg`, referenciado no
 HTML Hosted por URL HTTPS absoluta:
-`https://app.neurocapacitar.com.br/protear/logo-negativo.svg`. O HTML sempre
+`https://app.neurocapacitar.com.br/brand/logo-negativo.svg`. O HTML sempre
 deve incluir `alt="PROTEA-R"`, dimensões explícitas, `border="0"` e
 `display:block`. Não usar ngrok, localhost, bucket Development, data URI ou
 fonte externa como dependência da identidade visual compartilhada.
@@ -95,7 +95,7 @@ construídos no Hub. Nenhum token é criado, persistido ou derivado no template.
 
 - `from`: `RESEND_FROM_EMAIL`, controlado pelo Hub;
 - `to`: derivado pelo Hub;
-- `replyTo`: `SUPPORT_EMAIL` por padrão e e-mail da aluna no suporte;
+- `replyTo`: `SUPPORT_EMAIL` por padrão e e-mail do aluno no suporte;
 - `subject`: enviado pelo Hub durante a migração para preservar paridade;
 - conteúdo e plain text: Resend;
 - alias: catálogo server-only.
@@ -106,7 +106,7 @@ O payload Hosted não pode misturar `template` com `html`, `text` ou `react`.
 
 1. editar o draft no Resend;
 2. testar com variáveis controladas;
-3. revisar HTML, plain text, subject, links e conteúdo fornecido pela aluna;
+3. revisar HTML, plain text, subject, links e conteúdo fornecido pelo aluno;
 4. publicar somente após os testes locais e o checker;
 5. tratar `has_unpublished_versions` como warning enquanto houver uma versão publicada válida;
 6. depois de um revert, testar e publicar o novo draft antes de reprocessar a outbox.

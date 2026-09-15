@@ -20,7 +20,16 @@ para emissões futuras. O perfil emissor global, com razão social, marca e CNPJ
 Curso. Não há HTML livre, campos arbitrários ou inferência automática de
 posicionamento.
 
-Na composição do template, a arte de fundo A4, o nome da Aluna, o código de
+O perfil emissor global é administrado em **Admin > Configurações**. Razão social
+e CNPJ são uma unidade: estado parcial é rejeitado antes da transação. O salvamento
+de `app_settings` e `certificate_issuer_profiles` é atômico e registra
+`settings.updated` com os valores anterior e novo; o CNPJ é mascarado na auditoria.
+O CNPJ pode ser informado com ou sem máscara, mas precisa conter 14 dígitos,
+passar pelos dígitos verificadores e é normalizado para o formato brasileiro
+antes de ser salvo. A tela informa quais dados impedem o perfil de ficar pronto.
+O diagnóstico da JMVStream pertence a **Admin > Operação**.
+
+Na composição do template, a arte de fundo A4, o nome do Aluno, o código de
 validação e o QR de validação são obrigatórios e devem permanecer visíveis no
 layout. O título do Curso e o nome do emissor continuam disponíveis e são
 preenchidos automaticamente, mas podem ficar ocultos. O perfil emissor global,
@@ -77,9 +86,14 @@ já removida e falha de provider pode ser repetida.
 
 Certificado preserva código público, Conta, Curso, publicação interna de origem, data, carga horária e snapshots de nome e título. Seus estados são `valid` e `revoked`.
 
+Uma emissão comum usa o título atual de `courses` no momento da emissão e o
+grava no snapshot; Certificados já emitidos não acompanham renomeações. A
+reconciliação histórica usa deliberadamente o `title_snapshot` da publicação
+de origem para preservar o significado da conclusão antiga.
+
 ### REG-DAT-001 Emissão exige conclusão e unicidade válida
 
-`issueManualCertificate` cria `CourseCompletion` se ela ainda não existir e somente quando não há Certificado anterior para a Aluna no Curso. `completeLesson` cria a primeira conclusão quando todas as Aulas obrigatórias da publicação vigente estão concluídas. Somente a transação que insere essa primeira `CourseCompletion` pode iniciar a emissão automática; conflito com uma conclusão já existente encerra o caminho sem tentar Certificado ou outbox. Depois de uma revogação, somente `reissueCertificate` pode criar nova evidência, sempre na publicação de origem.
+`issueManualCertificate` cria `CourseCompletion` se ela ainda não existir e somente quando não há Certificado anterior para o Aluno no Curso. `completeLesson` cria a primeira conclusão quando todas as Aulas obrigatórias da publicação vigente estão concluídas. Somente a transação que insere essa primeira `CourseCompletion` pode iniciar a emissão automática; conflito com uma conclusão já existente encerra o caminho sem tentar Certificado ou outbox. Depois de uma revogação, somente `reissueCertificate` pode criar nova evidência, sempre na publicação de origem.
 
 **Invariantes:** `CourseCompletion` é única por Conta e Curso; o código público é único; não há segundo Certificado válido para a mesma Conta e Curso sem lifecycle explícito; Certificado revogado bloqueia emissão automática; snapshots e a publicação de origem preservam o texto emitido. Publicação posterior não reabre a conclusão nem gera novo certificado automaticamente.
 
@@ -95,7 +109,7 @@ Na área autenticada, Certificado `pending` aparece como “Preparando” e atua
 
 ### REG-DAT-002 Revogação preserva histórico
 
-`revokeCertificate` altera estado, categoria, detalhe interno, autoria e data; não apaga o registro. Admin pode emitir, revogar, reemitir qualquer registro histórico e reconciliar Certificados. `support` não emite, revoga nem reconcilia; pode somente reemitir o Certificado existente mais recente da Aluna no Curso, conforme [DEC-DISC-014](../decisions.md#dec-disc-014). A action exige a capacidade correspondente e o comando reaplica a regra de registro mais recente dentro do lock transacional. A confirmação é validada novamente no parser server-side da action; remover ou forjar o controle visual não autoriza o comando. A consulta pública mostra estado, data e categoria legível, nunca detalhe, autoria ou evidências. A revogação bloqueia imediatamente novos previews e downloads nas rotas do Hub, mas não consegue recolher PDFs já baixados nem desfazer cópias compartilhadas anteriormente.
+`revokeCertificate` altera estado, categoria, detalhe interno, autoria e data; não apaga o registro. Admin pode emitir, revogar, reemitir qualquer registro histórico e reconciliar Certificados. `support` não emite, revoga nem reconcilia; pode somente reemitir o Certificado existente mais recente do Aluno no Curso, conforme [DEC-DISC-014](../decisions.md#dec-disc-014). A action exige a capacidade correspondente e o comando reaplica a regra de registro mais recente dentro do lock transacional. A confirmação é validada novamente no parser server-side da action; remover ou forjar o controle visual não autoriza o comando. A consulta pública mostra estado, data e categoria legível, nunca detalhe, autoria ou evidências. A revogação bloqueia imediatamente novos previews e downloads nas rotas do Hub, mas não consegue recolher PDFs já baixados nem desfazer cópias compartilhadas anteriormente.
 
 ### REG-DAT-003 Reemissão cria nova evidência
 
@@ -104,9 +118,9 @@ Na área autenticada, Certificado `pending` aparece como “Preparando” e atua
 ### REG-DAT-003A Hardening do ciclo e da rastreabilidade
 
 Reemissão por `support` somente pode partir do registro histórico mais recente da
-Aluna no Curso. Admin pode selecionar um registro histórico anterior para a
+Aluno no Curso. Admin pode selecionar um registro histórico anterior para a
 correção excepcional. Ambos os caminhos usam lock transacional por par
-Aluna/Curso; o predecessor revogado não é reescrito e duas reemissões
+Aluno/Curso; o predecessor revogado não é reescrito e duas reemissões
 concorrentes não criam ramificação. A UI aplica a mesma fronteira por papel.
 Novas emissões usam código no
 formato `PRT-` seguido de 32 caracteres hexadecimais; o lookup continua
@@ -136,7 +150,7 @@ deve seguir o workflow protegido após preflight e backup.
 
 `/certificados/[code]` é a página canônica de validação, preview e compartilhamento. `consumePublicCertificateLookup`, em `src/features/certificates/public-rate-limit.ts`, aplica limite antes de `getCertificateByCode`; a mesma barreira antecede a leitura da rota `/certificados/[code]/pdf`. Código inexistente não revela outros Certificados da pessoa.
 
-A página mantém apenas o resumo contextual da Aluna e do Curso, o estado e o código público; os demais claims permanecem no PDF. Somente `status = valid` e `render_status = ready` mostra a imagem de preview e a ação de download. `pending`, `failed` e `revoked` permanecem consultáveis com seu estado seguro, sem preview, download ou URL assinada. A rota do PNG gera ou reutiliza o artefato privado e responde com redirect inline; a rota do PDF repete a validação de estado, exige chave e digest, verifica o SHA-256 no R2 e só então responde com redirect temporário para uma URL assinada curta. A página publica `noindex,nofollow`; as respostas de redirect publicam `X-Robots-Tag: noindex, nofollow`. Códigos de Certificado são redigidos no pathname enviado ao Sentry, e respostas de erro não incluem detalhes do provider.
+A página mantém apenas o resumo contextual do Aluno e do Curso, o estado e o código público; os demais claims permanecem no PDF. Somente `status = valid` e `render_status = ready` mostra a imagem de preview e a ação de download. `pending`, `failed` e `revoked` permanecem consultáveis com seu estado seguro, sem preview, download ou URL assinada. A rota do PNG gera ou reutiliza o artefato privado e responde com redirect inline; a rota do PDF repete a validação de estado, exige chave e digest, verifica o SHA-256 no R2 e só então responde com redirect temporário para uma URL assinada curta. A página publica `noindex,nofollow`; as respostas de redirect publicam `X-Robots-Tag: noindex, nofollow`. Códigos de Certificado são redigidos no pathname enviado ao Sentry, e respostas de erro não incluem detalhes do provider.
 
 ## Dados técnicos e manutenção
 
@@ -153,13 +167,13 @@ Uma solicitação real é um incidente excepcional: registrar o caso no canal op
 - remove sessões expiradas;
 - remove limites expirados da consulta pública de certificados;
 - consolida eventos de analytics anteriores ao dia atual em métricas diárias;
-- remove eventos brutos de analytics após 90 dias e métricas diárias após 13 meses;
+- remove eventos brutos de analytics após 12 meses e métricas diárias após 13 meses;
 - remove uploads administrativos temporários abandonados após 24 horas;
 - reconcilia artes de template substituídas por uma fila persistente, com
   carência, claim, nova verificação de referência e retry;
 - reconcilia PDFs determinísticos órfãos de Certificados revogados somente após expirar o lease, confirmar ausência de claim e de mensagem de renderização em processamento e repetir a verificação imediatamente antes da exclusão.
 
-As preferências de analytics da Aluna estão em [Aprendizagem e progresso](learning-content-and-progress.md). Base legal, canal de direitos, retenção de registros financeiros e qualquer anonimização exigem decisão jurídica futura.
+As preferências de analytics do Aluno estão em [Aprendizagem e progresso](learning-content-and-progress.md). Base legal, canal de direitos, retenção de registros financeiros e qualquer anonimização exigem decisão jurídica futura.
 
 ## Concorrência e falhas
 

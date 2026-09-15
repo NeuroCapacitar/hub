@@ -2,6 +2,18 @@ import type * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+type CardTitleVariant = "card" | "page" | "section";
+
+const getCardTitleClass = (variant: CardTitleVariant): string => {
+  if (variant === "page") {
+    return "type-page-title";
+  }
+  if (variant === "section") {
+    return "type-section-title";
+  }
+  return "type-card-title";
+};
+
 function Card({
   className,
   density = "default",
@@ -50,13 +62,15 @@ function CardHeader({
 function CardTitle({
   as: Component = "div",
   className,
+  variant = "card",
   ...props
 }: React.ComponentProps<"div"> & {
   as?: "div" | "h1" | "h2" | "h3" | "h4";
+  variant?: CardTitleVariant;
 }) {
   return (
     <Component
-      className={cn("type-card-title", className)}
+      className={cn(getCardTitleClass(variant), className)}
       data-slot="card-title"
       {...props}
     />

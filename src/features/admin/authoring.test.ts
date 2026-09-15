@@ -9,7 +9,7 @@ const {
   deleteR2Objects,
   ensureJmvstreamCourseFolder,
   query,
-  recalculateCourseWorkloadHours,
+  recalculateCourseWorkloadHoursWithClient,
   resolveJmvstreamPlayerThumbnailUrl,
   uploadCourseCoverFile,
   publishR2Object,
@@ -27,7 +27,7 @@ const {
   deleteR2Objects: vi.fn(),
   ensureJmvstreamCourseFolder: vi.fn(),
   query: vi.fn(),
-  recalculateCourseWorkloadHours: vi.fn(),
+  recalculateCourseWorkloadHoursWithClient: vi.fn(),
   resolveJmvstreamPlayerThumbnailUrl: vi.fn(),
   uploadCourseCoverFile: vi.fn(),
   publishR2Object: vi.fn(),
@@ -41,7 +41,7 @@ const {
 vi.mock("server-only", () => ({}));
 vi.mock("@/db", () => ({ getPool: () => ({ connect, query }) }));
 vi.mock("@/features/courses/server", () => ({
-  recalculateCourseWorkloadHours,
+  recalculateCourseWorkloadHoursWithClient,
 }));
 vi.mock("@/features/jmvstream/server", () => ({
   deleteJmvstreamAssetsForLesson,
@@ -120,6 +120,35 @@ const textDocument = {
 const versioningQueryResult = (sql: string): { rows: unknown[] } | null => {
   if (
     sql.includes(
+      "select l.id, l.module_id, m.course_id, l.course_publication_id"
+    )
+  ) {
+    return {
+      rows: [
+        {
+          course_id: "course-1",
+          course_publication_id: "course-publication-draft",
+          id: "lesson-1",
+          module_id: "module-1",
+          status: "draft",
+        },
+      ],
+    };
+  }
+  if (sql.includes("select m.id, m.course_id, m.course_publication_id")) {
+    return {
+      rows: [
+        {
+          course_id: "course-1",
+          course_publication_id: "course-publication-draft",
+          id: "module-1",
+          status: "draft",
+        },
+      ],
+    };
+  }
+  if (
+    sql.includes(
       "join course_publications cp on cp.id = m.course_publication_id"
     )
   ) {
@@ -166,7 +195,7 @@ const setDefaultMocks = (): void => {
   deleteJmvstreamAssetsForLesson.mockResolvedValue({ attempted: 0, failed: 0 });
   deleteR2Objects.mockResolvedValue(undefined);
   ensureJmvstreamCourseFolder.mockResolvedValue(null);
-  recalculateCourseWorkloadHours.mockResolvedValue(undefined);
+  recalculateCourseWorkloadHoursWithClient.mockResolvedValue(undefined);
   resolveJmvstreamPlayerThumbnailUrl.mockResolvedValue(null);
   uploadCourseCoverFile.mockResolvedValue(coverImage);
   publishR2Object.mockResolvedValue(undefined);
@@ -348,6 +377,45 @@ describe("admin authoring", () => {
         COURSE_ACTIVATION_UPDATE_PATTERN.test(String(sql))
       )
     ).toBe(false);
+    const readinessSql = query.mock.calls.find(
+      ([sql]) =>
+        String(sql).includes("from lessons l") &&
+        String(sql).includes("readiness_failure")
+    )?.[0];
+    expect(String(readinessSql)).toContain(
+      "nullif(l.video_external_id, '') is not null"
+    );
+  });
+
+  it("rejects publication when a JMVStream lesson has no persisted duration", async () => {
+    query.mockImplementation((sql: string) => {
+      if (
+        sql.includes("from course_publications") &&
+        sql.includes("for update")
+      ) {
+        return { rows: [{ id: "publication-1" }] };
+      }
+      if (sql.includes("from lessons") && sql.includes("video_provider")) {
+        return {
+          rows: [
+            {
+              id: "lesson-1",
+              lesson_title: "Aula sem duração",
+              module_title: "Módulo 1",
+              readiness_failure: "duration",
+              video_external_id: "video-1",
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+
+    await expect(
+      publishCoursePublication({ actorUserId: "admin-1", courseId: "course-1" })
+    ).rejects.toThrow("Aula sem duração");
+    expect(publishR2Object).not.toHaveBeenCalled();
   });
 
   it("rejects a published schedule that cannot fit an open Course access window", async () => {
@@ -549,8 +617,22 @@ describe("admin authoring", () => {
     ]);
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("insert into audit_logs"),
-      ["admin-1", "course.created", "course", result.courseId]
+      [
+        "admin-1",
+        "course.created",
+        "course",
+        result.courseId,
+        expect.any(String),
+      ]
     );
+    const auditCall = query.mock.calls.find(([sql]) =>
+      String(sql).includes("insert into audit_logs")
+    );
+    const auditMetadata = JSON.parse(String(auditCall?.[1]?.[4]));
+    expect(auditMetadata.changes).toMatchObject({
+      priceInCents: { after: 12_990, before: null },
+      title: { after: "Curso novo", before: null },
+    });
     expect(ensureJmvstreamCourseFolder).toHaveBeenCalledWith(result.courseId);
 
     const courseInsertIndex = query.mock.calls.findIndex(([sql]) =>
@@ -574,6 +656,48 @@ describe("admin authoring", () => {
 
     expect(courseInsertOrder).toBeLessThan(auditOrder);
     expect(auditOrder).toBeLessThan(folderSyncOrder);
+  });
+
+  it("allocates a colliding Course slug inside the creation transaction", async () => {
+    query.mockImplementation((sql: string, values?: unknown[]) => {
+      if (sql.includes("select id from courses where slug = $1")) {
+        const candidate = values?.[0];
+        return {
+          rows:
+            candidate === "curso-novo" || candidate === "curso-novo-2"
+              ? [{ id: "existing-course" }]
+              : [],
+        };
+      }
+      if (sql.includes("insert into courses")) {
+        return { rows: [{ id: values?.[0] }] };
+      }
+      return versioningQueryResult(sql) ?? { rows: [] };
+    });
+    const formData = new FormData();
+    formData.set("title", "Curso novo");
+    formData.set("price", "100,00");
+    formData.set("accessDurationMonths", "12");
+
+    const result = await saveCourse({ actorUserId: "admin-1", formData });
+    const calls = query.mock.calls.map(([sql]) => String(sql));
+    const beginIndex = calls.indexOf("begin");
+    const lockIndex = calls.findIndex((sql) =>
+      sql.includes("course-slug-allocation")
+    );
+    const slugIndex = calls.findIndex((sql) =>
+      sql.includes("select id from courses where slug = $1")
+    );
+    const insertIndex = calls.findIndex((sql) =>
+      sql.includes("insert into courses")
+    );
+    const courseInsert = query.mock.calls[insertIndex];
+
+    expect(result.courseId).toBeTruthy();
+    expect(lockIndex).toBeGreaterThan(beginIndex);
+    expect(slugIndex).toBeGreaterThan(lockIndex);
+    expect(insertIndex).toBeGreaterThan(slugIndex);
+    expect(courseInsert?.[1]?.[1]).toBe("curso-novo-3");
   });
 
   it("removes a newly uploaded course cover when course creation fails", async () => {
@@ -657,6 +781,10 @@ describe("admin authoring", () => {
       "course-1",
     ]);
     expect(ensureJmvstreamCourseFolder).toHaveBeenCalledWith("course-1");
+    expect(recalculateCourseWorkloadHoursWithClient).toHaveBeenCalledWith(
+      expect.anything(),
+      "course-1"
+    );
   });
 
   it("rechecks a duration reduction after R2 and cleans a rejected upload outside database transactions", async () => {
@@ -845,7 +973,7 @@ describe("admin authoring", () => {
     ).toBe(true);
   });
 
-  it("updates a module and recalculates both affected courses", async () => {
+  it("rejects a module update when the submitted Course differs from ownership", async () => {
     query.mockImplementation((sql: string) => {
       if (sql.includes("select course_id from modules")) {
         return { rows: [{ course_id: "course-old" }] };
@@ -863,37 +991,21 @@ describe("admin authoring", () => {
     formData.set("releaseMode", "delayed");
     formData.set("releaseDelayDays", "8");
 
-    await saveModule({ actorUserId: "admin-1", formData });
+    await expect(
+      saveModule({ actorUserId: "admin-1", formData })
+    ).rejects.toThrow("O módulo não pertence ao Curso informado.");
 
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("update modules"),
-      [
-        "course-new",
-        "Modulo atualizado",
-        "Descricao",
-        2,
-        "archived",
-        8,
-        "module-1",
-      ]
-    );
     expect(
-      query.mock.calls.find(([sql]) =>
-        String(sql).includes("update modules")
-      )?.[0]
-    ).toContain("release_delay_days");
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("insert into audit_logs"),
-      ["admin-1", "module.updated", "module", "module-1"]
-    );
-    expect(recalculateCourseWorkloadHours.mock.calls).toEqual([
-      ["course-new"],
-      ["course-old"],
-    ]);
+      query.mock.calls.some(([sql]) => String(sql).includes("update modules"))
+    ).toBe(false);
+    expect(recalculateCourseWorkloadHoursWithClient).not.toHaveBeenCalled();
   });
 
   it("creates modules as drafts regardless of submitted status", async () => {
     query.mockImplementation((sql: string) => {
+      if (sql.includes("select coalesce(max(sort_order), 0) + 1")) {
+        return { rows: [{ next_sort_order: 3 }] };
+      }
       if (sql.includes("insert into modules")) {
         return { rows: [{ id: "module-1" }] };
       }
@@ -904,7 +1016,7 @@ describe("admin authoring", () => {
     formData.set("courseId", "course-1");
     formData.set("title", "Modulo novo");
     formData.set("description", "Descricao");
-    formData.set("sortOrder", "1");
+    formData.set("sortOrder", "999");
     formData.set("status", "active");
     formData.set("releaseMode", "immediate");
     formData.set("releaseDelayDays", "residual invalid value");
@@ -918,7 +1030,7 @@ describe("admin authoring", () => {
         "course-publication-draft",
         "Modulo novo",
         "Descricao",
-        1,
+        3,
         "draft",
         0,
       ]
@@ -929,13 +1041,15 @@ describe("admin authoring", () => {
       )?.[0]
     );
     expect(insertSql).toContain("release_delay_days");
-    expect(insertSql).toContain(
-      "on conflict (course_publication_id, sort_order)"
+    expect(insertSql).not.toContain("on conflict");
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("select coalesce(max(sort_order), 0) + 1"),
+      ["course-publication-draft"]
     );
-    expect(insertSql).toContain(
-      "release_delay_days = excluded.release_delay_days"
+    expect(recalculateCourseWorkloadHoursWithClient).toHaveBeenCalledWith(
+      expect.anything(),
+      "course-1"
     );
-    expect(recalculateCourseWorkloadHours).toHaveBeenCalledWith("course-1");
   });
 
   it.each([
@@ -943,6 +1057,9 @@ describe("admin authoring", () => {
     MAX_RELEASE_DELAY_DAYS,
   ])("accepts a delayed module release of %i days", async (releaseDelayDays) => {
     query.mockImplementation((sql: string) => {
+      if (sql.includes("select coalesce(max(sort_order), 0) + 1")) {
+        return { rows: [{ next_sort_order: 1 }] };
+      }
       if (sql.includes("insert into modules")) {
         return { rows: [{ id: "module-1" }] };
       }
@@ -991,6 +1108,9 @@ describe("admin authoring", () => {
   it.each([
     "",
     "1.5",
+    "+1",
+    "0x10",
+    "1e1",
     "-1",
     "NaN",
     "Infinity",
@@ -1103,9 +1223,12 @@ describe("admin authoring", () => {
     );
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("insert into audit_logs"),
-      ["admin-1", "lesson.created", "lesson", "lesson-1"]
+      ["admin-1", "lesson.created", "lesson", "lesson-1", expect.any(String)]
     );
-    expect(recalculateCourseWorkloadHours).toHaveBeenCalledWith("course-1");
+    expect(recalculateCourseWorkloadHoursWithClient).toHaveBeenCalledWith(
+      expect.anything(),
+      "course-1"
+    );
   });
 
   it("rejects a lesson draft when the database does not return its identifier", async () => {
@@ -1133,7 +1256,7 @@ describe("admin authoring", () => {
       createLessonDraft({ actorUserId: "admin-1", formData })
     ).rejects.toThrow("Nao foi possivel criar a aula.");
 
-    expect(recalculateCourseWorkloadHours).not.toHaveBeenCalled();
+    expect(recalculateCourseWorkloadHoursWithClient).not.toHaveBeenCalled();
   });
 
   it("returns the database identifier after creating a complete lesson", async () => {
@@ -1158,7 +1281,13 @@ describe("admin authoring", () => {
     ).resolves.toEqual({ courseId: "course-1", lessonId: "lesson-created" });
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("insert into audit_logs"),
-      ["admin-1", "lesson.created", "lesson", "lesson-created"]
+      [
+        "admin-1",
+        "lesson.created",
+        "lesson",
+        "lesson-created",
+        expect.any(String),
+      ]
     );
   });
 
@@ -1361,7 +1490,81 @@ describe("admin authoring", () => {
     expect(deleteR2Objects).toHaveBeenCalledWith([
       "lessons/lesson-1/resources/old.pdf",
     ]);
-    expect(recalculateCourseWorkloadHours).toHaveBeenCalledWith("course-1");
+    expect(recalculateCourseWorkloadHoursWithClient).toHaveBeenCalledWith(
+      expect.anything(),
+      "course-1"
+    );
+  });
+
+  it("saves a cloned lesson while keeping a resource from the previous publication", async () => {
+    const inheritedContent = {
+      document: textDocument,
+      resources: [
+        {
+          contentType: "application/pdf",
+          fileName: "shared.pdf",
+          id: "resource-0",
+          key: "lessons/lesson-old/resources/shared.pdf",
+          label: "Shared",
+          sizeBytes: 100,
+          storage: "r2",
+        },
+      ],
+      type: "text",
+    };
+    query.mockImplementation((sql: string) => {
+      if (sql.includes("source_lesson.content_json")) {
+        return { rows: [{ content_json: inheritedContent }] };
+      }
+      if (sql.includes("select content_json from lessons")) {
+        return { rows: [{ content_json: inheritedContent }] };
+      }
+      if (sql.includes("select video_embed_url")) {
+        return { rows: [] };
+      }
+      if (sql.includes("select m.course_id")) {
+        return { rows: [{ course_id: "course-1" }] };
+      }
+
+      return versioningQueryResult(sql) ?? { rows: [] };
+    });
+    const formData = new FormData();
+    formData.set("lessonId", "lesson-new");
+    formData.set("moduleId", "module-1");
+    formData.set("title", "Aula clonada atualizada");
+    formData.set("description", "Descricao");
+    formData.set("textDocument", JSON.stringify(textDocument));
+    formData.set("sortOrder", "2");
+    formData.set("status", "draft");
+    formData.set("isRequired", "false");
+    formData.set("resourceStorage[]", "r2");
+    formData.set("resourceId[]", "resource-0");
+    formData.set("resourceLabel[]", "Shared");
+    formData.set("resourceKey[]", "lessons/lesson-old/resources/shared.pdf");
+    formData.set("resourceFileName[]", "shared.pdf");
+    formData.set("resourceContentType[]", "application/pdf");
+    formData.set("resourceSizeBytes[]", "100");
+
+    await expect(
+      saveLesson({ actorUserId: "admin-1", formData })
+    ).resolves.toEqual({ courseId: "course-1", lessonId: "lesson-new" });
+
+    const updateCall = query.mock.calls.find(([sql]) =>
+      String(sql).includes("update lessons")
+    );
+    expect(JSON.parse(String(updateCall?.[1]?.[8]))).toMatchObject({
+      resources: [
+        expect.objectContaining({
+          key: "lessons/lesson-old/resources/shared.pdf",
+        }),
+      ],
+    });
+    expect(getLessonResourceUpload).not.toHaveBeenCalled();
+    expect(confirmLessonResourceUpload).toHaveBeenCalledWith({
+      contentType: "application/pdf",
+      key: "lessons/lesson-old/resources/shared.pdf",
+      sizeBytes: 100,
+    });
   });
 
   it("does not delete an R2 resource still referenced by a published course version", async () => {
@@ -1394,7 +1597,9 @@ describe("admin authoring", () => {
       if (sql.includes("select content_json from lessons")) {
         return { rows: [{ content_json: previousContent }] };
       }
-      if (sql.includes("published_publication.status = 'published'")) {
+      if (
+        sql.includes("published_publication.status in ('published', 'retired')")
+      ) {
         return { rows: [{ content_json: previousContent }] };
       }
       if (sql.includes("select m.course_id")) {
@@ -1476,6 +1681,70 @@ describe("admin authoring", () => {
     ).rejects.toThrow("Prepare alteracoes");
 
     expect(confirmLessonResourceUpload).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.some(([sql]) => String(sql).includes("update lessons"))
+    ).toBe(false);
+  });
+
+  it("rejects moving an existing lesson to another Course", async () => {
+    query.mockImplementation((sql: string) => {
+      if (
+        sql.includes("select course_id, course_publication_id from modules")
+      ) {
+        return {
+          rows: [
+            {
+              course_id: "course-2",
+              course_publication_id: "course-publication-2",
+            },
+          ],
+        };
+      }
+      if (sql.includes("select m.course_id")) {
+        return { rows: [{ course_id: "course-1" }] };
+      }
+      if (
+        sql.includes(
+          "select l.id, l.module_id, m.course_id, l.course_publication_id"
+        )
+      ) {
+        return {
+          rows: [
+            {
+              course_id: "course-1",
+              course_publication_id: "course-publication-1",
+              id: "lesson-1",
+              module_id: "module-1",
+              status: "draft",
+            },
+          ],
+        };
+      }
+      if (sql.includes("select m.id, m.course_id, m.course_publication_id")) {
+        return {
+          rows: [
+            {
+              course_id: "course-2",
+              course_publication_id: "course-publication-2",
+              id: "module-2",
+              status: "draft",
+            },
+          ],
+        };
+      }
+      return versioningQueryResult(sql) ?? { rows: [] };
+    });
+    const formData = new FormData();
+    formData.set("lessonId", "lesson-1");
+    formData.set("moduleId", "module-2");
+    formData.set("title", "Aula transferida");
+    formData.set("textDocument", JSON.stringify(textDocument));
+
+    await expect(
+      saveLesson({ actorUserId: "admin-1", formData })
+    ).rejects.toThrow(
+      "A Aula não pode ser movida entre Cursos ou publicações."
+    );
     expect(
       query.mock.calls.some(([sql]) => String(sql).includes("update lessons"))
     ).toBe(false);
@@ -1617,9 +1886,18 @@ describe("admin authoring", () => {
     );
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("insert into audit_logs"),
-      ["admin-1", "lesson.video_removed", "lesson", "lesson-1"]
+      [
+        "admin-1",
+        "lesson.video_removed",
+        "lesson",
+        "lesson-1",
+        expect.any(String),
+      ]
     );
-    expect(recalculateCourseWorkloadHours).toHaveBeenCalledWith("course-1");
+    expect(recalculateCourseWorkloadHoursWithClient).toHaveBeenCalledWith(
+      expect.anything(),
+      "course-1"
+    );
     expect(result).toEqual({ courseId: "course-1", deletePending: true });
   });
 

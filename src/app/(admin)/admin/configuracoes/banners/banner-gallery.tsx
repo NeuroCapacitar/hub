@@ -312,6 +312,7 @@ export function BannerGallery({ initialBanners }: BannerGalleryProps) {
                 <div className="relative">
                   <input
                     accept={BANNER_ACCEPT}
+                    aria-label="Selecionar banner"
                     className="absolute inset-0 cursor-pointer opacity-0"
                     onChange={(event) => {
                       const files = event.currentTarget.files;
@@ -340,7 +341,7 @@ export function BannerGallery({ initialBanners }: BannerGalleryProps) {
               )
             }
             count={banners.length}
-            title="Banners Ativos"
+            title="Banners cadastrados"
           />
 
           {banners.length > 0 || uploadingFiles.length > 0 ? (

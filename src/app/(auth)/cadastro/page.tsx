@@ -9,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { PLATFORM_NAME } from "@/lib/brand";
 import { route } from "@/lib/routes";
 import { getCurrentSession } from "@/lib/session";
 import { SignUpForm } from "./sign-up-form";
@@ -17,6 +16,7 @@ import { SignUpForm } from "./sign-up-form";
 export const metadata: Metadata = {
   title: "Criar conta",
 };
+export const dynamic = "force-dynamic";
 
 export default async function SignUpPage(): Promise<React.JSX.Element> {
   await connection();
@@ -27,10 +27,9 @@ export default async function SignUpPage(): Promise<React.JSX.Element> {
   }
 
   return (
-    <AuthShell>
-      <Card className="mx-auto w-full max-w-sm bg-card/95">
-        <CardHeader>
-          <CardDescription>{PLATFORM_NAME}</CardDescription>
+    <AuthShell formSide="left">
+      <Card className="mx-auto w-full max-w-sm gap-0 overflow-visible rounded-none bg-transparent px-0 py-0 shadow-none ring-0">
+        <CardHeader className="gap-2 px-0 pb-6">
           <CardTitle as="h1" className="type-page-title">
             Crie sua conta
           </CardTitle>
@@ -39,7 +38,7 @@ export default async function SignUpPage(): Promise<React.JSX.Element> {
             separadamente.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-0">
           <SignUpForm />
         </CardContent>
       </Card>

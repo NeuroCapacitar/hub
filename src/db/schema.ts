@@ -5,6 +5,7 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -12,6 +13,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -137,6 +139,15 @@ export const refundRequestStatusEnum = pgEnum("refund_request_status", [
   "failed",
   "confirmed",
 ]);
+export const financialEventSourceEnum = pgEnum("financial_event_source", [
+  "order",
+  "webhook",
+  "statement",
+  "refund",
+  "review",
+  "installment",
+  "migration",
+]);
 export const outboxStatusEnum = pgEnum("outbox_status", [
   "pending",
   "processing",
@@ -199,11 +210,16 @@ export const learningAnalyticsEventTypeEnum = pgEnum(
   [
     "lesson_started",
     "watch_checkpoint",
+    "watch_progress",
     "lesson_completed",
     "resource_open_failed",
     "player_error",
   ]
 );
+export const lessonCompletionSourceEnum = pgEnum("lesson_completion_source", [
+  "manual",
+  "video",
+]);
 export const jmvstreamFolderTypeEnum = pgEnum("jmvstream_folder_type", [
   "course",
   "module",
@@ -475,6 +491,7 @@ export const coursePublications = pgTable(
       table.courseId,
       table.publicationNumber
     ),
+    unique("course_publications_id_course_unique").on(table.id, table.courseId),
     uniqueIndex("course_publications_one_published_per_course_idx")
       .on(table.courseId)
       .where(sql`${table.status} = 'published'`),
@@ -523,6 +540,15 @@ export const modules = pgTable(
       table.coursePublicationId,
       table.sortOrder
     ),
+    unique("modules_id_course_publication_unique").on(
+      table.id,
+      table.coursePublicationId
+    ),
+    foreignKey({
+      columns: [table.coursePublicationId, table.courseId],
+      foreignColumns: [coursePublications.id, coursePublications.courseId],
+      name: "modules_course_publication_course_fk",
+    }).onDelete("cascade"),
     check(
       "modules_release_delay_days_non_negative",
       sql`${table.releaseDelayDays} >= 0`
@@ -584,6 +610,11 @@ export const lessons = pgTable(
       table.moduleId,
       table.sortOrder
     ),
+    foreignKey({
+      columns: [table.moduleId, table.coursePublicationId],
+      foreignColumns: [modules.id, modules.coursePublicationId],
+      name: "lessons_module_course_publication_fk",
+    }).onDelete("cascade"),
   ]
 );
 
@@ -829,6 +860,7 @@ export const lessonProgress = pgTable(
     lessonId: uuid("lesson_id")
       .notNull()
       .references(() => lessons.id, { onDelete: "cascade" }),
+    completionSource: lessonCompletionSourceEnum("completion_source"),
     completedAt: timestamp("completed_at", tz).defaultNow().notNull(),
     ...timestamps,
   },
@@ -852,11 +884,27 @@ export const lessonWatchProgress = pgTable(
       .notNull()
       .references(() => lessons.id, { onDelete: "cascade" }),
     currentSeconds: integer("current_seconds").default(0).notNull(),
+    resumePositionSeconds: integer("resume_position_seconds")
+      .default(0)
+      .notNull(),
     maxPositionSeconds: integer("max_position_seconds").default(0).notNull(),
+    validatedPositionSeconds: integer("validated_position_seconds")
+      .default(0)
+      .notNull(),
+    playingTimeSeconds: integer("playing_time_seconds").default(0).notNull(),
     durationSeconds: integer("duration_seconds").default(0).notNull(),
     watchedPercent: integer("watched_percent").default(0).notNull(),
     lastEventName: text("last_event_name"),
     lastEventAt: timestamp("last_event_at", tz).defaultNow().notNull(),
+    trackingSessionId: text("tracking_session_id"),
+    lastEventSequence: integer("last_event_sequence").default(0).notNull(),
+    awaitingPlaybackAfterSeek: boolean("awaiting_playback_after_seek")
+      .default(false)
+      .notNull(),
+    linearProgressBlocked: boolean("linear_progress_blocked")
+      .default(false)
+      .notNull(),
+    trackingVersion: integer("tracking_version").default(0).notNull(),
     completedByVideoAt: timestamp("completed_by_video_at", tz),
     ...timestamps,
   },
@@ -872,12 +920,32 @@ export const lessonWatchProgress = pgTable(
       sql`${table.currentSeconds} >= 0`
     ),
     check(
+      "lesson_watch_progress_resume_position_seconds_non_negative",
+      sql`${table.resumePositionSeconds} >= 0`
+    ),
+    check(
       "lesson_watch_progress_duration_seconds_non_negative",
       sql`${table.durationSeconds} >= 0`
     ),
     check(
       "lesson_watch_progress_max_position_seconds_non_negative",
       sql`${table.maxPositionSeconds} >= 0`
+    ),
+    check(
+      "lesson_watch_progress_validated_position_seconds_non_negative",
+      sql`${table.validatedPositionSeconds} >= 0`
+    ),
+    check(
+      "lesson_watch_progress_playing_time_seconds_non_negative",
+      sql`${table.playingTimeSeconds} >= 0`
+    ),
+    check(
+      "lesson_watch_progress_last_event_sequence_non_negative",
+      sql`${table.lastEventSequence} >= 0`
+    ),
+    check(
+      "lesson_watch_progress_tracking_version_valid",
+      sql`${table.trackingVersion} in (0, 1)`
     ),
     check(
       "lesson_watch_progress_percent_bounds",
@@ -919,6 +987,8 @@ export const learningAnalyticsEvents = pgTable(
       .notNull()
       .references(() => lessons.id, { onDelete: "cascade" }),
     checkpointPercent: integer("checkpoint_percent"),
+    playingSeconds: integer("playing_seconds").default(0).notNull(),
+    completionSource: lessonCompletionSourceEnum("completion_source"),
     errorCode: text("error_code"),
     occurredAt: timestamp("occurred_at", tz).defaultNow().notNull(),
     createdAt: timestamp("created_at", tz).defaultNow().notNull(),
@@ -940,6 +1010,10 @@ export const learningAnalyticsEvents = pgTable(
       "learning_analytics_events_checkpoint_percent_bounds",
       sql`${table.checkpointPercent} is null or (${table.checkpointPercent} >= 0 and ${table.checkpointPercent} <= 100)`
     ),
+    check(
+      "learning_analytics_events_playing_seconds_non_negative",
+      sql`${table.playingSeconds} >= 0`
+    ),
   ]
 );
 
@@ -958,6 +1032,7 @@ export const learningAnalyticsDailyMetrics = pgTable(
       .references(() => lessons.id, { onDelete: "cascade" }),
     eventCount: integer("event_count").notNull(),
     uniqueEnrollmentCount: integer("unique_enrollment_count").notNull(),
+    playingSeconds: integer("playing_seconds").default(0).notNull(),
     ...timestamps,
   },
   (table) => [
@@ -1052,6 +1127,7 @@ export const orders = pgTable(
     paymentMaxInstallmentCount: integer("payment_max_installment_count")
       .default(1)
       .notNull(),
+    paymentInstallmentCount: integer("payment_installment_count"),
     accessDurationMonths: integer("access_duration_months"),
     paidAmountInCents: integer("paid_amount_in_cents"),
     netAmountInCents: integer("net_amount_in_cents"),
@@ -1084,6 +1160,7 @@ export const orders = pgTable(
       table.checkoutStatus,
       table.checkoutNextAttemptAt
     ),
+    index("orders_created_at_id_idx").on(table.createdAt, table.id),
     uniqueIndex("orders_external_unique_idx").on(table.externalId),
     index("orders_course_status_idx").on(table.courseId, table.status),
     check(
@@ -1101,6 +1178,10 @@ export const orders = pgTable(
     check(
       "orders_payment_installment_requires_card",
       sql`${table.paymentAllowCreditCard} or ${table.paymentMaxInstallmentCount} = 1`
+    ),
+    check(
+      "orders_actual_installment_count_valid",
+      sql`${table.paymentInstallmentCount} is null or ${table.paymentInstallmentCount} between 2 and 21`
     ),
     check(
       "orders_amount_in_cents_non_negative",
@@ -1187,6 +1268,9 @@ export const paymentReviews = pgTable(
     type: paymentReviewTypeEnum("type").notNull(),
     status: paymentReviewStatusEnum("status").default("pending").notNull(),
     reason: text("reason").notNull(),
+    observedAmountInCents: integer("observed_amount_in_cents"),
+    observedNetAmountInCents: integer("observed_net_amount_in_cents"),
+    observedFeeAmountInCents: integer("observed_fee_amount_in_cents"),
     decisionReason: text("decision_reason"),
     resolvedByUserId: text("resolved_by_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -1208,6 +1292,12 @@ export const paymentReviews = pgTable(
       .where(sql`${table.webhookEventId} is not null`),
     index("payment_reviews_order_status_idx").on(table.orderId, table.status),
     index("payment_reviews_status_idx").on(table.status),
+    check(
+      "payment_reviews_observed_amounts_non_negative",
+      sql`(${table.observedAmountInCents} is null or ${table.observedAmountInCents} >= 0)
+        and (${table.observedNetAmountInCents} is null or ${table.observedNetAmountInCents} >= 0)
+        and (${table.observedFeeAmountInCents} is null or ${table.observedFeeAmountInCents} >= 0)`
+    ),
   ]
 );
 
@@ -1266,6 +1356,135 @@ export const asaasFinancialTransactions = pgTable(
       table.providerTransactionId
     ),
     index("asaas_financial_transactions_date_idx").on(table.transactionDate),
+  ]
+);
+
+export const asaasInstallmentPayments = pgTable(
+  "asaas_installment_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orderId: uuid("order_id").references(() => orders.id, {
+      onDelete: "set null",
+    }),
+    providerInstallmentId: text("provider_installment_id").notNull(),
+    providerPaymentId: text("provider_payment_id").notNull(),
+    installmentNumber: integer("installment_number"),
+    status: text("status").notNull(),
+    dueDate: text("due_date"),
+    paymentDate: text("payment_date"),
+    clientPaymentDate: text("client_payment_date"),
+    valueInCents: integer("value_in_cents").notNull(),
+    netValueInCents: integer("net_value_in_cents"),
+    feeAmountInCents: integer("fee_amount_in_cents"),
+    anticipated: boolean("anticipated"),
+    syncedAt: timestamp("synced_at", tz).defaultNow().notNull(),
+    metadata: jsonb("metadata").default(sql`'{}'::jsonb`).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("asaas_installment_payments_provider_payment_unique_idx").on(
+      table.providerPaymentId
+    ),
+    index("asaas_installment_payments_order_number_idx").on(
+      table.orderId,
+      table.installmentNumber
+    ),
+    index("asaas_installment_payments_installment_status_idx").on(
+      table.providerInstallmentId,
+      table.status
+    ),
+    check(
+      "asaas_installment_payments_installment_number_positive",
+      sql`${table.installmentNumber} is null or ${table.installmentNumber} >= 1`
+    ),
+    check(
+      "asaas_installment_payments_amounts_consistent",
+      sql`${table.valueInCents} > 0
+        and (${table.netValueInCents} is null or (${table.netValueInCents} >= 0 and ${table.netValueInCents} <= ${table.valueInCents}))
+        and (${table.feeAmountInCents} is null or ${table.feeAmountInCents} >= 0)`
+    ),
+  ]
+);
+
+export const financialEvents = pgTable(
+  "financial_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    source: financialEventSourceEnum("source").notNull(),
+    eventKey: text("event_key").notNull(),
+    eventType: text("event_type").notNull(),
+    provider: text("provider").notNull(),
+    occurredAt: timestamp("occurred_at", tz).notNull(),
+    orderId: uuid("order_id").references(() => orders.id, {
+      onDelete: "set null",
+    }),
+    webhookEventId: uuid("webhook_event_id").references(
+      () => webhookEvents.id,
+      { onDelete: "set null" }
+    ),
+    refundRequestId: uuid("refund_request_id").references(
+      () => refundRequests.id,
+      { onDelete: "set null" }
+    ),
+    paymentReviewId: uuid("payment_review_id").references(
+      () => paymentReviews.id,
+      { onDelete: "set null" }
+    ),
+    actorUserId: text("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    providerCheckoutId: text("provider_checkout_id"),
+    providerPaymentId: text("provider_payment_id"),
+    providerInstallmentId: text("provider_installment_id"),
+    providerTransactionId: text("provider_transaction_id"),
+    orderStatusBefore: text("order_status_before"),
+    orderStatusAfter: text("order_status_after"),
+    checkoutStatusBefore: text("checkout_status_before"),
+    checkoutStatusAfter: text("checkout_status_after"),
+    providerPaymentStatusBefore: text("provider_payment_status_before"),
+    providerPaymentStatusAfter: text("provider_payment_status_after"),
+    refundStatusBefore: text("refund_status_before"),
+    refundStatusAfter: text("refund_status_after"),
+    paymentMethod: text("payment_method"),
+    amountInCents: integer("amount_in_cents"),
+    valueInCents: integer("value_in_cents"),
+    feeAmountInCents: integer("fee_amount_in_cents"),
+    netAmountInCents: integer("net_amount_in_cents"),
+    refundAmountInCents: integer("refund_amount_in_cents"),
+    metadata: jsonb("metadata").default(sql`'{}'::jsonb`).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("financial_events_provider_source_key_unique_idx").on(
+      table.provider,
+      table.source,
+      table.eventKey
+    ),
+    index("financial_events_order_occurred_idx").on(
+      table.orderId,
+      table.occurredAt
+    ),
+    index("financial_events_payment_occurred_idx").on(
+      table.providerPaymentId,
+      table.occurredAt
+    ),
+    index("financial_events_transaction_idx").on(table.providerTransactionId),
+    index("financial_events_occurred_idx").on(table.occurredAt),
+    check(
+      "financial_events_event_key_not_empty",
+      sql`length(trim(${table.eventKey})) > 0`
+    ),
+    check(
+      "financial_events_event_type_not_empty",
+      sql`length(trim(${table.eventType})) > 0`
+    ),
+    check(
+      "financial_events_amounts_non_negative",
+      sql`(${table.amountInCents} is null or ${table.amountInCents} >= 0)
+        and (${table.feeAmountInCents} is null or ${table.feeAmountInCents} >= 0)
+        and (${table.netAmountInCents} is null or ${table.netAmountInCents} >= 0)
+        and (${table.refundAmountInCents} is null or ${table.refundAmountInCents} >= 0)`
+    ),
   ]
 );
 
@@ -1807,3 +2026,30 @@ export const dashboardBanners = pgTable("dashboard_banners", {
   sortOrder: integer("sort_order").notNull(),
   ...timestamps,
 });
+
+export const authMediaSlides = pgTable(
+  "auth_media_slides",
+  {
+    blurDataUrl: text("blur_data_url").notNull(),
+    id: uuid("id").primaryKey().defaultRandom(),
+    imageUrl: text("image_url").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    sortOrder: integer("sort_order").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    check(
+      "auth_media_slides_image_url_prefix_check",
+      sql`${table.imageUrl} like 'auth-media/%'`
+    ),
+    check(
+      "auth_media_slides_sort_order_positive_check",
+      sql`${table.sortOrder} > 0`
+    ),
+    index("auth_media_slides_active_order_idx").on(
+      table.isActive,
+      table.sortOrder
+    ),
+    unique("auth_media_slides_sort_order_unique").on(table.sortOrder),
+  ]
+);

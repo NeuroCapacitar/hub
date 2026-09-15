@@ -27,7 +27,7 @@ import { getActiveBannersData } from "@/features/banners/server";
 import { CourseCoverImage } from "@/features/courses/course-cover-image";
 import { CourseInterestButton } from "@/features/courses/course-interest-button";
 import {
-  formatCourseWorkload,
+  formatCourseWorkloadHours,
   getStudentCatalogAccessPresentation,
   getStudentCoursePrimaryHref,
   groupStudentCatalogCourses,
@@ -317,8 +317,8 @@ function CourseCard({
               ) : null}
             </div>
             <div className="shrink-0 pt-0.5 text-right font-medium text-card-foreground/60 text-xs">
-              {course.totalCount} aulas •{" "}
-              {formatCourseWorkload(course.totalDurationSeconds)}
+              {course.lessonCount} aulas •{" "}
+              {formatCourseWorkloadHours(course.workloadHours)}
             </div>
           </div>
         </div>
@@ -330,7 +330,7 @@ function CourseCard({
             <div>
               <div className="mb-2 flex items-center justify-between text-card-foreground/60 text-xs">
                 <span>
-                  {course.completedCount}/{course.totalCount} aulas
+                  {course.completedCount}/{course.totalCount} obrigatórias
                 </span>
                 <span className="font-semibold text-card-foreground">
                   {course.progressPercent}%
@@ -339,6 +339,7 @@ function CourseCard({
               <Progress
                 aria-label={`Progresso no curso ${course.title}: ${course.progressPercent}%`}
                 className="h-1"
+                tone={course.progressPercent >= 100 ? "complete" : "active"}
                 value={course.progressPercent}
               />
             </div>

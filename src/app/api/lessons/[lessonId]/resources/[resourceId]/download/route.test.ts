@@ -1,12 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  assertAdminPreviewLessonAccess,
   assertProtectedLessonAccess,
   createLessonResourceDownloadUrl,
   getStudentLessonWorkspace,
   recordLearningAnalyticsEvent,
   requireSession,
 } = vi.hoisted(() => ({
+  assertAdminPreviewLessonAccess: vi.fn(),
   assertProtectedLessonAccess: vi.fn(),
   createLessonResourceDownloadUrl: vi.fn(),
   getStudentLessonWorkspace: vi.fn(),
@@ -16,6 +18,7 @@ const {
 
 vi.mock("@/features/courses/server", () => ({ getStudentLessonWorkspace }));
 vi.mock("@/features/courses/protected-lesson-access", () => ({
+  assertAdminPreviewLessonAccess,
   assertProtectedLessonAccess,
   LessonAccessDeniedError: class LessonAccessDeniedError extends Error {},
 }));
@@ -28,6 +31,117 @@ vi.mock("@/lib/session", () => ({ requireSession }));
 import { GET } from "./route";
 
 describe("lesson resource download", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("signs a private resource for an authenticated admin preview", async () => {
+    requireSession.mockResolvedValue({
+      role: "admin",
+      user: { id: "admin-1" },
+    });
+    getStudentLessonWorkspace.mockResolvedValue({
+      data: {
+        course: { id: "course-1", title: "Course" },
+        lesson: {
+          contentJson: {
+            document: { type: "doc" },
+            resources: [
+              {
+                fileName: "material.pdf",
+                id: "resource-1",
+                key: "lessons/lesson-1/material.pdf",
+                label: "Material",
+                storage: "r2",
+              },
+            ],
+            type: "text",
+          },
+        },
+      },
+      kind: "available",
+    });
+    createLessonResourceDownloadUrl.mockResolvedValue(
+      "https://r2.example.test/signed-download"
+    );
+
+    const response = await GET(
+      new Request("https://hub.example.test/api?preview=student"),
+      {
+        params: Promise.resolve({
+          lessonId: "lesson-1",
+          resourceId: "resource-1",
+        }),
+      }
+    );
+
+    expect(response.status).toBe(302);
+    expect(assertAdminPreviewLessonAccess).toHaveBeenCalledWith({
+      lessonId: "lesson-1",
+    });
+    expect(assertProtectedLessonAccess).not.toHaveBeenCalled();
+  });
+
+  it("does not allow an admin resource request without preview context", async () => {
+    requireSession.mockResolvedValue({
+      role: "admin",
+      user: { id: "admin-1" },
+    });
+
+    const response = await GET(new Request("https://hub.example.test/api"), {
+      params: Promise.resolve({
+        lessonId: "lesson-1",
+        resourceId: "resource-1",
+      }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(getStudentLessonWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("preserves admin preview context when R2 download fails", async () => {
+    requireSession.mockResolvedValue({
+      role: "admin",
+      user: { id: "admin-1" },
+    });
+    getStudentLessonWorkspace.mockResolvedValue({
+      data: {
+        course: { id: "course-1", title: "Course" },
+        lesson: {
+          contentJson: {
+            resources: [
+              {
+                fileName: "material.pdf",
+                id: "resource-1",
+                key: "lessons/lesson-1/material.pdf",
+                label: "Material",
+                storage: "r2",
+              },
+            ],
+            type: "text",
+          },
+        },
+      },
+      kind: "available",
+    });
+    createLessonResourceDownloadUrl.mockRejectedValue(new Error("R2 down"));
+
+    const response = await GET(
+      new Request("https://hub.example.test/api?preview=student"),
+      {
+        params: Promise.resolve({
+          lessonId: "lesson-1",
+          resourceId: "resource-1",
+        }),
+      }
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(
+      "https://hub.example.test/app/aulas/lesson-1?material=unavailable&preview=student"
+    );
+  });
+
   it("does not sign a future module resource", async () => {
     requireSession.mockResolvedValue({
       role: "student",

@@ -28,7 +28,7 @@ describe("course publication contracts", () => {
     );
 
     expect(source).toContain(
-      '"select id from courses where id = $1 limit 1 for update"'
+      '"select id, title from courses where id = $1 limit 1 for update"'
     );
     expect(source).toContain("module_id, curriculum_key, title");
     expect(source).toContain(

@@ -5,6 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { CourseCoverUploadField } from "@/components/course-cover-upload-field";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,10 +44,12 @@ import {
 } from "@/features/payments/course-payment-offer";
 import { parseCoursePriceToCents } from "@/features/payments/course-price";
 import { formatCurrencyInCents } from "@/lib/formatters";
+import { useCourseTabDirty } from "./course-management-tabs";
 import { CourseWorkloadDialog } from "./course-workload-dialog";
 
 export interface CourseData {
   accessDurationMonths: number;
+  calculatedWorkloadHours?: number;
   coverImage?: unknown;
   description: string | null;
   id: string;
@@ -79,6 +82,8 @@ export function CourseSettingsForm({
   course: CourseData;
 }): React.JSX.Element {
   const [isPending, startTransition] = useTransition();
+  const [isDirty, setIsDirty] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingPriceChange, setPendingPriceChange] =
     useState<PendingPriceChange | null>(null);
   const [priceValue, setPriceValue] = useState(() =>
@@ -96,9 +101,8 @@ export function CourseSettingsForm({
   const [paymentMaxInstallmentCount, setPaymentMaxInstallmentCount] = useState(
     course.paymentMaxInstallmentCount.toString()
   );
-  const manualWorkloadHours = workloadHoursOverride
-    ? Number(workloadHoursOverride)
-    : null;
+  const manualWorkloadHours =
+    workloadHoursOverride.trim() === "" ? null : Number(workloadHoursOverride);
   const configuredInstallmentCount = Number(paymentMaxInstallmentCount);
   const validInstallmentCount = Number.isFinite(configuredInstallmentCount)
     ? configuredInstallmentCount
@@ -120,17 +124,25 @@ export function CourseSettingsForm({
   );
 
   const saveCourseSettings = (formData: FormData): void => {
+    setErrorMessage(null);
     const toastId = toast.loading("Salvando configurações…");
 
     startTransition(async () => {
       try {
         await saveCourseAction(formData);
+        setIsDirty(false);
         toast.success("Configurações salvas com sucesso!", { id: toastId });
-      } catch {
-        toast.error("Não foi possível salvar o curso.", { id: toastId });
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Não foi possível salvar o curso.";
+        setErrorMessage(message);
+        toast.error(message, { id: toastId });
       }
     });
   };
+  useCourseTabDirty("settings", isDirty);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
@@ -154,7 +166,17 @@ export function CourseSettingsForm({
 
   return (
     <>
-      <form className="flex flex-col gap-8" onSubmit={handleSubmit}>
+      <form
+        className="flex flex-col gap-8"
+        onChange={() => setIsDirty(true)}
+        onSubmit={handleSubmit}
+      >
+        {errorMessage ? (
+          <Alert role="alert" variant="destructive">
+            <AlertTitle>Não foi possível salvar o curso</AlertTitle>
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        ) : null}
         <fieldset className="contents" disabled={isPending}>
           <input name="courseId" type="hidden" value={course.id} />
           <input
@@ -221,7 +243,9 @@ export function CourseSettingsForm({
                     Carga horária
                   </FieldLabel>
                   <CourseWorkloadDialog
-                    calculatedHours={course.workloadHours}
+                    calculatedHours={
+                      course.calculatedWorkloadHours ?? course.workloadHours
+                    }
                     compact
                     onValueChange={(value) => {
                       setWorkloadHoursOverride(value?.toString() ?? "");

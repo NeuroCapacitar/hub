@@ -2,9 +2,9 @@
 status: canonical
 owner: engineering
 last_verified_commit: b6e6d63
-current_migration_tag: 0071_content_release_observability_indexes
-migration_entry_count: 72
-schema_table_count: 47
+current_migration_tag: 0080_auth_media_slides
+migration_entry_count: 81
+schema_table_count: 50
 ---
 
 # Banco e migrations
@@ -57,6 +57,74 @@ Depois da migration, repita o comando e arquive o plano sem dados pessoais.
 Aceite a mudança somente se o plano deixar de fazer um `Seq Scan` relevante ou
 reduzir o custo/leituras de forma observável; se o ambiente tiver poucos
 eventos, registre que o ganho é preventivo e não faça benchmark artificial.
+
+A migration `0072_admin_order_installment_count` adiciona
+`orders.payment_installment_count` para preservar a quantidade efetiva de
+parcelas retornada pelo agregado Asaas. O campo é opcional porque pedidos
+históricos podem ter somente o ID do parcelamento ou não ter passado pelo
+enriquecimento do agregado; o limite máximo configurado da oferta não é usado
+como substituto da quantidade escolhida.
+
+A migration `0073_strange_inertia` adiciona um índice composto pela data e pelo
+ID do Pedido para manter a ordenação paginada do Financeiro determinística e
+eficiente. A consulta deve continuar usando os dois campos na mesma ordem;
+antes de aplicar em uma base grande, capture o plano real com `EXPLAIN`.
+
+A migration `0074_boring_nitro` cria `financial_events`, uma trilha financeira
+append-only com chave idempotente, data de ocorrência, vínculos opcionais ao
+Pedido, webhook, reembolso e Revisão, identificadores do Asaas e valores
+normalizados. Registros existentes entram como snapshots de backfill marcados
+em `metadata`; eles não reconstroem transições anteriores à migration. Triggers
+registram criações e mudanças financeiras futuras em Pedido, webhook,
+sincronização de movimentações, reembolso e Revisão. Payloads brutos não são
+copiados para essa trilha e continuam sujeitos à retenção própria da inbox.
+
+A migration `0075_installment_schedule_and_observed_evidence` adiciona a fonte
+`installment` à trilha financeira, persiste as cobranças individuais de um
+parcelamento Asaas quando a conciliação as valida e guarda valores observados
+nas Revisões de divergência. Datas das parcelas permanecem texto do provedor,
+sem assumir fuso horário; ausência de taxa ou líquido continua sendo evidência
+incompleta, não taxa zero confirmada.
+
+A migration `0076_linear_validated_video_progress` separa retomada, posição
+máxima observada, fronteira linear validada e tempo de reprodução. Ela inicializa
+a posição de retomada histórica a partir de `current_seconds`, mas deixa a
+fronteira e o tempo validados em zero; portanto, não transforma registros antigos
+em prova de reprodução. Também registra a origem manual ou automática da
+conclusão e permite agregar tempo de reprodução nos analytics.
+
+A migration `0077_analytics_completion_source` acrescenta a origem manual ou de
+vídeo aos eventos brutos de conclusão. O agregado diário continua combinando a
+contagem por evento; a origem detalhada permanece na linha de progresso e no
+evento bruto dentro do período de retenção.
+
+A migration `0078_protect_module_course_publication_ownership` cria a chave
+única composta de `course_publications(id, course_id)` e a chave estrangeira
+composta correspondente em `modules(course_publication_id, course_id)`. Antes
+de promovê-la a Staging ou Production, executar o preflight de inconsistências
+do plano de remediação no banco alvo; qualquer linha divergente exige STOP e
+investigação manual antes da migration.
+
+A migration `0079_protect_lesson_module_publication_ownership` cria a chave
+única composta de `modules(id, course_publication_id)` e a chave estrangeira
+composta correspondente em `lessons(module_id, course_publication_id)`. Ela
+impede que uma Aula use um Módulo de uma Publicação e o identificador de outra.
+O preflight de Aulas deve ser repetido em cada ambiente antes da promoção;
+qualquer divergência exige STOP e investigação manual.
+
+A migration `0080_auth_media_slides` cria a coleção independente da mídia da
+tela de acesso. O contrato final é WebP `1200×1050` (8:7), com no máximo cinco
+slides, ordem positiva única e chaves sob `auth-media/`. A publicação no
+bucket público acontece somente depois da confirmação do objeto privado; a
+manutenção repõe cópias ativas e limpa objetos sem referência após a janela
+de segurança. Antes de promover, confira também o prefixo público, a URL base
+e a permissão exclusiva de Admin descritos no ADR-0015.
+
+Na verificação de escala do Financeiro em Development, a base tinha 8 Pedidos e a
+busca textual usou `Seq Scan` com 2 buffers e 0,111 ms de execução; a ordenação por
+status usou 2 buffers e 0,092 ms. Como a população é pequena e não há evidência de
+ganho prático para um índice trigram ou cache, nenhum índice adicional foi criado.
+Repetir a medição antes de alterar essa decisão quando a população crescer.
 
 ## CI
 

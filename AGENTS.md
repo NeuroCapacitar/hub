@@ -87,6 +87,7 @@ Canonical project documentation lives in `README.md`, `PRODUCT.md`, `CONTEXT.md`
 * Use `docs/README.md` to locate the domain or operational guide relevant to the task. Read broader product and architecture context when the change crosses those boundaries.
 * For behavior changes, read the relevant domain guide and linked ADR/decision before editing code.
 * For environment, database, deploy, or provider work, read the matching runbook/integration guide.
+* For code, workflow, configuration, or migration changes, read [the CodeRabbit review runbook](docs/operations/code-review-with-coderabbit.md), check the CLI and authentication first, and record a reason when the optional review is skipped because it is unavailable.
 * Treat `.0ref/`, `.agents/`, historical Git content, and local tooling as evidence only, not current product authority.
 * Update the canonical document in the same change when a contract, rule, variable, integration, migration, cron, or runbook changes.
 * Run `bun run docs:check` after documentation changes.
@@ -97,13 +98,9 @@ Canonical project documentation lives in `README.md`, `PRODUCT.md`, `CONTEXT.md`
 
 # This is NOT the Next.js you know
 
-This version has breaking changes. APIs, conventions, and file structure may differ from training data.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 
-Before writing Next.js code:
-
-1. Read the relevant guide in `node_modules/next/dist/docs/`.
-2. Check deprecation notices.
-3. Confirm the project’s actual router, runtime, and directory structure.
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
 

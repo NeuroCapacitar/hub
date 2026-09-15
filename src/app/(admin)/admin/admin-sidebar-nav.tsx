@@ -2,6 +2,7 @@
 
 import {
   AccountSetting01Icon,
+  Activity03Icon,
   Analytics01Icon,
   Book01Icon,
   HistoryIcon,
@@ -24,8 +25,9 @@ const adminNavItems = [
   ["Painel", "/admin", Analytics01Icon],
   ["Aprendizagem", "/admin/aprendizagem", Analytics01Icon],
   ["Cursos", "/admin/cursos", Book01Icon],
-  ["Alunas", "/admin/alunos", UserGroupIcon],
+  ["Alunos", "/admin/alunos", UserGroupIcon],
   ["Financeiro", "/admin/financeiro", Invoice01Icon],
+  ["Operação", "/admin/operacao", Activity03Icon],
   ["Auditoria", "/admin/auditoria", HistoryIcon],
   ["Configurações", "/admin/configuracoes", AccountSetting01Icon],
 ] as const;

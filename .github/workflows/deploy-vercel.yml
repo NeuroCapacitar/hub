@@ -201,39 +201,9 @@ jobs:
                   .status == "completed" and
                   .conclusion == "success")
               ' <<< "${ci_checks}")"
-              if [[ "${ci_check_ok}" != "true" ]]; then
-                merged_prs="$(
-                  curl --fail-with-body --silent --show-error \
-                    --header "Accept: application/vnd.github+json" \
-                    --header "Authorization: Bearer ${GH_TOKEN}" \
-                    --header "X-GitHub-Api-Version: 2022-11-28" \
-                    "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${staging_sha}/pulls"
-                )"
-                candidate_ci_head_sha="$(jq -er '
-                  [.[]
-                   | select(.base.ref == "staging" and .merged_at != null)
-                   | .head.sha]
-                  | .[0] // empty
-                ' <<< "${merged_prs}")" || candidate_ci_head_sha=""
-                if [[ -n "${candidate_ci_head_sha}" ]]; then
-                  candidate_ci_checks="$(
-                    curl --fail-with-body --silent --show-error \
-                      --header "Accept: application/vnd.github+json" \
-                      --header "Authorization: Bearer ${GH_TOKEN}" \
-                      --header "X-GitHub-Api-Version: 2022-11-28" \
-                      "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${candidate_ci_head_sha}/check-runs?check_name=CI&per_page=100"
-                  )"
-                  ci_check_ok="$(jq -r '
-                    any((.check_runs // [])[];
-                      .name == "CI" and
-                      .status == "completed" and
-                      .conclusion == "success")
-                  ' <<< "${candidate_ci_checks}")"
-                fi
-              fi
             fi
             if [[ "${ci_check_ok}" != "true" ]]; then
-              echo "No successful CI check exists for the Staging candidate." >&2
+              echo "No successful CI check exists for the exact Staging candidate SHA." >&2
               exit 1
             fi
             if ! git merge-base --is-ancestor "${production_sha}" "${staging_sha}"; then
@@ -267,25 +237,21 @@ jobs:
               echo "Hotfix Production requires the hotfix label on a merged hotfix/* pull request into main." >&2
               exit 1
             fi
-            hotfix_head_sha="$(
-              jq -er '
-                [.[]
-                 | select(.base.ref == "main" and .merged_at != null and (.head.ref | startswith("hotfix/")) and (.labels | any(.[]; .name == "hotfix")))
-                 | .head.sha]
-                | .[0] // empty
-              ' <<< "${pull_requests}"
-            )"
-            ci_runs="$(
+            ci_checks="$(
               curl --fail-with-body --silent --show-error \
                 --header "Accept: application/vnd.github+json" \
                 --header "Authorization: Bearer ${GH_TOKEN}" \
                 --header "X-GitHub-Api-Version: 2022-11-28" \
-                "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${hotfix_head_sha}&status=success&per_page=20"
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/commits/${main_sha}/check-runs?check_name=CI&per_page=100"
             )"
-            if ! jq -e --arg sha "${hotfix_head_sha}" \
-              '.workflow_runs | any(.[]; .head_sha == $sha and .conclusion == "success")' \
-              <<< "${ci_runs}" > /dev/null; then
-              echo "Hotfix Production requires a successful CI run for the hotfix head." >&2
+            ci_check_ok="$(jq -r '
+              any((.check_runs // [])[];
+                .name == "CI" and
+                .status == "completed" and
+                .conclusion == "success")
+            ' <<< "${ci_checks}")"
+            if [[ "${ci_check_ok}" != "true" ]]; then
+              echo "Hotfix Production requires a successful CI check for the exact main SHA." >&2
               exit 1
             fi
             if ! git diff --quiet "${production_sha}" "${main_sha}" -- src/db/migrations src/db/schema.ts; then

@@ -3,7 +3,7 @@ const JMVSTREAM_PLAYER_ORIGIN = "https://player.jmvstream.com";
 const IFRAME_SRC_PATTERN = /\bsrc=(["'])(.*?)\1/i;
 const VIDEO_PROVIDERS = new Set(["external", "jmvstream", "panda"]);
 const JMVSTREAM_OUT_EVENT_PATTERN = /^jmvplayerout-/;
-const JMVSTREAM_VIDEO_COMPLETE_PERCENT = 95;
+export const JMVSTREAM_VIDEO_COMPLETE_PERCENT = 100;
 
 export type VideoProvider = "external" | "jmvstream" | "panda" | null;
 export type JmvstreamPlayerEventName =
@@ -17,7 +17,8 @@ export interface JmvstreamPlayerEvent {
   currentSeconds: number;
   durationSeconds: number;
   eventName: JmvstreamPlayerEventName;
-  watchedPercent: number;
+  isPaused: boolean;
+  positionPercent: number;
 }
 
 export const toVideoProvider = (value: string | null): VideoProvider =>
@@ -129,16 +130,20 @@ export const getJmvstreamPlayerEventFromMessage = (
 
   const currentSeconds = Math.max(0, Math.round(payload.currentTime));
   const durationSeconds = Math.max(1, Math.round(payload.duration));
-  const watchedPercent = Math.min(
+  const positionPercent = Math.min(
     100,
-    Math.round((currentSeconds / durationSeconds) * 100)
+    Math.floor((currentSeconds / durationSeconds) * 100)
   );
 
   return {
     currentSeconds,
     durationSeconds,
     eventName,
-    watchedPercent,
+    isPaused:
+      payload.paused === true ||
+      payload.paused === 1 ||
+      eventName === "jmvplayerout-pause",
+    positionPercent,
   };
 };
 
@@ -174,13 +179,14 @@ export const shouldApplyDetectedDuration = ({
 
 export const shouldCompleteLessonFromJmvstreamEvent = ({
   eventName,
-  watchedPercent,
+  validatedPercent,
 }: {
   eventName: string;
-  watchedPercent: number;
+  validatedPercent: number;
 }): boolean =>
-  eventName === "jmvplayerout-end" ||
-  watchedPercent >= JMVSTREAM_VIDEO_COMPLETE_PERCENT;
+  isJmvstreamPlayerEventName(eventName) &&
+  eventName !== "jmvplayerout-skip" &&
+  validatedPercent >= JMVSTREAM_VIDEO_COMPLETE_PERCENT;
 
 const normalizeJmvstreamPayload = (message: unknown): unknown =>
   typeof message === "string" ? parseJmvstreamMessage(message) : message;
@@ -225,6 +231,7 @@ const isJmvstreamProgressPayload = (
   duration: number;
   event?: string;
   eventName?: string;
+  paused?: boolean | number;
 } => {
   if (!isJmvstreamMessagePayload(payload)) {
     return false;
@@ -247,7 +254,7 @@ const getJmvstreamEventName = (payload: {
 }): unknown =>
   typeof payload.event === "string" ? payload.event : payload.eventName;
 
-const isJmvstreamPlayerEventName = (
+export const isJmvstreamPlayerEventName = (
   value: unknown
 ): value is JmvstreamPlayerEventName =>
   value === "jmvplayerout-end" ||

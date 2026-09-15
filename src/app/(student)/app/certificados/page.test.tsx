@@ -83,6 +83,8 @@ describe("MyCertificatesPage", () => {
     const markup = await renderPage([]);
 
     expect(markup).toContain("Nenhum certificado emitido ainda");
+    expect(markup).toContain("Conclua todas as aulas obrigatórias");
+    expect(markup).not.toContain("Conclua 100% das aulas");
     expect(markup).toContain('href="/app"');
     expect(markup).toContain("Voltar para meus cursos");
   });

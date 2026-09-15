@@ -19,6 +19,12 @@
       "skillPath": "skills/engineering/ask-matt/SKILL.md",
       "computedHash": "5ec84a4c2d9021d99780e5222b2a9f532b53cca8237024eb6cb40ad370c667c5"
     },
+    "autofix": {
+      "source": "coderabbitai/skills",
+      "sourceType": "github",
+      "skillPath": "skills/autofix/SKILL.md",
+      "computedHash": "1acb22e44a778ada090af5d0913ddc1dee1d7d4c0c4d2a3d4889b672c626c713"
+    },
     "better-auth-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",
@@ -62,10 +68,10 @@
       "computedHash": "fcb47a959393265b575b30ce960efe6308e642c9ee11f8ed9e461bc904ff15ce"
     },
     "code-review": {
-      "source": "mattpocock/skills",
+      "source": "coderabbitai/skills",
       "sourceType": "github",
-      "skillPath": "skills/engineering/code-review/SKILL.md",
-      "computedHash": "7c3170d8b1b904418358af0474f82e74c89a2dd66c12c956caefdc0aa81ea09f"
+      "skillPath": "skills/code-review/SKILL.md",
+      "computedHash": "38fa1a6b131fc7c97969deae97c4ddfc6adb3c444d8e91a24fab9c69467f2673"
     },
     "codebase-design": {
       "source": "mattpocock/skills",

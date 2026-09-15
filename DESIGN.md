@@ -1,8 +1,8 @@
 ---
 status: canonical
 owner: design-and-engineering
-last_verified_commit: 9d0450a275d5bdacfaa44e306ca1ad8958053c89
-last_verified_at: 2026-09-07
+last_verified_commit: 106377c22baf164a55b94601555ab68ef46366a1
+last_verified_at: 2026-09-14
 ---
 
 # Sistema visual do NeuroCapacitar Hub
@@ -44,10 +44,14 @@ devem ser copiadas:
   projeto;
 - uso de um cabeçalho de relatório no lugar da navegação autenticada do Hub.
 
-Há duas decisões do Hub que prevalecem sobre a referência externa:
+Há decisões do Hub que prevalecem sobre a referência externa:
 
 - o produto é dark-only neste escopo e não possui seletor visual de tema;
-- não adicionar `prefers-reduced-motion` neste projeto.
+- o autoplay da mídia da tela de acesso é autorizado e pausa exclusivamente
+  enquanto o ponteiro está sobre a imagem; a navegação manual usa indicadores e
+  arraste;
+- a navegação da mídia da tela de acesso usa indicadores compactos centralizados,
+  com o estado ativo alongado, sem setas laterais;
 
 As capas de Cursos e a mídia visual existente de Aulas são conteúdo visual do
 produto. Seus gradientes, blur, escala e sombras existentes podem permanecer;
@@ -72,7 +76,7 @@ contrato correspondente, nunca por uma troca visual automática.
 O favicon file-based da aplicação é
 [src/app/icon.svg](src/app/icon.svg). Ele é uma composição técnica do fundo
 escuro do Hub com o mark aprovado atualmente disponível em
-`public/protear/logo-negativo.svg`; não é autorização para criar uma nova logo
+`public/brand/logo-negativo.svg`; não é autorização para criar uma nova logo
 ou para usar a identidade de um Curso como nome global. Se surgir um mark
 dedicado da NeuroCapacitar, substitua somente a composição do ícone e preserve
 o contrato `app/icon.svg` do Next.js.
@@ -108,7 +112,7 @@ O Hub tem dois registros principais:
 - **Operação:** Admin e Suporte precisam localizar estados, exceções, evidências
   e próximas ações com rapidez. A interface pode ser densa, mas cada estado
   crítico precisa de texto claro, ação de recuperação e evidência suficiente.
-- **Aprendizagem:** a Aluna precisa identificar a próxima Aula, entender seu
+- **Aprendizagem:** o Aluno precisa identificar a próxima Aula, entender seu
   progresso e consumir conteúdo sem competir com controles administrativos.
 
 As permissões são distintas: `admin`, `support` e `student` não são apenas
@@ -121,7 +125,7 @@ As áreas autenticadas seguem esta estrutura comprovada:
 
 - Admin e Suporte: `src/app/(admin)/admin`, com `PanelLayout` e navegação
   administrativa;
-- Aluna: `src/app/(student)/app`, com `PanelLayout` e navegação de aprendizagem;
+- Aluno: `src/app/(student)/app`, com `PanelLayout` e navegação de aprendizagem;
 - shell compartilhado: `src/components/panel-layout.tsx`;
 - contêiner de página: `src/components/page-container.tsx`;
 - cabeçalho de página: `src/components/page-header.tsx`.
@@ -220,11 +224,23 @@ Os tokens semânticos são definidos em `src/app/globals.css` e devem ser usados
 por papel, não por aparência:
 
 - `background`: tela principal;
-- `foreground`: texto principal;
+- `foreground`: texto principal em creme claro já próximo da areia;
+- `support-foreground`: descrições e contexto em um teal-sage transicional,
+  harmonizado com o petróleo sem voltar ao cinza frio;
 - `card` e `card-foreground`: agrupamento real de conteúdo;
 - `popover` e `popover-foreground`: menus, diálogos e superfícies portadas;
 - `muted` e `muted-foreground`: apoio e contexto ainda legível;
-- `primary` e `primary-foreground`: ação principal e seleção atual;
+- `primary` e `primary-foreground`: ênfase de marca, seleção e progresso quando
+  o consumidor explicita esse papel;
+- `button-primary` e `button-primary-foreground`: ação principal dos botões,
+  atualmente em petróleo;
+- `selection` e `selection-foreground`: seleção de texto e controles selecionados;
+- `focus` e `focus-foreground`: indicador de foco de teclado;
+- `progress-active`, `progress-complete` e `learning-complete`: andamento e
+  conclusão de aprendizagem, sem substituir estados técnicos;
+- `link`: links que precisam de ênfase textual;
+- `surface-warm` e `surface-warm-foreground`: superfícies quentes institucionais
+  de uso raro;
 - `secondary` e `secondary-foreground`: ação ou estado secundário;
 - `accent` e `accent-foreground`: ênfase pontual;
 - `destructive`: erro, bloqueio e ação destrutiva;
@@ -240,19 +256,29 @@ separada: `L` expressa luminosidade perceptual, `C` intensidade cromática e
 | Papel | Token atual | Uso autorizado |
 |---|---|---|
 | tela | `--background: oklch(0.237 0.025 204.4)` | fundo contínuo da aplicação |
-| texto principal | `--foreground: oklch(0.949 0.009 197)` | títulos, prosa e controles |
-| superfície | `--card: oklch(0.272 0.027 203.5)` | agrupamento real de conteúdo |
+| texto principal | `--foreground: var(--brand-cream)` | títulos, prosa e controles |
+| superfície | `--card: oklch(0.275 0.022 203)` | agrupamento real de conteúdo |
 | navegação | `--sidebar: oklch(0.221 0.023 205.4)` | sidebar autenticada |
-| ação/seleção | `--primary: oklch(0.495 0.061 202.9)` | ação principal e seleção atual |
-| apoio | `--muted: oklch(0.309 0.033 204.9)` | contexto e placeholders |
-| texto de apoio | `--muted-foreground: oklch(0.702 0.044 199.9)` | informação secundária legível |
-| ênfase | `--accent: oklch(0.675 0.143 54)` | destaque pontual, não texto longo |
+| ação de botão | `--button-primary: var(--brand-petroleum)` | botões principais |
+| ênfase/seleção | `--primary: var(--brand-orange)` | seleção, progresso e atenção explícita |
+| seleção | `--selection: oklch(0.675 0.143 54 / 0.45)` | texto e controles selecionados |
+| foco | `--focus: var(--brand-sand)` | indicador de teclado |
+| apoio | `--muted: oklch(0.305 0.020 203)` | contexto e placeholders |
+| texto de apoio | `--muted-foreground: oklch(0.720 0.018 79)` | informação secundária legível |
+| ênfase | `--accent: var(--brand-orange)` | destaque pontual, não texto longo |
+| progresso ativo | `--progress-active: var(--brand-orange)` | andamento mensurável |
+| conclusão de aprendizagem | `--learning-complete: var(--brand-olive)` | conclusão contextual de Curso/Aula |
 | erro | `--destructive: oklch(0.726 0.122 20.5)` | erro, bloqueio e ação destrutiva |
 | sucesso | `--success: oklch(0.704 0.12 160)` | confirmação explícita |
 | alerta | `--warning: oklch(0.769 0.13 78)` | atenção e risco reversível |
 | informação | `--info: oklch(0.68 0.1 245)` | contexto informativo |
 
-`--border`, `--input`, `--ring` e `--sidebar-*` também usam os mesmos papéis
+Os anchors de marca (`--brand-petroleum`, `--brand-sand`, `--brand-orange`,
+`--brand-olive` e `--brand-terracotta`) documentam a identidade e não devem
+ser consumidos diretamente pelos componentes. Componentes usam os tokens
+funcionais e, quando necessário, um token de componente/estado que os referencia.
+
+`--border`, `--input`, `--ring`, `--focus` e `--sidebar-*` também usam os mesmos papéis
 em OKLCH, inclusive com alpha quando a função é separar sem criar uma nova
 superfície. O tema é dark-only e os blocos `:root` e `.dark` permanecem
 equivalentes até existir uma decisão de produto para outro tema.
@@ -513,7 +539,7 @@ conjunto filtrado for vazio ou quando a tabela estiver em viewport estreito.
 
 ## Conteúdo, terminologia e confiança
 
-Use os termos definidos em [CONTEXT.md](CONTEXT.md): Aluna, Curso, Módulo, Aula,
+Use os termos definidos em [CONTEXT.md](CONTEXT.md): Aluno, Curso, Módulo, Aula,
 Matrícula, Concessão, Pedido, Progresso, Conclusão e Certificado não são
 sinônimos intercambiáveis.
 
@@ -522,7 +548,7 @@ sinônimos intercambiáveis.
 - mensagens de erro dizem o que falhou e qual recuperação é possível;
 - estados ambíguos comunicam a incerteza e não liberam confiança visual falsa;
 - Admin e Suporte recebem detalhes operacionais necessários, sem transformar
-  dados técnicos em copy para Alunas;
+  dados técnicos em copy para Alunos;
 - não expor e-mail, identidade, payload, segredo, motivo interno ou detalhe de
   provider quando a tela não precisa disso;
 - labels de status devem ser consistentes entre lista, detalhe, filtro e ação;
@@ -540,6 +566,7 @@ no scroll.
 
 - usar movimento somente para mudança de estado, foco, hover, continuidade ou
   confirmação da ação;
+- não consultar preferências de movimento do sistema para alterar a animação;
 - nunca mover imagem de capa ou mídia de Aula no hover como requisito de
   entendimento;
 - transicionar propriedades específicas, como fazem os primitives existentes;
@@ -547,12 +574,12 @@ no scroll.
 - `animate-spin` pode indicar carregamento e `animate-pulse` pode indicar
   skeleton, desde que o texto de estado também exista quando necessário;
 - não adicionar uma biblioteca de animação para microinteração;
-- não adicionar `prefers-reduced-motion` neste projeto.
 
-O carrossel de banners do dashboard mantém o autoplay existente de seis
-segundos nesta linha de trabalho por decisão explícita de escopo. Não adicionar
-novos carrosséis com autoplay sem uma decisão específica de produto e sem
-definir a interação correspondente.
+O carrossel de banners do Dashboard mantém o autoplay existente de seis
+segundos. A mídia da tela de acesso também possui autorização explícita para
+autoplay de seis segundos, com pausa exclusivamente em hover e navegação manual
+por indicadores e arraste, sem botão visual de play/pausa. Outros carrosséis
+continuam exigindo decisão específica de produto e interação correspondente.
 
 O `Button`, `Input`, `Textarea`, `Select` e `Progress` atuais já possuem
 transições limitadas às propriedades relevantes. Preserve esses contratos e não
@@ -579,6 +606,9 @@ os substitua por uma transição ampla.
   espaço;
 - capas e mídia visual de conteúdo podem usar a exceção registrada neste
   documento;
+- a mídia da tela de acesso é decorativa, usa moldura própria, aceita crop sem
+  deformação e mantém fallback local quando não há slide ativo ou a mídia
+  publicada falha;
 - Hugeicons é o único kit de ícones instalado e deve manter peso e escala
   coerentes;
 - ícones ao lado de texto são auxiliares e ficam ocultos da árvore acessível;
@@ -623,8 +653,8 @@ Antes de considerar uma interface pronta, confirme:
 - copy visível está em português, com termos do glossário e acentuação correta;
 - não há cor, ícone ou movimento funcionando como único indicador;
 - efeitos de capas e mídia de Aulas permanecem somente onde a exceção permite;
-- não há `prefers-reduced-motion`, `transition-all`, gradiente decorativo novo
-  ou CSS de marca Vercel;
+- não há `transition-all`, gradiente decorativo novo ou CSS de marca
+  Vercel;
 - a ordem de leitura funciona sem estilos e a navegação por teclado mantém o
   foco visível.
 

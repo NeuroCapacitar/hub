@@ -1,4 +1,5 @@
 import { getPool } from "@/db";
+import { reconcileAuthMediaStorage } from "@/features/auth-media/storage";
 import { reconcileRevokedCertificateArtifacts } from "@/features/certificates/artifact-reconciliation";
 import { reconcileCertificateTemplateAssets } from "@/features/certificates/template-asset-cleanup";
 import { pruneEmailDeliveryRecords } from "@/features/email-delivery/server";
@@ -12,6 +13,7 @@ import {
 } from "@/lib/timezone";
 
 interface MaintenanceResult {
+  authMediaObjectsReconciled: number;
   certificateTemplateAssetsRemoved: number;
   checkoutReservationsRemoved: number;
   deadlineReached: boolean;
@@ -30,6 +32,7 @@ interface MaintenanceResult {
 }
 
 const emptyMaintenanceResult = (): MaintenanceResult => ({
+  authMediaObjectsReconciled: 0,
   certificateTemplateAssetsRemoved: 0,
   checkoutReservationsRemoved: 0,
   deadlineReached: false,
@@ -148,11 +151,12 @@ export const runMaintenance = async ({
   const analytics = await pool.query(`
     insert into learning_analytics_daily_metrics (
       metric_date, event_type, course_publication_id, lesson_id,
-      event_count, unique_enrollment_count
+      event_count, unique_enrollment_count, playing_seconds
     )
     select (occurred_at at time zone ${APP_TIME_ZONE_SQL})::date,
            event_type, course_publication_id, lesson_id,
-           count(*)::int, count(distinct enrollment_id)::int
+           count(*)::int, count(distinct enrollment_id)::int,
+           coalesce(sum(playing_seconds), 0)::int
     from learning_analytics_events
     where occurred_at < ${APP_CURRENT_DAY_START_SQL}
     group by (occurred_at at time zone ${APP_TIME_ZONE_SQL})::date,
@@ -160,6 +164,7 @@ export const runMaintenance = async ({
     on conflict (metric_date, event_type, course_publication_id, lesson_id)
     do update set event_count = excluded.event_count,
                   unique_enrollment_count = excluded.unique_enrollment_count,
+                  playing_seconds = excluded.playing_seconds,
                   updated_at = now()
   `);
   result.learningAnalyticsAggregated = analytics.rowCount ?? 0;
@@ -168,7 +173,7 @@ export const runMaintenance = async ({
     return result;
   }
   const analyticsEvents = await pool.query(
-    "delete from learning_analytics_events where occurred_at < now() - interval '90 days'"
+    "delete from learning_analytics_events where occurred_at < now() - interval '12 months'"
   );
   result.learningAnalyticsEventsRemoved = analyticsEvents.rowCount ?? 0;
 
@@ -211,6 +216,13 @@ export const runMaintenance = async ({
     return result;
   }
   result.stagedAdminImagesRemoved = await reconcileStagedAdminImageUploads({
+    shouldContinue: canContinue,
+  });
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  result.authMediaObjectsReconciled = await reconcileAuthMediaStorage({
     shouldContinue: canContinue,
   });
 

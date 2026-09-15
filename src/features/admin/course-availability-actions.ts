@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import {
+  parseAuthoringUuid,
+  readAuthoringUuid,
+} from "@/features/admin/authoring-input";
 import type { CourseAvailabilityPreset } from "@/features/courses/availability";
 import {
   archiveCourse,
@@ -40,7 +44,7 @@ export const saveCourseAvailabilityAction = async (
 ): Promise<CourseAvailabilityActionResult> => {
   try {
     const session = await requireRole(["admin"]);
-    const courseId = readString(formData, "courseId");
+    const courseId = readAuthoringUuid({ field: "courseId", formData });
     const preset = readString(formData, "preset") as CourseAvailabilityPreset;
     if (!(courseId && PRESETS.has(preset))) {
       throw new Error("Disponibilidade do Curso inválida.");
@@ -78,12 +82,20 @@ export const saveCourseAvailabilityAction = async (
 
 export const archiveCourseAction = async (courseId: string): Promise<void> => {
   const session = await requireRole(["admin"]);
-  await archiveCourse({ actorUserId: session.user.id, courseId });
-  revalidateCourseAvailability(courseId);
+  const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+  await archiveCourse({
+    actorUserId: session.user.id,
+    courseId: normalizedCourseId,
+  });
+  revalidateCourseAvailability(normalizedCourseId);
 };
 
 export const restoreCourseAction = async (courseId: string): Promise<void> => {
   const session = await requireRole(["admin"]);
-  await restoreCourse({ actorUserId: session.user.id, courseId });
-  revalidateCourseAvailability(courseId);
+  const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+  await restoreCourse({
+    actorUserId: session.user.id,
+    courseId: normalizedCourseId,
+  });
+  revalidateCourseAvailability(normalizedCourseId);
 };

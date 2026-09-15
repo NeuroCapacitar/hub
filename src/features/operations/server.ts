@@ -7,10 +7,13 @@ export interface OperationalBacklogSnapshot {
     accepted: number;
     bounced: number;
     complained: number;
-    deadLetters: number;
     delivered: number;
-    oldestRetryAt: Date | null;
-    retrying: number;
+    resendWebhook: {
+      deadLetters: number;
+      oldestDeadLetterAt: Date | null;
+      oldestRetryAt: Date | null;
+      retrying: number;
+    };
   };
   outbox: {
     deadLetters: number;
@@ -57,6 +60,7 @@ interface OperationalBacklogRow {
   email_complained: string;
   email_delivered: string;
   email_webhook_dead_letters: string;
+  email_webhook_oldest_dead_letter_at: Date | null;
   email_webhook_oldest_retry_at: Date | null;
   email_webhook_retrying: string;
   oldest_outbox_at: Date | null;
@@ -200,16 +204,16 @@ const getEmailDeliveryAlerts = ({
   now: Date;
 }): OperationalAlert[] => {
   const alerts: OperationalAlert[] = [];
-  if (emailDelivery.deadLetters > 0) {
+  if (emailDelivery.resendWebhook.deadLetters > 0) {
     alerts.push({
       code: "email_delivery_dead_letter",
-      severity: "critical",
+      severity: "high",
     });
   }
   if (
-    emailDelivery.retrying > 0 &&
+    emailDelivery.resendWebhook.retrying > 0 &&
     isAtLeastAge({
-      date: emailDelivery.oldestRetryAt,
+      date: emailDelivery.resendWebhook.oldestRetryAt,
       now,
       thresholdMs: OPERATIONAL_BACKLOG_THRESHOLDS_MS.emailDeliveryRetry,
     })
@@ -225,10 +229,13 @@ const buildEmailDeliverySnapshot = (
   accepted: Number(row?.email_accepted ?? 0),
   bounced: Number(row?.email_bounced ?? 0),
   complained: Number(row?.email_complained ?? 0),
-  deadLetters: Number(row?.email_webhook_dead_letters ?? 0),
   delivered: Number(row?.email_delivered ?? 0),
-  oldestRetryAt: row?.email_webhook_oldest_retry_at ?? null,
-  retrying: Number(row?.email_webhook_retrying ?? 0),
+  resendWebhook: {
+    deadLetters: Number(row?.email_webhook_dead_letters ?? 0),
+    oldestDeadLetterAt: row?.email_webhook_oldest_dead_letter_at ?? null,
+    oldestRetryAt: row?.email_webhook_oldest_retry_at ?? null,
+    retrying: Number(row?.email_webhook_retrying ?? 0),
+  },
 });
 
 export const getOperationalBacklogSnapshot = async ({
@@ -243,6 +250,7 @@ export const getOperationalBacklogSnapshot = async ({
       (select count(*) from outbox_messages where status = 'dead_letter') as dead_letters,
       (select count(*) from outbox_messages where status = 'superseded') as outbox_superseded,
       (select count(*) from resend_webhook_events where status = 'dead_letter') as email_webhook_dead_letters,
+      (select min(updated_at) from resend_webhook_events where status = 'dead_letter') as email_webhook_oldest_dead_letter_at,
       (select count(*) from resend_webhook_events where status = 'retrying') as email_webhook_retrying,
       (select min(received_at) from resend_webhook_events where status = 'retrying') as email_webhook_oldest_retry_at,
       (select count(*) from email_messages where status = 'accepted') as email_accepted,

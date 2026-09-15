@@ -12,12 +12,14 @@ import {
   buildLessonCommentTree,
   type LessonCommentRecord,
   type LessonCommentView,
+  type LessonDiscussionIdentity,
   normalizeCommentBody,
   validateReplyTarget,
 } from "./rules";
 
 interface LessonAccessResult {
   courseId: string;
+  discussion: LessonDiscussionIdentity;
 }
 
 interface LessonCommentRow {
@@ -34,6 +36,8 @@ interface LessonCommentRow {
 }
 
 interface ParentCommentRow {
+  course_id: string;
+  curriculum_key: string;
   id: string;
   lesson_id: string;
   parent_id: string | null;
@@ -65,9 +69,12 @@ export const ensureCanCommentOnLesson = async ({
 
   if (role === "admin") {
     const db = client ?? getPool();
-    const { rows } = await db.query<{ course_id: string }>(
+    const { rows } = await db.query<{
+      course_id: string;
+      curriculum_key: string;
+    }>(
       `
-        select m.course_id
+        select m.course_id, l.curriculum_key
         from lessons l
         join modules m on m.id = l.module_id
         where l.id = $1
@@ -76,18 +83,25 @@ export const ensureCanCommentOnLesson = async ({
       [lessonId]
     );
     const courseId = rows[0]?.course_id;
+    const curriculumKey = rows[0]?.curriculum_key;
 
-    if (!courseId) {
+    if (!(courseId && curriculumKey)) {
       throw new Error("Aula invalida.");
     }
 
-    return { courseId };
+    return {
+      courseId,
+      discussion: { courseId, curriculumKey },
+    };
   }
 
   const db = client ?? getPool();
-  const lesson = await db.query<{ course_id: string }>(
+  const lesson = await db.query<{
+    course_id: string;
+    curriculum_key: string;
+  }>(
     `
-      select m.course_id
+      select m.course_id, l.curriculum_key
       from lessons l
       join modules m on m.id = l.module_id
       where l.id = $1
@@ -96,7 +110,8 @@ export const ensureCanCommentOnLesson = async ({
     [lessonId]
   );
   const courseId = lesson.rows[0]?.course_id;
-  if (!courseId) {
+  const curriculumKey = lesson.rows[0]?.curriculum_key;
+  if (!(courseId && curriculumKey)) {
     throw new Error("Aula invalida.");
   }
   if (client) {
@@ -112,7 +127,10 @@ export const ensureCanCommentOnLesson = async ({
   if (access.kind !== "allowed") {
     throw new Error("Aula indisponivel para esta matricula.");
   }
-  return { courseId: access.courseId };
+  return {
+    courseId: access.courseId,
+    discussion: { courseId: access.courseId, curriculumKey },
+  };
 };
 
 export const getLessonComments = async ({
@@ -127,7 +145,7 @@ export const getLessonComments = async ({
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
-    const { courseId } = await ensureCanCommentOnLesson({
+    const { courseId, discussion } = await ensureCanCommentOnLesson({
       client,
       lessonId,
       role,
@@ -150,9 +168,19 @@ export const getLessonComments = async ({
         from lesson_comments lc
         left join users u on u.id = lc.author_user_id
         left join profiles p on p.user_id = u.id
-        where lc.lesson_id = $1
+        where exists (
+          select 1
+            from lessons comment_lesson
+            join modules comment_module on comment_module.id = comment_lesson.module_id
+            join course_publications comment_publication
+              on comment_publication.id = comment_lesson.course_publication_id
+            where comment_lesson.id = lc.lesson_id
+              and comment_module.course_id = $1
+              and comment_lesson.curriculum_key = $2
+              and comment_publication.status in ('published', 'retired')
+          )
           and (
-            $2::boolean
+            $3::boolean
             or (
               lc.status = 'visible'
               and (
@@ -168,7 +196,7 @@ export const getLessonComments = async ({
           )
         order by lc.created_at asc, lc.id asc
       `,
-      [lessonId, canModerateComments]
+      [courseId, discussion.curriculumKey, canModerateComments]
     );
 
     const records = rows.map(toLessonCommentRecord);
@@ -210,9 +238,12 @@ export const createLessonComment = async ({
 
   try {
     await client.query("BEGIN");
-    const lesson = await client.query<{ course_id: string }>(
+    const lesson = await client.query<{
+      course_id: string;
+      curriculum_key: string;
+    }>(
       `
-        select m.course_id
+        select m.course_id, l.curriculum_key
         from lessons l
         join modules m on m.id = l.module_id
         where l.id = $1
@@ -221,8 +252,9 @@ export const createLessonComment = async ({
       [lessonId]
     );
     const courseId = lesson.rows[0]?.course_id;
+    const curriculumKey = lesson.rows[0]?.curriculum_key;
 
-    if (!courseId) {
+    if (!(courseId && curriculumKey)) {
       throw new Error("Aula invalida.");
     }
 
@@ -251,8 +283,13 @@ export const createLessonComment = async ({
       }
 
       validateReplyTarget({
+        discussion: { courseId, curriculumKey },
         lessonId,
         parent: {
+          discussion: {
+            courseId: parent.course_id,
+            curriculumKey: parent.curriculum_key,
+          },
           id: parent.id,
           lessonId: parent.lesson_id,
           parentId: parent.parent_id,
@@ -371,9 +408,18 @@ const getParentComment = async (
 ): Promise<ParentCommentRow | null> => {
   const { rows } = await db.query<ParentCommentRow>(
     `
-      select id, lesson_id, parent_id, status
+      select lesson_comments.id,
+             lesson_comments.lesson_id,
+             lesson_comments.parent_id,
+             lesson_comments.status,
+             modules.course_id,
+             lessons.curriculum_key
       from lesson_comments
-      where id = $1
+      join lessons on lessons.id = lesson_comments.lesson_id
+      join modules on modules.id = lessons.module_id
+      join course_publications on course_publications.id = lessons.course_publication_id
+      where lesson_comments.id = $1
+        and course_publications.status in ('published', 'retired')
       limit 1
     `,
     [commentId]

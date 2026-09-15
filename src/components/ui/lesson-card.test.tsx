@@ -59,4 +59,25 @@ describe("LessonCard", () => {
     expect(markup).toContain("bg-gradient-to-br");
     expect(markup).not.toContain("<img");
   });
+
+  it("identifies required and optional lessons", () => {
+    const requiredMarkup = renderToStaticMarkup(
+      <LessonCard {...baseProps} isRequired />
+    );
+    const optionalMarkup = renderToStaticMarkup(
+      <LessonCard {...baseProps} isRequired={false} />
+    );
+
+    expect(requiredMarkup).not.toContain('aria-label="Aula obrigatória"');
+    expect(requiredMarkup).toContain("Obrigatória");
+    expect(requiredMarkup).not.toContain("bg-background/85");
+    expect(requiredMarkup.indexOf("Obrigatória")).toBeGreaterThan(
+      requiredMarkup.indexOf("10 min")
+    );
+    expect(optionalMarkup).not.toContain('aria-label="Aula opcional"');
+    expect(optionalMarkup).toContain("Opcional");
+    expect(optionalMarkup.indexOf("Opcional")).toBeGreaterThan(
+      optionalMarkup.indexOf("10 min")
+    );
+  });
 });

@@ -120,7 +120,7 @@ export function JmvstreamUploadPanel({
 
       if (result.ready && result.playerUrl) {
         onPlayerReady?.(result.playerUrl);
-        setStatus("Vídeo pronto para as alunas.");
+        setStatus("Vídeo pronto para os alunos.");
         router.refresh();
         return;
       }
@@ -472,7 +472,7 @@ export function JmvstreamUploadPanel({
           <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 starting:opacity-0 shadow-sm transition-opacity duration-300 ease-out">
             <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
               <div className="flex min-w-0 flex-1 items-start gap-3">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info">
                   <HugeiconsIcon
                     aria-hidden="true"
                     className={
@@ -603,7 +603,7 @@ export function JmvstreamUploadPanel({
               <div className="flex items-center gap-3">
                 <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="absolute inset-y-0 left-0 bg-primary transition-[width] duration-300 ease-out"
+                    className="absolute inset-y-0 left-0 bg-progress-active transition-[width] duration-300 ease-out"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
@@ -681,7 +681,7 @@ const syncJmvstreamPlayerStatus = async (
     if (playerSync.ready) {
       return {
         playerUrl: playerSync.playerUrl,
-        status: "Vídeo pronto para as alunas.",
+        status: "Vídeo pronto para os alunos.",
       };
     }
   } catch {

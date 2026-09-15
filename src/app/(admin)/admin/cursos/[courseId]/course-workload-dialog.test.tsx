@@ -29,14 +29,17 @@ describe("CourseWorkloadDialog", () => {
   });
 
   const renderDialog = (
-    onValueChange: (value: number | null) => void
+    onValueChange: (value: number | null) => void,
+    options: { calculatedHours?: number; value?: number | null } = {}
   ): void => {
+    const { calculatedHours = 10, value = null } = options;
+
     act(() => {
       root.render(
         <CourseWorkloadDialog
-          calculatedHours={10}
+          calculatedHours={calculatedHours}
           onValueChange={onValueChange}
-          value={null}
+          value={value}
         />
       );
     });
@@ -115,5 +118,17 @@ describe("CourseWorkloadDialog", () => {
     });
 
     expect(onValueChange).toHaveBeenCalledWith(null);
+  });
+
+  it("keeps the calculated workload visible while a manual override is active", () => {
+    renderDialog(vi.fn(), { calculatedHours: 13, value: 18 });
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>("button")?.click();
+    });
+
+    expect(document.body.textContent).toContain(
+      "Automático: 13 horas pela soma das aulas."
+    );
   });
 });

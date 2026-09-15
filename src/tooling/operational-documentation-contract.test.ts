@@ -47,17 +47,8 @@ const scheduleDescription: Record<string, string> = {
 const markdownCode = String.fromCharCode(96);
 const documentedCronLine = (path: string, description: string): string =>
   ["- ", markdownCode, path, markdownCode, " ", description].join("");
-const documentedJmvstreamCron = [
-  "cron ",
-  markdownCode,
-  "/api/cron/jmvstream",
-  markdownCode,
-  " chama ",
-  markdownCode,
-  "syncPendingJmvstreamPlayers",
-  markdownCode,
-  " a cada quinze minutos",
-].join("");
+const documentedJmvstreamCron =
+  /cron `\/api\/cron\/jmvstream` adquire o lease, expira sessões de upload stale e\s+chama `syncPendingJmvstreamPlayers` a cada quinze minutos/;
 const releaseFlowFrequentCronPattern =
   /Asaas, JMVStream, outbox e\s+Resend a cada quinze minutos/;
 const releaseFlowEnrollmentCronPattern =
@@ -65,7 +56,7 @@ const releaseFlowEnrollmentCronPattern =
 const releaseFlowMaintenanceCronPattern =
   /manuten\u00e7\u00e3o\s+diariamente \u00e0s 04:00 UTC/;
 const currentMainShaPattern =
-  /O commit atual de \x60main\x60 \u00e9 \x60([0-9a-f]{40})\x60/u;
+  /No checkpoint de 2026-09-03, \x60main\x60 apontava para\s+\x60([0-9a-f]{40})\x60/u;
 const currentStagingShaPattern =
   /O \u00faltimo checkpoint verificado de\s+\x60staging\x60\s+\u00e9 o merge commit\s+\x60([0-9a-f]{40})\x60/u;
 const releaseMetadataCommitPattern =
@@ -98,7 +89,7 @@ describe("Operational documentation contracts", () => {
     expect(releaseFlow).toMatch(releaseFlowFrequentCronPattern);
     expect(releaseFlow).toMatch(releaseFlowEnrollmentCronPattern);
     expect(releaseFlow).toMatch(releaseFlowMaintenanceCronPattern);
-    expect(jmvstream).toContain(documentedJmvstreamCron);
+    expect(jmvstream).toMatch(documentedJmvstreamCron);
   });
 
   it("documents the implemented support enrollment capability", () => {
@@ -124,7 +115,10 @@ describe("Operational documentation contracts", () => {
       expect(releaseState).toContain([field, ": ", currentMainSha].join(""));
     }
     expect(releaseState.match(releaseMetadataCommitPattern)).toHaveLength(2);
-    expect(currentReleaseSection).toContain("Checkpoint operacional atual");
+    expect(currentReleaseSection).toContain(
+      "Último checkpoint operacional documentado"
+    );
+    expect(currentReleaseSection).not.toContain("O commit atual de `main`");
     expect(currentReleaseSection).toMatch(workflowEvidencePattern);
     expect(readinessReview).toContain(currentMainSha);
     expect(readinessReview).toMatch(workflowEvidencePattern);

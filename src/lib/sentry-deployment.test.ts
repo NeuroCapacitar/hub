@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isSentryRuntimeEnabled,
   resolveSentryBuildConfiguration,
   resolveSentryRelease,
 } from "./sentry-deployment";
@@ -11,12 +12,12 @@ describe("Sentry deployment configuration", () => {
       resolveSentryBuildConfiguration({
         SENTRY_AUTH_TOKEN: "configured-without-being-returned",
         SENTRY_ORG: "neurocapacitar",
-        SENTRY_PROJECT: "hub-development",
+        SENTRY_PROJECT: "hub-web",
         VERCEL_GIT_COMMIT_SHA: release,
       })
     ).toEqual({
       org: "neurocapacitar",
-      project: "hub-development",
+      project: "hub-web",
       release,
       uploadSourceMaps: true,
     });
@@ -42,5 +43,25 @@ describe("Sentry deployment configuration", () => {
       })
     ).toBe("b".repeat(40));
     expect(resolveSentryRelease({ SENTRY_RELEASE: "abc1234" })).toBeUndefined();
+  });
+
+  it("enables runtime capture only for a production Node environment", () => {
+    const dsn = "https://public@example.ingest.sentry.io/1";
+
+    expect(
+      isSentryRuntimeEnabled({ dsn, nodeEnvironment: "development" })
+    ).toBe(false);
+    expect(isSentryRuntimeEnabled({ dsn, nodeEnvironment: "test" })).toBe(
+      false
+    );
+    expect(isSentryRuntimeEnabled({ dsn, nodeEnvironment: "production" })).toBe(
+      true
+    );
+    expect(
+      isSentryRuntimeEnabled({
+        dsn: undefined,
+        nodeEnvironment: "production",
+      })
+    ).toBe(false);
   });
 });

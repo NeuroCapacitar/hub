@@ -248,6 +248,15 @@ describe("course payment settings", () => {
     );
   });
 
+  it("preserves a zero-hour manual override instead of treating it as empty", () => {
+    const markup = renderToStaticMarkup(
+      <CourseSettingsForm course={{ ...course, workloadHoursOverride: 0 }} />
+    );
+
+    expect(markup).toContain('value="0"');
+    expect(markup).toContain("0 horas");
+  });
+
   it("organizes settings into spacious domain sections", () => {
     const markup = renderToStaticMarkup(<CourseSettingsForm course={course} />);
 

@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: 10c9cb8dd187482144850015841fb4485eacbd5f
+last_verified_commit: e0a55d04884851c21bd55fe605afd05cc52c5a4e
 ---
 
 # Testes e CI
@@ -23,6 +23,12 @@ O workflow `.github/workflows/ci.yml` executa em:
 Ele não executa em cada `push` para `main` ou `staging`. O merge em `staging`
 possui somente uma operação separada para aplicar migrations no banco persistente
 de Staging; essa operação não repete os testes.
+
+Quando um release depende da árvore final de um merge, a verificação precisa
+existir para o SHA dessa árvore. Um check verde apenas no head de um PR não é
+substituto: execute a CI manualmente para a referência candidata quando
+necessário e só avance depois que o check `CI` verde estiver associado ao SHA
+exato.
 
 ## Banco de teste
 
@@ -62,6 +68,19 @@ Staging ou Production.
 Não use `DATABASE_URL` de Development, Staging ou Production na CI. Se o
 container PostgreSQL não subir, corrija o workflow ou a imagem; não substitua o
 alvo por Neon apenas para fazer a execução passar.
+
+## CodeRabbit
+
+O CodeRabbit é uma revisão assistida separada da CI. Antes do Pull Request,
+tente o procedimento em [Revisão assistida com CodeRabbit](code-review-with-coderabbit.md)
+com a base `staging`; para hotfix, use `main`. A etapa exige disponibilidade da
+CLI e autenticação válidas. Se qualquer uma estiver ausente, registre o motivo
+do skip e não bloqueie o trabalho.
+
+CodeRabbit não substitui `bun run verify`, o workflow `CI`, revisão de regra de
+negócio ou validação de deployment. Não adicione a revisão como check obrigatório
+sem uma decisão explícita sobre plano, custo, disponibilidade e comportamento
+do repositório.
 
 ## Dependabot e forks
 

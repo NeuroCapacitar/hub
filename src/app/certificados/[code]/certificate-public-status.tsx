@@ -63,7 +63,7 @@ const toneClassNames = {
   danger: "border-destructive bg-card text-destructive",
   success:
     "border-success bg-success text-success-foreground hover:bg-success/80",
-  warning: "border-accent bg-card text-accent",
+  warning: "border-warning bg-card text-warning",
 } as const;
 
 const getStatusIcon = (tone: "danger" | "success" | "warning") => {

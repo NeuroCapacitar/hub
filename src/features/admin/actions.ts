@@ -5,6 +5,14 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getPool } from "@/db";
 import {
+  type AuditLogQueryClient,
+  writeAuditLog,
+} from "@/features/admin/audit-log";
+import type {
+  AuditMetadata,
+  AuditMetadataValue,
+} from "@/features/admin/audit-types";
+import {
   createCoursePublicationDraft,
   createLessonDraft,
   publishCoursePublication,
@@ -13,6 +21,11 @@ import {
   saveLesson,
   saveModule,
 } from "@/features/admin/authoring";
+import {
+  parseAuthoringUuid,
+  parseAuthoringUuidList,
+  readAuthoringUuid,
+} from "@/features/admin/authoring-input";
 import type { CertificateTemplateActionState } from "@/features/admin/certificate-template-action-state";
 import {
   getExpectedCertificateTemplateActionMessage,
@@ -69,6 +82,7 @@ import {
   consumeStagedAdminImageUploads,
 } from "@/features/storage/staged-image-upload-registry";
 import { requirePermission } from "@/lib/auth-permissions";
+import { normalizeCnpj } from "@/lib/cnpj";
 import {
   CORRELATION_ID_HEADER,
   createCorrelationId,
@@ -106,22 +120,53 @@ const revalidateAdmin = (): void => {
 const audit = async ({
   action,
   actorUserId,
+  client,
+  metadata,
   targetId,
   targetType,
 }: {
   action: string;
   actorUserId: string;
+  client?: AuditLogQueryClient;
+  metadata?: AuditMetadata;
   targetId?: string | undefined;
   targetType: string;
 }) => {
-  await getPool().query(
-    `
-      insert into audit_logs (actor_user_id, action, target_type, target_id)
-      values ($1, $2, $3, $4)
-    `,
-    [actorUserId, action, targetType, targetId ?? null]
-  );
+  await writeAuditLog({
+    action,
+    actorUserId,
+    client,
+    metadata,
+    targetId,
+    targetType,
+  });
 };
+
+const maskCnpjForAudit = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 4 ? `••••${digits.slice(-4)}` : "••••";
+};
+
+const getAuditChanges = (
+  before: Record<string, AuditMetadataValue>,
+  after: Record<string, AuditMetadataValue>
+): NonNullable<AuditMetadata["changes"]> =>
+  Object.fromEntries(
+    Object.keys(before).flatMap((key) => {
+      const beforeValue = before[key] ?? null;
+      const afterValue = after[key] ?? null;
+      return JSON.stringify(beforeValue) === JSON.stringify(afterValue)
+        ? []
+        : [[key, { after: afterValue, before: beforeValue }]];
+    })
+  );
+
+const truncateAuditText = (value: string | null): string | null =>
+  value && value.length > 500 ? `${value.slice(0, 500)}…` : value;
 
 export interface LessonReorderGroup {
   lessonIds: string[];
@@ -134,6 +179,7 @@ export type CourseContentReorderResult =
 
 const REORDER_FAILURE_MESSAGE =
   "Nao foi possivel salvar a nova ordem. Tente novamente.";
+const MAX_POSTGRES_INTEGER = 2_147_483_647;
 
 const hasExactlyTheSameIds = (
   actualIds: string[],
@@ -142,6 +188,47 @@ const hasExactlyTheSameIds = (
   actualIds.length === expectedIds.length &&
   new Set(actualIds).size === actualIds.length &&
   actualIds.every((id) => expectedIds.includes(id));
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const parseLessonReorderGroups = (value: unknown): LessonReorderGroup[] => {
+  if (!Array.isArray(value)) {
+    throw new Error("Invalid lesson order.");
+  }
+
+  return value.map((group, index) => {
+    if (!isRecord(group)) {
+      throw new Error("Invalid lesson order.");
+    }
+
+    return {
+      lessonIds: parseAuthoringUuidList(
+        group.lessonIds,
+        `reorderGroups[${index}].lessonIds`
+      ),
+      moduleId: parseAuthoringUuid(
+        group.moduleId,
+        `reorderGroups[${index}].moduleId`
+      ),
+    };
+  });
+};
+
+const getTemporaryPositiveOrderBase = (
+  currentOrders: readonly number[],
+  itemCount: number
+): number => {
+  const currentMaximum = currentOrders.reduce(
+    (maximum, order) => Math.max(maximum, order),
+    0
+  );
+  const base = currentMaximum + itemCount + 1;
+  if (base + Math.max(0, itemCount - 1) > MAX_POSTGRES_INTEGER) {
+    throw new Error("A ordem do conteúdo excede o limite suportado.");
+  }
+  return base;
+};
 
 const getActionCorrelationId = async (): Promise<string> =>
   createCorrelationId((await headers()).get(CORRELATION_ID_HEADER));
@@ -188,6 +275,7 @@ const revalidateEnrollmentAdminPaths = (): void => {
 
 export const saveCourseAction = async (formData: FormData): Promise<void> => {
   const session = await requireRole(["admin"]);
+  readAuthoringUuid({ field: "courseId", formData });
   const { courseId } = await saveCourse({
     actorUserId: session.user.id,
     formData,
@@ -213,9 +301,10 @@ export const createCoursePublicationDraftAction = async (
 ): Promise<CoursePublicationActionResult> => {
   try {
     const session = await requireRole(["admin"]);
+    const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
     await createCoursePublicationDraft({
       actorUserId: session.user.id,
-      courseId,
+      courseId: normalizedCourseId,
     });
     revalidateAdmin();
     return { ok: true };
@@ -232,9 +321,10 @@ export const publishCoursePublicationAction = async (
 ): Promise<CoursePublicationActionResult> => {
   try {
     const session = await requireRole(["admin"]);
+    const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
     const result = await publishCoursePublication({
       actorUserId: session.user.id,
-      courseId,
+      courseId: normalizedCourseId,
     });
 
     if (result === "no_draft") {
@@ -256,6 +346,13 @@ export const publishCoursePublicationAction = async (
 
 export const saveModuleAction = async (formData: FormData): Promise<void> => {
   const session = await requireRole(["admin"]);
+  readAuthoringUuid({
+    field: "courseId",
+    formData,
+    required: true,
+    requiredMessage: "Informe o Curso.",
+  });
+  readAuthoringUuid({ field: "moduleId", formData });
   await saveModule({ actorUserId: session.user.id, formData });
   revalidateAdmin();
 };
@@ -264,6 +361,12 @@ export const createLessonDraftAction = async (
   formData: FormData
 ): Promise<void> => {
   const session = await requireRole(["admin"]);
+  readAuthoringUuid({
+    field: "moduleId",
+    formData,
+    required: true,
+    requiredMessage: "Informe o módulo da aula.",
+  });
   const { courseId, lessonId } = await createLessonDraft({
     actorUserId: session.user.id,
     formData,
@@ -278,9 +381,16 @@ export const saveLessonAction = async (
   formData: FormData
 ): Promise<LessonSaveActionResult> => {
   const correlationId = await getActionCorrelationId();
-  const submittedLessonId = String(formData.get("lessonId") ?? "").trim();
 
   try {
+    const submittedLessonId =
+      readAuthoringUuid({ field: "lessonId", formData }) ?? "";
+    readAuthoringUuid({
+      field: "moduleId",
+      formData,
+      required: true,
+      requiredMessage: "Informe o módulo da aula.",
+    });
     const saved = await observeOperation({
       ...(submittedLessonId ? { aggregateId: submittedLessonId } : {}),
       correlationId,
@@ -318,7 +428,8 @@ export const ensureJmvstreamCourseFolderAction = async (
   courseId: string
 ): Promise<void> => {
   await requireRole(["admin"]);
-  await ensureJmvstreamCourseFolder(courseId);
+  const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+  await ensureJmvstreamCourseFolder(normalizedCourseId);
   revalidateAdmin();
 };
 
@@ -334,8 +445,12 @@ export const initJmvstreamUploadAction = async (input: {
   await requireRole(["admin"]);
 
   try {
+    const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
     return {
-      data: await initJmvstreamUpload(input),
+      data: await initJmvstreamUpload({
+        ...input,
+        lessonId: normalizedLessonId,
+      }),
       ok: true,
     };
   } catch (error) {
@@ -365,7 +480,16 @@ export const completeJmvstreamUploadAction = async (input: {
   videoHash: string;
 }): Promise<void> => {
   await requireRole(["admin"]);
-  await completeJmvstreamUpload(input);
+  const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
+  const normalizedUploadSessionId = parseAuthoringUuid(
+    input?.uploadSessionId,
+    "uploadSessionId"
+  );
+  await completeJmvstreamUpload({
+    ...input,
+    lessonId: normalizedLessonId,
+    uploadSessionId: normalizedUploadSessionId,
+  });
   revalidateAdmin();
 };
 
@@ -373,7 +497,8 @@ export const syncJmvstreamLessonPlayerAction = async (input: {
   lessonId: string;
 }): Promise<{ playerUrl: null | string; ready: boolean }> => {
   await requireRole(["admin"]);
-  const result = await syncJmvstreamLessonPlayer(input.lessonId);
+  const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
+  const result = await syncJmvstreamLessonPlayer(normalizedLessonId);
 
   if (result.ready) {
     revalidateAdmin();
@@ -386,13 +511,14 @@ export const removeJmvstreamVideoFromLessonAction = async (input: {
   lessonId: string;
 }): Promise<{ deletePending: boolean }> => {
   const session = await requireRole(["admin"]);
+  const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
   const { courseId, deletePending } = await removeLessonVideo({
     actorUserId: session.user.id,
-    lessonId: input.lessonId,
+    lessonId: normalizedLessonId,
   });
   revalidateAdmin();
   revalidatePath(
-    buildAdminLessonEditPath({ courseId, lessonId: input.lessonId.trim() })
+    buildAdminLessonEditPath({ courseId, lessonId: normalizedLessonId })
   );
 
   return { deletePending };
@@ -411,7 +537,8 @@ export const discardJmvstreamUploadAction = async (input: {
   assetId: string;
 }): Promise<void> => {
   await requireRole(["admin"]);
-  await discardJmvstreamUpload(input);
+  const normalizedAssetId = parseAuthoringUuid(input?.assetId, "assetId");
+  await discardJmvstreamUpload({ ...input, assetId: normalizedAssetId });
   revalidateAdmin();
 };
 
@@ -421,8 +548,9 @@ export const retryJmvstreamDeleteAction = async ({
   assetId: string;
 }): Promise<{ error: string; ok: false } | { ok: true }> => {
   await requireRole(["admin"]);
+  const normalizedAssetId = parseAuthoringUuid(assetId, "assetId");
   try {
-    await retryJmvstreamAssetDelete(assetId);
+    await retryJmvstreamAssetDelete(normalizedAssetId);
     revalidateAdmin();
     return { ok: true };
   } catch (error) {
@@ -637,74 +765,198 @@ export const restoreStudentPlatformAccessAction = async (
 };
 
 export const saveFaqAction = async (formData: FormData): Promise<void> => {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageContent");
   const faqId = readString(formData, "faqId");
-  const values = [
-    readString(formData, "question"),
-    readString(formData, "answer"),
-    readNumber(formData, "sortOrder"),
-    readCheckbox(formData, "isPublished"),
-  ];
+  const question = readString(formData, "question");
+  const answer = readString(formData, "answer");
+  const sortOrder = readNumber(formData, "sortOrder");
+  const isPublished = readCheckbox(formData, "isPublished");
 
-  if (faqId) {
-    await getPool().query(
-      `
-        update faq_items
-        set question = $1,
-            answer = $2,
-            sort_order = $3,
-            is_published = $4,
-            updated_at = now()
-        where id = $5
-      `,
-      [...values, faqId]
-    );
-  } else {
-    await getPool().query(
-      `
-        insert into faq_items (question, answer, sort_order, is_published)
-        values ($1, $2, $3, $4)
-      `,
-      values
-    );
+  if (!(question && answer)) {
+    throw new Error("Informe a pergunta e a resposta da FAQ.");
   }
 
-  await audit({
-    action: "faq.saved",
-    actorUserId: session.user.id,
-    targetId: faqId || undefined,
-    targetType: "faq",
-  });
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const previous = faqId
+      ? await client.query<{
+          answer: string;
+          is_published: boolean;
+          question: string;
+          sort_order: number;
+        }>(
+          `
+            select question, answer, sort_order, is_published
+            from faq_items
+            where id = $1
+            for update
+          `,
+          [faqId]
+        )
+      : { rows: [] };
+    const previousFaq = previous.rows[0];
+    if (faqId && !previousFaq) {
+      throw new Error("FAQ invalido.");
+    }
+
+    let savedFaqId = faqId;
+    if (faqId) {
+      await client.query(
+        `
+          update faq_items
+          set question = $1,
+              answer = $2,
+              sort_order = $3,
+              is_published = $4,
+              updated_at = now()
+          where id = $5
+        `,
+        [question, answer, sortOrder, isPublished, faqId]
+      );
+    } else {
+      const inserted = await client.query<{ id: string }>(
+        `
+          insert into faq_items (question, answer, sort_order, is_published)
+          values ($1, $2, $3, $4)
+          returning id
+        `,
+        [question, answer, sortOrder, isPublished]
+      );
+      savedFaqId = inserted.rows[0]?.id ?? "";
+      if (!savedFaqId) {
+        throw new Error("Não foi possível criar a FAQ.");
+      }
+    }
+
+    const before = {
+      answer: truncateAuditText(previousFaq?.answer ?? null),
+      isPublished: previousFaq?.is_published ?? null,
+      question: truncateAuditText(previousFaq?.question ?? null),
+      sortOrder: previousFaq?.sort_order ?? null,
+    };
+    const after = {
+      answer: truncateAuditText(answer),
+      isPublished,
+      question: truncateAuditText(question),
+      sortOrder,
+    };
+    await audit({
+      action: faqId ? "faq.updated" : "faq.created",
+      actorUserId: session.user.id,
+      client,
+      metadata: {
+        changes: getAuditChanges(before, after),
+        targetLabelAfter: question,
+        ...(previousFaq ? { targetLabelBefore: previousFaq.question } : {}),
+      },
+      targetId: savedFaqId,
+      targetType: "faq",
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await rollbackTransaction(client);
+    throw error;
+  } finally {
+    client.release();
+  }
   revalidateAdmin();
 };
 
 export const deleteFaqAction = async (formData: FormData): Promise<void> => {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageContent");
   const faqId = readString(formData, "faqId");
 
   if (!faqId) {
     throw new Error("FAQ invalido.");
   }
 
-  await getPool().query("delete from faq_items where id = $1", [faqId]);
-  await audit({
-    action: "faq.deleted",
-    actorUserId: session.user.id,
-    targetId: faqId,
-    targetType: "faq",
-  });
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const previous = await client.query<{
+      answer: string;
+      is_published: boolean;
+      question: string;
+      sort_order: number;
+    }>(
+      `
+        select question, answer, sort_order, is_published
+        from faq_items
+        where id = $1
+        for update
+      `,
+      [faqId]
+    );
+    const previousFaq = previous.rows[0];
+    if (!previousFaq) {
+      throw new Error("FAQ invalido.");
+    }
+    await client.query("delete from faq_items where id = $1", [faqId]);
+    await audit({
+      action: "faq.deleted",
+      actorUserId: session.user.id,
+      client,
+      metadata: {
+        changes: getAuditChanges(
+          {
+            answer: truncateAuditText(previousFaq.answer),
+            isPublished: previousFaq.is_published,
+            question: truncateAuditText(previousFaq.question),
+            sortOrder: previousFaq.sort_order,
+          },
+          {
+            answer: null,
+            isPublished: null,
+            question: null,
+            sortOrder: null,
+          }
+        ),
+        targetLabelBefore: previousFaq.question,
+      },
+      targetId: faqId,
+      targetType: "faq",
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await rollbackTransaction(client);
+    throw error;
+  } finally {
+    client.release();
+  }
   revalidateAdmin();
 };
 
 export const reorderFaqsAction = async (
   orderedFaqIds: string[]
 ): Promise<void> => {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageContent");
 
   const pool = getPool();
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+
+    const currentFaqs = await client.query<{
+      id: string;
+      question: string;
+      sort_order: number;
+    }>(
+      `
+        select id, question, sort_order
+        from faq_items
+        order by sort_order, id
+        for update
+      `
+    );
+    if (
+      !hasExactlyTheSameIds(
+        orderedFaqIds,
+        currentFaqs.rows.map((faq) => faq.id)
+      )
+    ) {
+      throw new Error("Ordem de FAQ inválida.");
+    }
 
     // Pass 1: Set to temporary negative order to avoid unique constraint violations
     for (let i = 0; i < orderedFaqIds.length; i++) {
@@ -722,6 +974,27 @@ export const reorderFaqsAction = async (
       );
     }
 
+    const questionById = new Map(
+      currentFaqs.rows.map((faq) => [faq.id, faq.question])
+    );
+    await audit({
+      action: "faq.reordered",
+      actorUserId: session.user.id,
+      client,
+      metadata: {
+        changes: getAuditChanges(
+          {
+            order: currentFaqs.rows.map((faq) => faq.question),
+          },
+          {
+            order: orderedFaqIds.map(
+              (faqId) => questionById.get(faqId) ?? faqId
+            ),
+          }
+        ),
+      },
+      targetType: "faq",
+    });
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -730,51 +1003,137 @@ export const reorderFaqsAction = async (
     client.release();
   }
 
-  await audit({
-    action: "faq.reordered",
-    actorUserId: session.user.id,
-    targetType: "faq",
-  });
   revalidateAdmin();
 };
 
 export const saveSettingsAction = async (formData: FormData): Promise<void> => {
   const session = await requireRole(["admin"]);
-  await getPool().query(
-    `
-      insert into app_settings (
-        id,
-        certificate_signer_name,
-        certificate_signer_role
-      )
-      values ('global', $1, $2)
-      on conflict (id) do update set
-        certificate_signer_name = excluded.certificate_signer_name,
-        certificate_signer_role = excluded.certificate_signer_role,
-        updated_at = now()
-    `,
-    [
-      readString(formData, "certificateSignerName") || null,
-      readString(formData, "certificateSignerRole") || null,
-    ]
-  );
+
+  const certificateSignerName =
+    readString(formData, "certificateSignerName") || null;
+  const certificateSignerRole =
+    readString(formData, "certificateSignerRole") || null;
   const legalName = readString(formData, "issuerLegalName");
   const displayName = readString(formData, "issuerDisplayName");
-  const cnpj = readString(formData, "issuerCnpj");
-  if (legalName && cnpj) {
-    await getPool().query(
-      `insert into certificate_issuer_profiles (id, legal_name, cnpj, display_name)
-       values ('global', $1, $2, $3)
-       on conflict (id) do update set legal_name = excluded.legal_name, cnpj = excluded.cnpj, display_name = excluded.display_name, updated_at = now()`,
-      [legalName, cnpj, displayName || legalName]
+  const cnpjInput = readString(formData, "issuerCnpj");
+
+  if (Boolean(legalName) !== Boolean(cnpjInput)) {
+    throw new Error(
+      "Preencha razão social e CNPJ para manter o perfil emissor completo."
     );
   }
-  await audit({
-    action: "settings.updated",
-    actorUserId: session.user.id,
-    targetId: "global",
-    targetType: "settings",
-  });
+  if (!(legalName && cnpjInput)) {
+    throw new Error(
+      "Informe razão social e CNPJ para salvar o perfil emissor."
+    );
+  }
+  const cnpj = normalizeCnpj(cnpjInput);
+  if (!cnpj) {
+    throw new Error("Informe um CNPJ válido com 14 dígitos.");
+  }
+
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const settingsResult = await client.query<{
+      certificate_signer_name: string | null;
+      certificate_signer_role: string | null;
+    }>(
+      `
+        select certificate_signer_name, certificate_signer_role
+        from app_settings
+        where id = 'global'
+        for update
+      `
+    );
+    const issuerResult = await client.query<{
+      cnpj: string;
+      display_name: string;
+      legal_name: string;
+    }>(
+      `
+        select cnpj, display_name, legal_name
+        from certificate_issuer_profiles
+        where id = 'global'
+        for update
+      `
+    );
+
+    const currentSettings = settingsResult.rows[0];
+    const currentIssuer = issuerResult.rows[0];
+    const before = {
+      certificateSignerName: currentSettings?.certificate_signer_name ?? null,
+      certificateSignerRole: currentSettings?.certificate_signer_role ?? null,
+      issuerCnpj: maskCnpjForAudit(currentIssuer?.cnpj ?? null),
+      issuerDisplayName: currentIssuer?.display_name ?? null,
+      issuerLegalName: currentIssuer?.legal_name ?? null,
+    };
+
+    await client.query(
+      `
+        insert into app_settings (
+          id,
+          certificate_signer_name,
+          certificate_signer_role
+        )
+        values ('global', $1, $2)
+        on conflict (id) do update set
+          certificate_signer_name = excluded.certificate_signer_name,
+          certificate_signer_role = excluded.certificate_signer_role,
+          updated_at = now()
+      `,
+      [certificateSignerName, certificateSignerRole]
+    );
+
+    await client.query(
+      `
+        insert into certificate_issuer_profiles (
+          id,
+          legal_name,
+          cnpj,
+          display_name
+        )
+        values ('global', $1, $2, $3)
+        on conflict (id) do update set
+          legal_name = excluded.legal_name,
+          cnpj = excluded.cnpj,
+          display_name = excluded.display_name,
+          updated_at = now()
+      `,
+      [legalName, cnpj, displayName || legalName]
+    );
+
+    const after = {
+      certificateSignerName,
+      certificateSignerRole,
+      issuerCnpj: maskCnpjForAudit(cnpj || null),
+      issuerDisplayName: displayName || legalName,
+      issuerLegalName: legalName,
+    };
+
+    await audit({
+      action: "settings.updated",
+      actorUserId: session.user.id,
+      client,
+      metadata: {
+        changes: getAuditChanges(before, after),
+        targetLabelAfter: "Configurações globais",
+        targetLabelBefore: "Configurações globais",
+      },
+      targetId: "global",
+      targetType: "settings",
+    });
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await rollbackTransaction(client);
+    throw error;
+  } finally {
+    client.release();
+  }
+
   revalidateAdmin();
 };
 
@@ -950,7 +1309,8 @@ export const disableCertificateForCourseAction = async (
   courseId: string
 ): Promise<void> => {
   const session = await requireRole(["admin"]);
-  await disableCertificateForCourse(courseId, session.user.id);
+  const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+  await disableCertificateForCourse(normalizedCourseId, session.user.id);
   revalidateAdmin();
 };
 
@@ -958,7 +1318,8 @@ export const enableCertificateForCourseAction = async (
   courseId: string
 ): Promise<void> => {
   const session = await requireRole(["admin"]);
-  await enableCertificateForCourse(courseId, session.user.id);
+  const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+  await enableCertificateForCourse(normalizedCourseId, session.user.id);
   revalidateAdmin();
 };
 
@@ -969,56 +1330,90 @@ export const reorderModulesAction = async (
   const correlationId = await getActionCorrelationId();
 
   try {
+    const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+    const normalizedOrderedModuleIds = parseAuthoringUuidList(
+      orderedModuleIds,
+      "orderedModuleIds"
+    );
     await observeOperation({
-      aggregateId: courseId,
+      aggregateId: normalizedCourseId,
       correlationId,
       execute: async () => {
         const session = await requireRole(["admin"]);
         const client = await getPool().connect();
         try {
           await client.query("BEGIN");
-          await lockCourseContentRelease(client, courseId);
-          const expectedModules = await client.query<{ id: string }>(
+          await lockCourseContentRelease(client, normalizedCourseId);
+          const expectedModules = await client.query<{
+            id: string;
+            sort_order: number;
+            title: string;
+          }>(
             `
-              select m.id
+              select m.id, m.title, m.sort_order
               from modules m
               inner join course_publications cp on cp.id = m.course_publication_id
               where m.course_id = $1 and cp.status = 'draft'
+              order by m.sort_order
               for update
             `,
-            [courseId]
+            [normalizedCourseId]
           );
 
           if (
             !hasExactlyTheSameIds(
-              orderedModuleIds,
+              normalizedOrderedModuleIds,
               expectedModules.rows.map((module) => module.id)
             )
           ) {
             throw new Error("Invalid module order.");
           }
 
-          for (let i = 0; i < orderedModuleIds.length; i++) {
+          const temporaryOrderBase = getTemporaryPositiveOrderBase(
+            expectedModules.rows.map((module) => module.sort_order),
+            normalizedOrderedModuleIds.length
+          );
+          for (let i = 0; i < normalizedOrderedModuleIds.length; i++) {
             await client.query(
               "update modules set sort_order = $1 where id = $2 and course_id = $3",
-              [-(i + 1), orderedModuleIds[i], courseId]
+              [
+                temporaryOrderBase + i,
+                normalizedOrderedModuleIds[i],
+                normalizedCourseId,
+              ]
             );
           }
 
-          for (let i = 0; i < orderedModuleIds.length; i++) {
+          for (let i = 0; i < normalizedOrderedModuleIds.length; i++) {
             await client.query(
               "update modules set sort_order = $1, updated_at = now() where id = $2 and course_id = $3",
-              [i + 1, orderedModuleIds[i], courseId]
+              [i + 1, normalizedOrderedModuleIds[i], normalizedCourseId]
             );
           }
 
-          await client.query(
-            `
-              insert into audit_logs (actor_user_id, action, target_type, target_id)
-              values ($1, $2, $3, $4)
-            `,
-            [session.user.id, "modules.reordered", "course", courseId]
+          const moduleTitleById = new Map(
+            expectedModules.rows.map((module) => [module.id, module.title])
           );
+          await audit({
+            action: "modules.reordered",
+            actorUserId: session.user.id,
+            client,
+            metadata: {
+              changes: {
+                order: {
+                  after: normalizedOrderedModuleIds.map(
+                    (moduleId) => moduleTitleById.get(moduleId) ?? moduleId
+                  ),
+                  before: [...expectedModules.rows]
+                    .sort((left, right) => left.sort_order - right.sort_order)
+                    .map((module) => module.title),
+                },
+              },
+              targetLabelAfter: "Conteúdo do Curso",
+            },
+            targetId: normalizedCourseId,
+            targetType: "course",
+          });
           await client.query("COMMIT");
           revalidateAdmin();
         } catch (error) {
@@ -1045,17 +1440,21 @@ export const reorderLessonsAction = async (
   const correlationId = await getActionCorrelationId();
 
   try {
+    const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+    const normalizedReorderGroups = parseLessonReorderGroups(reorderGroups);
     await observeOperation({
-      aggregateId: courseId,
+      aggregateId: normalizedCourseId,
       correlationId,
       execute: async () => {
         const session = await requireRole(["admin"]);
         const client = await getPool().connect();
         try {
           await client.query("BEGIN");
-          await lockCourseContentRelease(client, courseId);
-          const moduleIds = reorderGroups.map((group) => group.moduleId);
-          const orderedLessonIds = reorderGroups.flatMap(
+          await lockCourseContentRelease(client, normalizedCourseId);
+          const moduleIds = normalizedReorderGroups.map(
+            (group) => group.moduleId
+          );
+          const orderedLessonIds = normalizedReorderGroups.flatMap(
             (group) => group.lessonIds
           );
 
@@ -1070,15 +1469,16 @@ export const reorderLessonsAction = async (
           const modules = await client.query<{
             course_publication_id: string;
             id: string;
+            title: string;
           }>(
             `
-              select m.id, m.course_publication_id
+              select m.id, m.course_publication_id, m.title
               from modules m
               inner join course_publications cp on cp.id = m.course_publication_id
               where m.course_id = $1 and m.id = any($2::uuid[]) and cp.status = 'draft'
               for update
             `,
-            [courseId, moduleIds]
+            [normalizedCourseId, moduleIds]
           );
 
           if (modules.rows.length !== moduleIds.length) {
@@ -1095,8 +1495,20 @@ export const reorderLessonsAction = async (
             throw new Error("Invalid lesson publication.");
           }
 
-          const expectedLessons = await client.query<{ id: string }>(
-            "select id from lessons where module_id = any($1::uuid[]) for update",
+          const expectedLessons = await client.query<{
+            id: string;
+            module_title: string;
+            sort_order: number;
+            title: string;
+          }>(
+            `
+              select l.id, l.title, l.sort_order, m.title as module_title
+              from lessons l
+              join modules m on m.id = l.module_id
+              where l.module_id = any($1::uuid[])
+              order by m.sort_order, l.sort_order
+              for update of l
+            `,
             [moduleIds]
           );
 
@@ -1109,16 +1521,19 @@ export const reorderLessonsAction = async (
             throw new Error("Invalid lesson order.");
           }
 
-          let temporaryOrder = -1;
-          for (const lessonId of orderedLessonIds) {
+          const temporaryOrderBase = getTemporaryPositiveOrderBase(
+            expectedLessons.rows.map((lesson) => lesson.sort_order),
+            orderedLessonIds.length
+          );
+          for (let i = 0; i < orderedLessonIds.length; i++) {
+            const lessonId = orderedLessonIds[i];
             await client.query(
               "update lessons set sort_order = $1 where id = $2",
-              [temporaryOrder, lessonId]
+              [temporaryOrderBase + i, lessonId]
             );
-            temporaryOrder--;
           }
 
-          for (const group of reorderGroups) {
+          for (const group of normalizedReorderGroups) {
             for (let i = 0; i < group.lessonIds.length; i++) {
               await client.query(
                 "update lessons set sort_order = $1, module_id = $3, updated_at = now() where id = $2",
@@ -1127,13 +1542,36 @@ export const reorderLessonsAction = async (
             }
           }
 
-          await client.query(
-            `
-              insert into audit_logs (actor_user_id, action, target_type, target_id)
-              values ($1, $2, $3, $4)
-            `,
-            [session.user.id, "lessons.reordered", "course", courseId]
+          const lessonTitleById = new Map(
+            expectedLessons.rows.map((lesson) => [lesson.id, lesson.title])
           );
+          const moduleTitleById = new Map(
+            modules.rows.map((module) => [module.id, module.title])
+          );
+          const formatLessonOrder = (moduleId: string, lessonId: string) =>
+            `${moduleTitleById.get(moduleId) ?? "Módulo"} · ${lessonTitleById.get(lessonId) ?? lessonId}`;
+          await audit({
+            action: "lessons.reordered",
+            actorUserId: session.user.id,
+            client,
+            metadata: {
+              changes: {
+                order: {
+                  after: normalizedReorderGroups.flatMap((group) =>
+                    group.lessonIds.map((lessonId) =>
+                      formatLessonOrder(group.moduleId, lessonId)
+                    )
+                  ),
+                  before: expectedLessons.rows.map(
+                    (lesson) => `${lesson.module_title} · ${lesson.title}`
+                  ),
+                },
+              },
+              targetLabelAfter: "Conteúdo do Curso",
+            },
+            targetId: normalizedCourseId,
+            targetType: "course",
+          });
           await client.query("COMMIT");
           revalidateAdmin();
         } catch (error) {
@@ -1232,6 +1670,7 @@ const persistDashboardBanner = async ({
   isActive: boolean;
   linkUrl: string | null;
   newBannerId: string;
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: banner persistence coordinates database, storage, and audit lifecycle
 }): Promise<{ bannerId: string }> => {
   assertBannerLink({ buttonText, linkUrl });
 
@@ -1241,21 +1680,38 @@ const persistDashboardBanner = async ({
   let previousImageKey: string | null = null;
   let nextBlurDataUrl: string | null = null;
   let nextImageKey: string | null = null;
+  let auditBefore: Record<string, AuditMetadataValue> = {};
+  let auditAfter: Record<string, AuditMetadataValue> = {};
+  let auditTargetLabelBefore: string | null = null;
 
   if (existingBannerId) {
     const previous = await pool.query<{
       blur_data_url: string | null;
+      button_text: string | null;
       image_url: string;
+      is_active: boolean;
+      link_url: string | null;
+      sort_order: number;
     }>(
-      "select image_url, blur_data_url from dashboard_banners where id = $1 limit 1",
+      "select image_url, blur_data_url, link_url, button_text, is_active, sort_order from dashboard_banners where id = $1 limit 1",
       [existingBannerId]
     );
-    previousImageKey = previous.rows[0]?.image_url ?? null;
-    previousBlurDataUrl = previous.rows[0]?.blur_data_url ?? null;
+    const previousBanner = previous.rows[0];
+    previousImageKey = previousBanner?.image_url ?? null;
+    previousBlurDataUrl = previousBanner?.blur_data_url ?? null;
 
     if (!previousImageKey) {
       throw new Error("Banner inválido.");
     }
+    auditBefore = {
+      buttonText: previousBanner?.button_text ?? null,
+      imageReplaced: false,
+      isActive: previousBanner?.is_active ?? false,
+      linkUrl: previousBanner?.link_url ?? null,
+      sortOrder: previousBanner?.sort_order ?? null,
+    };
+    auditTargetLabelBefore =
+      previousBanner?.button_text ?? "Banner do Dashboard";
 
     if (imageFile && imageFile.size > 0) {
       const uploadedBanner = await uploadDashboardBannerFile({
@@ -1282,6 +1738,13 @@ const persistDashboardBanner = async ({
         [linkUrl, buttonText, isActive, existingBannerId]
       );
     }
+    auditAfter = {
+      buttonText,
+      imageReplaced: Boolean(imageFile && imageFile.size > 0),
+      isActive,
+      linkUrl,
+      sortOrder: previousBanner?.sort_order ?? null,
+    };
   } else {
     if (!imageFile || imageFile.size === 0) {
       throw new Error("A imagem do banner é obrigatória.");
@@ -1321,6 +1784,18 @@ const persistDashboardBanner = async ({
       ]
     );
     bannerId = insertRes.rows[0].id;
+    auditBefore = {
+      buttonText: null,
+      isActive: null,
+      linkUrl: null,
+      sortOrder: null,
+    };
+    auditAfter = {
+      buttonText,
+      isActive,
+      linkUrl,
+      sortOrder: nextSortOrder,
+    };
   }
 
   await synchronizeBannerObjects({
@@ -1330,8 +1805,15 @@ const persistDashboardBanner = async ({
   });
 
   await audit({
-    action: "banner.saved",
+    action: existingBannerId ? "banner.updated" : "banner.created",
     actorUserId,
+    metadata: {
+      changes: getAuditChanges(auditBefore, auditAfter),
+      targetLabelAfter: buttonText ?? "Banner do Dashboard",
+      ...(auditTargetLabelBefore
+        ? { targetLabelBefore: auditTargetLabelBefore }
+        : {}),
+    },
     targetId: bannerId || undefined,
     targetType: "banner",
   });
@@ -1385,11 +1867,18 @@ export const deleteBannerAction = async (formData: FormData): Promise<void> => {
   }
 
   const pool = getPool();
-  const previous = await pool.query<{ image_url: string }>(
-    "select image_url from dashboard_banners where id = $1 limit 1",
+  const previous = await pool.query<{
+    button_text: string | null;
+    image_url: string;
+    is_active: boolean;
+    link_url: string | null;
+    sort_order: number;
+  }>(
+    "select image_url, link_url, button_text, is_active, sort_order from dashboard_banners where id = $1 limit 1",
     [bannerId]
   );
-  const imageKey = previous.rows[0]?.image_url;
+  const previousBanner = previous.rows[0];
+  const imageKey = previousBanner?.image_url;
 
   if (!imageKey) {
     throw new Error("Banner inválido.");
@@ -1403,6 +1892,25 @@ export const deleteBannerAction = async (formData: FormData): Promise<void> => {
   await audit({
     action: "banner.deleted",
     actorUserId: session.user.id,
+    metadata: {
+      changes: getAuditChanges(
+        {
+          buttonText: previousBanner?.button_text ?? null,
+          image: true,
+          isActive: previousBanner?.is_active ?? false,
+          linkUrl: previousBanner?.link_url ?? null,
+          sortOrder: previousBanner?.sort_order ?? null,
+        },
+        {
+          buttonText: null,
+          image: false,
+          isActive: null,
+          linkUrl: null,
+          sortOrder: null,
+        }
+      ),
+      targetLabelBefore: previousBanner?.button_text ?? "Banner do Dashboard",
+    },
     targetId: bannerId,
     targetType: "banner",
   });
@@ -1419,6 +1927,28 @@ export const reorderBannersAction = async (
   try {
     await client.query("BEGIN");
 
+    const currentBanners = await client.query<{
+      button_text: string | null;
+      id: string;
+      link_url: string | null;
+      sort_order: number;
+    }>(
+      `
+        select id, button_text, link_url, sort_order
+        from dashboard_banners
+        order by sort_order, id
+        for update
+      `
+    );
+    if (
+      !hasExactlyTheSameIds(
+        orderedBannerIds,
+        currentBanners.rows.map((banner) => banner.id)
+      )
+    ) {
+      throw new Error("Ordem de banner inválida.");
+    }
+
     for (let i = 0; i < orderedBannerIds.length; i++) {
       await client.query(
         "update dashboard_banners set sort_order = $1 where id = $2",
@@ -1433,6 +1963,33 @@ export const reorderBannersAction = async (
       );
     }
 
+    const bannerLabel = (banner: {
+      button_text: string | null;
+      id: string;
+      link_url: string | null;
+      sort_order: number;
+    }): string =>
+      banner.button_text ?? banner.link_url ?? `Banner ${banner.sort_order}`;
+    const bannerById = new Map(
+      currentBanners.rows.map((banner) => [banner.id, banner])
+    );
+    await audit({
+      action: "banners.reordered",
+      actorUserId: session.user.id,
+      client,
+      metadata: {
+        changes: getAuditChanges(
+          { order: currentBanners.rows.map((banner) => bannerLabel(banner)) },
+          {
+            order: orderedBannerIds.map((bannerId) => {
+              const banner = bannerById.get(bannerId);
+              return banner ? bannerLabel(banner) : bannerId;
+            }),
+          }
+        ),
+      },
+      targetType: "banner",
+    });
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -1441,10 +1998,5 @@ export const reorderBannersAction = async (
     client.release();
   }
 
-  await audit({
-    action: "banners.reordered",
-    actorUserId: session.user.id,
-    targetType: "banner",
-  });
   revalidateAdmin();
 };

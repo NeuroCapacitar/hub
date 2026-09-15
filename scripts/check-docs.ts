@@ -27,7 +27,9 @@ const CANONICAL_DOCUMENT_PATHS = [
   "docs/integrations/jmvstream.md",
   "docs/integrations/r2.md",
   "docs/integrations/resend.md",
+  "docs/integrations/resend-templates.md",
   "docs/operations/environment-and-local-development.md",
+  "docs/operations/code-review-with-coderabbit.md",
   "docs/operations/shared-development-and-release-guide.md",
   "docs/operations/release-flow.md",
   "docs/operations/production-release-guide.md",
@@ -41,6 +43,8 @@ const CANONICAL_DOCUMENT_PATHS = [
   "docs/operations/observability-and-recovery.md",
   "docs/operations/production-backup-restore.md",
   "docs/operations/dmarc-rollout.md",
+  "docs/operations/content-release-rollout.md",
+  "docs/operations/external-readiness-checklist.md",
   "docs/adr/0001-custom-rbac.md",
   "docs/adr/0002-r2-buckets-and-publication.md",
   "docs/adr/0003-jmvstream-direct-multipart-upload.md",
@@ -49,6 +53,14 @@ const CANONICAL_DOCUMENT_PATHS = [
   "docs/adr/0006-certificate-lifecycle.md",
   "docs/adr/0007-course-versioning-and-enrollment-curriculum.md",
   "docs/adr/0008-optional-learning-analytics.md",
+  "docs/adr/0009-course-availability-and-sale-interest.md",
+  "docs/adr/0010-relative-module-content-release.md",
+  "docs/adr/0011-optional-lesson-progression.md",
+  "docs/adr/0012-linear-validated-video-progress.md",
+  "docs/adr/0013-provider-and-hub-operational-ownership.md",
+  "docs/adr/0014-lesson-identity-and-state-across-publications.md",
+  "docs/adr/0015-authentication-screen-media.md",
+  "docs/reviews/2026-09-12-master-plan-with-implementation-report.md",
 ] as const;
 
 const REMOVED_DOCUMENT_PATHS = [
@@ -102,6 +114,8 @@ const ANGLE_BRACKETS = /^<|>$/g;
 const URI_SCHEME = /^[a-z][a-z\d+.-]*:/iu;
 const ENV_ASSIGNMENT = /^\s*([A-Z][A-Z0-9_]*)\s*=/;
 const SUPERSEDED_EXECUTION_STATUS = /^execution_status:\s*superseded\s*$/mu;
+const CANONICAL_MAP_PATTERN = /## Mapa canônico[\s\S]*?(?=### Revisões|$)/u;
+const CANONICAL_INDEX_LINK_PATTERN = /\]\(([^)#]+\.md)\)/gu;
 
 interface ValidationOptions {
   commitExists?: (commit: string) => boolean;
@@ -359,6 +373,35 @@ const validateMigrationLedger = ({
         `${migrationLedgerDocumentPath}: documento original sem destino no registro de migração: ${originalPath}`
     );
 
+const validateCanonicalIndexCoverage = ({
+  documentPaths,
+  indexContent,
+  rootDirectory,
+}: {
+  documentPaths: readonly string[];
+  indexContent: string;
+  rootDirectory: string;
+}): string[] => {
+  const canonicalMap = indexContent.match(CANONICAL_MAP_PATTERN)?.[0] ?? "";
+  const indexedDocuments = [
+    ...canonicalMap.matchAll(CANONICAL_INDEX_LINK_PATTERN),
+  ]
+    .map((match) => match[1])
+    .filter((target): target is string => Boolean(target))
+    .map((target) =>
+      resolve(rootDirectory, "docs", target)
+        .slice(rootDirectory.length + 1)
+        .replaceAll("\\", "/")
+    );
+
+  return indexedDocuments
+    .filter((documentPath) => !documentPaths.includes(documentPath))
+    .map(
+      (documentPath) =>
+        `docs/README.md: documento do mapa canônico fora do checker: ${documentPath}`
+    );
+};
+
 const validateEnvironmentCoverage = ({
   environmentDocument,
   environmentDocumentPath,
@@ -522,6 +565,11 @@ export const validateDocumentation = ({
 
   return [
     ...errors,
+    ...validateCanonicalIndexCoverage({
+      documentPaths,
+      indexContent: documents.get(migrationLedgerDocumentPath) ?? "",
+      rootDirectory,
+    }),
     ...validateRemovedReferences({
       documents,
       migrationLedgerDocumentPath,

@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: 10c9cb8dd187482144850015841fb4485eacbd5f
+last_verified_commit: e0a55d04884851c21bd55fe605afd05cc52c5a4e
 ---
 
 # Fluxo de release do Hub
@@ -77,12 +77,21 @@ O merge em `staging` tem uma operação pequena e separada que aplica migrations
 no banco persistente de Staging. Essa operação não faz deployment Vercel e não
 repete a CI.
 
+Antes de abrir o Pull Request, tente a revisão opcional do [runbook do
+CodeRabbit](code-review-with-coderabbit.md), usando `staging` como base para o
+fluxo normal e `main` somente para hotfix. Verifique a CLI e a autenticação; se
+o CodeRabbit não estiver disponível, registre o motivo do skip e continue. A
+revisão é assistiva e nunca substitui o check `CI`.
+
 ## Release normal
 
 1. Homologue o deployment atual de Staging.
 2. Execute `Deploy Vercel production` com `mode=release-staging`.
 3. O workflow confirma que `main` é ancestral de `staging`.
-4. O workflow confirma que o SHA candidato possui um check `CI` verde.
+4. O workflow confirma que o SHA candidato possui um check `CI` verde associado
+   ao próprio SHA. Um check verde somente no head do PR não autoriza a promoção;
+   nesse caso, execute a CI manualmente para a referência candidata e repita a
+   release.
 5. `main` avança por fast-forward para o SHA homologado.
 6. O workflow aguarda a build Production automática sem domínio.
 7. Sem migration, não há branch Neon de release nem migration de banco.

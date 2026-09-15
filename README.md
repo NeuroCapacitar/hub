@@ -1,12 +1,12 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: e121349ad0a625857037617a71259c7f4e22b1ce
+last_verified_commit: e0a55d04884851c21bd55fe605afd05cc52c5a4e
 ---
 
 # NeuroCapacitar Hub
 
-Plataforma de cursos da NeuroCapacitar: catálogo e aprendizagem para Alunas,
+Plataforma de cursos da NeuroCapacitar: catálogo e aprendizagem para Alunos,
 autoria e operação para Admin/Suporte, comércio Asaas, vídeo via JMVStream,
 mídia via Cloudflare R2, e-mail via Resend e Postgres/Neon. PROTEA-R é um Curso
 disponível na plataforma, não o nome do produto.
@@ -64,6 +64,11 @@ bun run verify
 executa a verificação completa exigida antes de um Pull Request. Os dois comandos
 param no primeiro erro. `bun run check` é somente leitura. Para correções
 automáticas deliberadas, use `bun run fix` e revise o diff.
+
+Antes de abrir um Pull Request, tente a revisão opcional do CodeRabbit conforme
+o [runbook de revisão assistida](docs/operations/code-review-with-coderabbit.md).
+Verifique a CLI e a autenticação primeiro; se o serviço não estiver disponível,
+registre o motivo e siga com a CI normal.
 
 ## Mapa arquitetural
 

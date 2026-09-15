@@ -18,7 +18,8 @@ const deploymentId = process.env.DEPLOYMENT_VERSION?.trim();
 const isVercel = Boolean(process.env.VERCEL);
 const isProduction = process.env.NODE_ENV === "production";
 const isE2eTest = process.env.E2E_TEST_MODE === "true";
-const sentryAuthToken = isE2eTest ? "" : process.env.SENTRY_AUTH_TOKEN;
+const sentryAuthToken =
+  isProduction && !isE2eTest ? process.env.SENTRY_AUTH_TOKEN : undefined;
 const sentryBuildConfiguration = resolveSentryBuildConfiguration({
   ...process.env,
   SENTRY_AUTH_TOKEN: isProduction && !isE2eTest ? sentryAuthToken : undefined,
@@ -83,6 +84,7 @@ const nextConfig: NextConfig = {
   ...(allowedDevOrigins?.length ? { allowedDevOrigins } : {}),
   ...(deploymentId ? { deploymentId } : {}),
   images: {
+    qualities: [75, 90],
     remotePatterns: [
       {
         hostname: "cdn.vod.br1.jmvstream.com",
@@ -142,7 +144,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["pdfkit"],
 };
 
-export default withSentryConfig(nextConfig, {
+const sentryNextConfig = {
   ...(sentryBuildConfiguration.org
     ? { org: sentryBuildConfiguration.org }
     : {}),
@@ -165,4 +167,8 @@ export default withSentryConfig(nextConfig, {
       removeDebugLogging: true,
     },
   },
-});
+};
+
+export default isProduction
+  ? withSentryConfig(nextConfig, sentryNextConfig)
+  : nextConfig;

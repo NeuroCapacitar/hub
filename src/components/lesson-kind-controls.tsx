@@ -83,6 +83,7 @@ import {
   getResourceTypeLabel,
   getResourceExtension as getSharedResourceExtension,
 } from "@/features/courses/resource-presentation";
+import { JMVSTREAM_PORTAL_URL } from "@/features/jmvstream/portal";
 import {
   type LessonResourceUploadPreview,
   uploadLessonResource,
@@ -211,7 +212,7 @@ export function LessonVideoControls({
     <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm transition-[opacity,transform] duration-300 ease-out">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
             <HugeiconsIcon aria-hidden="true" icon={FileLinkIcon} size={20} />
           </div>
           <div className="flex min-w-0 flex-col gap-1 pt-0.5">
@@ -266,12 +267,21 @@ export function LessonVideoControls({
 
   return (
     <div className="flex min-w-0 flex-col gap-5 rounded-xl border bg-background p-6 shadow-sm">
-      <div className="flex flex-col gap-1">
-        <h3 className="font-semibold text-base">Vídeo da aula</h3>
-        <p className="text-muted-foreground text-sm">
-          Adicione o conteúdo em vídeo colando um link externo ou enviando o
-          arquivo.
-        </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h3 className="font-semibold text-base">Vídeo da aula</h3>
+          <p className="text-muted-foreground text-sm">
+            Associe um vídeo existente ou envie um arquivo para a JMVStream.
+          </p>
+        </div>
+        <a
+          className="shrink-0 text-link text-sm underline underline-offset-4"
+          href={JMVSTREAM_PORTAL_URL}
+          rel="noopener"
+          target="_blank"
+        >
+          Abrir portal JMVStream
+        </a>
       </div>
 
       <input

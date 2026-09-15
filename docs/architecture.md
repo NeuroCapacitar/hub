@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: e325b7e
+last_verified_commit: edad1eb0506ea4ca4afeecdf85ac03cf5c65a9ac
 ---
 
 # Arquitetura
@@ -17,7 +17,7 @@ O racional histórico para a escolha de Next.js, React, Postgres/Neon e Vercel n
 ### Rotas
 
 - `src/app/(auth)`: entrada e recuperação de senha.
-- `src/app/(student)`: área autenticada da Aluna.
+- `src/app/(student)`: área autenticada do Aluno.
 - `src/app/(admin)`: painel de Admin/Suporte.
 - `src/app/api`: Better Auth, checkout, webhooks, mídia, crons e health check.
 - `src/app/certificados/[code]`: página pública canônica de validação, preview e compartilhamento; as subrotas `preview` e `pdf` mediam artefatos privados sem publicar chaves do R2.
@@ -39,6 +39,25 @@ health, readiness e crons autenticados. A topologia completa está no
 - **Persistência:** `src/db/index.ts` (`getPool`, `getDb`), `src/db/schema.ts` e SQL explícito nas features.
 - **Externo:** clientes em `src/features/payments`, `src/features/jmvstream`, `src/features/storage` e `src/features/email`.
 
+### Responsabilidade de integrações
+
+O Provedor é a autoridade da execução técnica externa. Resend decide e expõe
+detalhes de aceitação, entrega, bounce, supressão, reputação e replay de
+webhook; JMVStream decide e expõe detalhes de armazenamento, conversão, player
+e thumbnail. O Hub não replica esses portais.
+
+O Hub continua sendo a autoridade do negócio: mantém a intenção durável, a
+associação com seus agregados, a idempotência, a auditoria e uma projeção local
+mínima do último estado conhecido. Webhooks são persistidos e processados
+assíncronamente porque um provedor pode considerar o evento entregue antes de
+o worker local concluir. A interface administrativa deve apontar para a fila
+local quando a causa é do Hub e para o portal do provedor quando o detalhe ou a
+correção é externo.
+
+Falha de e-mail é uma falha de notificação, não uma decisão de acesso,
+conclusão ou Certificado. Falha de vídeo técnico pertence à JMVStream, mas a
+relação do ativo com a Aula e a regra de publicação pertencem ao Hub.
+
 Importações usam alias `@/`. Não há camada de repositórios genérica; Drizzle e `pg` são utilizados onde sua interface é mais adequada.
 
 ## Mapa domínio => código
@@ -51,7 +70,12 @@ Importações usam alias `@/`. Não há camada de repositórios genérica; Drizz
 - Certificados => `src/features/certificates`, tabelas `course_completions`, `certificate_issuer_profiles`, `certificate_templates`, `certificates`, `outbox_messages` e `public_certificate_rate_limits`.
 - Dados técnicos de analytics => `src/features/learning-analytics`, tabelas `learning_analytics_events` e `learning_analytics_daily_metrics`.
 - Mídia => `src/features/jmvstream`, `src/features/storage`, tabelas `jmvstream_folders`, `jmvstream_video_assets` e JSON de conteúdo.
-- Operação => `src/features/admin/server.ts`, `audit_logs`, `app_settings`, `faq_items`, `dashboard_banners`.
+- Configurações => `src/app/(admin)/admin/configuracoes`, com perfil emissor global,
+  assinatura padrão, banners e FAQ editorial;
+- Operação => `src/features/admin/server.ts`, `src/features/operations/server.ts`,
+  `src/features/jmvstream/server.ts`, `audit_logs`, `app_settings`, `faq_items` e
+  `dashboard_banners`; saúde de provider e filas ficam nesta superfície, não em
+  Configurações.
 
 ## Banco
 
@@ -105,20 +129,20 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 
 1. `getStudentCourseAccessStatus` e `resolveCourseAccess` negam acesso sem Conta/Matrícula válidas.
 2. `getStudentCourseOverview` projeta Módulos futuros sem seus detalhes; `resolveLessonAccess` é a fronteira temporal única.
-3. `isLessonAvailable` aplica sequência depois da decisão temporal.
-4. `recordLessonWatchProgress` registra posição; evento JMVStream pode concluir em 98%.
+3. `isLessonAvailable` aplica sequência depois da decisão temporal e só considera Aulas obrigatórias anteriores como pré-requisito; opcionais não bloqueiam.
+4. `recordLessonWatchProgress` separa retomada, posição máxima, fronteira linear e tempo de reprodução; somente a fronteira validada pode concluir por vídeo em 100%. A sessão é emitida pelo servidor, a última abertura vence e eventos de sessão antiga são ignorados.
 5. `completeLesson` permite conclusão manual.
-6. `calculateCourseProgress` calcula percentual e próxima Aula.
+6. `calculateCourseProgress` calcula percentual obrigatório; a próxima Aula é a primeira pendente disponível em ordem, inclusive opcional.
 
 ### Publicação de mídia
 
 - JMVStream: app inicia multipart, navegador envia partes diretamente às URLs assinadas, app confirma e sincroniza player.
-- R2 privado: app assina upload/download por objeto; navegador transfere sem proxy de payload. Anexos de Aula registram uma sessão vinculada à Aula/Admin, reemitem a URL para a mesma chave uma vez e usam fallback server-side somente até 4 MiB; a confirmação por HEAD precede o salvamento.
+- R2 privado: app assina upload/download por objeto; navegador transfere sem proxy de payload. Anexos de Aula registram uma sessão vinculada à Aula/Admin, reemitem a URL para a mesma chave uma vez e usam fallback server-side somente até 4 MiB; a confirmação por HEAD precede o salvamento. Um recurso já referenciado pode ser reutilizado por Aula clonada apenas quando Curso e `curriculum_key` coincidem; referências de publicações `published` e `retired` protegem o objeto contra limpeza.
 - R2 público: `publishR2Object` copia do bucket privado para o público; URL pública vem de `R2_PUBLIC_BASE_URL`.
 
 ### Certificado, analytics e manutenção
 
-- cada Curso pode publicar uma versão imutável de template A4, vinculada ao perfil emissor global; novas emissões congelam template, dados da Aluna, Curso e emissão em `render_snapshot`;
+- cada Curso pode publicar uma versão imutável de template A4, vinculada ao perfil emissor global; novas emissões congelam template, dados do Aluno, Curso e emissão em `render_snapshot`;
 - `completeLesson` usa lock transacional por Conta e Curso antes do progresso e do resumo; somente a transação que insere a primeira `CourseCompletion` pode criar o Certificado automático `pending` e a mensagem `certificate.render`;
 - o worker obtém claim persistido, grava o artefato privado no R2 e só então enfileira o e-mail que aponta para `/certificados/[code]`. A página do Curso é a entrada contextual do Certificado; `/app/certificados` é o arquivo global autenticado. Ambas distinguem `pending`, `ready`, `failed` e revogado sem transformar a lista autenticada no destino canônico de compartilhamento;
 - `issueManualCertificate`, `revokeCertificate` e `reissueCertificate` controlam lifecycle com confirmação validada no servidor; reemissão cria nova evidência e preserva a anterior revogada;
@@ -127,14 +151,14 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 - não existe workflow de solicitações ou anonimização de dados. `runMaintenance` executa
   limpeza técnica limitada: sessões e rate limits expirados, reservas Asaas
   inequivocamente pré-provider abandonadas, sanitização do payload bruto da inbox Asaas
-  após 30 dias, agregação diária de analytics e retenção de analytics brutos por 90 dias
+  após 30 dias, agregação diária de analytics e retenção de analytics brutos por 12 meses
   e agregados por 13 meses.
 
 ## Observabilidade
 
-`src/proxy.ts` propaga `x-correlation-id` para request e response. `logOperationalEvent`, em `src/lib/observability.ts`, emite eventos JSON sem atributos sensíveis. `src/instrumentation.ts` registra exceções de request e as encaminha ao Sentry quando `SENTRY_DSN` existe; requests, breadcrumbs, transações e spans perdem query strings e códigos públicos de Certificado antes do envio. `error.tsx` e `global-error.tsx` fazem o equivalente para fallbacks de interface com um identificador de suporte.
+`src/proxy.ts` propaga `x-correlation-id` para request e response. `logOperationalEvent`, em `src/lib/observability.ts`, emite eventos JSON sem atributos sensíveis. `src/instrumentation.ts` registra exceções de request e as encaminha ao Sentry somente no runtime Production; requests, breadcrumbs, transações e spans perdem query strings e códigos públicos de Certificado antes do envio. `error.tsx` e `global-error.tsx` fazem o equivalente para fallbacks de interface com um identificador de suporte.
 
-`GET /api/health` é liveness. `GET /api/health/ready` faz readiness protegida contra Postgres, com timeout curto e verificação do journal; ele não consulta providers externos. `getOperationalBacklogSnapshot`, em `src/features/operations/server.ts`, alimenta **Admin > Auditoria** com contagens/idade de outbox, webhook e vídeo, sem PII. SLI/SLO, dona e ensaio de recuperação estão em [Observabilidade e recuperação](operations/observability-and-recovery.md).
+`GET /api/health` é liveness. `GET /api/health/ready` faz readiness protegida contra Postgres, com timeout curto e verificação do journal; ele não consulta providers externos. `getOperationalBacklogSnapshot`, em `src/features/operations/server.ts`, alimenta **Admin > Operação** com contagens/idade separadas de Outbox, eventos Resend, webhooks Asaas e vídeo, sem PII. A projeção local orienta a próxima ação, mas os detalhes técnicos e o replay do provedor continuam no portal externo. SLI/SLO, dona e ensaio de recuperação estão em [Observabilidade e recuperação](operations/observability-and-recovery.md).
 
 ## Concorrência, idempotência e auditoria
 
@@ -144,10 +168,19 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 - Pedidos e Concessões preservam IDs de origem;
 - `payment_reviews.webhook_event_id` é único quando preenchido, e conflitos de correlação
   sem Pedido seguro ficam em `audit_logs` com motivo sem PII;
+- `writeAuditLog`, em `src/features/admin/audit-log.ts`, é o escritor comum das ações
+  administrativas. Alterações de Curso e conteúdo registram em `metadata.changes` os
+  valores anterior e novo, incluindo preço, oferta, duração, capa, Módulos, Aulas,
+  ordenação e publicação, sempre na mesma transação da mutação;
+- `getAdminAuditData` consolida `audit_logs`, eventos de Matrícula e eventos financeiros
+  append-only. A projeção preserva ator, origem, alvo e horário, deduplica o par de
+  eventos de Matrícula criado pelo mesmo comando e não expõe payloads ou e-mails;
 - eventos de Matrícula e `audit_logs` registram ações administrativas e operacionais;
 - `outbox_messages` registra efeitos de e-mail críticos com chave idempotente, lease e
   dead letter; `auth.account-activation` persiste apenas IDs locais e cria token no
   callback Better Auth. Recuperação pública e ativação legada continuam fora da outbox;
+- suporte cujo agregado foi removido termina como `support_request_unavailable` e pode
+  ser encerrado explicitamente pelo Admin como `superseded`, sem payload com PII;
 - transições terminais da outbox são fenced por `locked_by`; perda do lease encerra o
   lote sem contabilizar sucesso/falha, e `certificate.render` terminaliza mensagem e
   Certificado de forma atômica;
@@ -156,6 +189,12 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 - `certificate_template_asset_cleanup` registra limpeza atrasada e recuperável
   das artes substituídas;
 - upload JMVStream mantém sessão/estado persistido para retry e limpeza.
+- Configurações globais atualiza `app_settings` e `certificate_issuer_profiles`
+  na mesma transação; o perfil emissor exige razão social e CNPJ juntos e a
+  alteração registra antes/depois seguro em `settings.updated`.
+- mutações editoriais distinguem criação, atualização, exclusão e reordenação de
+  FAQs e banners; os valores legíveis e a ordem anterior/nova entram na auditoria
+  sem registrar chaves privadas de storage.
 
 ## Rotinas
 
@@ -190,8 +229,8 @@ Comece no guia de domínio, siga a evidência para o símbolo da feature e entã
 
 O plano 008 trata tamanho como sinal, não como motivo suficiente para mover código. O mapa atual identifica responsabilidades independentes antes de qualquer extração:
 
-- `courses/server.ts`: catálogo, acesso da aluna, leitura de aula, progresso e coordenação de conclusão. A conclusão preserva sua transação e delega a elegibilidade, emissão e enfileiramento ao símbolo `issueCompletionCertificateIfEligible` de `certificates/server.ts`.
-- `admin/server.ts`: read models por superfície: catálogo/autoria, alunas/acesso, financeiro, auditoria e configurações. Cada extração deve manter a projeção e a autorização server-side.
+- `courses/server.ts`: catálogo, acesso do aluno, leitura de aula, progresso e coordenação de conclusão. A conclusão preserva sua transação e delega a elegibilidade, emissão e enfileiramento ao símbolo `issueCompletionCertificateIfEligible` de `certificates/server.ts`.
+- `admin/server.ts`: read models por superfície: catálogo/autoria, alunos/acesso, financeiro, auditoria e configurações. Cada extração deve manter a projeção e a autorização server-side.
 - `enrollments/access.ts` responde acesso de Curso/Aula por Matrícula ativa, conteúdo publicado e atraso do Módulo; `enrollments/server.ts` mantém concessões, projeção, override integral e ajustes de expiração, que compartilham transações e não devem ser separados arbitrariamente.
 - `payments/provider.ts` cria o adapter Asaas; `checkout.ts` concentra a intenção
   compartilhada, `asaas-financial-events.ts` decide eventos e consultas,
@@ -204,7 +243,7 @@ O plano 008 trata tamanho como sinal, não como motivo suficiente para mover có
 
 ### Orçamento atual de leitura administrativa
 
-`getAdminStudentsData` consulta uma página limitada de perfis e somente as matrículas dos usuários daquela página. A ordenação é estável por nome e ID, a busca é server-side por nome/e-mail e o retorno informa `page`, `pageSize`, `search` e `hasNextPage`. O teste `admin/server-read-projections.test.ts` mantém o orçamento histórico de 250 Alunas como caso explícito, enquanto o padrão de runtime é 100 Alunas por página. A tabela deve preservar busca, detalhes por Aluna e navegação sem carregar a coleção inteira.
+`getAdminStudentsData` consulta uma página limitada de perfis e somente as matrículas dos usuários daquela página. A ordenação é estável por nome e ID, a busca é server-side por nome/e-mail e o retorno informa `page`, `pageSize`, `search` e `hasNextPage`. O teste `admin/server-read-projections.test.ts` mantém o orçamento histórico de 250 Alunos como caso explícito, enquanto o padrão de runtime é 100 Alunos por página. A tabela deve preservar busca, detalhes por Aluno e navegação sem carregar a coleção inteira.
 
 ### Interfaces, consumidores e efeitos
 
@@ -218,8 +257,8 @@ O plano 008 trata tamanho como sinal, não como motivo suficiente para mover có
 
 - **Símbolos:** `getAdmin*Data`, `getAdminOverview`, `getAdminStudentSheetData` e editores de curso/aula; actions nomeadas por comando.
 - **Consumidores:** páginas, tabelas e Sheets Admin. `authoring.ts` é chamado por actions, nunca por JSX.
-- **Invariante, queries e efeitos:** `requireRole` autentica a entrada. Os parsers por comando validam `FormData` antes de SQL/provider. `admin/server.ts` só projeta dados de catálogo, Alunas/acesso, financeiro, auditoria e configurações; a ficha de Aluna é carregada sob demanda por GET protegido, sem estado de seleção na URL. A action chama o caso de uso e revalida as superfícies administrativas afetadas.
-- **Ficha contextual de Aluna:** `/admin/alunos` e a aba de alunos do Curso usam o mesmo `StudentManagementSheet`. A lista geral mostra plataforma, todas as Matrículas e Certificados; o contexto de Curso mostra somente a Matrícula e os Certificados daquele Curso. A antiga rota `/admin/alunos/[userId]` não faz parte do produto e retorna 404.
+- **Invariante, queries e efeitos:** `requireRole` autentica a entrada. Os parsers por comando validam `FormData` antes de SQL/provider. `admin/server.ts` só projeta dados de catálogo, Alunos/acesso, financeiro, auditoria e configurações; a ficha de Aluno é carregada sob demanda por GET protegido, sem estado de seleção na URL. A action chama o caso de uso e revalida as superfícies administrativas afetadas.
+- **Ficha contextual de Aluno:** `/admin/alunos` e a aba de alunos do Curso usam o mesmo `StudentManagementSheet`. A lista geral mostra plataforma, todas as Matrículas e Certificados; o contexto de Curso mostra somente a Matrícula e os Certificados daquele Curso. A antiga rota `/admin/alunos/[userId]` não faz parte do produto e retorna 404.
 
 #### Acesso e comércio
 

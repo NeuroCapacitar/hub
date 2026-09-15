@@ -1,8 +1,13 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { getPool } from "@/db";
+import {
+  type AuditLogQueryClient,
+  writeAuditLog,
+} from "@/features/admin/audit-log";
+import type { AuditChange, AuditMetadata } from "@/features/admin/audit-types";
 import {
   findContentReleaseRegressions,
   type PublishedLessonRelease,
@@ -24,7 +29,7 @@ import {
   assertMaxReleaseDelayFitsAccessDuration,
   assertValidReleaseDelayDays,
 } from "@/features/courses/module-content-release";
-import { recalculateCourseWorkloadHours } from "@/features/courses/server";
+import { recalculateCourseWorkloadHoursWithClient } from "@/features/courses/server";
 import { createCourseSlug } from "@/features/courses/slug";
 import { parseCourseWorkloadOverride } from "@/features/courses/workload";
 import {
@@ -66,20 +71,19 @@ import {
 import { parseStagedAdminImageReference } from "@/features/storage/staged-image-upload";
 import { consumeStagedAdminImageUpload } from "@/features/storage/staged-image-upload-registry";
 import { getServerEnv } from "@/lib/env";
+import {
+  type AuthoringContentStatus,
+  readAuthoringContentStatus,
+  readAuthoringNonNegativeInteger,
+  readAuthoringPositiveInteger,
+  readAuthoringRequiredBoolean,
+  readAuthoringString,
+  readRequiredAuthoringString,
+} from "./authoring-input";
 
 const CREATED_CONTENT_STATUS = "draft";
 const PUBLISHED_CONTENT_STATUS = "active";
-const ARCHIVED_CONTENT_STATUS = "archived";
-const CONTENT_STATUSES = new Set([
-  CREATED_CONTENT_STATUS,
-  PUBLISHED_CONTENT_STATUS,
-  ARCHIVED_CONTENT_STATUS,
-]);
-
-type ContentStatus =
-  | typeof CREATED_CONTENT_STATUS
-  | typeof PUBLISHED_CONTENT_STATUS
-  | typeof ARCHIVED_CONTENT_STATUS;
+type ContentStatus = AuthoringContentStatus;
 
 interface AuthoringFormInput {
   actorUserId: string;
@@ -98,38 +102,169 @@ interface CourseFormValues {
   workloadHoursOverride: number | null;
 }
 
-const readString = (formData: FormData, key: string): string =>
-  String(formData.get(key) ?? "").trim();
+const getAuditChanges = (
+  changes: Record<string, AuditChange>
+): Record<string, AuditChange> =>
+  Object.fromEntries(
+    Object.entries(changes).filter(
+      ([, change]) =>
+        JSON.stringify(change.before) !== JSON.stringify(change.after)
+    )
+  );
 
-const readNumber = (formData: FormData, key: string, fallback = 0): number => {
-  const value = Number(formData.get(key));
-  return Number.isFinite(value) ? value : fallback;
+const truncateAuditText = (value: string | null): string | null =>
+  value && value.length > 500 ? `${value.slice(0, 500)}…` : value;
+
+interface LessonAuditSnapshot {
+  content: boolean;
+  contentFingerprint: string | null;
+  description: string | null;
+  durationSeconds: number;
+  isPublished: boolean;
+  isRequired: boolean;
+  moduleId: string;
+  sortOrder: number;
+  status: string;
+  textDurationSeconds: number;
+  textWordCount: number;
+  title: string;
+  videoDurationSeconds: number;
+  videoEmbedUrl: string | null;
+  videoExternalId: string | null;
+  videoProvider: string | null;
+}
+
+interface LessonAuditDatabaseRow {
+  content_json: unknown;
+  course_id: string;
+  course_publication_id: string;
+  description: string | null;
+  duration_seconds: number;
+  id: string;
+  is_published: boolean;
+  is_required: boolean;
+  module_id: string;
+  sort_order: number;
+  status: string;
+  text_duration_seconds: number;
+  text_word_count: number;
+  title: string;
+  video_duration_seconds: number;
+  video_embed_url: string | null;
+  video_external_id: string | null;
+  video_provider: string | null;
+}
+
+const getLessonAuditChanges = (
+  before: LessonAuditSnapshot | null,
+  after: LessonAuditSnapshot
+): Record<string, AuditChange> =>
+  getAuditChanges({
+    content: {
+      after:
+        before && before.contentFingerprint !== after.contentFingerprint
+          ? "versão atual"
+          : after.content,
+      before:
+        before && before.contentFingerprint !== after.contentFingerprint
+          ? "versão anterior"
+          : (before?.content ?? null),
+    },
+    description: {
+      after: truncateAuditText(after.description),
+      before: truncateAuditText(before?.description ?? null),
+    },
+    durationSeconds: {
+      after: after.durationSeconds,
+      before: before?.durationSeconds ?? null,
+    },
+    isPublished: {
+      after: after.isPublished,
+      before: before?.isPublished ?? null,
+    },
+    isRequired: {
+      after: after.isRequired,
+      before: before?.isRequired ?? null,
+    },
+    moduleId: { after: after.moduleId, before: before?.moduleId ?? null },
+    sortOrder: { after: after.sortOrder, before: before?.sortOrder ?? null },
+    status: { after: after.status, before: before?.status ?? null },
+    textDurationSeconds: {
+      after: after.textDurationSeconds,
+      before: before?.textDurationSeconds ?? null,
+    },
+    textWordCount: {
+      after: after.textWordCount,
+      before: before?.textWordCount ?? null,
+    },
+    title: { after: after.title, before: before?.title ?? null },
+    videoDurationSeconds: {
+      after: after.videoDurationSeconds,
+      before: before?.videoDurationSeconds ?? null,
+    },
+    videoEmbedUrl: {
+      after: after.videoEmbedUrl,
+      before: before?.videoEmbedUrl ?? null,
+    },
+    videoExternalId: {
+      after: after.videoExternalId,
+      before: before?.videoExternalId ?? null,
+    },
+    videoProvider: {
+      after: after.videoProvider,
+      before: before?.videoProvider ?? null,
+    },
+  });
+
+const getContentFingerprint = (content: unknown): string | null => {
+  if (content === null || content === undefined) {
+    return null;
+  }
+  return createHash("sha256")
+    .update(JSON.stringify(content))
+    .digest("hex")
+    .slice(0, 16);
 };
 
+const readString = readAuthoringString;
+
 const readModuleReleaseDelayDays = (formData: FormData): number => {
-  if (readString(formData, "releaseMode") === "immediate") {
+  const releaseMode = readString(formData, "releaseMode");
+  if (releaseMode === "immediate") {
     return 0;
   }
-
-  const rawValue = readString(formData, "releaseDelayDays");
-  const value = Number(rawValue);
-  if (!(rawValue && Number.isSafeInteger(value) && value >= 0)) {
-    throw new Error("Informe uma quantidade inteira e não negativa de dias.");
+  if (releaseMode !== "delayed") {
+    throw new LessonAuthoringError("O modo de liberação do Módulo é inválido.");
   }
 
-  assertValidReleaseDelayDays(value);
-  return value;
+  try {
+    const value = readAuthoringNonNegativeInteger(formData, "releaseDelayDays");
+    assertValidReleaseDelayDays(value);
+    return value;
+  } catch (error) {
+    if (error instanceof LessonAuthoringError) {
+      throw new Error("Informe uma quantidade inteira e não negativa de dias.");
+    }
+
+    throw error;
+  }
 };
 
 const normalizeLessonContentForSave = ({
   formData,
+  inheritedResourceKeys,
   lessonId,
 }: {
   formData: FormData;
+  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   lessonId: string;
 }): ReturnType<typeof normalizeLessonContentFromForm> => {
   try {
-    return normalizeLessonContentFromForm({ formData, lessonId });
+    return normalizeLessonContentFromForm({
+      formData,
+      inheritedResourceKeys,
+      lessonId,
+    });
   } catch (error) {
     if (error instanceof LessonAuthoringError) {
       throw error;
@@ -160,13 +295,8 @@ const assertLessonHasContent = ({
   );
 };
 
-const readLessonRequired = (formData: FormData): boolean => {
-  if (!formData.has("isRequired")) {
-    return true;
-  }
-
-  return formData.getAll("isRequired").includes("on");
-};
+const readLessonRequired = (formData: FormData): boolean =>
+  readAuthoringRequiredBoolean(formData, "isRequired", true);
 
 const parseJsonFormField = (formData: FormData, key: string): unknown => {
   const value = readString(formData, key);
@@ -229,31 +359,32 @@ const publishCourseCover = async (
   );
 };
 
-const readContentStatus = (formData: FormData): ContentStatus => {
-  const status = readString(formData, "status");
-
-  if (CONTENT_STATUSES.has(status)) {
-    return status as ContentStatus;
-  }
-
-  return CREATED_CONTENT_STATUS;
-};
+const readContentStatus = (formData: FormData): ContentStatus =>
+  readAuthoringContentStatus(formData, CREATED_CONTENT_STATUS);
 
 const readCourseFormValues = (formData: FormData): CourseFormValues => {
   const paymentOffer = formData.has("paymentOfferPresent")
     ? parseCoursePaymentOffer({
         allowCreditCard: formData.has("paymentAllowCreditCard"),
         allowPix: formData.has("paymentAllowPix"),
-        maxInstallmentCount: readNumber(
+        maxInstallmentCount: readAuthoringNonNegativeInteger(
           formData,
           "paymentMaxInstallmentCount",
           1
         ),
       })
     : DEFAULT_COURSE_PAYMENT_OFFER;
+  const title = readString(formData, "title");
+  if (!title) {
+    throw new LessonAuthoringError("Informe o título do Curso.", "title");
+  }
 
   return {
-    accessDurationMonths: readNumber(formData, "accessDurationMonths", 12),
+    accessDurationMonths: readAuthoringPositiveInteger(
+      formData,
+      "accessDurationMonths",
+      12
+    ),
     description: readString(formData, "description") || null,
     workloadHoursOverride: parseCourseWorkloadOverride(
       readString(formData, "workloadHoursOverride")
@@ -263,28 +394,33 @@ const readCourseFormValues = (formData: FormData): CourseFormValues => {
     paymentMaxInstallmentCount: paymentOffer.maxInstallmentCount,
     priceInCents: parseCoursePriceToCents(readString(formData, "price")),
     subtitle: readString(formData, "subtitle") || null,
-    title: readString(formData, "title"),
+    title,
   };
 };
 
 const audit = async ({
   action,
   actorUserId,
+  client,
+  metadata,
   targetId,
   targetType,
 }: {
   action: string;
   actorUserId: string;
+  client?: AuditLogQueryClient;
+  metadata?: AuditMetadata;
   targetId?: string | undefined;
   targetType: string;
 }): Promise<void> => {
-  await getPool().query(
-    `
-      insert into audit_logs (actor_user_id, action, target_type, target_id)
-      values ($1, $2, $3, $4)
-    `,
-    [actorUserId, action, targetType, targetId ?? null]
-  );
+  await writeAuditLog({
+    action,
+    actorUserId,
+    client,
+    metadata,
+    targetId,
+    targetType,
+  });
 };
 
 const withCourseContentReleaseLock = async <T>(
@@ -307,13 +443,19 @@ const withCourseContentReleaseLock = async <T>(
   }
 };
 
-const resolveUniqueCourseSlug = async (title: string): Promise<string> => {
+const resolveUniqueCourseSlug = async (
+  client: PoolClient,
+  title: string
+): Promise<string> => {
+  await client.query(
+    "select pg_advisory_xact_lock(hashtextextended('course-slug-allocation', 0))"
+  );
   const baseSlug = createCourseSlug(title);
   let candidate = baseSlug;
   let suffix = 2;
 
   while (true) {
-    const existing = await getPool().query<{ id: string }>(
+    const existing = await client.query<{ id: string }>(
       "select id from courses where slug = $1 limit 1",
       [candidate]
     );
@@ -451,6 +593,51 @@ interface PreparedCoursePublication {
   coverImage: CourseCoverImage | null;
 }
 
+const assertCoursePublicationVideoReadiness = async (
+  client: PoolClient,
+  coursePublicationId: string
+): Promise<void> => {
+  const unavailableVideo = await client.query<{
+    id: string;
+    lesson_title: string;
+    module_title: string;
+    readiness_failure: "duration" | "player";
+  }>(
+    `
+      select l.id,
+             l.title as lesson_title,
+             m.title as module_title,
+             case
+               when coalesce(l.video_embed_url, '') = '' then 'player'
+               else 'duration'
+             end as readiness_failure
+      from lessons l
+      join modules m on m.id = l.module_id
+      where l.course_publication_id = $1
+        and l.video_provider = 'jmvstream'
+          and (
+            coalesce(l.video_embed_url, '') = ''
+            or (
+              nullif(l.video_external_id, '') is not null
+              and coalesce(l.video_duration_seconds, 0) <= 0
+            )
+          )
+      order by m.sort_order, l.sort_order
+      limit 1
+    `,
+    [coursePublicationId]
+  );
+  const firstUnavailableVideo = unavailableVideo.rows[0];
+  if (firstUnavailableVideo?.readiness_failure === "player") {
+    throw new Error("A publicacao possui video JMVStream sem player pronto.");
+  }
+  if (firstUnavailableVideo) {
+    throw new Error(
+      `A publicacao possui video JMVStream sem duracao sincronizada: a Aula "${firstUnavailableVideo.lesson_title}" do Modulo "${firstUnavailableVideo.module_title}" ainda nao esta pronta.`
+    );
+  }
+};
+
 const runCoursePublicationTransaction = async ({
   actorUserId,
   courseId,
@@ -465,9 +652,14 @@ const runCoursePublicationTransaction = async ({
   try {
     await client.query("begin");
     await lockCourseContentRelease(client, courseId);
-    const { rows } = await client.query<{ id: string }>(
+    const { rows } = await client.query<{
+      id: string;
+      publication_number: number;
+      title_snapshot: string;
+      workload_hours_snapshot: number;
+    }>(
       `
-        select id
+        select id, publication_number, title_snapshot, workload_hours_snapshot
         from course_publications
         where course_id = $1 and status = 'draft'
         order by publication_number desc
@@ -477,33 +669,22 @@ const runCoursePublicationTransaction = async ({
       [courseId]
     );
     const coursePublicationId = rows[0]?.id;
+    const publicationNumber = rows[0]?.publication_number;
 
     if (!coursePublicationId) {
       await client.query("rollback");
       return null;
     }
 
-    const unavailableVideo = await client.query<{ id: string }>(
-      `
-        select id
-        from lessons
-        where course_publication_id = $1
-          and video_provider = 'jmvstream'
-          and coalesce(video_embed_url, '') = ''
-        limit 1
-      `,
-      [coursePublicationId]
-    );
-    if (unavailableVideo.rows[0]) {
-      throw new Error("A publicacao possui video JMVStream sem player pronto.");
-    }
+    await assertCoursePublicationVideoReadiness(client, coursePublicationId);
 
     const courseCover = await client.query<{
       access_duration_months: number;
       cover_image_json: unknown;
       sales_status: "closed" | "open";
+      title: string;
     }>(
-      "select cover_image_json, access_duration_months, sales_status from courses where id = $1 for update",
+      "select cover_image_json, access_duration_months, sales_status, title from courses where id = $1 for update",
       [courseId]
     );
 
@@ -690,13 +871,32 @@ const runCoursePublicationTransaction = async ({
       `,
       [coursePublicationId, courseId]
     );
-    await client.query(
-      `
-        insert into audit_logs (actor_user_id, action, target_type, target_id, metadata)
-        values ($1, 'course_publication.published', 'course_publication', $2, $3::jsonb)
-      `,
-      [actorUserId, coursePublicationId, JSON.stringify({ courseId })]
-    );
+    await audit({
+      action: "course_publication.published",
+      actorUserId,
+      client,
+      metadata: {
+        changes: getAuditChanges({
+          publicationNumber: {
+            after: publicationNumber ?? null,
+            before: publicationNumber ?? null,
+          },
+          status: { after: "published", before: "draft" },
+          titleSnapshot: {
+            after: rows[0]?.title_snapshot ?? null,
+            before: rows[0]?.title_snapshot ?? null,
+          },
+          workloadHoursSnapshot: {
+            after: rows[0]?.workload_hours_snapshot ?? null,
+            before: rows[0]?.workload_hours_snapshot ?? null,
+          },
+        }),
+        courseId,
+        targetLabelAfter: currentCourse?.title ?? null,
+      },
+      targetId: coursePublicationId,
+      targetType: "course_publication",
+    });
     await client.query("commit");
     return publication;
   } catch (error) {
@@ -744,8 +944,8 @@ export const createCoursePublicationDraft = async ({
   try {
     await client.query("begin");
     await lockCourseContentRelease(client, courseId);
-    await client.query(
-      "select id from courses where id = $1 limit 1 for update",
+    const courseState = await client.query<{ id: string; title: string }>(
+      "select id, title from courses where id = $1 limit 1 for update",
       [courseId]
     );
     const existingDraft = await client.query<{ id: string }>(
@@ -780,17 +980,20 @@ export const createCoursePublicationDraft = async ({
       );
     }
 
-    const nextPublication = await client.query<{ id: string }>(
+    const nextPublication = await client.query<{
+      id: string;
+      publication_number: number;
+    }>(
       `
         insert into course_publications (
           course_id, publication_number, status, title_snapshot, workload_hours_snapshot
         ) values ($1, $2, 'draft', $3, $4)
-        returning id
+         returning id, publication_number
       `,
       [
         courseId,
         source.publication_number + 1,
-        source.title_snapshot,
+        courseState.rows[0]?.title ?? source.title_snapshot,
         source.workload_hours_snapshot,
       ]
     );
@@ -909,17 +1112,34 @@ export const createCoursePublicationDraft = async ({
         ]
       );
     }
-    await client.query(
-      `
-        insert into audit_logs (actor_user_id, action, target_type, target_id, metadata)
-        values ($1, 'course_publication.draft_created', 'course_publication', $2, $3::jsonb)
-      `,
-      [
-        actorUserId,
-        coursePublicationId,
-        JSON.stringify({ sourcePublicationId: source.id }),
-      ]
-    );
+    await audit({
+      action: "course_publication.draft_created",
+      actorUserId,
+      client,
+      metadata: {
+        changes: {
+          publicationNumber: {
+            after: nextPublication.rows[0]?.publication_number ?? null,
+            before: source.publication_number,
+          },
+          status: { after: "draft", before: "published" },
+          titleSnapshot: {
+            after: courseState.rows[0]?.title ?? source.title_snapshot,
+            before: null,
+          },
+          workloadHoursSnapshot: {
+            after: source.workload_hours_snapshot,
+            before: null,
+          },
+        },
+        lessonCount: lessonsToCopy.rows.length,
+        moduleCount: modulesToCopy.rows.length,
+        sourcePublicationId: source.id,
+        targetLabelAfter: courseState.rows[0]?.title ?? source.title_snapshot,
+      },
+      targetId: coursePublicationId,
+      targetType: "course_publication",
+    });
     await client.query("commit");
     return { coursePublicationId };
   } catch (error) {
@@ -1035,6 +1255,82 @@ const getLessonR2ObjectKeys = async (lessonId: string): Promise<string[]> => {
   return getLessonContentStorageKeys(rows[0]?.content_json);
 };
 
+const getInheritedLessonResourceKeys = async (
+  lessonId: string
+): Promise<Set<string>> => {
+  if (!lessonId) {
+    return new Set();
+  }
+
+  const { rows } = await getPool().query<{ content_json: unknown }>(
+    `
+      select source_lesson.content_json
+      from lessons target_lesson
+      join modules target_module on target_module.id = target_lesson.module_id
+      join course_publications target_publication
+        on target_publication.id = target_lesson.course_publication_id
+      join lessons source_lesson
+        on source_lesson.id <> target_lesson.id
+       and source_lesson.curriculum_key = target_lesson.curriculum_key
+      join modules source_module on source_module.id = source_lesson.module_id
+      join course_publications source_publication
+        on source_publication.id = source_lesson.course_publication_id
+      where target_lesson.id = $1
+        and target_publication.status = 'draft'
+        and source_module.course_id = target_module.course_id
+        and source_publication.status in ('published', 'retired')
+        and source_lesson.content_json is not null
+    `,
+    [lessonId]
+  );
+
+  return new Set(
+    rows.flatMap((row) => getLessonContentStorageKeys(row.content_json))
+  );
+};
+
+const assertExistingLessonTargetMatches = ({
+  currentLesson,
+  currentModule,
+}: {
+  currentLesson: LessonAuditDatabaseRow | undefined;
+  currentModule:
+    | {
+        course_id: string;
+        course_publication_id: string;
+        id: string;
+      }
+    | undefined;
+}): void => {
+  if (!(currentLesson && currentModule)) {
+    throw new LessonAuthoringError(
+      "A Aula não pode ser movida entre Cursos ou publicações."
+    );
+  }
+  if (
+    currentLesson.course_id !== currentModule.course_id ||
+    currentLesson.course_publication_id !== currentModule.course_publication_id
+  ) {
+    throw new LessonAuthoringError(
+      "A Aula não pode ser movida entre Cursos ou publicações."
+    );
+  }
+};
+
+const recalculateCourseWorkloadForTransaction = async (
+  client: PoolClient,
+  courseIds: readonly (string | null)[]
+): Promise<void> => {
+  const uniqueCourseIds = [
+    ...new Set(
+      courseIds.filter((courseId): courseId is string => Boolean(courseId))
+    ),
+  ];
+  for (const courseId of uniqueCourseIds) {
+    await recalculateCourseWorkloadHoursWithClient(client, courseId);
+  }
+};
+
 const getCourseR2ObjectKeys = async (courseId: string): Promise<string[]> => {
   const [courseResult, lessonResult] = await Promise.all([
     getPool().query<{ cover_image_json: unknown }>(
@@ -1072,7 +1368,7 @@ const deleteRemovedR2Objects = async ({
   const nextKeySet = new Set(nextKeys);
   const removedKeys = previousKeys.filter((key) => !nextKeySet.has(key));
 
-  const protectedKeys = await getR2KeysReferencedByPublishedVersion({
+  const protectedKeys = await getR2KeysReferencedByProtectedPublication({
     candidateKeys: removedKeys,
     lessonId,
   });
@@ -1080,7 +1376,7 @@ const deleteRemovedR2Objects = async ({
   await deleteR2Objects(removedKeys.filter((key) => !protectedKeys.has(key)));
 };
 
-const getR2KeysReferencedByPublishedVersion = async ({
+const getR2KeysReferencedByProtectedPublication = async ({
   candidateKeys,
   lessonId,
 }: {
@@ -1098,7 +1394,7 @@ const getR2KeysReferencedByPublishedVersion = async ({
       join course_publications published_publication
         on published_publication.id = published_lesson.course_publication_id
       where published_lesson.id <> $1
-        and published_publication.status = 'published'
+        and published_publication.status in ('published', 'retired')
         and published_lesson.content_json is not null
     `,
     [lessonId]
@@ -1188,16 +1484,20 @@ const assertSafeLessonResourceUploadReference = ({
 
 const confirmSingleLessonResourceUpload = async ({
   actorUserId,
+  inheritedResourceKeys,
   lessonId,
   previousR2Keys,
   resource,
 }: {
   actorUserId: string;
+  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   lessonId: string | null;
   previousR2Keys: string[];
   resource: LessonResourceUploadReference;
 }): Promise<boolean> => {
-  const isExistingResource = previousR2Keys.includes(resource.key);
+  const isExistingResource =
+    previousR2Keys.includes(resource.key) ||
+    (inheritedResourceKeys?.has(resource.key) ?? false);
   if (!isExistingResource) {
     if (!lessonId) {
       throw new LessonAuthoringError(
@@ -1241,11 +1541,13 @@ const confirmSingleLessonResourceUpload = async ({
 const confirmLessonResourceUploads = async ({
   actorUserId,
   contentJson,
+  inheritedResourceKeys,
   lessonId,
   previousR2Keys,
 }: {
   actorUserId: string;
   contentJson: unknown;
+  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   lessonId: string | null;
   previousR2Keys: string[];
 }): Promise<string[]> => {
@@ -1263,6 +1565,7 @@ const confirmLessonResourceUploads = async ({
 
     const isNewUpload = await confirmSingleLessonResourceUpload({
       actorUserId,
+      inheritedResourceKeys,
       lessonId,
       previousR2Keys,
       resource,
@@ -1344,13 +1647,30 @@ const runCourseUpdateTransaction = async ({
     const publicationState = await client.query<{
       access_duration_months: number;
       cover_image_json: unknown;
+      description: string | null;
       max_release_delay_days: number;
+      payment_allow_credit_card: boolean;
+      payment_allow_pix: boolean;
+      payment_max_installment_count: number;
+      price_in_cents: number;
       sales_status: "closed" | "open";
       should_publish: boolean;
+      subtitle: string | null;
+      title: string;
+      workload_hours_override: number | null;
     }>(
       `
         select (c.status = 'active' or c.catalog_visibility = 'listed') as should_publish,
+               c.title,
+               c.subtitle,
+               c.description,
+               c.workload_hours_override,
+               c.price_in_cents,
+               c.payment_allow_pix,
+               c.payment_allow_credit_card,
+               c.payment_max_installment_count,
                c.access_duration_months,
+               c.cover_image_json,
                c.sales_status,
                coalesce((
                  select max(m.release_delay_days)
@@ -1440,11 +1760,67 @@ const runCourseUpdateTransaction = async ({
     );
     await client.query(
       `
-        insert into audit_logs (actor_user_id, action, target_type, target_id)
-        values ($1, $2, $3, $4)
+        update course_publications
+        set title_snapshot = $1,
+            updated_at = now()
+        where course_id = $2 and status = 'draft'
       `,
-      [actorUserId, "course.updated", "course", courseId]
+      [values.title, courseId]
     );
+    const changes = getAuditChanges({
+      accessDurationMonths: {
+        after: values.accessDurationMonths,
+        before: currentCourse.access_duration_months,
+      },
+      description: {
+        after: truncateAuditText(values.description),
+        before: truncateAuditText(currentCourse.description),
+      },
+      paymentAllowCreditCard: {
+        after: values.paymentAllowCreditCard,
+        before: currentCourse.payment_allow_credit_card,
+      },
+      paymentAllowPix: {
+        after: values.paymentAllowPix,
+        before: currentCourse.payment_allow_pix,
+      },
+      paymentMaxInstallmentCount: {
+        after: values.paymentMaxInstallmentCount,
+        before: currentCourse.payment_max_installment_count,
+      },
+      priceInCents: {
+        after: values.priceInCents,
+        before: currentCourse.price_in_cents,
+      },
+      subtitle: {
+        after: truncateAuditText(values.subtitle),
+        before: truncateAuditText(currentCourse.subtitle),
+      },
+      title: { after: values.title, before: currentCourse.title },
+      workloadHoursOverride: {
+        after: values.workloadHoursOverride,
+        before: currentCourse.workload_hours_override,
+      },
+      cover: {
+        after: nextCoverImage ? "configurada" : "não configurada",
+        before: currentCoverImage ? "configurada" : "não configurada",
+      },
+    });
+    if (Object.keys(changes).length > 0) {
+      await audit({
+        action: "course.updated",
+        actorUserId,
+        client,
+        metadata: {
+          changes,
+          targetLabelAfter: values.title,
+          targetLabelBefore: currentCourse.title,
+        },
+        targetId: courseId,
+        targetType: "course",
+      });
+    }
+    await recalculateCourseWorkloadHoursWithClient(client, courseId);
     await client.query("commit");
     return {
       coverImage: currentCoverImage,
@@ -1539,66 +1915,118 @@ const createNewCourse = async ({
       : parseCourseCoverFormField(formData);
     uploadedCoverImage = coverFile ? coverImage : null;
     const insertedThumbnailUrl = getCourseCoverUrl({ courseId, coverImage });
-    const slug = await resolveUniqueCourseSlug(values.title);
-    const inserted = await getPool().query<{ id: string }>(
-      `
-        insert into courses (
-          id,
+    const client = await getPool().connect();
+    try {
+      await client.query("begin");
+      const slug = await resolveUniqueCourseSlug(client, values.title);
+      const inserted = await client.query<{ id: string }>(
+        `
+          insert into courses (
+            id,
+            slug,
+            title,
+            subtitle,
+            description,
+            workload_hours,
+            workload_hours_override,
+            price_in_cents,
+            payment_allow_pix,
+            payment_allow_credit_card,
+            payment_max_installment_count,
+            thumbnail_url,
+            cover_image_json,
+            access_duration_months,
+            status
+          )
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15)
+          returning id
+        `,
+        [
+          courseId,
           slug,
-           title,
-           subtitle,
-           description,
-           workload_hours,
-           workload_hours_override,
-           price_in_cents,
-          payment_allow_pix,
-          payment_allow_credit_card,
-          payment_max_installment_count,
-          thumbnail_url,
-          cover_image_json,
-          access_duration_months,
-          status
-        )
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15)
-        returning id
-      `,
-      [
-        courseId,
-        slug,
-        values.title,
-        values.subtitle,
-        values.description,
-        values.workloadHoursOverride ?? 0,
-        values.workloadHoursOverride,
-        values.priceInCents,
-        values.paymentAllowPix,
-        values.paymentAllowCreditCard,
-        values.paymentMaxInstallmentCount,
-        insertedThumbnailUrl,
-        coverImage ? JSON.stringify(coverImage) : null,
-        values.accessDurationMonths,
-        CREATED_CONTENT_STATUS,
-      ]
-    );
-    await getPool().query(
-      `
-        insert into course_publications (
-          course_id,
-          publication_number,
-          status,
-          title_snapshot,
-          workload_hours_snapshot
-        )
-         values ($1, 1, 'draft', $2, $3)
-      `,
-      [inserted.rows[0]?.id, values.title, values.workloadHoursOverride ?? 0]
-    );
-    await audit({
-      action: "course.created",
-      actorUserId,
-      targetId: inserted.rows[0]?.id,
-      targetType: "course",
-    });
+          values.title,
+          values.subtitle,
+          values.description,
+          values.workloadHoursOverride ?? 0,
+          values.workloadHoursOverride,
+          values.priceInCents,
+          values.paymentAllowPix,
+          values.paymentAllowCreditCard,
+          values.paymentMaxInstallmentCount,
+          insertedThumbnailUrl,
+          coverImage ? JSON.stringify(coverImage) : null,
+          values.accessDurationMonths,
+          CREATED_CONTENT_STATUS,
+        ]
+      );
+      const createdCourseId = inserted.rows[0]?.id;
+      if (!createdCourseId) {
+        throw new Error("Não foi possível criar o Curso.");
+      }
+      await client.query(
+        `
+          insert into course_publications (
+            course_id,
+            publication_number,
+            status,
+            title_snapshot,
+            workload_hours_snapshot
+          )
+          values ($1, 1, 'draft', $2, $3)
+        `,
+        [createdCourseId, values.title, values.workloadHoursOverride ?? 0]
+      );
+      await audit({
+        action: "course.created",
+        actorUserId,
+        client,
+        metadata: {
+          changes: getAuditChanges({
+            accessDurationMonths: {
+              after: values.accessDurationMonths,
+              before: null,
+            },
+            description: {
+              after: truncateAuditText(values.description),
+              before: null,
+            },
+            paymentAllowCreditCard: {
+              after: values.paymentAllowCreditCard,
+              before: null,
+            },
+            paymentAllowPix: { after: values.paymentAllowPix, before: null },
+            paymentMaxInstallmentCount: {
+              after: values.paymentMaxInstallmentCount,
+              before: null,
+            },
+            priceInCents: { after: values.priceInCents, before: null },
+            subtitle: {
+              after: truncateAuditText(values.subtitle),
+              before: null,
+            },
+            title: { after: values.title, before: null },
+            workloadHoursOverride: {
+              after: values.workloadHoursOverride,
+              before: null,
+            },
+            cover: {
+              after: coverImage ? "configurada" : "não configurada",
+              before: null,
+            },
+          }),
+          targetLabelAfter: values.title,
+        },
+        targetId: createdCourseId,
+        targetType: "course",
+      });
+      await recalculateCourseWorkloadHoursWithClient(client, courseId);
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     await cleanupUploadedCourseCover(uploadedCoverImage);
     throw error;
@@ -1666,8 +2094,6 @@ export const saveCourse = async ({
     await persistCourse(null);
   }
 
-  await recalculateCourseWorkloadHours(savedCourseId);
-
   await ensureJmvstreamCourseFolder(savedCourseId);
 
   return { courseId: savedCourseId };
@@ -1679,23 +2105,39 @@ export const saveModule = async ({
 }: AuthoringFormInput): Promise<void> => {
   const moduleId = readString(formData, "moduleId");
   const courseId = readString(formData, "courseId");
-  const title = readString(formData, "title");
+  if (!courseId) {
+    throw new LessonAuthoringError("Informe o Curso.");
+  }
+  const title = readRequiredAuthoringString({
+    field: "title",
+    formData,
+    label: "o título do Módulo",
+  });
   const description = readString(formData, "description") || null;
-  const sortOrder = readNumber(formData, "sortOrder", 1);
   const releaseDelayDays = readModuleReleaseDelayDays(formData);
   const status = moduleId
     ? readContentStatus(formData)
     : CREATED_CONTENT_STATUS;
 
   if (moduleId) {
+    const sortOrder = readAuthoringPositiveInteger(formData, "sortOrder", 1);
     await assertDraftModule(moduleId);
     const previousCourseId = await getCourseIdForModule(moduleId);
     await withCourseContentReleaseLock(
       [courseId, previousCourseId ?? ""],
       async (client) => {
-        const current = await client.query<{ id: string }>(
+        const current = await client.query<{
+          course_id: string;
+          description: string | null;
+          id: string;
+          release_delay_days: number;
+          sort_order: number;
+          status: string;
+          title: string;
+        }>(
           `
-            select m.id
+            select m.id, m.course_id, m.course_publication_id, m.title,
+                   m.description, m.sort_order, m.status, m.release_delay_days
             from modules m
             join course_publications cp on cp.id = m.course_publication_id
             where m.id = $1 and cp.status = 'draft'
@@ -1709,49 +2151,68 @@ export const saveModule = async ({
             "Modulo nao pertence a uma versao em rascunho."
           );
         }
+        if (current.rows[0].course_id !== courseId) {
+          throw new LessonAuthoringError(
+            "O módulo não pertence ao Curso informado."
+          );
+        }
 
         await client.query(
           `
             update modules
-            set course_id = $1,
-                title = $2,
-                description = $3,
-                sort_order = $4,
-                status = $5,
-                release_delay_days = $6,
+            set title = $1,
+                description = $2,
+                sort_order = $3,
+                status = $4,
+                release_delay_days = $5,
                 updated_at = now()
-            where id = $7
+            where id = $6
           `,
-          [
-            courseId,
-            title,
-            description,
-            sortOrder,
-            status,
-            releaseDelayDays,
-            moduleId,
-          ]
+          [title, description, sortOrder, status, releaseDelayDays, moduleId]
         );
+        const changes = getAuditChanges({
+          courseId: { after: courseId, before: current.rows[0].course_id },
+          description: {
+            after: truncateAuditText(description),
+            before: truncateAuditText(current.rows[0].description),
+          },
+          releaseDelayDays: {
+            after: releaseDelayDays,
+            before: current.rows[0].release_delay_days,
+          },
+          sortOrder: {
+            after: sortOrder,
+            before: current.rows[0].sort_order,
+          },
+          status: { after: status, before: current.rows[0].status },
+          title: { after: title, before: current.rows[0].title },
+        });
+        if (Object.keys(changes).length > 0) {
+          await audit({
+            action: "module.updated",
+            actorUserId,
+            client,
+            metadata: {
+              changes,
+              targetLabelAfter: title,
+              targetLabelBefore: current.rows[0].title,
+            },
+            targetId: moduleId,
+            targetType: "module",
+          });
+        }
+        await recalculateCourseWorkloadForTransaction(client, [
+          courseId,
+          previousCourseId,
+        ]);
       }
     );
-    await audit({
-      action: "module.updated",
-      actorUserId,
-      targetId: moduleId,
-      targetType: "module",
-    });
-    await recalculateCourseWorkloadHours(courseId);
-    if (previousCourseId && previousCourseId !== courseId) {
-      await recalculateCourseWorkloadHours(previousCourseId);
-    }
     return;
   }
 
-  const inserted = await withCourseContentReleaseLock(
-    [courseId],
-    async (client) => {
-      const draft = await client.query<{ id: string }>(
-        `
+  await withCourseContentReleaseLock([courseId], async (client) => {
+    const draft = await client.query<{ id: string }>(
+      `
           select id
           from course_publications
           where course_id = $1 and status = 'draft'
@@ -1759,46 +2220,77 @@ export const saveModule = async ({
           limit 1
           for update
         `,
-        [courseId]
-      );
-      const coursePublicationId = draft.rows[0]?.id;
-      if (!coursePublicationId) {
-        throw new Error(
-          "Prepare alteracoes antes de alterar conteudo publicado."
-        );
-      }
-
-      return await client.query<{ id: string }>(
-        `
-          insert into modules (course_id, course_publication_id, title, description, sort_order, status, release_delay_days)
-          values ($1, $2, $3, $4, $5, $6, $7)
-          on conflict (course_publication_id, sort_order) do update set
-            title = excluded.title,
-            description = excluded.description,
-            status = excluded.status,
-            release_delay_days = excluded.release_delay_days,
-            updated_at = now()
-          returning id
-        `,
-        [
-          courseId,
-          coursePublicationId,
-          title,
-          description,
-          sortOrder,
-          status,
-          releaseDelayDays,
-        ]
+      [courseId]
+    );
+    const coursePublicationId = draft.rows[0]?.id;
+    if (!coursePublicationId) {
+      throw new Error(
+        "Prepare alteracoes antes de alterar conteudo publicado."
       );
     }
-  );
-  await audit({
-    action: "module.upserted",
-    actorUserId,
-    targetId: inserted.rows[0]?.id,
-    targetType: "module",
+
+    const nextSortOrderResult = await client.query<{ next_sort_order: number }>(
+      `
+        select coalesce(max(sort_order), 0) + 1 as next_sort_order
+        from modules m
+        where m.course_publication_id = $1
+      `,
+      [coursePublicationId]
+    );
+    const sortOrder = Number(nextSortOrderResult.rows[0]?.next_sort_order);
+    if (!(Number.isSafeInteger(sortOrder) && sortOrder > 0)) {
+      throw new Error("Não foi possível calcular a posição do Módulo.");
+    }
+
+    const insertedModule = await client.query<{ id: string }>(
+      `
+          insert into modules (course_id, course_publication_id, title, description, sort_order, status, release_delay_days)
+          values ($1, $2, $3, $4, $5, $6, $7)
+          returning id
+        `,
+      [
+        courseId,
+        coursePublicationId,
+        title,
+        description,
+        sortOrder,
+        status,
+        releaseDelayDays,
+      ]
+    );
+    const changes = getAuditChanges({
+      description: {
+        after: truncateAuditText(description),
+        before: null,
+      },
+      releaseDelayDays: {
+        after: releaseDelayDays,
+        before: null,
+      },
+      sortOrder: {
+        after: sortOrder,
+        before: null,
+      },
+      status: { after: status, before: null },
+      title: { after: title, before: null },
+    });
+    await audit({
+      action: "module.created",
+      actorUserId,
+      client,
+      metadata: {
+        changes: {
+          ...changes,
+          courseId: { after: courseId, before: null },
+        },
+        targetLabelAfter: title,
+      },
+      targetId: insertedModule.rows[0]?.id,
+      targetType: "module",
+    });
+    await recalculateCourseWorkloadForTransaction(client, [courseId]);
+    return insertedModule;
   });
-  await recalculateCourseWorkloadHours(courseId);
 };
 
 export const createLessonDraft = async ({
@@ -1817,7 +2309,7 @@ export const createLessonDraft = async ({
     throw new LessonAuthoringError("Modulo invalido.");
   }
 
-  const inserted = await withCourseContentReleaseLock(
+  const lessonId = await withCourseContentReleaseLock(
     [courseId],
     async (client) => {
       const currentModule = await client.query<{ id: string }>(
@@ -1837,7 +2329,7 @@ export const createLessonDraft = async ({
         );
       }
 
-      return await client.query<{ id: string }>(
+      const inserted = await client.query<{ id: string }>(
         `
           insert into lessons (
             module_id,
@@ -1865,21 +2357,43 @@ export const createLessonDraft = async ({
           CREATED_CONTENT_STATUS,
         ]
       );
+      const lessonId = inserted.rows[0]?.id;
+      if (!lessonId) {
+        throw new Error("Nao foi possivel criar a aula.");
+      }
+      const lessonAfter: LessonAuditSnapshot = {
+        content: false,
+        contentFingerprint: null,
+        description: draft.description,
+        durationSeconds: 0,
+        isPublished: false,
+        isRequired: true,
+        moduleId: draft.moduleId,
+        sortOrder: draft.sortOrder,
+        status: CREATED_CONTENT_STATUS,
+        textDurationSeconds: 0,
+        textWordCount: 0,
+        title: draft.title,
+        videoDurationSeconds: 0,
+        videoEmbedUrl: null,
+        videoExternalId: null,
+        videoProvider: null,
+      };
+      await audit({
+        action: "lesson.created",
+        actorUserId,
+        client,
+        metadata: {
+          changes: getLessonAuditChanges(null, lessonAfter),
+          targetLabelAfter: draft.title,
+        },
+        targetId: lessonId,
+        targetType: "lesson",
+      });
+      await recalculateCourseWorkloadHoursWithClient(client, courseId);
+      return lessonId;
     }
   );
-  const lessonId = inserted.rows[0]?.id;
-
-  if (!lessonId) {
-    throw new Error("Nao foi possivel criar a aula.");
-  }
-
-  await audit({
-    action: "lesson.created",
-    actorUserId,
-    targetId: lessonId,
-    targetType: "lesson",
-  });
-  await recalculateCourseWorkloadHours(courseId);
 
   return { courseId, lessonId };
 };
@@ -1901,8 +2415,12 @@ export const saveLesson = async ({
   await assertExistingLessonPublicationIsEditable(existingLessonId);
 
   let savedLessonId = existingLessonId;
+  const inheritedResourceKeys = existingLessonId
+    ? await getInheritedLessonResourceKeys(existingLessonId)
+    : new Set<string>();
   const contentJson = normalizeLessonContentForSave({
     formData,
+    inheritedResourceKeys,
     lessonId: existingLessonId,
   });
 
@@ -1924,6 +2442,7 @@ export const saveLesson = async ({
   const uploadedLessonResourceIds = await confirmLessonResourceUploads({
     actorUserId,
     contentJson,
+    inheritedResourceKeys,
     lessonId: existingLessonId,
     previousR2Keys,
   });
@@ -1931,7 +2450,7 @@ export const saveLesson = async ({
   const durationBreakdown = calculateLessonDurationBreakdown({
     textDocument: contentJson?.document ?? null,
     videoDurationSeconds: hasVideoContent
-      ? readNumber(formData, "durationSeconds")
+      ? readAuthoringNonNegativeInteger(formData, "durationSeconds", 0)
       : 0,
   });
   const status = existingLessonId
@@ -1939,7 +2458,7 @@ export const saveLesson = async ({
     : CREATED_CONTENT_STATUS;
   const isPublished = status === PUBLISHED_CONTENT_STATUS;
   const isRequired = readLessonRequired(formData);
-  const sortOrder = readNumber(formData, "sortOrder", 1);
+  const sortOrder = readAuthoringPositiveInteger(formData, "sortOrder", 1);
   const moduleId = readString(formData, "moduleId");
   await assertLessonTargetPublicationIsEditable({ moduleId });
   const module = await getCourseAndPublicationForModule(moduleId);
@@ -1947,11 +2466,12 @@ export const saveLesson = async ({
   if (!module) {
     throw new LessonAuthoringError("Modulo invalido.");
   }
+  const description = readString(formData, "description") || null;
   const values = [
     moduleId,
     module.coursePublicationId,
     title,
-    readString(formData, "description") || null,
+    description,
     videoProvider,
     videoExternalId,
     videoEmbedUrl,
@@ -1973,11 +2493,18 @@ export const saveLesson = async ({
   const persistedLessonId = await withCourseContentReleaseLock(
     [moduleCourseId, previousCourseId ?? ""],
     async (client) => {
+      let currentLesson: { rows: LessonAuditDatabaseRow[] } | null = null;
       if (existingLessonId) {
-        const currentLesson = await client.query<{ id: string }>(
+        currentLesson = await client.query<LessonAuditDatabaseRow>(
           `
-            select l.id
+            select l.id, l.module_id, m.course_id, l.course_publication_id,
+                   l.title, l.description,
+                   l.video_provider, l.video_external_id, l.video_embed_url,
+                   l.content_json, l.duration_seconds, l.video_duration_seconds,
+                   l.text_duration_seconds, l.text_word_count, l.sort_order,
+                   l.status, l.is_published, l.is_required
             from lessons l
+            join modules m on m.id = l.module_id
             join course_publications cp on cp.id = l.course_publication_id
             where l.id = $1 and cp.status = 'draft'
             limit 1
@@ -1992,9 +2519,13 @@ export const saveLesson = async ({
         }
       }
 
-      const currentModule = await client.query<{ id: string }>(
+      const currentModule = await client.query<{
+        course_id: string;
+        course_publication_id: string;
+        id: string;
+      }>(
         `
-          select m.id
+          select m.id, m.course_id, m.course_publication_id
           from modules m
           join course_publications cp on cp.id = m.course_publication_id
           where m.id = $1 and cp.status = 'draft'
@@ -2007,6 +2538,12 @@ export const saveLesson = async ({
         throw new LessonAuthoringError(
           "Prepare alteracoes antes de editar conteudo publicado."
         );
+      }
+      if (existingLessonId) {
+        assertExistingLessonTargetMatches({
+          currentLesson: currentLesson?.rows[0],
+          currentModule: currentModule.rows[0],
+        });
       }
 
       if (existingLessonId) {
@@ -2035,6 +2572,67 @@ export const saveLesson = async ({
           `,
           [...values, existingLessonId]
         );
+        const current = currentLesson?.rows[0];
+        if (!current) {
+          throw new LessonAuthoringError(
+            "Não foi possível carregar a Aula antes de salvar."
+          );
+        }
+        const lessonAfter: LessonAuditSnapshot = {
+          content: Boolean(contentJson),
+          contentFingerprint: getContentFingerprint(contentJson),
+          description,
+          durationSeconds: durationBreakdown.totalDurationSeconds,
+          isPublished,
+          isRequired,
+          moduleId,
+          sortOrder,
+          status,
+          textDurationSeconds: durationBreakdown.textDurationSeconds,
+          textWordCount: durationBreakdown.textWordCount,
+          title,
+          videoDurationSeconds: durationBreakdown.videoDurationSeconds,
+          videoEmbedUrl,
+          videoExternalId,
+          videoProvider,
+        };
+        const lessonBefore: LessonAuditSnapshot = {
+          content: Boolean(current.content_json),
+          contentFingerprint: getContentFingerprint(current.content_json),
+          description: current.description,
+          durationSeconds: current.duration_seconds,
+          isPublished: current.is_published,
+          isRequired: current.is_required,
+          moduleId: current.module_id,
+          sortOrder: current.sort_order,
+          status: current.status,
+          textDurationSeconds: current.text_duration_seconds,
+          textWordCount: current.text_word_count,
+          title: current.title,
+          videoDurationSeconds: current.video_duration_seconds,
+          videoEmbedUrl: current.video_embed_url,
+          videoExternalId: current.video_external_id,
+          videoProvider: current.video_provider,
+        };
+        const changes = getLessonAuditChanges(lessonBefore, lessonAfter);
+        if (Object.keys(changes).length > 0) {
+          await audit({
+            action: "lesson.updated",
+            actorUserId,
+            client,
+            metadata: {
+              changes,
+              targetLabelAfter: title,
+              targetLabelBefore: current.title,
+            },
+            targetId: existingLessonId,
+            targetType: "lesson",
+          });
+        }
+        await recalculateCourseWorkloadForTransaction(client, [
+          moduleCourseId,
+          previousCourseId,
+        ]);
         return existingLessonId;
       }
 
@@ -2068,24 +2666,42 @@ export const saveLesson = async ({
       if (!insertedLessonId) {
         throw new Error("Nao foi possivel salvar a aula.");
       }
+      const lessonAfter: LessonAuditSnapshot = {
+        content: Boolean(contentJson),
+        contentFingerprint: getContentFingerprint(contentJson),
+        description,
+        durationSeconds: durationBreakdown.totalDurationSeconds,
+        isPublished,
+        isRequired,
+        moduleId,
+        sortOrder,
+        status,
+        textDurationSeconds: durationBreakdown.textDurationSeconds,
+        textWordCount: durationBreakdown.textWordCount,
+        title,
+        videoDurationSeconds: durationBreakdown.videoDurationSeconds,
+        videoEmbedUrl,
+        videoExternalId,
+        videoProvider,
+      };
+      await audit({
+        action: "lesson.created",
+        actorUserId,
+        client,
+        metadata: {
+          changes: getLessonAuditChanges(null, lessonAfter),
+          targetLabelAfter: title,
+        },
+        targetId: insertedLessonId,
+        targetType: "lesson",
+      });
+      await recalculateCourseWorkloadForTransaction(client, [moduleCourseId]);
       return insertedLessonId;
     }
   );
   savedLessonId = persistedLessonId;
 
   if (existingLessonId) {
-    await audit({
-      action: "lesson.updated",
-      actorUserId,
-      targetId: existingLessonId,
-      targetType: "lesson",
-    });
-    if (moduleCourseId) {
-      await recalculateCourseWorkloadHours(moduleCourseId);
-    }
-    if (previousCourseId && previousCourseId !== moduleCourseId) {
-      await recalculateCourseWorkloadHours(previousCourseId);
-    }
     await cleanupUpdatedLessonAssets({
       contentJson,
       lessonId: existingLessonId,
@@ -2093,16 +2709,6 @@ export const saveLesson = async ({
       shouldDeleteJmvstreamAsset,
       shouldKeepJmvstreamAsset,
     });
-  } else {
-    await audit({
-      action: "lesson.created",
-      actorUserId,
-      targetId: savedLessonId,
-      targetType: "lesson",
-    });
-    if (moduleCourseId) {
-      await recalculateCourseWorkloadHours(moduleCourseId);
-    }
   }
 
   await consumeUploadedLessonResources({
@@ -2141,9 +2747,30 @@ export const removeLessonVideo = async ({
     ? { failed: 0 }
     : await deleteJmvstreamAssetsForLesson(lessonId);
   await withCourseContentReleaseLock([courseId], async (client) => {
-    const currentLesson = await client.query<{ id: string }>(
+    const currentLesson = await client.query<{
+      content_json: unknown;
+      description: string | null;
+      duration_seconds: number;
+      id: string;
+      is_published: boolean;
+      is_required: boolean;
+      module_id: string;
+      sort_order: number;
+      status: string;
+      text_duration_seconds: number;
+      text_word_count: number;
+      title: string;
+      video_duration_seconds: number;
+      video_embed_url: string | null;
+      video_external_id: string | null;
+      video_provider: string | null;
+    }>(
       `
-        select l.id
+        select l.id, l.module_id, l.title, l.description,
+               l.video_provider, l.video_external_id, l.video_embed_url,
+               l.content_json, l.duration_seconds, l.video_duration_seconds,
+               l.text_duration_seconds, l.text_word_count, l.sort_order,
+               l.status, l.is_published, l.is_required
         from lessons l
         join course_publications cp on cp.id = l.course_publication_id
         where l.id = $1 and cp.status = 'draft'
@@ -2157,6 +2784,7 @@ export const removeLessonVideo = async ({
         "Prepare alteracoes antes de editar conteudo publicado."
       );
     }
+    const current = currentLesson.rows[0];
     await client.query(
       `
         update lessons
@@ -2171,14 +2799,49 @@ export const removeLessonVideo = async ({
       `,
       [lessonId]
     );
+    const lessonBefore: LessonAuditSnapshot = {
+      content: Boolean(current.content_json),
+      contentFingerprint: getContentFingerprint(current.content_json),
+      description: current.description,
+      durationSeconds: current.duration_seconds,
+      isPublished: current.is_published,
+      isRequired: current.is_required,
+      moduleId: current.module_id,
+      sortOrder: current.sort_order,
+      status: current.status,
+      textDurationSeconds: current.text_duration_seconds,
+      textWordCount: current.text_word_count,
+      title: current.title,
+      videoDurationSeconds: current.video_duration_seconds,
+      videoEmbedUrl: current.video_embed_url,
+      videoExternalId: current.video_external_id,
+      videoProvider: current.video_provider,
+    };
+    const lessonAfter: LessonAuditSnapshot = {
+      ...lessonBefore,
+      durationSeconds: current.text_duration_seconds,
+      videoDurationSeconds: 0,
+      videoEmbedUrl: null,
+      videoExternalId: null,
+      videoProvider: null,
+    };
+    const changes = getLessonAuditChanges(lessonBefore, lessonAfter);
+    if (Object.keys(changes).length > 0) {
+      await audit({
+        action: "lesson.video_removed",
+        actorUserId,
+        client,
+        metadata: {
+          changes,
+          targetLabelAfter: current.title,
+          targetLabelBefore: current.title,
+        },
+        targetId: lessonId,
+        targetType: "lesson",
+      });
+    }
+    await recalculateCourseWorkloadForTransaction(client, [courseId]);
   });
-  await audit({
-    action: "lesson.video_removed",
-    actorUserId,
-    targetId: lessonId,
-    targetType: "lesson",
-  });
-  await recalculateCourseWorkloadHours(courseId);
 
   return { courseId, deletePending: deleteResult.failed > 0 };
 };

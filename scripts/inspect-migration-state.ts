@@ -1,7 +1,10 @@
 import { config } from "dotenv";
 import { Pool, type PoolClient } from "pg";
 import { withVerifiedSslMode } from "../src/db/connection-url";
-import { certificateMigrationStateChecks } from "../src/db/migration-state-checks";
+import {
+  certificateMigrationStateChecks,
+  courseContentMigrationStateChecks,
+} from "../src/db/migration-state-checks";
 
 config({ path: ".env.local", quiet: true });
 config({ path: ".env", quiet: true });
@@ -100,6 +103,10 @@ const inspectState = async (client: PoolClient): Promise<MigrationCheck[]> => {
       "0034_remove_privacy_request_workflow",
       "remocao do workflow de solicitacoes de dados",
       "select to_regclass('public.privacy_requests') is null and to_regtype('public.privacy_request_status') is null as present"
+    ),
+    ...courseContentMigrationStateChecks.map(
+      ({ check, migration, statement }) =>
+        scheduleExistsCheck(migration, check, statement)
     ),
     ...certificateMigrationStateChecks.map(({ check, migration, statement }) =>
       scheduleExistsCheck(migration, check, statement)

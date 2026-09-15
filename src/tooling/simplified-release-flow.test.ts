@@ -78,7 +78,7 @@ describe("simplified release flow", () => {
     expect(workflow).toContain("needs: verify_staging");
     expect(workflow).toContain("githubCommitSha");
     expect(workflow).toContain(
-      "Hotfix Production requires a successful CI run"
+      "Hotfix Production requires a successful CI check for the exact main SHA"
     );
     expect(workflow).toContain("Hotfix Production requires the hotfix label");
     expect(workflow).toContain(

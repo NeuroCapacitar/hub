@@ -360,6 +360,7 @@ const issueCertificate = async ({
   reasonCategory,
   reasonDetail,
   replacesCertificateId,
+  titleSource = "current",
   userId,
   workloadSource = "effective",
 }: {
@@ -371,12 +372,14 @@ const issueCertificate = async ({
   reasonCategory?: CertificateReasonCode;
   reasonDetail?: string;
   replacesCertificateId?: string;
+  titleSource?: "current" | "publication";
   userId: string;
   workloadSource?: "effective" | "publication";
 }): Promise<{ id: string }> => {
   const snapshot = await client.query<{
     completed_at: Date;
     course_title: string;
+    publication_course_title: string;
     student_name: string;
     workload_hours: number;
     template_id: string;
@@ -395,7 +398,8 @@ const issueCertificate = async ({
       select
         u.name as student_name,
         cc.completed_at,
-        cp.title_snapshot as course_title,
+        c.title as course_title,
+        cp.title_snapshot as publication_course_title,
         cp.workload_hours_snapshot as publication_workload_hours,
         coalesce(c.workload_hours_override, cp.workload_hours_snapshot) as workload_hours,
         ct.id as template_id,
@@ -426,7 +430,7 @@ const issueCertificate = async ({
   const source = snapshot.rows[0];
 
   if (!source) {
-    throw new CertificateDomainError("Aluna ou curso nao localizado.");
+    throw new CertificateDomainError("Aluno ou curso nao localizado.");
   }
 
   const issuedAt = new Date().toISOString();
@@ -435,6 +439,10 @@ const issueCertificate = async ({
     workloadSource === "publication"
       ? source.publication_workload_hours
       : source.workload_hours;
+  const courseTitle =
+    titleSource === "publication"
+      ? (source.publication_course_title ?? source.course_title)
+      : source.course_title;
   let certificateId: string | undefined;
 
   for (let attempt = 0; attempt < MAX_CERTIFICATE_CODE_ATTEMPTS; attempt += 1) {
@@ -445,7 +453,7 @@ const issueCertificate = async ({
       certificate: { code: certificateCode, issuedAt },
       completion: { completedAt: source.completed_at.toISOString() },
       course: {
-        title: source.course_title,
+        title: courseTitle,
         workloadHours,
       },
       issuer: {
@@ -490,7 +498,7 @@ const issueCertificate = async ({
           coursePublicationId,
           certificateCode,
           source.student_name,
-          source.course_title,
+          courseTitle,
           workloadHours,
           replacesCertificateId ?? null,
           source.template_id,
@@ -629,6 +637,7 @@ export const reconcileHistoricalCourseCertificates = async ({
         client,
         courseId,
         coursePublicationId: candidate.course_publication_id,
+        titleSource: "publication",
         userId: candidate.user_id,
         workloadSource: "publication",
       });
@@ -705,7 +714,7 @@ export const issueManualCertificate = async ({
     );
     if (!enrollment.rows[0]) {
       throw new CertificateDomainError(
-        "A aluna nao possui matricula no curso."
+        "O aluno nao possui matricula no curso."
       );
     }
     const certificateHistory = await client.query<{
@@ -725,7 +734,7 @@ export const issueManualCertificate = async ({
     const existingCertificate = certificateHistory.rows[0];
     if (existingCertificate?.status === "valid") {
       throw new CertificateDomainError(
-        "A aluna ja possui um certificado valido para este curso."
+        "O aluno ja possui um certificado valido para este curso."
       );
     }
     if (existingCertificate?.status === "revoked") {
@@ -1121,7 +1130,8 @@ export const getCertificateOperationsForUser = async (
     workload_hours_snapshot: number;
   }>(
     `
-      select certificate.id, certificate.code, certificate.student_name_snapshot,
+      select certificate.id, certificate.course_id, certificate.code,
+             certificate.student_name_snapshot,
              certificate.course_title_snapshot, certificate.workload_hours_snapshot,
              certificate.issued_at, certificate.revoked_at,
              certificate.revoked_reason_category, certificate.status,

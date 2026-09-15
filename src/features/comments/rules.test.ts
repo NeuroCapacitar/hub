@@ -54,6 +54,46 @@ describe("lesson comment rules", () => {
     ).toThrow("Responda apenas comentarios principais.");
   });
 
+  it("allows a reply from an earlier publication of the same curricular lesson", () => {
+    expect(() =>
+      validateReplyTarget({
+        discussion: {
+          courseId: "course-1",
+          curriculumKey: "curriculum-1",
+        },
+        lessonId: "lesson-current",
+        parent: {
+          discussion: {
+            courseId: "course-1",
+            curriculumKey: "curriculum-1",
+          },
+          id: "root-1",
+          lessonId: "lesson-previous",
+          parentId: null,
+        },
+      })
+    ).not.toThrow();
+
+    expect(() =>
+      validateReplyTarget({
+        discussion: {
+          courseId: "course-2",
+          curriculumKey: "curriculum-1",
+        },
+        lessonId: "lesson-current",
+        parent: {
+          discussion: {
+            courseId: "course-1",
+            curriculumKey: "curriculum-1",
+          },
+          id: "root-1",
+          lessonId: "lesson-previous",
+          parentId: null,
+        },
+      })
+    ).toThrow("Comentario de origem invalido.");
+  });
+
   it("keeps hidden comment text out of the presentation model", () => {
     expect(
       sanitizeLessonComment({

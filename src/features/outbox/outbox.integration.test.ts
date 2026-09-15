@@ -21,6 +21,7 @@ import {
   enqueueOutboxMessage,
   markOutboxMessageDeadLetter,
   requeueDeadLetterMessage,
+  supersedeUnavailableSupportDeadLetterMessage,
 } from "./server";
 
 const pool = new Pool({ connectionString: withVerifiedSslMode(databaseUrl) });
@@ -420,6 +421,110 @@ describe("outbox PostgreSQL concurrency", () => {
       }
       writer.release();
       worker.release();
+    }
+  });
+
+  it("supersedes a support dead letter after its source was removed", async () => {
+    const writer = await pool.connect();
+    let fixture: CertificateFixture | undefined;
+    let messageId: string | undefined;
+    const requestId = randomUUID();
+    try {
+      fixture = await createCertificateFixture(writer);
+      const inserted = await writer.query<{ id: string }>(
+        `insert into outbox_messages (
+           topic,
+           aggregate_type,
+           aggregate_id,
+           idempotency_key,
+           payload_version,
+           payload,
+           status,
+           attempts,
+           last_error_code,
+           last_error_at
+         ) values (
+           'email.support-request',
+           'support_request',
+           $1,
+           $2,
+           1,
+           $3::jsonb,
+           'dead_letter',
+           5,
+           'support_request_unavailable',
+           now()
+         )
+         returning id`,
+        [
+          requestId,
+          `email.support-request/${requestId}/v1`,
+          JSON.stringify({ requestId }),
+        ]
+      );
+      messageId = inserted.rows[0]?.id;
+      expect(messageId).toBeTruthy();
+
+      await expect(
+        supersedeUnavailableSupportDeadLetterMessage({
+          actorUserId: fixture.userId,
+          messageId: String(messageId),
+        })
+      ).resolves.toBeUndefined();
+
+      await expect(
+        writer.query<{
+          last_error_code: string;
+          manual_reprocess_count: number;
+          payload: { requestId: string };
+          status: string;
+        }>(
+          `select status, last_error_code, manual_reprocess_count, payload
+           from outbox_messages
+           where id = $1`,
+          [messageId]
+        )
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            last_error_code: "support_request_unavailable",
+            manual_reprocess_count: 0,
+            payload: { requestId },
+            status: "superseded",
+          },
+        ],
+      });
+
+      await expect(
+        writer.query<{ action: string; metadata: { reason: string } }>(
+          `select action, metadata
+           from audit_logs
+           where target_type = 'outbox_message' and target_id = $1
+           order by created_at desc
+           limit 1`,
+          [messageId]
+        )
+      ).resolves.toMatchObject({
+        rows: [
+          {
+            action: "outbox.superseded",
+            metadata: { reason: "support_request_unavailable" },
+          },
+        ],
+      });
+    } finally {
+      if (messageId) {
+        await writer.query("delete from audit_logs where target_id = $1", [
+          messageId,
+        ]);
+        await writer.query("delete from outbox_messages where id = $1", [
+          messageId,
+        ]);
+      }
+      if (fixture) {
+        await deleteCertificateFixture(writer, fixture);
+      }
+      writer.release();
     }
   });
 });
