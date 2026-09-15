@@ -1,7 +1,7 @@
 # Relatório de implementação: sistema visual NeuroCapacitar Hub
 
-> Estado: implementado na worktree `codex/design-system-refactor`; refinamentos
-> técnicos desta unidade aguardam commit
+> Estado: implementado e commitado na worktree `codex/design-system-refactor`
+> Commit de implementação: `ef34238`
 > Baseline: `aa3119c28414100e9d18b1b85bf55607d722225c`
 > Data: 2026-09-15
 > Worktree: `C:\Users\Junior\.config\superpowers\worktrees\hub\design-system-refactor`
@@ -207,16 +207,15 @@ passou compilação, TypeScript, coleta de páginas e otimização.
   criada e o build/testes confirmam sua integração, mas a revisão humana de
   viewport estreito e contraste deve ser feita ao abrir a rota em ambiente
   autorizado.
-- `DESIGN.md` mantém o `last_verified_commit` canônico anterior porque esta
-  implementação ainda não foi commitada; o hash deve ser atualizado no commit
-  de integração.
+- `DESIGN.md` e a matriz de consumidores apontam para o commit de implementação
+  `ef34238` como baseline verificável.
 - O relatório original e os arquivos de pesquisa permanecem como artefatos de
   referência; não foram sobrescritos.
 - A decisão de migrar os três consumidores restantes de `Badge default` foi
   preservada como pendência semântica; não foi feita uma troca por aparência.
 - Um asset vetorial oficial dedicado ainda não foi fornecido; nenhum vetor foi
   fabricado a partir do raster existente.
-- A branch ainda não foi commitada ou integrada, conforme a autorização atual.
+- A branch foi commitada localmente, mas ainda não foi integrada ou publicada.
 
 ## Refinamentos posteriores
 

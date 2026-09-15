@@ -2,7 +2,7 @@
 
 > Status: implementado como inventário documental e guardrail da execução
 > Owner: design-and-engineering
-> Baseline verificado: `cb3cbb9b73918d7a720a8cb2d7931ecb53afda15`
+> Baseline verificado: `ef34238`
 > Fonte dos valores: `src/app/globals.css`
 > Escopo: UI web estática em `src/`, sem alterar consumidores nesta rodada
 

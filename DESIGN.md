@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: design-and-engineering
-last_verified_commit: cb3cbb9b73918d7a720a8cb2d7931ecb53afda15
+last_verified_commit: ef34238
 last_verified_at: 2026-09-15
 ---
 
