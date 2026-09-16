@@ -1,7 +1,7 @@
 ---
 status: implemented
 owner: product-and-engineering
-last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
+last_verified_commit: 66eeed254e9c792d5fad7ca352eda1d71c8d62f2
 document_type: implementation-plan
 date: 2026-09-15
 ---
@@ -94,8 +94,9 @@ mudado.
 > 2026-09-16, e o ADR está `accepted`. Os documentos canônicos apontam para o
 > commit real de implementação `48110385a7097084c42b9b862b57c66ed311898d`.
 >
-> Etapa 13 concluída em 2026-09-16. O commit de código validado é
-> `b9cc1bd90419d4ed623b2b9805a48adc840d5957`. Os gates locais finais passaram:
+> Etapa 13 concluída em 2026-09-16. O commit final validado é
+> `66eeed254e9c792d5fad7ca352eda1d71c8d62f2`; o núcleo funcional foi
+> consolidado em `b9cc1bd90419d4ed623b2b9805a48adc840d5957`. Os gates locais finais passaram:
 > `bun run verify` e `bun run verify:quick` com 424 arquivos e 2.971 testes,
 > `bun run docs:check` com 46 documentos canônicos, `bun run
 > db:migrations:check`, `bun run typecheck`, `bun run check`, `bun audit
@@ -106,8 +107,10 @@ mudado.
 > O replay da cadeia completa de migrations passou em branches Neon CI
 > descartáveis, com uma transação por arquivo. A suíte PostgreSQL passou 71/71
 > testes em branch limpa; E2E passou 41/41 desktop e 10/10 mobile, incluindo
-> gratuito e pago. A jornada gratuita confirmou uma concessão, uma Matrícula,
-> um evento e zero Orders. `AUTH_PUBLIC_SIGNUP_ENABLED` permaneceu false por
+> gratuito e pago. Após o endurecimento da asserção, a jornada Student
+> autenticada direta passou isoladamente 1/1 em branch nova. A jornada gratuita
+> confirmou uma concessão, uma Matrícula, um evento e zero Orders.
+> `AUTH_PUBLIC_SIGNUP_ENABLED` permaneceu false por
 > default e foi true somente no runtime explicitamente aprovado para a
 > validação pública. O executor oficial de Staging/Production agora usa
 > endpoint direto, lock compartilhado e separação por arquivo; nenhum banco
