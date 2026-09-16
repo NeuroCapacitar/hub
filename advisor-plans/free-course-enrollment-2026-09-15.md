@@ -69,7 +69,7 @@ mudado.
 - [x] Etapa 9 — Auditoria e read models
 - [x] Etapa 10 — integração PostgreSQL e concorrência
 - [x] Etapa 11 — jornada E2E
-- [ ] Etapa 12 — documentação canônica
+- [x] Etapa 12 — documentação canônica
 - [ ] Etapa 13 — gates finais e release handoff
 
 > Etapa 10 concluída em branch Neon temporária do projeto de CI: migrations
@@ -88,13 +88,11 @@ mudado.
 > usar `process.execPath`. As branches têm expiração automática e não são
 > `production`/`staging`.
 >
-> Etapa 12 em progresso: o glossário, Produto, guias de domínio, arquitetura,
+> Etapa 12 concluída: o glossário, Produto, guias de domínio, arquitetura,
 > registro de decisões, índice canônico e ADR-0013 foram atualizados. O produto
 > ratificou o cadastro público como ponte e a reentrada após expiração em
-> 2026-09-16, e o ADR está `accepted`. Os metadados
-> `last_verified_commit` dos documentos canônicos também permanecem nos commits
-> existentes até haver um commit que contenha esta implementação; não será usado
-> o SHA do plano como prova.
+> 2026-09-16, e o ADR está `accepted`. Os documentos canônicos apontam para o
+> commit real de implementação `48110385a7097084c42b9b862b57c66ed311898d`.
 
 ## Objetivo
 
