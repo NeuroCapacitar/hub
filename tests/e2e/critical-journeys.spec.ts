@@ -508,15 +508,9 @@ test("authenticated Student enrolls in a free course directly", async ({
   const freeEnrollmentButton = page.getByRole("button", {
     name: "Inscrever-se gratuitamente",
   });
-  if (await freeEnrollmentButton.count()) {
-    await expect(freeEnrollmentButton).toBeVisible();
-    await freeEnrollmentButton.click();
-  } else {
-    await expect(
-      page.getByText("Sua Matrícula já está ativa.", { exact: true })
-    ).toBeVisible();
-    await page.getByRole("link", { name: "Acessar curso" }).click();
-  }
+  await expect(freeEnrollmentButton).toHaveCount(1);
+  await expect(freeEnrollmentButton).toBeVisible();
+  await freeEnrollmentButton.click();
 
   await expect(page).toHaveURL(
     new RegExp(`/app/cursos/${fixture.freeCourse.id}$`)
