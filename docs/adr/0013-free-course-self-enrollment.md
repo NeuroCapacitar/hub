@@ -1,7 +1,7 @@
 ---
 status: accepted
 owner: product
-last_verified_commit: 2bfcf38e
+last_verified_commit: 48110385a7097084c42b9b862b57c66ed311898d
 ---
 
 # Autoinscrição gratuita em Curso

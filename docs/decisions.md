@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: product
-last_verified_commit: e325b7e
+last_verified_commit: 48110385a7097084c42b9b862b57c66ed311898d
 ---
 
 # Registro de decisões de produto

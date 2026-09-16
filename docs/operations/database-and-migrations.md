@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: b6e6d63
+last_verified_commit: 48110385a7097084c42b9b862b57c66ed311898d
 current_migration_tag: 0081_free_enrollment_contract
 migration_entry_count: 82
 schema_table_count: 49
