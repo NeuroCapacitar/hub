@@ -252,13 +252,19 @@ const readModuleReleaseDelayDays = (formData: FormData): number => {
 
 const normalizeLessonContentForSave = ({
   formData,
+  inheritedResourceKeys,
   lessonId,
 }: {
   formData: FormData;
+  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   lessonId: string;
 }): ReturnType<typeof normalizeLessonContentFromForm> => {
   try {
-    return normalizeLessonContentFromForm({ formData, lessonId });
+    return normalizeLessonContentFromForm({
+      formData,
+      inheritedResourceKeys,
+      lessonId,
+    });
   } catch (error) {
     if (error instanceof LessonAuthoringError) {
       throw error;
@@ -589,6 +595,51 @@ interface PreparedCoursePublication {
   coverImage: CourseCoverImage | null;
 }
 
+const assertCoursePublicationVideoReadiness = async (
+  client: PoolClient,
+  coursePublicationId: string
+): Promise<void> => {
+  const unavailableVideo = await client.query<{
+    id: string;
+    lesson_title: string;
+    module_title: string;
+    readiness_failure: "duration" | "player";
+  }>(
+    `
+      select l.id,
+             l.title as lesson_title,
+             m.title as module_title,
+             case
+               when coalesce(l.video_embed_url, '') = '' then 'player'
+               else 'duration'
+             end as readiness_failure
+      from lessons l
+      join modules m on m.id = l.module_id
+      where l.course_publication_id = $1
+        and l.video_provider = 'jmvstream'
+          and (
+            coalesce(l.video_embed_url, '') = ''
+            or (
+              nullif(l.video_external_id, '') is not null
+              and coalesce(l.video_duration_seconds, 0) <= 0
+            )
+          )
+      order by m.sort_order, l.sort_order
+      limit 1
+    `,
+    [coursePublicationId]
+  );
+  const firstUnavailableVideo = unavailableVideo.rows[0];
+  if (firstUnavailableVideo?.readiness_failure === "player") {
+    throw new Error("A publicacao possui video JMVStream sem player pronto.");
+  }
+  if (firstUnavailableVideo) {
+    throw new Error(
+      `A publicacao possui video JMVStream sem duracao sincronizada: a Aula "${firstUnavailableVideo.lesson_title}" do Modulo "${firstUnavailableVideo.module_title}" ainda nao esta pronta.`
+    );
+  }
+};
+
 const runCoursePublicationTransaction = async ({
   actorUserId,
   courseId,
@@ -627,20 +678,7 @@ const runCoursePublicationTransaction = async ({
       return null;
     }
 
-    const unavailableVideo = await client.query<{ id: string }>(
-      `
-        select id
-        from lessons
-        where course_publication_id = $1
-          and video_provider = 'jmvstream'
-          and coalesce(video_embed_url, '') = ''
-        limit 1
-      `,
-      [coursePublicationId]
-    );
-    if (unavailableVideo.rows[0]) {
-      throw new Error("A publicacao possui video JMVStream sem player pronto.");
-    }
+    await assertCoursePublicationVideoReadiness(client, coursePublicationId);
 
     const courseCover = await client.query<{
       access_duration_months: number;
@@ -908,8 +946,8 @@ export const createCoursePublicationDraft = async ({
   try {
     await client.query("begin");
     await lockCourseContentRelease(client, courseId);
-    await client.query(
-      "select id from courses where id = $1 limit 1 for update",
+    const courseState = await client.query<{ id: string; title: string }>(
+      "select id, title from courses where id = $1 limit 1 for update",
       [courseId]
     );
     const existingDraft = await client.query<{ id: string }>(
@@ -957,7 +995,7 @@ export const createCoursePublicationDraft = async ({
       [
         courseId,
         source.publication_number + 1,
-        source.title_snapshot,
+        courseState.rows[0]?.title ?? source.title_snapshot,
         source.workload_hours_snapshot,
       ]
     );
@@ -1088,7 +1126,7 @@ export const createCoursePublicationDraft = async ({
           },
           status: { after: "draft", before: "published" },
           titleSnapshot: {
-            after: source.title_snapshot,
+            after: courseState.rows[0]?.title ?? source.title_snapshot,
             before: null,
           },
           workloadHoursSnapshot: {
@@ -1099,7 +1137,7 @@ export const createCoursePublicationDraft = async ({
         lessonCount: lessonsToCopy.rows.length,
         moduleCount: modulesToCopy.rows.length,
         sourcePublicationId: source.id,
-        targetLabelAfter: source.title_snapshot,
+        targetLabelAfter: courseState.rows[0]?.title ?? source.title_snapshot,
       },
       targetId: coursePublicationId,
       targetType: "course_publication",
@@ -1219,6 +1257,40 @@ const getLessonR2ObjectKeys = async (lessonId: string): Promise<string[]> => {
   return getLessonContentStorageKeys(rows[0]?.content_json);
 };
 
+const getInheritedLessonResourceKeys = async (
+  lessonId: string
+): Promise<Set<string>> => {
+  if (!lessonId) {
+    return new Set();
+  }
+
+  const { rows } = await getPool().query<{ content_json: unknown }>(
+    `
+      select source_lesson.content_json
+      from lessons target_lesson
+      join modules target_module on target_module.id = target_lesson.module_id
+      join course_publications target_publication
+        on target_publication.id = target_lesson.course_publication_id
+      join lessons source_lesson
+        on source_lesson.id <> target_lesson.id
+       and source_lesson.curriculum_key = target_lesson.curriculum_key
+      join modules source_module on source_module.id = source_lesson.module_id
+      join course_publications source_publication
+        on source_publication.id = source_lesson.course_publication_id
+      where target_lesson.id = $1
+        and target_publication.status = 'draft'
+        and source_module.course_id = target_module.course_id
+        and source_publication.status in ('published', 'retired')
+        and source_lesson.content_json is not null
+    `,
+    [lessonId]
+  );
+
+  return new Set(
+    rows.flatMap((row) => getLessonContentStorageKeys(row.content_json))
+  );
+};
+
 const assertExistingLessonTargetMatches = ({
   currentLesson,
   currentModule,
@@ -1298,7 +1370,7 @@ const deleteRemovedR2Objects = async ({
   const nextKeySet = new Set(nextKeys);
   const removedKeys = previousKeys.filter((key) => !nextKeySet.has(key));
 
-  const protectedKeys = await getR2KeysReferencedByPublishedVersion({
+  const protectedKeys = await getR2KeysReferencedByProtectedPublication({
     candidateKeys: removedKeys,
     lessonId,
   });
@@ -1306,7 +1378,7 @@ const deleteRemovedR2Objects = async ({
   await deleteR2Objects(removedKeys.filter((key) => !protectedKeys.has(key)));
 };
 
-const getR2KeysReferencedByPublishedVersion = async ({
+const getR2KeysReferencedByProtectedPublication = async ({
   candidateKeys,
   lessonId,
 }: {
@@ -1324,7 +1396,7 @@ const getR2KeysReferencedByPublishedVersion = async ({
       join course_publications published_publication
         on published_publication.id = published_lesson.course_publication_id
       where published_lesson.id <> $1
-        and published_publication.status = 'published'
+        and published_publication.status in ('published', 'retired')
         and published_lesson.content_json is not null
     `,
     [lessonId]
@@ -1414,16 +1486,20 @@ const assertSafeLessonResourceUploadReference = ({
 
 const confirmSingleLessonResourceUpload = async ({
   actorUserId,
+  inheritedResourceKeys,
   lessonId,
   previousR2Keys,
   resource,
 }: {
   actorUserId: string;
+  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   lessonId: string | null;
   previousR2Keys: string[];
   resource: LessonResourceUploadReference;
 }): Promise<boolean> => {
-  const isExistingResource = previousR2Keys.includes(resource.key);
+  const isExistingResource =
+    previousR2Keys.includes(resource.key) ||
+    (inheritedResourceKeys?.has(resource.key) ?? false);
   if (!isExistingResource) {
     if (!lessonId) {
       throw new LessonAuthoringError(
@@ -1467,11 +1543,13 @@ const confirmSingleLessonResourceUpload = async ({
 const confirmLessonResourceUploads = async ({
   actorUserId,
   contentJson,
+  inheritedResourceKeys,
   lessonId,
   previousR2Keys,
 }: {
   actorUserId: string;
   contentJson: unknown;
+  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   lessonId: string | null;
   previousR2Keys: string[];
 }): Promise<string[]> => {
@@ -1489,6 +1567,7 @@ const confirmLessonResourceUploads = async ({
 
     const isNewUpload = await confirmSingleLessonResourceUpload({
       actorUserId,
+      inheritedResourceKeys,
       lessonId,
       previousR2Keys,
       resource,
@@ -1680,6 +1759,15 @@ const runCourseUpdateTransaction = async ({
         values.accessDurationMonths,
         courseId,
       ]
+    );
+    await client.query(
+      `
+        update course_publications
+        set title_snapshot = $1,
+            updated_at = now()
+        where course_id = $2 and status = 'draft'
+      `,
+      [values.title, courseId]
     );
     const changes = getAuditChanges({
       accessDurationMonths: {
@@ -2028,13 +2116,13 @@ export const saveModule = async ({
     label: "o título do Módulo",
   });
   const description = readString(formData, "description") || null;
-  const sortOrder = readAuthoringPositiveInteger(formData, "sortOrder", 1);
   const releaseDelayDays = readModuleReleaseDelayDays(formData);
   const status = moduleId
     ? readContentStatus(formData)
     : CREATED_CONTENT_STATUS;
 
   if (moduleId) {
+    const sortOrder = readAuthoringPositiveInteger(formData, "sortOrder", 1);
     await assertDraftModule(moduleId);
     const previousCourseId = await getCourseIdForModule(moduleId);
     await withCourseContentReleaseLock(
@@ -2143,36 +2231,23 @@ export const saveModule = async ({
       );
     }
 
-    const existingModule = await client.query<{
-      description: string | null;
-      id: string;
-      release_delay_days: number;
-      sort_order: number;
-      status: string;
-      title: string;
-    }>(
+    const nextSortOrderResult = await client.query<{ next_sort_order: number }>(
       `
-        select m.id, m.title, m.description, m.sort_order,
-               m.status, m.release_delay_days
+        select coalesce(max(sort_order), 0) + 1 as next_sort_order
         from modules m
-        where m.course_publication_id = $1 and m.sort_order = $2
-        limit 1
-        for update
+        where m.course_publication_id = $1
       `,
-      [coursePublicationId, sortOrder]
+      [coursePublicationId]
     );
-    const previousModule = existingModule.rows[0];
+    const sortOrder = Number(nextSortOrderResult.rows[0]?.next_sort_order);
+    if (!(Number.isSafeInteger(sortOrder) && sortOrder > 0)) {
+      throw new Error("Não foi possível calcular a posição do Módulo.");
+    }
 
     const insertedModule = await client.query<{ id: string }>(
       `
           insert into modules (course_id, course_publication_id, title, description, sort_order, status, release_delay_days)
           values ($1, $2, $3, $4, $5, $6, $7)
-          on conflict (course_publication_id, sort_order) do update set
-            title = excluded.title,
-            description = excluded.description,
-            status = excluded.status,
-            release_delay_days = excluded.release_delay_days,
-            updated_at = now()
           returning id
         `,
       [
@@ -2188,32 +2263,29 @@ export const saveModule = async ({
     const changes = getAuditChanges({
       description: {
         after: truncateAuditText(description),
-        before: truncateAuditText(previousModule?.description ?? null),
+        before: null,
       },
       releaseDelayDays: {
         after: releaseDelayDays,
-        before: previousModule?.release_delay_days ?? null,
+        before: null,
       },
       sortOrder: {
         after: sortOrder,
-        before: previousModule?.sort_order ?? null,
+        before: null,
       },
-      status: { after: status, before: previousModule?.status ?? null },
-      title: { after: title, before: previousModule?.title ?? null },
+      status: { after: status, before: null },
+      title: { after: title, before: null },
     });
     await audit({
-      action: previousModule ? "module.updated" : "module.created",
+      action: "module.created",
       actorUserId,
       client,
       metadata: {
         changes: {
           ...changes,
-          ...(previousModule
-            ? {}
-            : { courseId: { after: courseId, before: null } }),
+          courseId: { after: courseId, before: null },
         },
         targetLabelAfter: title,
-        ...(previousModule ? { targetLabelBefore: previousModule.title } : {}),
       },
       targetId: insertedModule.rows[0]?.id,
       targetType: "module",
@@ -2345,8 +2417,12 @@ export const saveLesson = async ({
   await assertExistingLessonPublicationIsEditable(existingLessonId);
 
   let savedLessonId = existingLessonId;
+  const inheritedResourceKeys = existingLessonId
+    ? await getInheritedLessonResourceKeys(existingLessonId)
+    : new Set<string>();
   const contentJson = normalizeLessonContentForSave({
     formData,
+    inheritedResourceKeys,
     lessonId: existingLessonId,
   });
 
@@ -2368,6 +2444,7 @@ export const saveLesson = async ({
   const uploadedLessonResourceIds = await confirmLessonResourceUploads({
     actorUserId,
     contentJson,
+    inheritedResourceKeys,
     lessonId: existingLessonId,
     previousR2Keys,
   });

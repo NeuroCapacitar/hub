@@ -706,7 +706,7 @@ describe("outbox email delivery", () => {
         payloadVersion: 1,
         topic: "email.support-request",
       })
-    ).rejects.toMatchObject({ code: "aggregate_not_deliverable" });
+    ).rejects.toMatchObject({ code: "support_request_unavailable" });
 
     expect(dependencies.sendSupportRequestEmail).not.toHaveBeenCalled();
   });

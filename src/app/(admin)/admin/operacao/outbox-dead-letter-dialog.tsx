@@ -18,7 +18,10 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { formatDateTime } from "@/lib/formatters";
-import { OutboxDeadLetterReprocess } from "./outbox-dead-letters";
+import {
+  OutboxDeadLetterReprocess,
+  OutboxDeadLetterSupersede,
+} from "./outbox-dead-letters";
 
 interface OutboxDeadLetterRecord {
   attempts: number;
@@ -28,6 +31,10 @@ interface OutboxDeadLetterRecord {
   lastErrorCode: string | null;
   topic: string;
 }
+
+type OutboxReprocessBlockedReason =
+  | "manual_reprocess_already_used"
+  | "support_request_unavailable";
 
 function DetailItem({
   children,
@@ -48,10 +55,14 @@ function DetailItem({
 
 export function OutboxDeadLetterDialog({
   canRetry,
+  canReprocess,
   message,
+  reprocessBlockedReason,
 }: {
+  canReprocess: boolean;
   canRetry: boolean;
   message: OutboxDeadLetterRecord;
+  reprocessBlockedReason?: OutboxReprocessBlockedReason | null | undefined;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -138,19 +149,19 @@ export function OutboxDeadLetterDialog({
               >
                 Recuperação
               </h3>
-              {canRetry ? (
-                <>
-                  <p className="mt-1 text-muted-foreground text-sm">
-                    Confirme o agregado relacionado. Após 24 horas, existe risco
-                    de duplicar um e-mail.
-                  </p>
-                  <OutboxDeadLetterReprocess messageId={message.id} />
-                </>
-              ) : (
-                <p className="mt-1 text-muted-foreground text-sm">
-                  Somente Administrador pode reprocessar esta mensagem.
-                </p>
-              )}
+              <OutboxRecoveryInstructions
+                canReprocess={canReprocess}
+                canRetry={canRetry}
+                messageId={message.id}
+                reprocessBlockedReason={reprocessBlockedReason}
+              />
+              {canRetry &&
+              !canReprocess &&
+              reprocessBlockedReason === "support_request_unavailable" ? (
+                <div className="mt-3">
+                  <OutboxDeadLetterSupersede messageId={message.id} />
+                </div>
+              ) : null}
             </section>
           </div>
         </DialogBody>
@@ -163,5 +174,45 @@ export function OutboxDeadLetterDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function OutboxRecoveryInstructions({
+  canReprocess,
+  canRetry,
+  messageId,
+  reprocessBlockedReason,
+}: {
+  canReprocess: boolean;
+  canRetry: boolean;
+  messageId: string;
+  reprocessBlockedReason?: OutboxReprocessBlockedReason | null | undefined;
+}): React.JSX.Element {
+  if (!canRetry) {
+    return (
+      <p className="mt-1 text-muted-foreground text-sm">
+        Somente Administrador pode reprocessar esta mensagem.
+      </p>
+    );
+  }
+
+  if (canReprocess) {
+    return (
+      <>
+        <p className="mt-1 text-muted-foreground text-sm">
+          Confirme o agregado relacionado. Após 24 horas, existe risco de
+          duplicar um e-mail.
+        </p>
+        <OutboxDeadLetterReprocess messageId={messageId} />
+      </>
+    );
+  }
+
+  return (
+    <p className="mt-1 text-muted-foreground text-sm">
+      {reprocessBlockedReason === "support_request_unavailable"
+        ? "A solicitação de suporte original não está mais disponível."
+        : "O reprocessamento manual desta mensagem já foi utilizado."}
+    </p>
   );
 }

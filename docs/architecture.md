@@ -39,6 +39,25 @@ health, readiness e crons autenticados. A topologia completa está no
 - **Persistência:** `src/db/index.ts` (`getPool`, `getDb`), `src/db/schema.ts` e SQL explícito nas features.
 - **Externo:** clientes em `src/features/payments`, `src/features/jmvstream`, `src/features/storage` e `src/features/email`.
 
+### Responsabilidade de integrações
+
+O Provedor é a autoridade da execução técnica externa. Resend decide e expõe
+detalhes de aceitação, entrega, bounce, supressão, reputação e replay de
+webhook; JMVStream decide e expõe detalhes de armazenamento, conversão, player
+e thumbnail. O Hub não replica esses portais.
+
+O Hub continua sendo a autoridade do negócio: mantém a intenção durável, a
+associação com seus agregados, a idempotência, a auditoria e uma projeção local
+mínima do último estado conhecido. Webhooks são persistidos e processados
+assíncronamente porque um provedor pode considerar o evento entregue antes de
+o worker local concluir. A interface administrativa deve apontar para a fila
+local quando a causa é do Hub e para o portal do provedor quando o detalhe ou a
+correção é externo.
+
+Falha de e-mail é uma falha de notificação, não uma decisão de acesso,
+conclusão ou Certificado. Falha de vídeo técnico pertence à JMVStream, mas a
+relação do ativo com a Aula e a regra de publicação pertencem ao Hub.
+
 Importações usam alias `@/`. Não há camada de repositórios genérica; Drizzle e `pg` são utilizados onde sua interface é mais adequada.
 
 ## Mapa domínio => código
@@ -118,14 +137,14 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 1. `getStudentCourseAccessStatus` e `resolveCourseAccess` negam acesso sem Conta/Matrícula válidas.
 2. `getStudentCourseOverview` projeta Módulos futuros sem seus detalhes; `resolveLessonAccess` é a fronteira temporal única.
 3. `isLessonAvailable` aplica sequência depois da decisão temporal e só considera Aulas obrigatórias anteriores como pré-requisito; opcionais não bloqueiam.
-4. `recordLessonWatchProgress` separa retomada, posição máxima, fronteira linear e tempo de reprodução; somente a fronteira validada pode concluir por vídeo em 100%.
+4. `recordLessonWatchProgress` separa retomada, posição máxima, fronteira linear e tempo de reprodução; somente a fronteira validada pode concluir por vídeo em 100%. A sessão é emitida pelo servidor, a última abertura vence e eventos de sessão antiga são ignorados.
 5. `completeLesson` permite conclusão manual.
 6. `calculateCourseProgress` calcula percentual obrigatório; a próxima Aula é a primeira pendente disponível em ordem, inclusive opcional.
 
 ### Publicação de mídia
 
 - JMVStream: app inicia multipart, navegador envia partes diretamente às URLs assinadas, app confirma e sincroniza player.
-- R2 privado: app assina upload/download por objeto; navegador transfere sem proxy de payload. Anexos de Aula registram uma sessão vinculada à Aula/Admin, reemitem a URL para a mesma chave uma vez e usam fallback server-side somente até 4 MiB; a confirmação por HEAD precede o salvamento.
+- R2 privado: app assina upload/download por objeto; navegador transfere sem proxy de payload. Anexos de Aula registram uma sessão vinculada à Aula/Admin, reemitem a URL para a mesma chave uma vez e usam fallback server-side somente até 4 MiB; a confirmação por HEAD precede o salvamento. Um recurso já referenciado pode ser reutilizado por Aula clonada apenas quando Curso e `curriculum_key` coincidem; referências de publicações `published` e `retired` protegem o objeto contra limpeza.
 - R2 público: `publishR2Object` copia do bucket privado para o público; URL pública vem de `R2_PUBLIC_BASE_URL`.
 
 ### Certificado, analytics e manutenção
@@ -146,7 +165,7 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 
 `src/proxy.ts` propaga `x-correlation-id` para request e response. `logOperationalEvent`, em `src/lib/observability.ts`, emite eventos JSON sem atributos sensíveis. `src/instrumentation.ts` registra exceções de request e as encaminha ao Sentry somente no runtime Production; requests, breadcrumbs, transações e spans perdem query strings e códigos públicos de Certificado antes do envio. `error.tsx` e `global-error.tsx` fazem o equivalente para fallbacks de interface com um identificador de suporte.
 
-`GET /api/health` é liveness. `GET /api/health/ready` faz readiness protegida contra Postgres, com timeout curto e verificação do journal; ele não consulta providers externos. `getOperationalBacklogSnapshot`, em `src/features/operations/server.ts`, alimenta **Admin > Operação** com contagens/idade de outbox, webhook e vídeo, sem PII. SLI/SLO, dona e ensaio de recuperação estão em [Observabilidade e recuperação](operations/observability-and-recovery.md).
+`GET /api/health` é liveness. `GET /api/health/ready` faz readiness protegida contra Postgres, com timeout curto e verificação do journal; ele não consulta providers externos. `getOperationalBacklogSnapshot`, em `src/features/operations/server.ts`, alimenta **Admin > Operação** com contagens/idade separadas de Outbox, eventos Resend, webhooks Asaas e vídeo, sem PII. A projeção local orienta a próxima ação, mas os detalhes técnicos e o replay do provedor continuam no portal externo. SLI/SLO, dona e ensaio de recuperação estão em [Observabilidade e recuperação](operations/observability-and-recovery.md).
 
 ## Concorrência, idempotência e auditoria
 
@@ -167,6 +186,8 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 - `outbox_messages` registra efeitos de e-mail críticos com chave idempotente, lease e
   dead letter; `auth.account-activation` persiste apenas IDs locais e cria token no
   callback Better Auth. Recuperação pública e ativação legada continuam fora da outbox;
+- suporte cujo agregado foi removido termina como `support_request_unavailable` e pode
+  ser encerrado explicitamente pelo Admin como `superseded`, sem payload com PII;
 - transições terminais da outbox são fenced por `locked_by`; perda do lease encerra o
   lote sem contabilizar sucesso/falha, e `certificate.render` terminaliza mensagem e
   Certificado de forma atômica;

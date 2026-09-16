@@ -6,6 +6,7 @@ const dependencies = vi.hoisted(() => ({
   enrollInFreeCourse: vi.fn(),
   logOperationalEvent: vi.fn(),
   recordLessonWatchProgress: vi.fn(),
+  startLessonWatchSession: vi.fn(),
   redirect: vi.fn(),
   revalidatePath: vi.fn(),
   requireRole: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock("@/features/courses/preview", () => ({
 vi.mock("@/features/courses/server", () => ({
   completeLesson: dependencies.completeLesson,
   recordLessonWatchProgress: dependencies.recordLessonWatchProgress,
+  startLessonWatchSession: dependencies.startLessonWatchSession,
 }));
 vi.mock("@/features/enrollments/free-enrollment", () => ({
   enrollInFreeCourse: dependencies.enrollInFreeCourse,
@@ -55,6 +57,7 @@ import {
   recordLessonWatchProgressAction,
   sendSupportRequestAction,
   setCourseSaleInterestAction,
+  startLessonWatchSessionAction,
 } from "./actions";
 
 describe("completeLessonAction", () => {
@@ -363,6 +366,37 @@ describe("recordLessonWatchProgressAction", () => {
     expect(
       dependencies.scheduleOutboxDrainAfterResponse
     ).toHaveBeenCalledOnce();
+  });
+});
+
+describe("startLessonWatchSessionAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dependencies.requireSession.mockResolvedValue({
+      role: "student",
+      user: { id: "student-1" },
+    });
+    dependencies.startLessonWatchSession.mockResolvedValue({
+      isLinearProgressBlocked: false,
+      resumePositionSeconds: 42,
+      trackingSessionId: "server-session-1",
+      watchedPercent: 12,
+    });
+  });
+
+  it("starts the session for the authenticated student", async () => {
+    await expect(
+      startLessonWatchSessionAction({ lessonId: "lesson-1" })
+    ).resolves.toEqual({
+      isLinearProgressBlocked: false,
+      resumePositionSeconds: 42,
+      trackingSessionId: "server-session-1",
+      watchedPercent: 12,
+    });
+    expect(dependencies.startLessonWatchSession).toHaveBeenCalledWith({
+      lessonId: "lesson-1",
+      userId: "student-1",
+    });
   });
 });
 

@@ -1,5 +1,5 @@
 {
-  "id": "0bc9aa94-d45c-459b-bba4-325054e4e113",
+  "id": "91d7ccc7-ebbe-4829-a2d8-f743e2b79448",
   "prevId": "43441e14-663c-4257-a1ad-cf4209c12160",
   "version": "7",
   "dialect": "postgresql",
@@ -652,6 +652,104 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.auth_media_slides": {
+      "name": "auth_media_slides",
+      "schema": "",
+      "columns": {
+        "blur_data_url": {
+          "name": "blur_data_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "image_url": {
+          "name": "image_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "auth_media_slides_active_order_idx": {
+          "name": "auth_media_slides_active_order_idx",
+          "columns": [
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sort_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "auth_media_slides_sort_order_unique": {
+          "name": "auth_media_slides_sort_order_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "sort_order"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "auth_media_slides_image_url_prefix_check": {
+          "name": "auth_media_slides_image_url_prefix_check",
+          "value": "\"auth_media_slides\".\"image_url\" like 'auth-media/%'"
+        },
+        "auth_media_slides_sort_order_positive_check": {
+          "name": "auth_media_slides_sort_order_positive_check",
+          "value": "\"auth_media_slides\".\"sort_order\" > 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.certificate_issuer_profiles": {
@@ -8346,8 +8444,7 @@
         "expiration_adjustment_reversed",
         "projection_rebuilt",
         "content_release_scheduled",
-        "content_full_access_granted",
-        "free_enrollment_granted"
+        "content_full_access_granted"
       ]
     },
     "public.enrollment_grant_source_type": {
@@ -8355,8 +8452,7 @@
       "schema": "public",
       "values": [
         "paid_order",
-        "manual",
-        "free_enrollment"
+        "manual"
       ]
     },
     "public.enrollment_grant_status": {

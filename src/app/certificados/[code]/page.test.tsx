@@ -74,7 +74,7 @@ describe("CertificateValidationPage", () => {
     expect(markup).toContain("Copiar link");
     expect(markup).not.toContain("A4 · PDF");
     expect(markup).toContain('alt="NeuroCapacitar"');
-    expect(markup).toContain('src="/protear/logo-negativo.svg"');
+    expect(markup).toContain('src="/brand/logo-negativo.svg"');
   });
 
   it("keeps a pending certificate visible without exposing a PDF action", async () => {

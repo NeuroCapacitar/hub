@@ -73,10 +73,20 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 - [ADR-0010: liberação temporal relativa por Módulo](adr/0010-relative-module-content-release.md)
 - [ADR-0011: sequência com Aulas opcionais não bloqueadoras](adr/0011-optional-lesson-progression.md)
 - [ADR-0012: progresso linear validado em vídeo](adr/0012-linear-validated-video-progress.md)
-- [ADR-0013: autoinscrição gratuita em Curso](adr/0013-free-course-self-enrollment.md)
+- [ADR-0013: ownership operacional entre Hub e provedores](adr/0013-provider-and-hub-operational-ownership.md)
+- [ADR-0014: identidade de Aula e estado entre publicações](adr/0014-lesson-identity-and-state-across-publications.md)
+- [ADR-0015: mídia administrável da tela de acesso](adr/0015-authentication-screen-media.md)
+- [ADR-0016: autoinscrição gratuita em Curso](adr/0016-free-course-self-enrollment.md)
 
 ### Revisões
 
+- [Remediação direta das instruções de skills e AGENTS.md em 2026-09-06](reviews/2026-09-06-instructions-remediation.md)
+- [Auditoria consolidada de skills e AGENTS.md em 2026-09-06](reviews/2026-09-06-skills-audit.md)
+- [Auditoria dos AGENTS.md](reviews/2026-09-06-agents-files-audit.md)
+- [Auditoria das skills pessoais e de projetos](reviews/2026-09-06-personal-skills-audit.md)
+- [Auditoria das skills Vercel e Neon](reviews/2026-09-06-vercel-neon-skills-audit.md)
+- [Auditoria dos demais plugins Codex](reviews/2026-09-06-other-plugin-skills-audit.md)
+- [Auditoria suplementar de outros clientes e instalações](reviews/2026-09-06-supplemental-skills-audit.md)
 - [Plano mestre de correção com relatório de implementação](reviews/2026-09-12-master-plan-with-implementation-report.md)
 - [Validação da auditoria técnica, arquitetural e de produto de 2026-09-12](reviews/2026-09-12-audit-validation-and-remediation.md)
 - [Requalificação de prontidão e higiene operacional em 2026-09-03](reviews/2026-09-03-readiness-remediation-requalification.md)

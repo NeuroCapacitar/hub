@@ -59,6 +59,12 @@ const course = {
   workloadHours: 0,
 } as const;
 
+const getCardMarkup = (markup: string, title: string): string =>
+  markup
+    .split("<article ")
+    .find((cardMarkup) => cardMarkup.includes(title))
+    ?.split("</article>")[0] ?? "";
+
 describe("Student dashboard availability", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -126,5 +132,66 @@ describe("Student dashboard availability", () => {
       "Peça um aviso para saber quando as inscrições reabrirem."
     );
     expect(markup).not.toContain("Adquirir acesso");
+  });
+
+  it("keeps normal active access neutral instead of using the default orange badge", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        courseId: "course-active",
+        expiresAt: new Date(Date.now() + 90 * 86_400_000),
+        launchDate: null,
+        progressPercent: 40,
+        slug: "curso-ativo",
+        title: "Curso ativo",
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+
+    expect(markup).toContain("Matriculado");
+    expect(markup).toContain('data-variant="secondary"');
+  });
+
+  it("keeps expiring and completed access semantically distinct", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        completedCount: 1,
+        courseId: "course-expiring",
+        expiresAt: new Date(Date.now() + 5 * 86_400_000),
+        launchDate: null,
+        progressPercent: 40,
+        slug: "curso-expirando",
+        title: "Curso expirando",
+        totalCount: 1,
+      },
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        completedCount: 1,
+        courseId: "course-completed",
+        expiresAt: new Date(Date.now() + 90 * 86_400_000),
+        launchDate: null,
+        progressPercent: 100,
+        slug: "curso-concluido",
+        title: "Curso concluído",
+        totalCount: 1,
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+    const expiringCard = getCardMarkup(markup, "Curso expirando");
+    const completedCard = getCardMarkup(markup, "Curso concluído");
+
+    expect(expiringCard).toContain("Acesso expira em");
+    expect(expiringCard).toContain('data-variant="warning"');
+    expect(completedCard).toContain("Curso concluído");
+    expect(completedCard).toContain('data-variant="learning"');
   });
 });

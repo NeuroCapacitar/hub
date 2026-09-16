@@ -207,4 +207,37 @@ describe("outbox worker", () => {
     expect(markDeadLetter).not.toHaveBeenCalled();
     expect(markRetry).not.toHaveBeenCalled();
   });
+
+  it("supersedes an unavailable support request without retrying", async () => {
+    const markDeadLetter = vi.fn();
+    const markRetry = vi.fn();
+    const markSuperseded = vi.fn().mockResolvedValue(true);
+
+    await expect(
+      processClaimedOutboxMessage({
+        deliver: vi
+          .fn()
+          .mockRejectedValue(
+            new OutboxSupersededError("support_request_unavailable")
+          ),
+        markDeadLetter,
+        markDeferred: vi.fn(),
+        markDelivered: vi.fn(),
+        markRetry,
+        markSuperseded,
+        message: claimedMessage({
+          aggregateId: "support-1",
+          payload: { requestId: "support-1" },
+          topic: "email.support-request",
+        }),
+      })
+    ).resolves.toBe("superseded");
+
+    expect(markSuperseded).toHaveBeenCalledWith({
+      errorCode: "support_request_unavailable",
+      id: "outbox-1",
+    });
+    expect(markDeadLetter).not.toHaveBeenCalled();
+    expect(markRetry).not.toHaveBeenCalled();
+  });
 });

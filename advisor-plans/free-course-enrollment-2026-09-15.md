@@ -89,7 +89,7 @@ mudado.
 > `production`/`staging`.
 >
 > Etapa 12 concluída: o glossário, Produto, guias de domínio, arquitetura,
-> registro de decisões, índice canônico e ADR-0013 foram atualizados. O produto
+> registro de decisões, índice canônico e ADR-0016 foram atualizados. O produto
 > ratificou o cadastro público como ponte e a reentrada após expiração em
 > 2026-09-16, e o ADR está `accepted`. Os documentos canônicos apontam para o
 > commit real de implementação `48110385a7097084c42b9b862b57c66ed311898d`.
@@ -289,8 +289,9 @@ do enum roda em transação e a constraint/index precisará mencionar
 free_enrollment, gerar duas migrations sequenciais:
 
 ~~~text
-0080 -> adiciona os dois valores aos enums; não usa os valores em constraint/index
-0081 -> atualiza constraint e cria o índice parcial; roda após o commit de 0080
+0080 -> migration já existente em staging para mídia da tela de acesso
+0081 -> adiciona os dois valores aos enums; não usa os valores em constraint/index
+0082 -> atualiza constraint e cria o índice parcial; roda após o commit de 0081
 ~~~
 
 Não editar migrations históricas, journal ou snapshots manualmente.
@@ -457,8 +458,8 @@ Fontes externas decisivas:
 Schema e migration:
 
 - src/db/schema.ts;
-- src/db/migrations/0080_free_enrollment_enums.sql e
-  src/db/migrations/0081_free_enrollment_contract.sql, ou os nomes gerados
+- src/db/migrations/0081_free_enrollment_enums.sql e
+  src/db/migrations/0082_free_enrollment_contract.sql, ou os nomes gerados
   pelo Drizzle com esses números e intenção;
 - snapshots e _journal.json gerados automaticamente;
 - src/db/asaas-schema-contract.test.ts;
@@ -510,7 +511,7 @@ Documentação canônica da implementação autorizada:
 - docs/domain/identity-and-authorization.md;
 - docs/domain/commerce-and-access.md;
 - docs/architecture.md;
-- novo docs/adr/0013-free-course-self-enrollment.md;
+- novo docs/adr/0016-free-course-self-enrollment.md;
 - docs/decisions.md;
 - docs/README.md;
 - docs/operations/database-and-migrations.md.
@@ -613,7 +614,7 @@ reentrada não existir, pare antes da Etapa 1.
    bun run db:generate -- --name free-enrollment-enums
    ~~~
 
-4. Confirme que a migration recebeu o número 0080 e contém somente os
+4. Confirme que a migration recebeu o número 0081 e contém somente os
    ALTER TYPE ... ADD VALUE necessários, sem constraint ou índice que use os
    valores novos.
 5. Agora adicione no schema a terceira alternativa da constraint:
@@ -633,8 +634,8 @@ reentrada não existir, pare antes da Etapa 1.
    bun run db:generate -- --name free-enrollment-contract
    ~~~
 
-8. Confirme que a migration recebeu 0081 e que a constraint/index não foram
-   colocados na 0080.
+8. Confirme que a migration recebeu 0082 e que a constraint/index não foram
+   colocados na 0081.
 9. Não altere snapshots antigos. O snapshot e o journal novos devem ser os
    artefatos produzidos pelo comando de geração.
 
@@ -646,8 +647,8 @@ bun run test -- src/db/asaas-schema-contract.test.ts src/db/free-enrollment-migr
 ~~~
 
 **Esperado:** Migrations validas. e todos os testes passarem. O teste novo de
-migration deve comprovar que 0080 não menciona constraint/index com o enum
-novo e que 0081 contém a constraint de três alternativas e o índice parcial.
+ migration deve comprovar que 0081 não menciona constraint/index com o enum
+ novo e que 0082 contém a constraint de três alternativas e o índice parcial.
 Se o Drizzle gerar uma única migration ou tentar recriar o enum, pare.
 
 ### Etapa 2: atualizar o contrato de eventos e tornar as mutações administrativas source-neutral
@@ -1163,7 +1164,7 @@ Somente depois de código/testes aprovados:
    no-op por acesso existente e ausência de Orders/Asaas. Se for criada uma
    regra nova, use o próximo ID estável, por exemplo REG-COM-011, sem
    duplicar IDs.
-5. Criar docs/adr/0013-free-course-self-enrollment.md somente com decisão
+5. Criar docs/adr/0016-free-course-self-enrollment.md somente com decisão
    ratificada. Registrar alternativas rejeitadas e consequências. Não marcar
    accepted se o produto não aprovou reentrada/cadastro.
 6. docs/decisions.md: adicionar o próximo DEC-DISC-017 e apontar para
@@ -1172,8 +1173,8 @@ Somente depois de código/testes aprovados:
    listar a nova action/serviço e afirmar que o fluxo não usa provider.
 8. docs/README.md: indexar ADR novo, se existir, e manter o mapa canônico.
 9. docs/operations/database-and-migrations.md: depois da migration aplicada
-   no change set, atualizar current_migration_tag para 0081...,
-   migration_entry_count para 82 e o last_verified_commit para um commit
+   no change set, atualizar current_migration_tag para 0082...,
+   migration_entry_count para 83 e o last_verified_commit para um commit
    existente da implementação. Não atualizar o número antes de os arquivos
    existirem.
 10. Atualize last_verified_commit dos documentos canônicos para o SHA que
@@ -1221,7 +1222,7 @@ na revisão; não instale ferramenta nem exponha segredo.
 O handoff de release deve conter:
 
 - SHA exato com CI verde;
-- migration 0080 e 0081 revisadas e replayadas em PostgreSQL descartável;
+- migration 0081 e 0082 revisadas e replayadas em PostgreSQL descartável;
 - E2E gratuito e pago verdes;
 - confirmação de AUTH_PUBLIC_SIGNUP_ENABLED no ambiente aprovado;
 - nenhum orders criado pela fixture gratuita;
@@ -1296,7 +1297,7 @@ Todos devem ser verdadeiros:
 - [x] Produto ratificou duração, reentrada, acesso misto, bloqueio source-neutral
   e cadastro público.
 - [x] free_enrollment existe no schema e nas duas migrations forward-only.
-- [x] 0080 adiciona enums e 0081 usa os valores após o commit anterior.
+- [x] 0081 adiciona enums e 0082 usa os valores após o commit anterior.
 - [x] order_id e manual_reference nulos são exigidos para grant gratuito.
 - [x] Há unicidade parcial por (user_id, course_id) para a origem gratuita.
 - [x] Serviço usa locks existentes, courses FOR UPDATE, transação e

@@ -7,9 +7,9 @@ last_verified_commit: e0a55d04884851c21bd55fe605afd05cc52c5a4e
 # Plano mestre de correção da auditoria
 ## NeuroCapacitar Hub
 
-**Repositório:** `NeuroCapacitar/hub`  
-**Baseline do plano:** `763103546139e5663c4203943830d290347aff4f`  
-**Branch base normal:** `staging`  
+**Repositório:** `NeuroCapacitar/hub`
+**Baseline do plano:** `763103546139e5663c4203943830d290347aff4f`
+**Branch base normal:** `staging`
 **Objetivo:** corrigir integralmente os problemas confirmados na auditoria técnica sem introduzir regressões em acesso, certificado, pagamento, publicação, histórico ou experiência do aluno.
 
 ---
@@ -3164,7 +3164,7 @@ Criar pequena seção no runbook de acessibilidade com:
 - zoom;
 - leitor de tela básico quando disponível;
 - mobile;
-- reduced motion.
+- motion behavior.
 
 Não declarar:
 

@@ -15,7 +15,7 @@ export function CertificateTemplateOverflowNotice({
 
   return (
     <Alert
-      className="border-accent/40 bg-accent/10 text-foreground"
+      className="border-warning/40 bg-warning/10 text-foreground"
       data-certificate-overflow-warning="true"
       role="status"
     >

@@ -212,7 +212,7 @@ export function LessonVideoControls({
     <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm transition-[opacity,transform] duration-300 ease-out">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
             <HugeiconsIcon aria-hidden="true" icon={FileLinkIcon} size={20} />
           </div>
           <div className="flex min-w-0 flex-col gap-1 pt-0.5">
@@ -275,7 +275,7 @@ export function LessonVideoControls({
           </p>
         </div>
         <a
-          className="shrink-0 text-primary text-sm underline underline-offset-4"
+          className="shrink-0 text-link text-sm underline underline-offset-4"
           href={JMVSTREAM_PORTAL_URL}
           rel="noopener"
           target="_blank"

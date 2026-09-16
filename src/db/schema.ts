@@ -2030,3 +2030,30 @@ export const dashboardBanners = pgTable("dashboard_banners", {
   sortOrder: integer("sort_order").notNull(),
   ...timestamps,
 });
+
+export const authMediaSlides = pgTable(
+  "auth_media_slides",
+  {
+    blurDataUrl: text("blur_data_url").notNull(),
+    id: uuid("id").primaryKey().defaultRandom(),
+    imageUrl: text("image_url").notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    sortOrder: integer("sort_order").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    check(
+      "auth_media_slides_image_url_prefix_check",
+      sql`${table.imageUrl} like 'auth-media/%'`
+    ),
+    check(
+      "auth_media_slides_sort_order_positive_check",
+      sql`${table.sortOrder} > 0`
+    ),
+    index("auth_media_slides_active_order_idx").on(
+      table.isActive,
+      table.sortOrder
+    ),
+    unique("auth_media_slides_sort_order_unique").on(table.sortOrder),
+  ]
+);

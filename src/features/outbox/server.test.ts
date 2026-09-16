@@ -9,6 +9,7 @@ vi.mock("@/db", () => ({ getPool: dependencies.getPool }));
 import {
   claimOutboxMessages,
   enqueueOutboxMessage,
+  listOutboxDeadLetters,
   markOutboxMessageDeadLetter,
   markOutboxMessageDeferred,
   markOutboxMessageDelivered,
@@ -16,6 +17,7 @@ import {
   markOutboxMessageSuperseded,
   pruneOutboxRecords,
   requeueDeadLetterMessage,
+  supersedeUnavailableSupportDeadLetter,
 } from "./server";
 
 const SKIP_LOCKED_PATTERN = /for update skip locked/i;
@@ -247,5 +249,94 @@ describe("outbox persistence", () => {
       ["admin-1", "outbox-1", "Falha transitória confirmada."]
     );
     expect(String(query.mock.calls[2]?.[0])).toContain("$3::text");
+  });
+
+  it("does not requeue a support message after its source request is unavailable", async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            manual_reprocess_count: 0,
+            source_exists: false,
+            status: "dead_letter",
+            topic: "email.support-request",
+          },
+        ],
+      });
+
+    await expect(
+      requeueDeadLetterMessage({
+        actorUserId: "admin-1",
+        client: { query } as never,
+        messageId: "outbox-support-1",
+        reason: "Falha transitória confirmada.",
+      })
+    ).rejects.toThrow(
+      "A solicitação de suporte original não está mais disponível"
+    );
+
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(String(query.mock.calls[0]?.[0])).toContain("support_requests");
+  });
+
+  it("supersedes an unavailable support dead letter without changing attempts", async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ id: "outbox-support-1" }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(
+      supersedeUnavailableSupportDeadLetter({
+        actorUserId: "admin-1",
+        client: { query } as never,
+        messageId: "outbox-support-1",
+      })
+    ).resolves.toBeUndefined();
+
+    expect(String(query.mock.calls[0]?.[0])).toContain("status = 'superseded'");
+    expect(String(query.mock.calls[0]?.[0])).toContain("email.support-request");
+    expect(String(query.mock.calls[0]?.[0])).toContain("not exists");
+    expect(String(query.mock.calls[0]?.[0])).not.toContain(
+      "manual_reprocess_count = manual_reprocess_count + 1"
+    );
+    expect(query.mock.calls[1]?.[1]).toEqual([
+      "admin-1",
+      "outbox-support-1",
+      "support_request_unavailable",
+    ]);
+  });
+
+  it("returns support dead letters as non-reprocessable without selecting payload", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          attempts: 5,
+          can_reprocess: false,
+          created_at: new Date("2026-09-01T00:00:00Z"),
+          id: "outbox-support-1",
+          last_error_at: new Date("2026-09-02T00:00:00Z"),
+          last_error_code: "aggregate_not_deliverable",
+          manual_reprocess_count: 0,
+          reprocess_blocked_reason: "support_request_unavailable",
+          topic: "email.support-request",
+          total_count: 1,
+        },
+      ],
+    });
+    dependencies.getPool.mockReturnValue({ query });
+
+    await expect(listOutboxDeadLetters()).resolves.toMatchObject({
+      messages: [
+        {
+          canReprocess: false,
+          id: "outbox-support-1",
+          reprocessBlockedReason: "support_request_unavailable",
+        },
+      ],
+    });
+    expect(String(query.mock.calls[0]?.[0])).toContain("support_requests");
+    expect(String(query.mock.calls[0]?.[0])).not.toContain("select payload");
   });
 });

@@ -285,6 +285,9 @@ function LessonMainContent({
       <div className="flex flex-col">
         <LessonVideoPlayer
           durationSeconds={data.lesson.durationSeconds}
+          initialLinearProgressBlocked={
+            data.lesson.watchProgress?.isLinearProgressBlocked ?? false
+          }
           initialPositionSeconds={
             data.lesson.watchProgress?.resumePositionSeconds ?? 0
           }
@@ -292,6 +295,7 @@ function LessonMainContent({
           isPreview={Boolean(previewMode)}
           lessonId={data.lesson.id}
           title={data.lesson.title}
+          videoDurationSeconds={data.lesson.videoDurationSeconds}
           videoEmbedUrl={lessonView.videoEmbedUrl}
           videoProvider={data.lesson.videoProvider}
         >
@@ -832,7 +836,8 @@ function LessonCourseSidebar({
           </div>
           <Progress
             aria-label="Progresso do curso"
-            className="mt-3 h-1 bg-primary/20"
+            className="mt-3 h-1 bg-muted"
+            tone={progressPercent >= 100 ? "complete" : "active"}
             value={progressPercent}
           />
         </div>

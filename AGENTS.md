@@ -70,7 +70,7 @@ Do not add a new rule until checking whether an existing rule already covers or 
 
 ### Repository Hygiene
 
-* At task boundaries, inspect and report the status of worktrees, branches, stashes, uncommitted changes, and open Pull Requests; every retained item needs an owner or a documented reason to remain.
+* For requested repository cleanup or release handoff, inspect worktrees, branches, stashes, uncommitted changes, and open Pull Requests; explain why retained cleanup candidates remain. For other tasks, inspect only state relevant to safe execution.
 * Keep only worktrees tied to active work. After confirming that no agent or session is using a worktree, that it contains no uncommitted or untracked user data or secrets, and that its branch is no longer needed, remove it through its owning manager.
 * Treat obsolete Pull Requests as cleanup candidates, not automatic deletions: close only merged, superseded, abandoned, or duplicate Pull Requests when closure is explicitly in scope; keep active Pull Requests open.
 * After a feature Pull Request is merged or intentionally closed, remove its obsolete local and remote feature branches only after confirming that no unique commits, recovery value, or dependent work remain. Preserve persistent, release, and recovery branches documented by the project.

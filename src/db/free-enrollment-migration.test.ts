@@ -5,12 +5,12 @@ describe("free enrollment migrations", () => {
   it("adds enum values before using them in the contract migration", async () => {
     const [enumMigration, contractMigration] = await Promise.all([
       readFile(
-        new URL("./migrations/0080_free_enrollment_enums.sql", import.meta.url),
+        new URL("./migrations/0081_free_enrollment_enums.sql", import.meta.url),
         "utf8"
       ),
       readFile(
         new URL(
-          "./migrations/0081_free_enrollment_contract.sql",
+          "./migrations/0082_free_enrollment_contract.sql",
           import.meta.url
         ),
         "utf8"

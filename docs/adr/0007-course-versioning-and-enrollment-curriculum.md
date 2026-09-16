@@ -21,6 +21,7 @@ O Hub atende poucos alunos e o produto decidiu que alterações de um Curso deve
 - Módulos e Aulas pertencem a uma publicação. Aulas obrigatórias definem o progresso vivo; opcionais não entram no denominador.
 - Alteração de conteúdo é sempre preparada e publicada em lote. Não há edição direta da publicação publicada.
 - Retirar conteúdo preserva a publicação anterior, mídia, progresso, analytics e auditoria.
+- As telas correntes usam `courses.title`; `title_snapshot` permanece histórico da publicação. Um Certificado novo captura o título atual no momento da emissão, enquanto Certificados existentes e reconciliações históricas preservam o contexto já registrado.
 
 `CourseCompletion` registra a primeira conclusão de Aluno + Curso independentemente de certificado. Certificado conserva a publicação de origem e seus snapshots, mas a unicidade de certificado válido é Aluno + Curso. Depois de uma publicação nova, progresso pode diminuir; recuperar 100% não emite nem reemite certificado automaticamente.
 

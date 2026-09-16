@@ -1,4 +1,8 @@
 const ADMIN_AUDIT_ACTION_LABELS: Record<string, string> = {
+  "auth_media_slide.created": "Mídia de acesso criada",
+  "auth_media_slide.deleted": "Mídia de acesso excluída",
+  "auth_media_slide.updated": "Mídia de acesso atualizada",
+  "auth_media_slides.reordered": "Mídias de acesso reordenadas",
   "banner.deleted": "Banner excluído",
   "banner.created": "Banner criado",
   "banner.saved": "Banner atualizado",

@@ -1,6 +1,6 @@
 {
-  "id": "3ea2ccbf-b5c9-42ce-acf8-22d42edeeba7",
-  "prevId": "0bc9aa94-d45c-459b-bba4-325054e4e113",
+  "id": "0bc9aa94-d45c-459b-bba4-325054e4e113",
+  "prevId": "91d7ccc7-ebbe-4829-a2d8-f743e2b79448",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -652,6 +652,104 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.auth_media_slides": {
+      "name": "auth_media_slides",
+      "schema": "",
+      "columns": {
+        "blur_data_url": {
+          "name": "blur_data_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "image_url": {
+          "name": "image_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_active": {
+          "name": "is_active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "auth_media_slides_active_order_idx": {
+          "name": "auth_media_slides_active_order_idx",
+          "columns": [
+            {
+              "expression": "is_active",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sort_order",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "auth_media_slides_sort_order_unique": {
+          "name": "auth_media_slides_sort_order_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "sort_order"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "auth_media_slides_image_url_prefix_check": {
+          "name": "auth_media_slides_image_url_prefix_check",
+          "value": "\"auth_media_slides\".\"image_url\" like 'auth-media/%'"
+        },
+        "auth_media_slides_sort_order_positive_check": {
+          "name": "auth_media_slides_sort_order_positive_check",
+          "value": "\"auth_media_slides\".\"sort_order\" > 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.certificate_issuer_profiles": {
@@ -2861,28 +2959,6 @@
           "method": "btree",
           "with": {}
         },
-        "enrollment_grants_free_user_course_unique_idx": {
-          "name": "enrollment_grants_free_user_course_unique_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "course_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"enrollment_grants\".\"source_type\" = 'free_enrollment'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "enrollment_grants_user_course_status_idx": {
           "name": "enrollment_grants_user_course_status_idx",
           "columns": [
@@ -2977,7 +3053,7 @@
         },
         "enrollment_grants_source_shape_check": {
           "name": "enrollment_grants_source_shape_check",
-          "value": "(\"enrollment_grants\".\"source_type\" = 'paid_order' and \"enrollment_grants\".\"order_id\" is not null and \"enrollment_grants\".\"manual_reference\" is null) or (\"enrollment_grants\".\"source_type\" = 'manual' and \"enrollment_grants\".\"order_id\" is null and \"enrollment_grants\".\"manual_reference\" is not null) or (\"enrollment_grants\".\"source_type\" = 'free_enrollment' and \"enrollment_grants\".\"order_id\" is null and \"enrollment_grants\".\"manual_reference\" is null)"
+          "value": "(\"enrollment_grants\".\"source_type\" = 'paid_order' and \"enrollment_grants\".\"order_id\" is not null and \"enrollment_grants\".\"manual_reference\" is null) or (\"enrollment_grants\".\"source_type\" = 'manual' and \"enrollment_grants\".\"order_id\" is null and \"enrollment_grants\".\"manual_reference\" is not null)"
         }
       },
       "isRLSEnabled": false

@@ -273,7 +273,7 @@ isolamento sem custo adicional.
 
 **Tema:** autoinscrição gratuita em Curso.
 **Estado:** aprovado pelo produto em 2026-09-16 e implementado; contrato descrito na
-[ADR-0013](adr/0013-free-course-self-enrollment.md).
+[ADR-0016](adr/0016-free-course-self-enrollment.md).
 
 O contrato proposto trata `price_in_cents = 0` como aquisição local: uma Conta Student
 autenticada recebe Concessão `free_enrollment`, evento de concessão e Matrícula

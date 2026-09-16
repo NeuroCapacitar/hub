@@ -76,8 +76,8 @@ function EmptyCertificatesState(): React.JSX.Element {
       </CardHeader>
       <CardContent>
         <p className="max-w-2xl text-muted-foreground text-sm leading-6">
-          Conclua 100% das aulas de um curso ativo para liberar o certificado e
-          o link público de validação.
+          Conclua todas as aulas obrigatórias de um curso ativo para liberar o
+          certificado e o link público de validação.
         </p>
         <Button asChild className="mt-5" variant="outline">
           <Link href={route("/app")}>Voltar para meus cursos</Link>

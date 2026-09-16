@@ -4,7 +4,7 @@ import sharp from "sharp";
 
 const CHECKOUT_ITEM_IMAGE_PATH = resolve(
   process.cwd(),
-  "public/protear/logo-negativo.svg"
+  "public/brand/logo-negativo.svg"
 );
 
 let cachedImageBase64: Promise<string> | undefined;

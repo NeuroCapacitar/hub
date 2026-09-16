@@ -86,6 +86,11 @@ já removida e falha de provider pode ser repetida.
 
 Certificado preserva código público, Conta, Curso, publicação interna de origem, data, carga horária e snapshots de nome e título. Seus estados são `valid` e `revoked`.
 
+Uma emissão comum usa o título atual de `courses` no momento da emissão e o
+grava no snapshot; Certificados já emitidos não acompanham renomeações. A
+reconciliação histórica usa deliberadamente o `title_snapshot` da publicação
+de origem para preservar o significado da conclusão antiga.
+
 ### REG-DAT-001 Emissão exige conclusão e unicidade válida
 
 `issueManualCertificate` cria `CourseCompletion` se ela ainda não existir e somente quando não há Certificado anterior para o Aluno no Curso. `completeLesson` cria a primeira conclusão quando todas as Aulas obrigatórias da publicação vigente estão concluídas. Somente a transação que insere essa primeira `CourseCompletion` pode iniciar a emissão automática; conflito com uma conclusão já existente encerra o caminho sem tentar Certificado ou outbox. Depois de uma revogação, somente `reissueCertificate` pode criar nova evidência, sempre na publicação de origem.

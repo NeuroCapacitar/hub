@@ -1,4 +1,10 @@
-const PUBLIC_MEDIA_PREFIXES = ["banners/", "courses/"] as const;
+import { AUTH_MEDIA_PUBLIC_PREFIX } from "@/features/auth-media/contract";
+
+const PUBLIC_MEDIA_PREFIXES = [
+  AUTH_MEDIA_PUBLIC_PREFIX,
+  "banners/",
+  "courses/",
+] as const;
 const TRAILING_SLASH_PATTERN = /\/$/;
 
 const isPublicMediaKey = (key: string): boolean =>

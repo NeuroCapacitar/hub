@@ -565,15 +565,22 @@
     {
       "idx": 80,
       "version": "7",
-      "when": 1789500259892,
-      "tag": "0080_free_enrollment_enums",
+      "when": 1789374578831,
+      "tag": "0080_auth_media_slides",
       "breakpoints": true
     },
     {
       "idx": 81,
       "version": "7",
+      "when": 1789500259892,
+      "tag": "0081_free_enrollment_enums",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
       "when": 1789500292297,
-      "tag": "0081_free_enrollment_contract",
+      "tag": "0082_free_enrollment_contract",
       "breakpoints": true
     }
   ]

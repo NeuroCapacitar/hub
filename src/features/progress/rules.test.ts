@@ -187,6 +187,31 @@ describe("course progress rules", () => {
     });
   });
 
+  it("keeps a legacy resume position unvalidated when playback resumes in the middle", () => {
+    const resumed = advanceVideoPlaybackProgress({
+      currentSeconds: 2405,
+      durationSeconds: 3600,
+      isPaused: false,
+      isSkipEvent: false,
+      previous: {
+        currentPositionSeconds: 2400,
+        isAwaitingPlaybackAfterSeek: false,
+        isLinearProgressBlocked: false,
+        maxPositionSeconds: 2400,
+        playingTimeSeconds: 0,
+        resumePositionSeconds: 2400,
+        validatedPositionSeconds: 0,
+      },
+    });
+
+    expect(resumed).toMatchObject({
+      isLinearProgressBlocked: true,
+      playingTimeSeconds: 5,
+      resumePositionSeconds: 2405,
+      validatedPositionSeconds: 0,
+    });
+  });
+
   it("does not validate or resume at a forward skip target", () => {
     const watched: VideoPlaybackProgressState = {
       currentPositionSeconds: 30,

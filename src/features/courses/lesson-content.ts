@@ -115,22 +115,29 @@ const isPositiveInteger = (value: unknown): value is number =>
   typeof value === "number" && Number.isInteger(value) && value > 0;
 
 const isLessonResourceKey = ({
+  inheritedResourceKeys,
   key,
   lessonId,
 }: {
+  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   key: string;
   lessonId?: string | undefined;
 }): boolean => {
-  if (!(key && lessonId)) {
+  if (!key) {
     return false;
   }
 
-  return key.startsWith(`lessons/${lessonId}/resources/`);
+  if (lessonId && key.startsWith(`lessons/${lessonId}/resources/`)) {
+    return true;
+  }
+
+  return inheritedResourceKeys?.has(key) ?? false;
 };
 
 const createR2ResourceFromForm = ({
   contentType,
   fileName,
+  inheritedResourceKeys,
   id,
   key,
   label,
@@ -140,6 +147,7 @@ const createR2ResourceFromForm = ({
 }: {
   contentType: string;
   fileName: string;
+  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   id: string;
   key: string;
   label: string;
@@ -151,7 +159,7 @@ const createR2ResourceFromForm = ({
     return null;
   }
 
-  if (!isLessonResourceKey({ key, lessonId })) {
+  if (!isLessonResourceKey({ inheritedResourceKeys, key, lessonId })) {
     throw new Error("O arquivo enviado nao pertence a esta aula.");
   }
 
@@ -161,7 +169,11 @@ const createR2ResourceFromForm = ({
     throw new Error("Arquivo da aula invalido.");
   }
 
-  const preview = parseR2ResourcePreviewFromForm({ lessonId, previewJson });
+  const preview = parseR2ResourcePreviewFromForm({
+    inheritedResourceKeys,
+    lessonId,
+    previewJson,
+  });
 
   return {
     contentType,
@@ -176,9 +188,11 @@ const createR2ResourceFromForm = ({
 };
 
 const parseR2ResourcePreviewFromForm = ({
+  inheritedResourceKeys,
   lessonId,
   previewJson,
 }: {
+  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   lessonId?: string | undefined;
   previewJson?: string | undefined;
 }): LessonResourcePreview | null => {
@@ -194,7 +208,13 @@ const parseR2ResourcePreviewFromForm = ({
       throw new Error("Preview invalido.");
     }
 
-    if (!isLessonResourceKey({ key: normalized.key, lessonId })) {
+    if (
+      !isLessonResourceKey({
+        inheritedResourceKeys,
+        key: normalized.key,
+        lessonId,
+      })
+    ) {
       throw new Error("Preview nao pertence a esta aula.");
     }
 
@@ -340,9 +360,11 @@ const parseTextDocument = (value: string): ProseMirrorJson | null => {
 
 const normalizeResourcesFromForm = ({
   formData,
+  inheritedResourceKeys,
   lessonId,
 }: {
   formData: FormData;
+  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   lessonId?: string | undefined;
 }): LessonResource[] => {
   const storages = readStringList(formData, "resourceStorage[]");
@@ -367,6 +389,7 @@ const normalizeResourcesFromForm = ({
         ? createR2ResourceFromForm({
             contentType: contentTypes[index] ?? "",
             fileName: fileNames[index] ?? "",
+            inheritedResourceKeys,
             id,
             key: keys[index] ?? "",
             label,
@@ -526,9 +549,11 @@ const validateLessonResourcesPolicy = (
 
 export const normalizeLessonContentFromForm = ({
   formData,
+  inheritedResourceKeys,
   lessonId,
 }: {
   formData: FormData;
+  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   lessonId?: string | undefined;
 }): LessonContent | null => {
   const document = parseTextDocument(readString(formData, "textDocument"));
@@ -538,7 +563,11 @@ export const normalizeLessonContentFromForm = ({
   }
 
   const resources = validateLessonResourcesPolicy(
-    normalizeResourcesFromForm({ formData, lessonId })
+    normalizeResourcesFromForm({
+      formData,
+      inheritedResourceKeys,
+      lessonId,
+    })
   );
 
   if (!(hasTextContent(document) || resources.length > 0)) {

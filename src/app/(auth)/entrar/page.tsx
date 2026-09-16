@@ -17,6 +17,7 @@ import { SignInForm } from "./sign-in-form";
 export const metadata: Metadata = {
   title: "Entrar",
 };
+export const dynamic = "force-dynamic";
 
 export default async function SignInPage({
   searchParams,
@@ -37,9 +38,9 @@ export default async function SignInPage({
   }
 
   return (
-    <AuthShell>
-      <Card className="mx-auto w-full max-w-sm bg-card/95">
-        <CardHeader>
+    <AuthShell formSide="right">
+      <Card className="mx-auto w-full max-w-sm gap-0 overflow-visible rounded-none bg-transparent px-0 py-0 shadow-none ring-0">
+        <CardHeader className="gap-2 px-0 pb-6">
           <CardTitle as="h1" className="type-page-title">
             Bem-vinda de volta
           </CardTitle>
@@ -47,7 +48,7 @@ export default async function SignInPage({
             Acesse sua conta para continuar seus estudos.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-0">
           <SignInForm returnTo={safeReturnTo} />
         </CardContent>
       </Card>

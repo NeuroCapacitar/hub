@@ -2,9 +2,9 @@
 status: canonical
 owner: engineering
 last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
-current_migration_tag: 0081_free_enrollment_contract
-migration_entry_count: 82
-schema_table_count: 49
+current_migration_tag: 0082_free_enrollment_contract
+migration_entry_count: 83
+schema_table_count: 50
 ---
 
 # Banco e migrations
@@ -124,13 +124,21 @@ impede que uma Aula use um Módulo de uma Publicação e o identificador de outr
 O preflight de Aulas deve ser repetido em cada ambiente antes da promoção;
 qualquer divergência exige STOP e investigação manual.
 
-A migration `0080_free_enrollment_enums` adiciona os valores
+A migration `0080_auth_media_slides` cria a coleção independente da mídia da
+tela de acesso. O contrato final é WebP `1200×1050` (8:7), com no máximo cinco
+slides, ordem positiva única e chaves sob `auth-media/`. A publicação no
+bucket público acontece somente depois da confirmação do objeto privado; a
+manutenção repõe cópias ativas e limpa objetos sem referência após a janela
+de segurança. Antes de promover, confira também o prefixo público, a URL base
+e a permissão exclusiva de Admin descritos no ADR-0015.
+
+A migration `0081_free_enrollment_enums` adiciona os valores
 `free_enrollment` e `free_enrollment_granted` aos enums de concessões e
 eventos de matrícula. Ela deve ser aplicada separadamente da alteração de
 constraint porque o PostgreSQL não permite usar um valor de enum recém-criado
 na mesma transação que o adicionou.
 
-A migration `0081_free_enrollment_contract` permite que uma concessão de
+A migration `0082_free_enrollment_contract` permite que uma concessão de
 matrícula gratuita não tenha Pedido nem referência manual e cria um índice
 único parcial por usuário e curso para impedir mais de uma concessão gratuita,
 independentemente do status. O código que concede acesso ainda deve validar

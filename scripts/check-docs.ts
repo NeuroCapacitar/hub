@@ -57,7 +57,10 @@ const CANONICAL_DOCUMENT_PATHS = [
   "docs/adr/0010-relative-module-content-release.md",
   "docs/adr/0011-optional-lesson-progression.md",
   "docs/adr/0012-linear-validated-video-progress.md",
-  "docs/adr/0013-free-course-self-enrollment.md",
+  "docs/adr/0013-provider-and-hub-operational-ownership.md",
+  "docs/adr/0014-lesson-identity-and-state-across-publications.md",
+  "docs/adr/0015-authentication-screen-media.md",
+  "docs/adr/0016-free-course-self-enrollment.md",
   "docs/reviews/2026-09-12-master-plan-with-implementation-report.md",
 ] as const;
 

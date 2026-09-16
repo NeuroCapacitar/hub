@@ -33,6 +33,12 @@ semântica por esta mudança; previews futuros usam o renderizador corrigido.
 
 Persistir snapshots no momento da emissão. Revogar com motivo, autoria e data. Reemitir criando novo Certificado e novo código, preservando o anterior revogado. Admin pode executar emissão, revogação e reemissão, inclusive a partir de um registro histórico, sempre com motivo obrigatório e confirmação validada na interface e novamente no servidor. Conforme [DEC-DISC-014](../decisions.md#dec-disc-014), `support` pode somente reemitir o Certificado existente mais recente do Aluno no Curso; emissão, revogação e reconciliação permanecem exclusivas de Admin. A capacidade é validada na action e a regra adicional de registro mais recente é validada no comando sob lock transacional.
 
+Uma nova emissão comum usa o `courses.title` vigente no instante da emissão e
+grava esse valor no snapshot do Certificado. Certificados já emitidos nunca são
+reescritos. A reconciliação histórica é a exceção deliberada: ela usa o
+`title_snapshot` da publicação de origem para que a correção de um registro
+antigo continue representando o contexto histórico da conclusão.
+
 A emissão automática pertence exclusivamente à transação que insere a primeira `CourseCompletion`. Emissão, reemissão e progresso final compartilham lock transacional por Conta e Curso; encontrar uma Conclusão existente não tenta Certificado nem outbox.
 
 Conclusões históricas podem ser reconciliadas somente por Admin, após confirmação explícita validada no servidor, em lotes de até 100. São elegíveis apenas conclusões de Curso com Certificado habilitado, template publicado, perfil emissor global e nenhum Certificado anterior para a combinação de Conta e Curso. Um Certificado revogado também conta como histórico e exige o fluxo de reemissão, portanto nunca volta à fila automática. Migration, deploy e leitura não executam backfill silencioso.

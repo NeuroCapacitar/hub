@@ -182,6 +182,62 @@ describe("content release PostgreSQL surfaces", () => {
     }
   });
 
+  it("keeps a lesson discussion visible after publishing a new physical lesson version", async () => {
+    const fixture = await createFixture();
+    await createLessonComment({
+      body: "Comentário da primeira publicação.",
+      lessonId: fixture.immediateLessonId,
+      role: "student",
+      userId: fixture.userId,
+    });
+
+    const secondPublicationId = randomUUID();
+    const secondModuleId = randomUUID();
+    const secondLessonId = randomUUID();
+    const curriculumResult = await pool.query<{ curriculum_key: string }>(
+      "select curriculum_key from lessons where id = $1",
+      [fixture.immediateLessonId]
+    );
+    const curriculumKey = curriculumResult.rows[0]?.curriculum_key;
+    if (!curriculumKey) {
+      throw new Error("Curriculum key da fixture não foi localizado.");
+    }
+
+    await pool.query(
+      "update course_publications set status = 'retired', retired_at = now() where course_id = $1 and status = 'published'",
+      [fixture.courseId]
+    );
+    await pool.query(
+      `insert into course_publications (
+         id, course_id, publication_number, status, title_snapshot, workload_hours_snapshot, published_at
+       ) values ($1, $2, 2, 'published', 'Release integration course', 1, now())`,
+      [secondPublicationId, fixture.courseId]
+    );
+    await pool.query(
+      `insert into modules (
+         id, course_id, course_publication_id, title, sort_order, status
+       ) values ($1, $2, $3, 'Immediate module', 1, 'active')`,
+      [secondModuleId, fixture.courseId, secondPublicationId]
+    );
+    await pool.query(
+      `insert into lessons (
+         id, module_id, course_publication_id, curriculum_key, title, sort_order, status, is_published
+       ) values ($1, $2, $3, $4, 'Immediate lesson revisada', 1, 'active', true)`,
+      [secondLessonId, secondModuleId, secondPublicationId, curriculumKey]
+    );
+
+    const comments = await getLessonComments({
+      lessonId: secondLessonId,
+      role: "student",
+      userId: fixture.userId,
+    });
+    expect(comments.comments).toEqual([
+      expect.objectContaining({
+        body: "Comentário da primeira publicação.",
+      }),
+    ]);
+  });
+
   it("does not issue a certificate while a required future lesson remains incomplete", async () => {
     const fixture = await createFixture();
 

@@ -79,15 +79,15 @@
 
 .lesson-rich-text a {
   font-weight: 500;
-  color: var(--primary);
+  color: var(--link);
   text-decoration: underline;
-  text-decoration-color: color-mix(in oklch, var(--primary), transparent 60%);
+  text-decoration-color: color-mix(in oklch, var(--link), transparent 60%);
   text-underline-offset: 3px;
   transition: text-decoration-color 150ms ease-out;
 }
 
 .lesson-rich-text a:hover {
-  text-decoration-color: var(--primary);
+  text-decoration-color: var(--link);
 }
 
 /* ------------------------------------------------------------------ */

@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
   getNewPasswordValidationError,
   PASSWORD_MIN_LENGTH,
@@ -163,27 +163,27 @@ export function ResetPasswordForm({
   return (
     <form aria-busy={isSubmitting} onSubmit={handleSubmit}>
       <fieldset className="contents" disabled={isSubmitting}>
-        <FieldGroup>
+        <FieldGroup className="gap-5">
           <Field>
             <FieldLabel htmlFor="password">Nova senha</FieldLabel>
-            <Input
+            <PasswordInput
               autoComplete="new-password"
+              className="h-11"
               id="password"
               minLength={PASSWORD_MIN_LENGTH}
               name="password"
               required
-              type="password"
             />
           </Field>
           <Field>
             <FieldLabel htmlFor="confirmation">Confirmar senha</FieldLabel>
-            <Input
+            <PasswordInput
               autoComplete="new-password"
+              className="h-11"
               id="confirmation"
               minLength={PASSWORD_MIN_LENGTH}
               name="confirmation"
               required
-              type="password"
             />
           </Field>
         </FieldGroup>
