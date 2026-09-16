@@ -30,24 +30,28 @@ Os termos têm definição estrita no [glossário](CONTEXT.md).
 
 ### Compra e liberação
 
-  1. Visitante ou Aluno autenticado escolhe Curso ativo e segue para o handoff transitório do checkout.
-2. Hub persiste o Pedido, o snapshot do cronograma e seus demais snapshots antes de criar o checkout hospedado Asaas com
-   item inline; não existe produto remoto por Curso.
-3. Webhook autenticado entra em inbox durável e o worker atualiza o Pedido.
+  1. Visitante ou Aluno autenticado escolhe Curso ativo e segue para o handoff de aquisição.
+2. Curso gratuito valida preço zero, Publicação e cronograma; Student recebe autoinscrição sem Pedido ou Checkout, enquanto visitante segue para login/cadastro. O cadastro público só é aberto quando `AUTH_PUBLIC_SIGNUP_ENABLED=true` e, sozinho, cria apenas a Conta. Curso pago persiste o Pedido, o snapshot do cronograma e seus demais snapshots antes de criar o checkout hospedado Asaas com item inline; não existe produto remoto por Curso.
+3. Webhook autenticado entra em inbox durável e o worker atualiza o Pedido pago.
 4. Pagamento válido vincula a compra à Conta existente pelo e-mail local ou cria uma
    Conta não verificada, depois cria Concessão e recompõe a Matrícula.
 5. Hub envia ativação ou aviso de acesso pela outbox; divergência financeira cria revisão
    humana.
 
-A jornada pública aprovada está implementada em código: usa o link estável
+A jornada pública implementada usa o link estável
 `/comprar/[slug]`, copiável pela administração e consumido pela landing page externa; o
-handoff cria o Checkout sem formulário local e mantém `/` protegida. O worker enriquece a
+handoff escolhe autoinscrição gratuita ou cria o Checkout pago sem formulário local e mantém `/` protegida. O worker enriquece a
 identidade fora da transação e trata Conta de equipe, bloqueio e revogação sem liberar
 acesso. A execução E2E em PostgreSQL descartável e o handoff público no Sandbox foram
 homologados. Uma compra pública em 3x, o bloqueio de identidade revogada e o reembolso
 integral do parcelamento foram homologados manualmente no Sandbox de Staging. O corte
 controlado de Production já foi executado; novas promoções continuam dependentes do
 fluxo protegido e da requalificação externa vigente.
+
+A política de usar cadastro público como ponte para autoinscrição e de permitir nova
+autoinscrição após expiração foi ratificada pelo produto em 2026-09-16, conforme
+[DEC-DISC-017](docs/decisions.md#dec-disc-017). O padrão seguro continua fechado:
+`AUTH_PUBLIC_SIGNUP_ENABLED=false`; habilitação é configuração de release por ambiente.
 
 ### Aprendizagem
 
@@ -76,6 +80,8 @@ fluxo protegido e da requalificação externa vigente.
 - autoria e publicação de Cursos/Módulos/Aulas;
 - vídeo JMVStream, texto rico, anexos e imagens R2;
 - catálogo, Matrícula, expiração, bloqueio, progresso e analytics técnico minimizado;
+- autoinscrição gratuita por Curso com Concessão local, sem Pedido ou Asaas, sujeita à
+  flag explícita do cadastro público para visitantes;
 - comentários com uma camada de resposta e moderação;
 - núcleo Asaas da compra autenticada, inbox/worker, conciliação e reembolso integral
   implementados e homologados em Sandbox; o corte controlado de Production já ocorreu,
@@ -113,8 +119,8 @@ O [registro de decisões](docs/decisions.md) separa comportamento implementado, 
 
 Pendências principais: tratamento da compra pública cujo e-mail já pertença a
 Admin/Suporte, critérios de incidente/SLO e racional não localizado para alguns
-providers externos. Pedidos de dados serão tratados como caso excepcional quando
-houver política jurídica formal e demanda real.
+providers externos. Pedidos de dados serão tratados como caso excepcional quando houver
+política jurídica formal e demanda real.
 
 ## Capacidades administrativas vigentes
 

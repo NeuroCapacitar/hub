@@ -1,9 +1,9 @@
 import { resolve } from "node:path";
 import { config } from "dotenv";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import { Pool } from "pg";
 import { withVerifiedSslMode } from "../src/db/connection-url";
+import { applyE2eMigrationsPerFile } from "../src/db/e2e-migrator";
 import { runMigrationWithLock } from "../src/db/migration-lock";
 import { getMigrationTargetProblems } from "../src/db/migration-target";
 
@@ -28,17 +28,22 @@ const pool = new Pool({
   connectionTimeoutMillis: 10_000,
   max: 2,
 });
-const database = drizzle(pool);
 const lockClient = await pool.connect();
+const migrationsFolder =
+  process.env.MIGRATIONS_FOLDER ?? resolve(process.cwd(), "src/db/migrations");
 
 try {
   await runMigrationWithLock({
     client: lockClient,
     migrate: () =>
-      migrate(database, {
-        migrationsFolder:
-          process.env.MIGRATIONS_FOLDER ??
-          resolve(process.cwd(), "src/db/migrations"),
+      applyE2eMigrationsPerFile({
+        client: lockClient,
+        migrations: readMigrationFiles({ migrationsFolder }),
+        // Development preserves historical journal rows whose hashes can differ
+        // from the current source after non-authoritative rewrites. Drizzle's
+        // normal migrator advances by applied timestamps; keep that behavior while
+        // retaining one transaction and journal entry per migration file.
+        verifyAppliedHashes: false,
       }),
   });
   process.stdout.write("Development migrations applied.\n");

@@ -31,6 +31,11 @@ vi.mock("./purchase-handoff-client", () => ({
     courseTitle: string;
   }) => <div data-client={`${courseSlug}:${courseTitle}`} />,
 }));
+vi.mock("./free-enrollment-button", () => ({
+  FreeEnrollmentButton: ({ courseId }: { courseId: string }) => (
+    <div data-free-course-id={courseId}>Inscrever-se gratuitamente</div>
+  ),
+}));
 
 import PurchasePage, { dynamic } from "./page";
 
@@ -79,6 +84,56 @@ describe("PurchasePage", () => {
     expect(markup).toContain('href="/app/cursos/course-1"');
     expect(markup).toContain("Acessar curso");
     expect(markup).not.toContain("data-client");
+  });
+
+  it("renderiza inscrição gratuita para Student autenticada", async () => {
+    dependencies.getCurrentSession.mockResolvedValue({
+      platformBlockedAt: null,
+      role: "student",
+      user: { id: "student-1" },
+    });
+    dependencies.getPurchaseHandoffView.mockResolvedValue({
+      courseId: "course-1",
+      courseSlug: "curso-gratis",
+      courseTitle: "Curso gratuito",
+      kind: "free_enrollment",
+    });
+
+    const markup = renderToStaticMarkup(
+      await PurchasePage({ params: Promise.resolve({ slug: "curso-gratis" }) })
+    );
+
+    expect(markup).toContain("Curso gratuito");
+    expect(markup).toContain('data-free-course-id="course-1"');
+    expect(markup).toContain("Inscrever-se gratuitamente");
+    expect(markup).not.toContain("Checkout");
+    expect(markup).not.toContain("Pedido");
+    expect(markup).not.toContain("Asaas");
+  });
+
+  it("renderiza links seguros para visitante de Curso gratuito", async () => {
+    dependencies.getPurchaseHandoffView.mockResolvedValue({
+      courseId: "course-1",
+      courseSlug: "curso-gratis",
+      courseTitle: "Curso gratuito",
+      kind: "free_enrollment",
+    });
+
+    const markup = renderToStaticMarkup(
+      await PurchasePage({ params: Promise.resolve({ slug: "curso-gratis" }) })
+    );
+
+    expect(markup).toContain(
+      'href="/cadastro?returnTo=%2Fcomprar%2Fcurso-gratis"'
+    );
+    expect(markup).toContain(
+      'href="/entrar?returnTo=%2Fcomprar%2Fcurso-gratis"'
+    );
+    expect(markup).toContain("Criar conta para se inscrever");
+    expect(markup).toContain("Entrar");
+    expect(markup).not.toContain("Checkout");
+    expect(markup).not.toContain("Pedido");
+    expect(markup).not.toContain("Asaas");
   });
 
   it.each([

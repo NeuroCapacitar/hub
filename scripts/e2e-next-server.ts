@@ -3,7 +3,7 @@ import { createWriteStream } from "node:fs";
 import { cp, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-const bunCommand = process.platform === "win32" ? "bun.cmd" : "bun";
+const bunCommand = process.execPath;
 const nodeCommand = process.platform === "win32" ? "node.exe" : "node";
 const logDirectory = "test-results";
 const logPath = join(logDirectory, "next-server.log");

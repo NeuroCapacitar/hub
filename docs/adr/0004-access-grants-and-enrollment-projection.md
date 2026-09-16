@@ -16,8 +16,10 @@ Tratar Concessão como ledger e fonte dos direitos por origem, e Matrícula como
 de Conta + Curso. Toda mutação financeira altera a Concessão e recompõe a Matrícula;
 nenhum fluxo financeiro cria ou altera Matrícula diretamente.
 
-A origem financeira aprovada é neutra: `paid_order`. Nomes de providers pertencem à
-integração e aos identificadores externos, não ao domínio de acesso.
+As origens de Concessão aprovadas são explícitas: `paid_order`, `manual` e
+`free_enrollment`. `paid_order` representa uma origem financeira; `manual` e
+`free_enrollment` representam origens locais de acesso. Nomes de providers pertencem
+à integração e aos identificadores externos, não ao domínio de acesso.
 
 ## Alternativas
 
@@ -33,10 +35,11 @@ integração e aos identificadores externos, não ao domínio de acesso.
 
 ## Estado
 
-Decisão aceita. Schema, código e testes usam a origem neutra `paid_order`. Razões de
-revogação do módulo de Matrículas também são neutras: `payment_refund` e
-`payment_dispute`. O processor financeiro Asaas aplica a Concessão e recompõe a
-Matrícula na mesma transação do evento financeiro.
+Decisão aceita. Schema, código e testes usam origens explícitas. `free_enrollment`
+não possui `order_id` nem `manual_reference` e é limitada a uma Concessão por Conta e
+Curso. Razões de revogação do módulo de Matrículas também são neutras:
+`payment_refund` e `payment_dispute`. O processor financeiro Asaas aplica a Concessão
+`paid_order` e recompõe a Matrícula na mesma transação do evento financeiro.
 
 O bootstrap local cria uma Concessão `manual` idempotente, identificada por
 `manual_reference`, e recompõe a Matrícula. O corte de Production da migração financeira

@@ -271,6 +271,21 @@ describe("admin presentation", () => {
   });
 
   describe("course operational state", () => {
+    it("treats an available free Course as ready", () => {
+      expect(
+        getAdminCourseOperationalState({
+          ...readyOperationalInput,
+          purchaseLink: {
+            available: true,
+            url: "https://hub.example/comprar/curso-gratuito",
+          },
+        })
+      ).toMatchObject({
+        key: "ready",
+        label: "Curso publicado",
+      });
+    });
+
     it("prioritizes an incomplete identity over every later state", () => {
       expect(
         getAdminCourseOperationalState({

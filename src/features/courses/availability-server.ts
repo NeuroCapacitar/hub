@@ -228,6 +228,7 @@ const validateTarget = ({
 
   if (
     target.preset === "available" &&
+    course.price_in_cents !== 0 &&
     (course.price_in_cents < ASAAS_MINIMUM_CHECKOUT_VALUE_IN_CENTS ||
       !(course.payment_allow_pix || course.payment_allow_credit_card))
   ) {

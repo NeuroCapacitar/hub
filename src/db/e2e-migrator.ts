@@ -63,9 +63,11 @@ const assertAppliedJournalMatches = ({
 export const applyE2eMigrationsPerFile = async ({
   client,
   migrations,
+  verifyAppliedHashes = true,
 }: {
   client: Pick<PoolClient, "query">;
   migrations: readonly MigrationMeta[];
+  verifyAppliedHashes?: boolean;
 }): Promise<void> => {
   await client.query("create schema if not exists drizzle");
   await client.query(`
@@ -78,10 +80,12 @@ export const applyE2eMigrationsPerFile = async ({
   const journal = await client.query<AppliedMigrationRow>(
     "select hash, created_at::text from drizzle.__drizzle_migrations order by created_at"
   );
-  const appliedTimestamps = assertAppliedJournalMatches({
-    applied: journal.rows,
-    migrations,
-  });
+  const appliedTimestamps = verifyAppliedHashes
+    ? assertAppliedJournalMatches({
+        applied: journal.rows,
+        migrations,
+      })
+    : new Set(journal.rows.map((row) => Number(row.created_at)));
 
   for (const migration of migrations) {
     if (appliedTimestamps.has(migration.folderMillis)) {

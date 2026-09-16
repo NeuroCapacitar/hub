@@ -47,7 +47,7 @@ Importações usam alias `@/`. Não há camada de repositórios genérica; Drizz
 - Conteúdo => `src/features/admin/authoring.ts`, `src/features/courses/server.ts`, tabelas `courses`, `modules`, `lessons`.
 - Progresso e interação => `src/features/progress/rules.ts`, `src/features/comments`, tabelas `lesson_progress`, `lesson_watch_progress`, `lesson_comments`.
 - Comércio => `src/features/payments`, tabelas `orders`, `webhook_events`, `payment_reviews`, `refund_requests`.
-- Acesso => `src/features/enrollments`, tabelas `enrollment_grants`, `enrollments`, `enrollment_expiration_adjustments`, `enrollment_events`.
+- Acesso => `src/features/enrollments`, tabelas `enrollment_grants`, `enrollments`, `enrollment_expiration_adjustments`, `enrollment_events`; autoinscrição gratuita em `src/features/enrollments/free-enrollment.ts`.
 - Certificados => `src/features/certificates`, tabelas `course_completions`, `certificate_issuer_profiles`, `certificate_templates`, `certificates`, `outbox_messages` e `public_certificate_rate_limits`.
 - Dados técnicos de analytics => `src/features/learning-analytics`, tabelas `learning_analytics_events` e `learning_analytics_daily_metrics`.
 - Mídia => `src/features/jmvstream`, `src/features/storage`, tabelas `jmvstream_folders`, `jmvstream_video_assets` e JSON de conteúdo.
@@ -88,18 +88,25 @@ de aplicação a três conexões; readiness mantém uma conexão isolada. Veja
 
 ### Checkout e acesso
 
-1. Route Handler/Action chama `createPublicCourseCheckout` ou `createCourseCheckout`.
-2. O núcleo Asaas persiste o Pedido e seus snapshots antes da chamada externa.
-3. `/api/webhooks/asaas` autentica, limita, valida e persiste a inbox antes de `200`.
-4. O worker reivindica o evento e abre uma transação com posse exclusiva.
-5. `processAsaasWebhookEvent` correlaciona somente identificadores exatos, bloqueia o
+1. Para Curso gratuito, `enrollFreeCourseAction` autentica uma Conta Student e chama
+   `enrollInFreeCourse`; para Curso pago, a aplicação chama
+   `createPublicCourseCheckout`/`createCourseCheckout`.
+2. O ramo gratuito relê Curso e Publicação sob lock, cria ou reativa a Concessão
+   `free_enrollment`, registra o evento e recompõe a Matrícula na mesma transação. Ele
+   não importa o adapter de pagamentos, não persiste Pedido e não chama provider.
+3. No ramo pago, o núcleo Asaas persiste o Pedido e seus snapshots antes da chamada
+   externa.
+4. `/api/webhooks/asaas` autentica, limita, valida e persiste a inbox antes de `200`.
+5. O worker reivindica o evento e abre uma transação com posse exclusiva.
+6. `processAsaasWebhookEvent` correlaciona somente identificadores exatos, bloqueia o
    Pedido e aplica a matriz financeira sobre o snapshot bloqueado. A conciliação adapta
    a consulta oficial do pagamento para a mesma matriz, sem manter política paralela.
-6. `apply-authoritative-financial-evidence.ts` converge pagamento, identidade, Concessão
+7. `apply-authoritative-financial-evidence.ts` converge pagamento, identidade, Concessão
    e outbox; webhook e conciliação chamam esse mesmo módulo profundo. A transação
    persiste evidência, Revisão idempotente ou Concessão/revogação e recompõe Matrícula.
-7. Conflitos ambíguos não escolhem Pedido e geram alerta durável sem payload ou PII.
-8. `availability-server.ts` fecha novas vendas antes de enfileirar cancelamento dos Checkouts ativos; acesso continua derivado de Matrícula e estado de entrega.
+8. Conflitos ambíguos não escolhem Pedido e geram alerta durável sem payload ou PII.
+9. `availability-server.ts` fecha novas aquisições antes de enfileirar cancelamento dos
+   Checkouts ativos; acesso continua derivado de Matrícula e estado de entrega.
 
 O processor financeiro e sua rota cron estão implementados. A agenda chama o worker
 Asaas a cada quinze minutos sob autenticação compartilhada, kill switch, lease e deadline. Isso
@@ -241,13 +248,17 @@ O plano 008 trata tamanho como sinal, não como motivo suficiente para mover có
 
 #### Acesso e comércio
 
-- **Símbolos:** `resolveCourseAccess` e `resolveLessonAccess`; concessões, projeção e ajustes de expiração; checkout autenticado/público, webhook, revisão e retry de pagamento.
-- **Consumidores:** cursos, actions administrativas, handlers de checkout e webhook
-  Asaas.
-- **Invariante, transação e efeitos:** Concessão é fonte e Matrícula é projeção. A inbox
-  deduplicada só aplica transição financeira válida; conflitos entram em revisão. O
-  adapter Asaas concentra HTTP/configuração, e o rate limit pertence exclusivamente ao
-  checkout público.
+- **Símbolos:** `resolveCourseAccess` e `resolveLessonAccess`; `enrollInFreeCourse` e
+  `enrollFreeCourseAction`; concessões, projeção e ajustes de expiração; checkout
+  autenticado/público, webhook, revisão e retry de pagamento.
+- **Consumidores:** páginas de Curso e Aula, handoff `/comprar/[slug]`, action Student,
+  actions administrativas, handlers de checkout e webhook Asaas.
+- **Invariante, transação e efeitos:** Concessão é fonte e Matrícula é projeção. O ramo
+  gratuito exige preço zero, Curso ativo/listado, vendas abertas, Publicação publicada,
+  duração válida e cronograma compatível; adquire lock de Conta + Curso e grava grant,
+  evento e projeção sem `orders` ou provider. A inbox deduplicada só aplica transição
+  financeira válida; conflitos entram em revisão. O adapter Asaas concentra
+  HTTP/configuração, e o rate limit pertence exclusivamente ao checkout público pago.
 
 #### JMVStream e resources
 

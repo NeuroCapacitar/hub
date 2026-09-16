@@ -107,13 +107,15 @@ export function CourseSettingsForm({
   const validInstallmentCount = Number.isFinite(configuredInstallmentCount)
     ? configuredInstallmentCount
     : MIN_INSTALLMENT_COUNT;
-  const priceInCentsForInstallments = (() => {
+  const parsedPriceInCents = (() => {
     try {
       return parseCoursePriceToCents(priceValue);
     } catch {
-      return course.priceInCents;
+      return null;
     }
   })();
+  const isFreeCourse = parsedPriceInCents === 0;
+  const priceInCentsForInstallments = parsedPriceInCents ?? course.priceInCents;
   const maxInstallmentsAllowedByPrice = getEffectiveMaxInstallmentCount({
     configuredMaxInstallmentCount: MAX_INSTALLMENT_COUNT,
     priceInCents: priceInCentsForInstallments,
@@ -289,92 +291,103 @@ export function CourseSettingsForm({
                   value={priceValue}
                 />
               </Field>
-              <FieldSet className="max-w-2xl gap-3">
-                <FieldLegend variant="label">Formas de pagamento</FieldLegend>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Field orientation="horizontal">
-                    <Checkbox
-                      checked={paymentAllowPix}
-                      disabled={!paymentAllowCreditCard}
-                      id="course-payment-pix"
-                      name="paymentAllowPix"
-                      onCheckedChange={(checked) => {
-                        if (checked === false && !paymentAllowCreditCard) {
-                          return;
-                        }
-                        setPaymentAllowPix(checked === true);
-                      }}
-                    />
-                    <FieldLabel htmlFor="course-payment-pix">
-                      Aceitar Pix
-                    </FieldLabel>
-                  </Field>
-                  <Field orientation="horizontal">
-                    <Checkbox
-                      checked={paymentAllowCreditCard}
-                      disabled={!paymentAllowPix}
-                      id="course-payment-card"
-                      name="paymentAllowCreditCard"
-                      onCheckedChange={(checked) => {
-                        if (checked === false && !paymentAllowPix) {
-                          return;
-                        }
-                        setPaymentAllowCreditCard(checked === true);
-                      }}
-                    />
-                    <FieldLabel htmlFor="course-payment-card">
-                      Aceitar cartão
-                    </FieldLabel>
-                  </Field>
-                </div>
-              </FieldSet>
-              <Field className="max-w-sm">
-                <FieldLabel htmlFor="course-payment-installments">
-                  Máximo de parcelas
-                </FieldLabel>
-                <Select
-                  disabled={!paymentAllowCreditCard}
-                  name="paymentMaxInstallmentCount"
-                  onValueChange={setPaymentMaxInstallmentCount}
-                  required={paymentAllowCreditCard}
-                  value={paymentMaxInstallmentCount}
-                >
-                  <SelectTrigger id="course-payment-installments">
-                    <SelectValue placeholder="Selecione o limite" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {INSTALLMENT_OPTIONS.map((installmentCount) => (
-                      <SelectItem
-                        disabled={
-                          installmentCount > maxInstallmentsAllowedByPrice
-                        }
-                        key={installmentCount}
-                        value={installmentCount.toString()}
-                      >
-                        {installmentCount}x
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FieldDescription>
-                  {paymentAllowCreditCard
-                    ? `O preço atual permite até ${maxInstallmentsAllowedByPrice}x por causa do valor mínimo por parcela.`
-                    : "Ative o cartão para configurar o limite de parcelas."}
-                </FieldDescription>
-              </Field>
-              <p className="max-w-2xl text-muted-foreground text-sm">
-                O Checkout Asaas aplica estas opções somente às novas compras.
-                Taxas e recebimento seguem o contrato da conta Asaas.
-              </p>
-              {paymentAllowCreditCard &&
-              effectiveMaxInstallmentCount < validInstallmentCount ? (
-                <p className="max-w-2xl text-sm text-warning">
-                  Pelo preço atual, o Checkout será limitado a{" "}
-                  {effectiveMaxInstallmentCount}x. A configuração de{" "}
-                  {validInstallmentCount}x continua salva para futuros reajustes
-                  de preço.
+              {isFreeCourse ? (
+                <p className="max-w-2xl text-muted-foreground text-sm">
+                  Curso gratuito. A inscrição é feita diretamente pelo Hub.
                 </p>
-              ) : null}
+              ) : (
+                <>
+                  <FieldSet className="max-w-2xl gap-3">
+                    <FieldLegend variant="label">
+                      Formas de pagamento
+                    </FieldLegend>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field orientation="horizontal">
+                        <Checkbox
+                          checked={paymentAllowPix}
+                          disabled={!paymentAllowCreditCard}
+                          id="course-payment-pix"
+                          name="paymentAllowPix"
+                          onCheckedChange={(checked) => {
+                            if (checked === false && !paymentAllowCreditCard) {
+                              return;
+                            }
+                            setPaymentAllowPix(checked === true);
+                          }}
+                        />
+                        <FieldLabel htmlFor="course-payment-pix">
+                          Aceitar Pix
+                        </FieldLabel>
+                      </Field>
+                      <Field orientation="horizontal">
+                        <Checkbox
+                          checked={paymentAllowCreditCard}
+                          disabled={!paymentAllowPix}
+                          id="course-payment-card"
+                          name="paymentAllowCreditCard"
+                          onCheckedChange={(checked) => {
+                            if (checked === false && !paymentAllowPix) {
+                              return;
+                            }
+                            setPaymentAllowCreditCard(checked === true);
+                          }}
+                        />
+                        <FieldLabel htmlFor="course-payment-card">
+                          Aceitar cartão
+                        </FieldLabel>
+                      </Field>
+                    </div>
+                  </FieldSet>
+                  <Field className="max-w-sm">
+                    <FieldLabel htmlFor="course-payment-installments">
+                      Máximo de parcelas
+                    </FieldLabel>
+                    <Select
+                      disabled={!paymentAllowCreditCard}
+                      name="paymentMaxInstallmentCount"
+                      onValueChange={setPaymentMaxInstallmentCount}
+                      required={paymentAllowCreditCard}
+                      value={paymentMaxInstallmentCount}
+                    >
+                      <SelectTrigger id="course-payment-installments">
+                        <SelectValue placeholder="Selecione o limite" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {INSTALLMENT_OPTIONS.map((installmentCount) => (
+                          <SelectItem
+                            disabled={
+                              installmentCount > maxInstallmentsAllowedByPrice
+                            }
+                            key={installmentCount}
+                            value={installmentCount.toString()}
+                          >
+                            {installmentCount}x
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                      {paymentAllowCreditCard
+                        ? `O preço atual permite até ${maxInstallmentsAllowedByPrice}x por causa do valor mínimo por parcela.`
+                        : "Ative o cartão para configurar o limite de parcelas."}
+                    </FieldDescription>
+                  </Field>
+                  <p className="max-w-2xl text-muted-foreground text-sm">
+                    O Checkout Asaas aplica estas opções somente às novas
+                    compras. Taxas e recebimento seguem o contrato da conta
+                    Asaas.
+                  </p>
+                  {paymentAllowCreditCard &&
+                  effectiveMaxInstallmentCount < validInstallmentCount ? (
+                    <p className="max-w-2xl text-sm text-warning">
+                      Pelo preço atual, o Checkout será limitado a{" "}
+                      {effectiveMaxInstallmentCount}x. A configuração de{" "}
+                      {validInstallmentCount}x continua salva para futuros
+                      reajustes de preço.
+                    </p>
+                  ) : null}
+                </>
+              )}
             </section>
           </div>
 

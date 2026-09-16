@@ -151,6 +151,64 @@ describe("Course availability commands", () => {
     expect(lockedCourseSql).toContain("m.status = 'active'");
   });
 
+  it("opens a zero-price Course with a published schedule without a paid offer gate", async () => {
+    const client = createClient({
+      ...ACTIVE_COURSE,
+      payment_allow_credit_card: false,
+      payment_allow_pix: true,
+      price_in_cents: 0,
+      sales_status: "closed",
+    });
+    dependencies.connect.mockResolvedValue(client);
+
+    await expect(
+      setCourseAvailability({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        preset: "available",
+      })
+    ).resolves.toMatchObject({ preset: "available" });
+    expect(dependencies.enqueueOutboxMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a positive subminimum price rejected", async () => {
+    const client = createClient({
+      ...ACTIVE_COURSE,
+      price_in_cents: 999,
+      sales_status: "closed",
+    });
+    dependencies.connect.mockResolvedValue(client);
+
+    await expect(
+      setCourseAvailability({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        preset: "available",
+      })
+    ).rejects.toThrow(
+      "Configure uma oferta comercial válida antes de abrir vendas."
+    );
+
+    expect(client.query).toHaveBeenCalledWith("rollback");
+  });
+
+  it("keeps the paid minimum price accepted", async () => {
+    const client = createClient({
+      ...ACTIVE_COURSE,
+      price_in_cents: 1000,
+      sales_status: "closed",
+    });
+    dependencies.connect.mockResolvedValue(client);
+
+    await expect(
+      setCourseAvailability({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        preset: "available",
+      })
+    ).resolves.toMatchObject({ preset: "available" });
+  });
+
   it("rejects opening sales before updates or notifications when the schedule does not fit", async () => {
     const client = createClient({
       ...ACTIVE_COURSE,
@@ -175,6 +233,29 @@ describe("Course availability commands", () => {
         String(sql).includes("update courses")
       )
     ).toBe(false);
+    expect(dependencies.enqueueOutboxMessage).not.toHaveBeenCalled();
+  });
+
+  it("rejects an incompatible schedule for a zero-price Course", async () => {
+    const client = createClient({
+      ...ACTIVE_COURSE,
+      max_release_delay_days: 28,
+      price_in_cents: 0,
+      sales_status: "closed",
+    });
+    dependencies.connect.mockResolvedValue(client);
+
+    await expect(
+      setCourseAvailability({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        preset: "available",
+      })
+    ).rejects.toThrow(
+      "O cronograma de conteúdo não cabe na duração comercial do Curso."
+    );
+
+    expect(client.query).toHaveBeenCalledWith("rollback");
     expect(dependencies.enqueueOutboxMessage).not.toHaveBeenCalled();
   });
 

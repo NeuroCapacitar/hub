@@ -106,6 +106,24 @@ describe("E2E per-file migrator", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("can continue from a Development journal with historical hash drift", async () => {
+    const client = {
+      query: vi.fn(async (statement: string) => ({
+        rows: statement.trim().startsWith("select hash")
+          ? [{ created_at: "1", hash: "other" }]
+          : [],
+      })),
+    };
+
+    await expect(
+      applyE2eMigrationsPerFile({
+        client: client as never,
+        migrations: [migration(1, "hash-1", ["select 1"])],
+        verifyAppliedHashes: false,
+      })
+    ).resolves.toBeUndefined();
+  });
+
   it("recognizes blank and line-comment-only statements", () => {
     expect(hasExecutableMigrationSql("\n-- baseline\n  -- retained\n")).toBe(
       false

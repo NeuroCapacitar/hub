@@ -73,6 +73,7 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 - [ADR-0010: liberação temporal relativa por Módulo](adr/0010-relative-module-content-release.md)
 - [ADR-0011: sequência com Aulas opcionais não bloqueadoras](adr/0011-optional-lesson-progression.md)
 - [ADR-0012: progresso linear validado em vídeo](adr/0012-linear-validated-video-progress.md)
+- [ADR-0013: autoinscrição gratuita em Curso](adr/0013-free-course-self-enrollment.md)
 
 ### Revisões
 

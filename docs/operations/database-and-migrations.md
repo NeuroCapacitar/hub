@@ -2,8 +2,8 @@
 status: canonical
 owner: engineering
 last_verified_commit: b6e6d63
-current_migration_tag: 0079_protect_lesson_module_publication_ownership
-migration_entry_count: 80
+current_migration_tag: 0081_free_enrollment_contract
+migration_entry_count: 82
 schema_table_count: 49
 ---
 
@@ -35,6 +35,15 @@ bun run db:migrations:check
 
 Revise SQL, journal e snapshot. Nunca edite journal ou snapshot manualmente e
 não use `db:push` para acelerar uma release.
+
+`bun run db:migrate:development` usa o endpoint direto, lock compartilhado e uma
+transação por arquivo de migration. A separação é necessária quando uma migration
+adiciona um valor de enum que será usado por uma migration posterior; o PostgreSQL
+exige que o primeiro `ALTER TYPE ... ADD VALUE` esteja commitado antes desse uso.
+O executor avança pelos timestamps já registrados no journal, preservando linhas
+históricas cujo hash possa divergir de uma fonte que não é autoridade, enquanto
+`db:migrations:check` valida a cadeia local e `db:migrations:inspect` audita o banco
+somente para leitura.
 
 ## Índice do histórico de liberação
 
@@ -111,6 +120,19 @@ composta correspondente em `lessons(module_id, course_publication_id)`. Ela
 impede que uma Aula use um Módulo de uma Publicação e o identificador de outra.
 O preflight de Aulas deve ser repetido em cada ambiente antes da promoção;
 qualquer divergência exige STOP e investigação manual.
+
+A migration `0080_free_enrollment_enums` adiciona os valores
+`free_enrollment` e `free_enrollment_granted` aos enums de concessões e
+eventos de matrícula. Ela deve ser aplicada separadamente da alteração de
+constraint porque o PostgreSQL não permite usar um valor de enum recém-criado
+na mesma transação que o adicionou.
+
+A migration `0081_free_enrollment_contract` permite que uma concessão de
+matrícula gratuita não tenha Pedido nem referência manual e cria um índice
+único parcial por usuário e curso para impedir duas concessões gratuitas
+simultâneas do mesmo curso. O código que concede acesso ainda deve validar
+preço, publicação, duração e concessões ativas; o índice é uma proteção final
+contra concorrência e duplicidade.
 
 Na verificação de escala do Financeiro em Development, a base tinha 8 Pedidos e a
 busca textual usou `Seq Scan` com 2 buffers e 0,111 ms de execução; a ordenação por

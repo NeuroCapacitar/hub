@@ -11,6 +11,19 @@ const eligibleCourse = {
 };
 
 describe("getCoursePurchaseLink", () => {
+  it("returns a free Course link even when Checkout is disabled", () => {
+    expect(
+      getCoursePurchaseLink({
+        appUrl: "https://hub.example",
+        checkoutMode: "disabled",
+        course: { ...eligibleCourse, priceInCents: 0 },
+      })
+    ).toEqual({
+      available: true,
+      url: "https://hub.example/comprar/curso",
+    });
+  });
+
   it("returns the stable public purchase URL for an eligible course", () => {
     expect(
       getCoursePurchaseLink({
@@ -22,6 +35,19 @@ describe("getCoursePurchaseLink", () => {
       available: true,
       url: "https://hub.example/comprar/curso",
     });
+  });
+
+  it.each([
+    ["sales_closed", { salesStatus: "closed" }],
+    ["course_unpublished", { hasPublishedPublication: false }],
+  ] as const)("does not offer free acquisition when the Course is %s", (reason, changes) => {
+    expect(
+      getCoursePurchaseLink({
+        appUrl: "https://hub.example",
+        checkoutMode: "disabled",
+        course: { ...eligibleCourse, priceInCents: 0, ...changes },
+      })
+    ).toEqual({ available: false, reason });
   });
 
   it.each([

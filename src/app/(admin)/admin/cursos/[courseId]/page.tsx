@@ -291,8 +291,8 @@ export default async function AdminCourseDetailPage({
                           Configurações do curso
                         </CardTitle>
                         <CardDescription>
-                          Dados que aparecem para o aluno e conectam o Curso ao
-                          checkout externo.
+                          Dados que aparecem para o aluno e conectam o Curso à
+                          página pública de aquisição.
                         </CardDescription>
                       </div>
                       <CoursePurchaseLink

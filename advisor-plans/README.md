@@ -20,6 +20,8 @@ pessoa responsável autorize sua execução.
 | [Auditoria profunda do Admin](admin-dashboard-review-2026-09-08.md) | Operação administrativa | review | — |
 | [Implementação do Admin](admin-dashboard-implementation-plan-2026-09-08.md) | Reorganização do Admin | implemented | auditoria do Admin |
 | [Pesquisa externa do Admin](admin-dashboard-external-research-2026-09-08.md) | Referências e operadores | research | — |
+| [Validação técnica de Curso gratuito](free-course-enrollment-analysis-2026-09-15.md) | Validação do relatório preliminar e decisões de domínio | proposed | plano de autoinscrição |
+| [Autoinscrição gratuita](free-course-enrollment-2026-09-15.md) | Curso gratuito, grants, handoff e segurança | in-progress — Etapas 0–11 completas | decisão sobre reentrada após expiração |
 
 Ao executar ou encerrar um plano, atualize seu `status` e esta tabela. O
 roadmap integrado do produto permanece em `plans/README.md`.

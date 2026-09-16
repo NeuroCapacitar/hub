@@ -619,6 +619,45 @@ describe("admin authoring", () => {
     expect(auditOrder).toBeLessThan(folderSyncOrder);
   });
 
+  it("stores the default valid payment columns for a free Course", async () => {
+    query.mockImplementation((sql: string, values?: unknown[]) => {
+      if (sql.includes("insert into courses")) {
+        return { rows: [{ id: values?.[0] }] };
+      }
+
+      return versioningQueryResult(sql) ?? { rows: [] };
+    });
+    const formData = new FormData();
+    formData.set("title", "Curso gratuito");
+    formData.set("price", "0");
+    formData.set("accessDurationMonths", "6");
+    formData.set("paymentOfferPresent", "on");
+    formData.set("paymentMaxInstallmentCount", "99");
+
+    const result = await saveCourse({ actorUserId: "admin-1", formData });
+    const courseInsert = query.mock.calls.find(([sql]) =>
+      String(sql).includes("insert into courses")
+    );
+
+    expect(courseInsert?.[1]).toEqual([
+      result.courseId,
+      "curso-gratuito",
+      "Curso gratuito",
+      null,
+      null,
+      0,
+      null,
+      0,
+      true,
+      true,
+      3,
+      null,
+      null,
+      6,
+      "draft",
+    ]);
+  });
+
   it("allocates a colliding Course slug inside the creation transaction", async () => {
     query.mockImplementation((sql: string, values?: unknown[]) => {
       if (sql.includes("select id from courses where slug = $1")) {

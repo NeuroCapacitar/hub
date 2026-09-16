@@ -37,6 +37,7 @@ import type { StudentCatalogCourseCard } from "@/features/courses/server";
 import { getStudentCourseCatalog } from "@/features/courses/server";
 import { route } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
+import { FreeCourseEnrollmentDialog } from "./free-course-enrollment-dialog";
 import { StudentBannersCarousel } from "./student-banners-carousel";
 
 export const dynamic = "force-dynamic";
@@ -440,6 +441,19 @@ function CoursePurchaseForm({
 }: {
   course: StudentCatalogCourseCard;
 }): React.JSX.Element {
+  if (course.priceInCents === 0) {
+    return (
+      <FreeCourseEnrollmentDialog
+        accessStatus={course.accessStatus === "expired" ? "expired" : "none"}
+        courseId={course.courseId}
+        description={course.description ?? course.subtitle}
+        lessonCount={course.lessonCount}
+        title={course.title}
+        workloadHours={course.workloadHours}
+      />
+    );
+  }
+
   return (
     <Button asChild className="w-full" size="sm">
       <Link href={route(`/comprar/${course.slug}`)}>

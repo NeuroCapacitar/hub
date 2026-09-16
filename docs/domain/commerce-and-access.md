@@ -60,6 +60,13 @@ apenas estado seguro e URL quando o Pedido correspondente já está `active`.
 **Falha:** preço abaixo de `1000` centavos, Curso indisponível, limite público ou provider
 sem configuração impedem checkout.
 
+Quando o Curso está `active`, `listed`, com vendas abertas e Publicação publicada,
+`price_in_cents = 0` usa a aquisição gratuita. `getPurchaseHandoffView` devolve
+`free_enrollment` depois de validar o mesmo cronograma de Módulos, sem Pedido,
+Checkout, digest financeiro ou provider; a Student usa a action de autoinscrição e
+visitantes seguem para login/cadastro com retorno interno seguro. Preço positivo
+continua sujeito ao piso de `1000` centavos e aos gates do Checkout.
+
 ### REG-COM-002 Webhook é autenticado e idempotente
 
 Para Asaas, `POST /api/webhooks/asaas` compara somente o header `asaas-access-token` com
@@ -125,7 +132,10 @@ estado terminal e Revisão pendente.
 
 Concessão é o ledger e a fonte do direito; Matrícula é a projeção de Conta + Curso. Fluxos
 financeiros alteram a Concessão e recompõem a Matrícula, sem criar Matrícula diretamente.
-A origem financeira aprovada é neutra, `paid_order`.
+As origens aprovadas de Concessão são explícitas: `paid_order`, `manual` e
+`free_enrollment`. `paid_order` representa a origem financeira; `manual` e
+`free_enrollment` representam origens locais de acesso, sem acoplamento ao
+provider de pagamentos.
 
 **Implementação atual:** `applyPaidWebhookAccess` cria ou reativa a Concessão associada
 ao Pedido e `rebuildEnrollmentProjection` consolida as Concessões.
@@ -134,14 +144,24 @@ ao Pedido e `rebuildEnrollmentProjection` consolida as Concessões.
 
 - `paid_order` representa Pedido financeiro em `order_id`; `manual` representa concessão
   auditável sem Pedido em `manual_reference`, usada pelo bootstrap local;
+- `free_enrollment` representa concessão gratuita sem Pedido nem referência manual; há
+  no máximo uma concessão gratuita por usuário e Curso;
 - cada Pedido e cada referência manual possuem Concessão única;
 - Concessão financeira terminal não é reativada por novo evento pago do mesmo Pedido;
 - Matrícula ativa usa a janela efetiva das Concessões ativas;
 - sem Concessão elegível, projeção vira `expired` ou `revoked` conforme o último estado.
 
+`enrollInFreeCourse`, chamado pela action autenticada de Student, é o caso de uso da
+autoinscrição. Sob lock de Conta + Curso, ele relê preço, estado de entrega, vitrine,
+vendas, Publicação e duração; somente `price_in_cents = 0`, Curso ativo/listado com
+vendas abertas, Publicação publicada e cronograma compatível podem criar a Concessão
+`free_enrollment`. O fluxo registra evento, recompõe Matrícula e não cria Pedido,
+`orders` ou chamada ao Asaas. Qualquer Concessão efetiva de outra origem torna a
+operação um no-op; repetição de uma Concessão gratuita ativa não cria novo evento.
+
 O modelo de ledger e projeção foi aceito em
 [ADR-0004](../adr/0004-access-grants-and-enrollment-projection.md). O schema e o módulo de
-Matrículas usam `paid_order`; revogações financeiras usam razões neutras
+Matrículas usam origens explícitas; revogações financeiras usam razões neutras
 `payment_refund` e `payment_dispute`.
 
 ### REG-COM-005 Acesso exige Conta e Matrícula efetivas
@@ -152,7 +172,7 @@ Admin pode conceder `full_access` uma vez no episódio atual com motivo, evento 
 
 Admin pode usar preview; a mutação de experiência do Aluno continua proibida no preview.
 
-### REG-COM-006 Expiração é calculada sobre a Concessão paga
+### REG-COM-006 Expiração é calculada sobre a Concessão de acesso
 
 `extendEnrollmentExpiration` e `setEnrollmentExpiration` alteram a janela efetiva, registram `enrollment_expiration_adjustments` e eventos.
 
@@ -167,6 +187,12 @@ com motivo e auditoria.
 - extensão aceita dias/meses; definição exata registra antes/depois;
 - ajuste não deve mudar carga horária ou duração pedagógica;
 - manutenção expira Concessões vencidas e recompõe Matrículas.
+- autoinscrição gratuita inicia sua janela pela duração de acesso definida no Curso;
+  a manutenção existente a expira como qualquer outra Concessão elegível;
+- após expiração, a implementação permite nova ação explícita que reutiliza a mesma
+  Concessão gratuita e registra a janela anterior/nova; Concessão terminal ou Matrícula
+  revogada não é reativada. Essa política foi ratificada em
+  [DEC-DISC-017](../decisions.md#dec-disc-017).
 - aviso de expiração carrega a validade exata como geração. Se validade, estado
   ou janela mudar antes do delivery, a outbox termina como `superseded` e não
   chama o adapter de e-mail; o scheduler pode criar a nova geração idempotente.
@@ -175,7 +201,12 @@ com motivo e auditoria.
 
 ### REG-COM-007 Bloqueio manual é reversível e auditável
 
-`blockEnrollmentAccess` cancela Concessões pagas elegíveis com motivo `manual_access_block`; `restoreEnrollmentAccess` restaura apenas Concessões canceladas por esse motivo.
+`blockEnrollmentAccess` cancela Concessões de acesso elegíveis com motivo `manual_access_block`; `restoreEnrollmentAccess` restaura apenas Concessões canceladas por esse motivo. A seleção inclui Concessões `paid_order`, `manual` e `free_enrollment` nos estados `active` ou `expired`; revogações financeiras continuam restritas à origem `paid_order`.
+
+Isso também vale para `free_enrollment`: bloqueio de Matrícula encerra o acesso
+projetado, e restauração pode reativar somente a Concessão cancelada por esse bloqueio.
+Não há restauração de Concessão gratuita terminalizada por outra política, nem
+reativação automática durante o bloqueio.
 
 Não confundir com reembolso/disputa nem bloqueio da plataforma. Ambos registram eventos.
 
@@ -308,7 +339,7 @@ Ver [ADR-0009](../adr/0009-course-availability-and-sale-interest.md).
 ## Decisões e bloqueios
 
 - [ADR-0004](../adr/0004-access-grants-and-enrollment-projection.md), aceito e implementado
-  com origem financeira e razões de revogação neutras.
+  com origens explícitas e razões de revogação neutras.
 - [ADR-0005](../adr/0005-financial-precedence-and-manual-review.md), aceito e implementado
   pela decisão pura e pelo processor transacional Asaas.
 - `db:seed:student` cria Concessão `manual` e recompõe a Matrícula pela projeção oficial.

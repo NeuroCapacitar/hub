@@ -11,6 +11,10 @@ describe("admin audit enrollment events", () => {
     expect(serverSource).toContain("enrollment_events");
     expect(serverSource).toContain("payment_refunded");
     expect(serverSource).toContain("payment_disputed");
+    expect(serverSource.match(/'free_enrollment_granted'/g) ?? []).toHaveLength(
+      2
+    );
+    expect(presentationSource).toContain("enrollment.free_enrollment_granted");
     expect(presentationSource).toContain("enrollment.expiration_extended");
     expect(presentationSource).toContain("enrollment.expiration_reduced");
     expect(presentationSource).toContain("enrollment.payment_refunded");

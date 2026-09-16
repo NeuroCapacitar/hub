@@ -82,7 +82,7 @@ export function CoursePurchaseLink({
         Link público
       </Button>
       <Input
-        aria-label="Link público de compra"
+        aria-label="Link público do Curso"
         className="sr-only"
         id="course-purchase-link"
         readOnly
@@ -91,7 +91,7 @@ export function CoursePurchaseLink({
       />
       {link.available ? null : (
         <p className="max-w-xs text-muted-foreground text-xs sm:text-right">
-          Checkout público indisponível: {unavailableMessages[link.reason]} (
+          Checkout pago indisponível: {unavailableMessages[link.reason]} (
           <code>{link.reason}</code>).
         </p>
       )}

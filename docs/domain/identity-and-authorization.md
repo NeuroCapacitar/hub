@@ -58,7 +58,24 @@ redirecione sua saída para logs compartilhados.
 
 `AUTH_PUBLIC_SIGNUP_ENABLED` continua com default `false`. Quando habilitado, `/cadastro` permite criar uma Conta com sessão imediata, mas não cria Pedido, Concessão ou Matrícula. Cursos permanecem indisponíveis até o fluxo comercial ou administrativo conceder acesso. Compra pública não depende de abrir esse cadastro: a confirmação financeira pode criar uma Conta local sem credencial e enviar ativação.
 
+As páginas `/entrar` e `/cadastro` aceitam retorno somente para a rota interna
+canônica `/comprar/<slug>`, validada por `getSafeAuthReturnTo` em
+`src/lib/auth-return-to.ts`. A allowlist exige slug minúsculo, sem query,
+fragmento, barra invertida, encoding ou host externo, e possui limite de tamanho.
+O formulário usa `URLSearchParams` para transportar o valor validado até
+`/api/auth/redirect`; o Route Handler valida novamente. Student autenticada pode
+voltar ao Curso, enquanto Admin e Support permanecem em `/admin`; Student
+bloqueada continua recebendo `403`. O fluxo de recuperação de senha não carrega
+esse retorno.
+
 O trigger `users_create_student_profile`, da migration `0041_public_signup_student_profiles.sql`, cria o Perfil `student` junto com cada nova Conta. A migration também preenche Perfis ausentes de Contas legadas, para que as novas Contas apareçam na administração sem depender de hook assíncrono da aplicação.
+
+Quando a Conta Student retorna de `/comprar/<slug>`, somente
+`enrollFreeCourseAction`, em `src/app/(student)/app/actions.ts`, pode iniciar a
+autoinscrição. A action aceita apenas o Curso informado pela interface, deriva o
+`userId` da sessão autenticada e delega a validação do Curso e a mutação ao caso de uso
+de acesso. Login e cadastro apenas preservam o retorno seguro; criar uma Conta nunca
+cria Concessão ou Matrícula por si só.
 
 ### REG-IDA-003 Autorização é por capacidade
 

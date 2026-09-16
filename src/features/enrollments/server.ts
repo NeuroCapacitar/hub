@@ -38,7 +38,8 @@ interface EnrollmentEventInput {
     | "payment_disputed"
     | "payment_paid"
     | "payment_refunded"
-    | "projection_rebuilt";
+    | "projection_rebuilt"
+    | "free_enrollment_granted";
   grantId?: string | null;
   metadata?: Record<string, unknown>;
   orderId?: string | null;
@@ -122,7 +123,7 @@ const resolveExpirationChangeType = ({
   return "unchanged";
 };
 
-const insertEnrollmentEvent = async (
+export const insertEnrollmentEvent = async (
   client: PoolClient,
   {
     actorUserId = null,
@@ -640,7 +641,7 @@ export const applyPaymentRevocation = async ({
   return true;
 };
 
-const getActivePaidGrantForEnrollment = async ({
+const getActiveGrantForEnrollment = async ({
   client,
   enrollmentId,
 }: {
@@ -661,7 +662,6 @@ const getActivePaidGrantForEnrollment = async ({
         on eg.user_id = e.user_id
        and eg.course_id = e.course_id
       where e.id = $1
-        and eg.source_type = 'paid_order'
         and eg.status in ('active', 'expired')
       order by eg.effective_expires_at desc
       limit 1
@@ -671,7 +671,7 @@ const getActivePaidGrantForEnrollment = async ({
   const grant = rows[0];
 
   if (!grant) {
-    throw new Error("Matricula sem pagamento ajustavel.");
+    throw new Error("Matricula sem concessao ajustavel.");
   }
 
   return grant;
@@ -727,7 +727,7 @@ const lockEnrollmentForGrantMutation = async ({
   });
 };
 
-const getPaidAccessGrantsForEnrollment = async ({
+const getAccessGrantsForEnrollment = async ({
   client,
   enrollmentId,
   statuses,
@@ -751,7 +751,6 @@ const getPaidAccessGrantsForEnrollment = async ({
         on eg.user_id = e.user_id
        and eg.course_id = e.course_id
       where e.id = $1
-        and eg.source_type = 'paid_order'
         and eg.status = any($2::enrollment_grant_status[])
       order by eg.effective_expires_at desc
     `,
@@ -787,7 +786,7 @@ export const extendEnrollmentExpiration = async ({
     await client.query("begin");
 
     await lockEnrollmentForGrantMutation({ client, enrollmentId });
-    const grant = await getActivePaidGrantForEnrollment({
+    const grant = await getActiveGrantForEnrollment({
       client,
       enrollmentId,
     });
@@ -882,7 +881,7 @@ export const setEnrollmentExpiration = async ({
     await client.query("begin");
 
     await lockEnrollmentForGrantMutation({ client, enrollmentId });
-    const grant = await getActivePaidGrantForEnrollment({
+    const grant = await getActiveGrantForEnrollment({
       client,
       enrollmentId,
     });
@@ -987,14 +986,14 @@ export const blockEnrollmentAccess = async ({
       client,
       enrollmentId,
     });
-    const grants = await getPaidAccessGrantsForEnrollment({
+    const grants = await getAccessGrantsForEnrollment({
       client,
       enrollmentId,
       statuses: ["active", "expired"],
     });
 
     if (grants.length === 0) {
-      throw new Error("Nao ha acesso pago ajustavel para bloquear.");
+      throw new Error("Nao ha concessao ajustavel para bloquear.");
     }
 
     await client.query(
@@ -1059,7 +1058,7 @@ export const restoreEnrollmentAccess = async ({
       enrollmentId,
     });
     const grants = (
-      await getPaidAccessGrantsForEnrollment({
+      await getAccessGrantsForEnrollment({
         client,
         enrollmentId,
         statuses: ["cancelled"],

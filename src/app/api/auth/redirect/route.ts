@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
+import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
 import { createCorrelationId, logOperationalEvent } from "@/lib/observability";
 import { getCurrentSession, recordStudentLastAccess } from "@/lib/session";
 
-export const GET = async (): Promise<NextResponse> => {
+export const GET = async (request: Request): Promise<NextResponse> => {
+  const searchParams = new URL(request.url).searchParams;
+  const returnToValues = searchParams.getAll("returnTo");
+  const safeReturnTo =
+    returnToValues.length === 1 ? getSafeAuthReturnTo(returnToValues[0]) : null;
   const session = await getCurrentSession();
 
   if (!session) {
@@ -28,6 +33,7 @@ export const GET = async (): Promise<NextResponse> => {
   }
 
   return NextResponse.json({
-    redirectTo: session.role === "student" ? "/app" : "/admin",
+    redirectTo:
+      session.role === "student" ? (safeReturnTo ?? "/app") : "/admin",
   });
 };

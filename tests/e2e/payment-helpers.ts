@@ -77,6 +77,142 @@ export const readCheckoutMutationOutcome = async ({
   }
 };
 
+export interface FreeEnrollmentOutcome {
+  accountCount: number;
+  enrollmentCount: number;
+  enrollmentStatus: "active" | "expired" | "revoked" | null;
+  freeEventCount: number;
+  freeGrantCount: number;
+  freeGrantStatus:
+    | "active"
+    | "cancelled"
+    | "disputed"
+    | "expired"
+    | "refunded"
+    | null;
+  orderCount: number;
+}
+
+export const readFreeEnrollmentOutcome = async ({
+  courseId,
+  email,
+}: {
+  courseId: string;
+  email: string;
+}): Promise<FreeEnrollmentOutcome> => {
+  const pool = new Pool({ connectionString: requireE2eDatabaseUrl() });
+  try {
+    const result = await pool.query<{
+      account_count: string;
+      enrollment_count: string;
+      enrollment_status: FreeEnrollmentOutcome["enrollmentStatus"];
+      free_event_count: string;
+      free_grant_count: string;
+      free_grant_status: FreeEnrollmentOutcome["freeGrantStatus"];
+      order_count: string;
+    }>(
+      `select
+         (
+           select count(*)
+           from users u
+           where lower(u.email) = lower($2)
+         )::text as account_count,
+         (
+           select count(*)
+           from enrollments e
+           join users u on u.id = e.user_id
+           where lower(u.email) = lower($2)
+             and e.course_id = $1
+         )::text as enrollment_count,
+         (
+           select e.status::text
+           from enrollments e
+           join users u on u.id = e.user_id
+           where lower(u.email) = lower($2)
+             and e.course_id = $1
+           order by e.created_at desc
+           limit 1
+         ) as enrollment_status,
+         (
+           select count(*)
+           from enrollment_events ee
+           join users u on u.id = ee.user_id
+           where lower(u.email) = lower($2)
+             and ee.course_id = $1
+             and ee.event_type = 'free_enrollment_granted'
+         )::text as free_event_count,
+         (
+           select count(*)
+           from enrollment_grants eg
+           join users u on u.id = eg.user_id
+           where lower(u.email) = lower($2)
+             and eg.course_id = $1
+             and eg.source_type = 'free_enrollment'
+         )::text as free_grant_count,
+         (
+           select eg.status::text
+           from enrollment_grants eg
+           join users u on u.id = eg.user_id
+           where lower(u.email) = lower($2)
+             and eg.course_id = $1
+             and eg.source_type = 'free_enrollment'
+           order by eg.created_at desc
+           limit 1
+         ) as free_grant_status,
+         (
+           select count(*)
+           from orders o
+           join users u on u.id = o.user_id
+           where lower(u.email) = lower($2)
+             and o.course_id = $1
+         )::text as order_count`,
+      [courseId, email]
+    );
+    const row = result.rows[0];
+    return {
+      accountCount: Number(row?.account_count ?? "0"),
+      enrollmentCount: Number(row?.enrollment_count ?? "0"),
+      enrollmentStatus: row?.enrollment_status ?? null,
+      freeEventCount: Number(row?.free_event_count ?? "0"),
+      freeGrantCount: Number(row?.free_grant_count ?? "0"),
+      freeGrantStatus: row?.free_grant_status ?? null,
+      orderCount: Number(row?.order_count ?? "0"),
+    };
+  } finally {
+    await pool.end();
+  }
+};
+
+const E2E_ASAAS_BASE_URL = "http://127.0.0.1:4570";
+
+export const resetE2eAsaasCheckoutMutations = async (
+  request: APIRequestContext
+): Promise<void> => {
+  const response = await request.post(
+    `${E2E_ASAAS_BASE_URL}/__e2e/checkout-mutations/reset`
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `E2E Asaas mutation counter reset failed with HTTP ${response.status()}.`
+    );
+  }
+};
+
+export const readE2eAsaasCheckoutMutationCount = async (
+  request: APIRequestContext
+): Promise<number> => {
+  const response = await request.get(
+    `${E2E_ASAAS_BASE_URL}/__e2e/checkout-mutations`
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `E2E Asaas mutation counter read failed with HTTP ${response.status()}.`
+    );
+  }
+  const payload = (await response.json()) as { count?: unknown };
+  return typeof payload.count === "number" ? payload.count : -1;
+};
+
 export interface OrderOutcome {
   accountLinked: boolean;
   activationCount: number;

@@ -8,12 +8,27 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
 import { route } from "@/lib/routes";
 import { getSignInOutcome } from "./sign-in-result";
 
-export function SignInForm(): React.JSX.Element {
+const getAuthRedirectPath = (returnTo: string | null): string => {
+  const searchParams = new URLSearchParams();
+  if (returnTo) {
+    searchParams.set("returnTo", returnTo);
+  }
+  const query = searchParams.toString();
+  return query ? `/api/auth/redirect?${query}` : "/api/auth/redirect";
+};
+
+export function SignInForm({
+  returnTo = null,
+}: {
+  returnTo?: string | null;
+} = {}): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const safeReturnTo = getSafeAuthReturnTo(returnTo);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -47,7 +62,7 @@ export function SignInForm(): React.JSX.Element {
         return;
       }
 
-      const redirectResponse = await fetch("/api/auth/redirect", {
+      const redirectResponse = await fetch(getAuthRedirectPath(safeReturnTo), {
         credentials: "same-origin",
         headers: { "ngrok-skip-browser-warning": "true" },
       });
