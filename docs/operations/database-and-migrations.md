@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: 48110385a7097084c42b9b862b57c66ed311898d
+last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
 current_migration_tag: 0081_free_enrollment_contract
 migration_entry_count: 82
 schema_table_count: 49
@@ -132,8 +132,8 @@ na mesma transação que o adicionou.
 
 A migration `0081_free_enrollment_contract` permite que uma concessão de
 matrícula gratuita não tenha Pedido nem referência manual e cria um índice
-único parcial por usuário e curso para impedir duas concessões gratuitas
-simultâneas do mesmo curso. O código que concede acesso ainda deve validar
+único parcial por usuário e curso para impedir mais de uma concessão gratuita,
+independentemente do status. O código que concede acesso ainda deve validar
 preço, publicação, duração e concessões ativas; o índice é uma proteção final
 contra concorrência e duplicidade.
 

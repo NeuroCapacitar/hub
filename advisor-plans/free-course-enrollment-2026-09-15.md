@@ -1,7 +1,7 @@
 ---
-status: in-progress
+status: implemented
 owner: product-and-engineering
-last_verified_commit: 2bfcf38e
+last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
 document_type: implementation-plan
 date: 2026-09-15
 ---
@@ -70,7 +70,7 @@ mudado.
 - [x] Etapa 10 — integração PostgreSQL e concorrência
 - [x] Etapa 11 — jornada E2E
 - [x] Etapa 12 — documentação canônica
-- [ ] Etapa 13 — gates finais e release handoff
+- [x] Etapa 13 — gates finais e release handoff
 
 > Etapa 10 concluída em branch Neon temporária do projeto de CI: migrations
 > E2E aplicadas, suíte PostgreSQL executada com 12/12 testes e cleanup
@@ -93,6 +93,25 @@ mudado.
 > ratificou o cadastro público como ponte e a reentrada após expiração em
 > 2026-09-16, e o ADR está `accepted`. Os documentos canônicos apontam para o
 > commit real de implementação `48110385a7097084c42b9b862b57c66ed311898d`.
+>
+> Etapa 13 concluída em 2026-09-16. O commit de código validado é
+> `b9cc1bd90419d4ed623b2b9805a48adc840d5957`. Os gates locais finais passaram:
+> `bun run verify` e `bun run verify:quick` com 424 arquivos e 2.971 testes,
+> `bun run docs:check` com 46 documentos canônicos, `bun run
+> db:migrations:check`, `bun run typecheck`, `bun run check`, `bun audit
+> --production` sem vulnerabilidades em 568 pacotes e build Next.js concluído.
+> O CodeRabbit foi executado contra `staging` com CLI 0.7.6 autenticada; os
+> achados aplicáveis foram corrigidos e não há achado funcional pendente.
+>
+> O replay da cadeia completa de migrations passou em branches Neon CI
+> descartáveis, com uma transação por arquivo. A suíte PostgreSQL passou 71/71
+> testes em branch limpa; E2E passou 41/41 desktop e 10/10 mobile, incluindo
+> gratuito e pago. A jornada gratuita confirmou uma concessão, uma Matrícula,
+> um evento e zero Orders. `AUTH_PUBLIC_SIGNUP_ENABLED` permaneceu false por
+> default e foi true somente no runtime explicitamente aprovado para a
+> validação pública. O executor oficial de Staging/Production agora usa
+> endpoint direto, lock compartilhado e separação por arquivo; nenhum banco
+> persistente, segredo, dump ou `.env.local` foi alterado pelo fechamento.
 
 ## Objetivo
 
@@ -1271,33 +1290,33 @@ explícita e sem os gates do release flow.
 
 Todos devem ser verdadeiros:
 
-- [ ] Produto ratificou duração, reentrada, acesso misto, bloqueio source-neutral
+- [x] Produto ratificou duração, reentrada, acesso misto, bloqueio source-neutral
   e cadastro público.
-- [ ] free_enrollment existe no schema e nas duas migrations forward-only.
-- [ ] 0080 adiciona enums e 0081 usa os valores após o commit anterior.
-- [ ] order_id e manual_reference nulos são exigidos para grant gratuito.
-- [ ] Há unicidade parcial por (user_id, course_id) para a origem gratuita.
-- [ ] Serviço usa locks existentes, courses FOR UPDATE, transação e
+- [x] free_enrollment existe no schema e nas duas migrations forward-only.
+- [x] 0080 adiciona enums e 0081 usa os valores após o commit anterior.
+- [x] order_id e manual_reference nulos são exigidos para grant gratuito.
+- [x] Há unicidade parcial por (user_id, course_id) para a origem gratuita.
+- [x] Serviço usa locks existentes, courses FOR UPDATE, transação e
   rebuildEnrollmentProjection.
-- [ ] Action exige student, usa ID de sessão e devolve somente dados seguros.
-- [ ] Curso gratuito não importa ou chama Asaas e não insere orders.
-- [ ] Acesso efetivo existente não cria grant gratuito adicional.
-- [ ] Double-click, duas abas e retry convergem para um grant e uma Matrícula.
-- [ ] Handoff/link gratuitos ignoram somente gates do Checkout pago.
-- [ ] Preço zero pode abrir disponibilidade; preço pago submínimo continua
+- [x] Action exige student, usa ID de sessão e devolve somente dados seguros.
+- [x] Curso gratuito não importa ou chama Asaas e não insere orders.
+- [x] Acesso efetivo existente não cria grant gratuito adicional.
+- [x] Double-click, duas abas e retry convergem para um grant e uma Matrícula.
+- [x] Handoff/link gratuitos ignoram somente gates do Checkout pago.
+- [x] Preço zero pode abrir disponibilidade; preço pago submínimo continua
   rejeitado.
-- [ ] UI de preço zero não falha por checkboxes de pagamento ausentes.
-- [ ] Bloqueio, restauração e validade administrativas não falham em Matrícula
+- [x] UI de preço zero não falha por checkboxes de pagamento ausentes.
+- [x] Bloqueio, restauração e validade administrativas não falham em Matrícula
   gratuita e não reativam estados financeiros terminais.
-- [ ] Evento gratuito aparece no feed e no label de Auditoria.
-- [ ] Visitante retorna a /comprar/<slug> somente por path validado.
-- [ ] Cadastro público continua fechado por default e é habilitado apenas no
+- [x] Evento gratuito aparece no feed e no label de Auditoria.
+- [x] Visitante retorna a /comprar/<slug> somente por path validado.
+- [x] Cadastro público continua fechado por default e é habilitado apenas no
   ambiente aprovado.
-- [ ] bun run docs:check, bun run db:migrations:check, bun run typecheck,
+- [x] bun run docs:check, bun run db:migrations:check, bun run typecheck,
   bun run check, bun run verify:quick, bun audit --production e
   bun run verify exitam 0.
-- [ ] Integração PostgreSQL e bun run test:e2e passam em ambiente descartável.
-- [ ] git status --short contém apenas arquivos autorizados; nenhum segredo,
+- [x] Integração PostgreSQL e bun run test:e2e passam em ambiente descartável.
+- [x] git status --short contém apenas arquivos autorizados; nenhum segredo,
   dump, artefato ou alteração não relacionada aparece.
 
 ## STOP conditions

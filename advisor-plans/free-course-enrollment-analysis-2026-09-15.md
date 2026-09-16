@@ -1,7 +1,7 @@
 ---
 status: proposed
 owner: product-and-engineering
-last_verified_commit: 2bfcf38e
+last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
 document_type: technical-validation
 date: 2026-09-15
 ---
