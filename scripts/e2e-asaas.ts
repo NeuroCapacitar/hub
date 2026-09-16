@@ -6,6 +6,8 @@ const COLLISION_CUSTOMER_PATH =
 const ISOLATED_CUSTOMER_PATH =
   /^\/v3\/customers\/cus_e2e_([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 
+let checkoutMutationCount = 0;
+
 declare const Bun: {
   serve(options: {
     fetch: (request: Request) => Promise<Response>;
@@ -53,7 +55,23 @@ export const handleE2eAsaasRequest = async (
 ): Promise<Response> => {
   const url = new URL(request.url);
 
+  if (
+    request.method === "POST" &&
+    url.pathname === "/__e2e/checkout-mutations/reset"
+  ) {
+    checkoutMutationCount = 0;
+    return Response.json({ count: checkoutMutationCount });
+  }
+
+  if (
+    request.method === "GET" &&
+    url.pathname === "/__e2e/checkout-mutations"
+  ) {
+    return Response.json({ count: checkoutMutationCount });
+  }
+
   if (request.method === "POST" && url.pathname === "/v3/checkouts") {
+    checkoutMutationCount += 1;
     const body = (await request.json()) as { externalReference?: string };
     const reference = body.externalReference;
     if (!reference?.startsWith("order_")) {

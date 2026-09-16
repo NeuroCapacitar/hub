@@ -10,8 +10,11 @@ import {
   readBuyerIdentityReviewOutcome,
   readCheckoutDeduplicationOutcome,
   readCheckoutMutationOutcome,
+  readE2eAsaasCheckoutMutationCount,
+  readFreeEnrollmentOutcome,
   readOrderOutcome,
   readPaymentEventCount,
+  resetE2eAsaasCheckoutMutations,
   runAsaasWorker,
   sendPaidWebhook,
   setE2ePlatformBlock,
@@ -30,6 +33,7 @@ const SENSITIVE_ERROR_PATTERN = /key|token|secret|postgres|database/i;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CHECKOUT_ID_PREFIX_PATTERN = /^chk_/;
+const CADASTRO_RETURN_TO_PATTERN = /\/cadastro\?returnTo=/;
 const CERTIFICATE_EMAIL_IDEMPOTENCY_PATTERN =
   /^email\.certificate-issued\/([0-9a-f-]{36})\/v1$/;
 const CERTIFICATE_CODE_LABEL_PATTERN = /Código do certificado:/;
@@ -400,6 +404,142 @@ test("public signup creates a student account without granting a course", async 
   );
   await expect(page.getByText(name, { exact: true })).toBeVisible();
   await expect(page.getByText(email, { exact: true })).toBeVisible();
+});
+
+test("public free course signup returns to the handoff and enrolls without checkout @mobile", async ({
+  page,
+  request,
+}) => {
+  const fixture = await readFixture();
+  const email = `free-cadastro-${fixture.runId}-${crypto.randomUUID().replaceAll("-", "")}@example.test`;
+  const expectedPurchasePath = `/comprar/${fixture.freeCourse.slug}`;
+  let checkoutRequestCount = 0;
+
+  page.on("request", (browserRequest) => {
+    if (
+      browserRequest.method() === "POST" &&
+      new URL(browserRequest.url()).pathname === "/api/checkouts/course"
+    ) {
+      checkoutRequestCount += 1;
+    }
+  });
+
+  await resetE2eAsaasCheckoutMutations(request);
+  await page.goto(expectedPurchasePath);
+  await expect(
+    page.getByRole("link", { name: "Criar conta para se inscrever" })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Entrar", exact: true })
+  ).toBeVisible();
+  expect(checkoutRequestCount).toBe(0);
+
+  await page
+    .getByRole("link", { name: "Criar conta para se inscrever" })
+    .click();
+  await expect(page).toHaveURL(CADASTRO_RETURN_TO_PATTERN);
+  expect(new URL(page.url()).searchParams.get("returnTo")).toBe(
+    expectedPurchasePath
+  );
+
+  await page.getByLabel("Nome completo").fill("Aluno de curso gratuito");
+  await page.getByLabel("E-mail").fill(email);
+  await page.getByLabel("Senha", { exact: true }).fill("E2E-password-123!");
+  await page.getByLabel("Confirmar senha").fill("E2E-password-123!");
+  await page.getByRole("button", { name: "Criar conta" }).click();
+
+  await expect(page).toHaveURL(new RegExp(`${expectedPurchasePath}$`));
+  await expect(
+    page.getByRole("button", { name: "Inscrever-se gratuitamente" })
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Inscrever-se gratuitamente" })
+    .click();
+
+  await expect(page).toHaveURL(
+    new RegExp(`/app/cursos/${fixture.freeCourse.id}$`)
+  );
+  await expect(
+    page.getByRole("heading", { name: fixture.freeCourse.title })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Módulo gratuito E2E" }).getByRole("link")
+  ).toBeVisible();
+
+  expect(checkoutRequestCount).toBe(0);
+  expect(await readE2eAsaasCheckoutMutationCount(request)).toBe(0);
+  await expect
+    .poll(() =>
+      readFreeEnrollmentOutcome({
+        courseId: fixture.freeCourse.id,
+        email,
+      })
+    )
+    .toEqual({
+      accountCount: 1,
+      enrollmentCount: 1,
+      enrollmentStatus: "active",
+      freeEventCount: 1,
+      freeGrantCount: 1,
+      freeGrantStatus: "active",
+      orderCount: 0,
+    });
+});
+
+test("authenticated Student enrolls in a free course directly", async ({
+  page,
+  request,
+}) => {
+  const fixture = await readFixture();
+  await signIn(page, fixture.studentWithoutGrant, APP_URL_PATTERN);
+
+  let checkoutRequestCount = 0;
+  page.on("request", (browserRequest) => {
+    if (
+      browserRequest.method() === "POST" &&
+      new URL(browserRequest.url()).pathname === "/api/checkouts/course"
+    ) {
+      checkoutRequestCount += 1;
+    }
+  });
+
+  await resetE2eAsaasCheckoutMutations(request);
+  await page.goto(`/comprar/${fixture.freeCourse.slug}`);
+  const freeEnrollmentButton = page.getByRole("button", {
+    name: "Inscrever-se gratuitamente",
+  });
+  await expect(freeEnrollmentButton).toHaveCount(1);
+  await expect(freeEnrollmentButton).toBeVisible();
+  await freeEnrollmentButton.click();
+
+  await expect(page).toHaveURL(
+    new RegExp(`/app/cursos/${fixture.freeCourse.id}$`)
+  );
+  await expect(
+    page.getByRole("heading", { name: fixture.freeCourse.title })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Módulo gratuito E2E" }).getByRole("link")
+  ).toBeVisible();
+
+  expect(checkoutRequestCount).toBe(0);
+  expect(await readE2eAsaasCheckoutMutationCount(request)).toBe(0);
+  await expect
+    .poll(() =>
+      readFreeEnrollmentOutcome({
+        courseId: fixture.freeCourse.id,
+        email: fixture.studentWithoutGrant.email,
+      })
+    )
+    .toEqual({
+      accountCount: 1,
+      enrollmentCount: 1,
+      enrollmentStatus: "active",
+      freeEventCount: 1,
+      freeGrantCount: 1,
+      freeGrantStatus: "active",
+      orderCount: 0,
+    });
 });
 
 test("student with a grant opens the first lesson @mobile", async ({
@@ -860,6 +1000,9 @@ test("refund requires password and explicit destructive confirmation @mobile", a
     request,
   });
   await runAsaasWorker(request);
+  await expect
+    .poll(() => readOrderOutcome(attemptId))
+    .toMatchObject({ grantCount: 1, status: "paid" });
 
   await page.context().clearCookies();
   await signIn(page, fixture.support, ADMIN_URL_PATTERN);

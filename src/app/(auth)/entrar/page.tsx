@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
 import { route } from "@/lib/routes";
 import { getCurrentSession } from "@/lib/session";
 import { SignInForm } from "./sign-in-form";
@@ -18,12 +19,22 @@ export const metadata: Metadata = {
 };
 export const dynamic = "force-dynamic";
 
-export default async function SignInPage(): Promise<React.JSX.Element> {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string | string[] | undefined }>;
+}): Promise<React.JSX.Element> {
   await connection();
-  const session = await getCurrentSession();
+  const [{ returnTo }, session] = await Promise.all([
+    searchParams,
+    getCurrentSession(),
+  ]);
+  const safeReturnTo = getSafeAuthReturnTo(returnTo);
 
   if (session && !(session.role === "student" && session.platformBlockedAt)) {
-    redirect(route(session.role === "student" ? "/app" : "/admin"));
+    redirect(
+      route(session.role === "student" ? (safeReturnTo ?? "/app") : "/admin")
+    );
   }
 
   return (
@@ -38,7 +49,7 @@ export default async function SignInPage(): Promise<React.JSX.Element> {
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0">
-          <SignInForm />
+          <SignInForm returnTo={safeReturnTo} />
         </CardContent>
       </Card>
     </AuthShell>

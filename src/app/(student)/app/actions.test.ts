@@ -3,10 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const dependencies = vi.hoisted(() => ({
   completeLesson: vi.fn(),
   createSupportRequest: vi.fn(),
+  enrollInFreeCourse: vi.fn(),
+  logOperationalEvent: vi.fn(),
   recordLessonWatchProgress: vi.fn(),
   startLessonWatchSession: vi.fn(),
   redirect: vi.fn(),
   revalidatePath: vi.fn(),
+  requireRole: vi.fn(),
   requireSession: vi.fn(),
   scheduleOutboxDrainAfterResponse: vi.fn(),
   setCourseSaleInterest: vi.fn(),
@@ -26,6 +29,9 @@ vi.mock("@/features/courses/server", () => ({
   recordLessonWatchProgress: dependencies.recordLessonWatchProgress,
   startLessonWatchSession: dependencies.startLessonWatchSession,
 }));
+vi.mock("@/features/enrollments/free-enrollment", () => ({
+  enrollInFreeCourse: dependencies.enrollInFreeCourse,
+}));
 vi.mock("@/features/learning-analytics/server", () => ({
   setLearningAnalyticsPreference: vi.fn(),
 }));
@@ -37,11 +43,17 @@ vi.mock("@/features/outbox/background-drain", () => ({
     dependencies.scheduleOutboxDrainAfterResponse,
 }));
 vi.mock("@/lib/session", () => ({
+  requireRole: dependencies.requireRole,
   requireSession: dependencies.requireSession,
+}));
+vi.mock("@/lib/observability", () => ({
+  createCorrelationId: () => "correlation-1",
+  logOperationalEvent: dependencies.logOperationalEvent,
 }));
 
 import {
   completeLessonAction,
+  enrollFreeCourseAction,
   recordLessonWatchProgressAction,
   sendSupportRequestAction,
   setCourseSaleInterestAction,
@@ -160,6 +172,149 @@ describe("setCourseSaleInterestAction", () => {
       "Apenas alunos podem demonstrar interesse."
     );
     expect(dependencies.setCourseSaleInterest).not.toHaveBeenCalled();
+  });
+});
+
+describe("enrollFreeCourseAction", () => {
+  const courseId = "11111111-1111-4111-8111-111111111111";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dependencies.requireRole.mockResolvedValue({
+      role: "student",
+      user: { id: "student-1" },
+    });
+    dependencies.enrollInFreeCourse.mockResolvedValue({ status: "created" });
+  });
+
+  it("uses only the authenticated Student and revalidates after the service succeeds", async () => {
+    const formData = new FormData();
+    formData.set("courseId", ` ${courseId} `);
+    formData.set("userId", "attacker-1");
+
+    await expect(enrollFreeCourseAction(formData)).resolves.toEqual({
+      courseId,
+      ok: true,
+    });
+
+    expect(dependencies.requireRole).toHaveBeenCalledWith(["student"]);
+    expect(dependencies.enrollInFreeCourse).toHaveBeenCalledWith({
+      courseId,
+      userId: "student-1",
+    });
+    expect(dependencies.revalidatePath).toHaveBeenNthCalledWith(1, "/app");
+    expect(dependencies.revalidatePath).toHaveBeenNthCalledWith(
+      2,
+      `/app/cursos/${courseId}`
+    );
+    expect(dependencies.revalidatePath).toHaveBeenNthCalledWith(
+      3,
+      "/comprar/[slug]",
+      "page"
+    );
+  });
+
+  it("rejects invalid input before calling the enrollment service", async () => {
+    const formData = new FormData();
+    formData.set("courseId", "course-1");
+
+    await expect(enrollFreeCourseAction(formData)).resolves.toEqual({
+      message: "Curso inválido.",
+      ok: false,
+    });
+
+    expect(dependencies.enrollInFreeCourse).not.toHaveBeenCalled();
+    expect(dependencies.revalidatePath).not.toHaveBeenCalled();
+    expect(dependencies.logOperationalEvent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "admin",
+    "support",
+  ] as const)("does not persist when the account role is %s", async () => {
+    dependencies.requireRole.mockRejectedValue(new Error("NEXT_REDIRECT"));
+    const formData = new FormData();
+    formData.set("courseId", courseId);
+
+    await expect(enrollFreeCourseAction(formData)).rejects.toThrow(
+      "NEXT_REDIRECT"
+    );
+
+    expect(dependencies.enrollInFreeCourse).not.toHaveBeenCalled();
+  });
+
+  it("does not persist when a blocked Student is rejected by the role guard", async () => {
+    dependencies.requireRole.mockRejectedValue(new Error("NEXT_REDIRECT"));
+    const formData = new FormData();
+    formData.set("courseId", courseId);
+
+    await expect(enrollFreeCourseAction(formData)).rejects.toThrow(
+      "NEXT_REDIRECT"
+    );
+
+    expect(dependencies.enrollInFreeCourse).not.toHaveBeenCalled();
+  });
+
+  it("returns a known domain error without logging it as an operational failure", async () => {
+    dependencies.enrollInFreeCourse.mockRejectedValue(
+      new Error("Preço diferente de zero.")
+    );
+    const formData = new FormData();
+    formData.set("courseId", courseId);
+
+    await expect(enrollFreeCourseAction(formData)).resolves.toEqual({
+      message: "Preço diferente de zero.",
+      ok: false,
+    });
+
+    expect(dependencies.revalidatePath).not.toHaveBeenCalled();
+    expect(dependencies.logOperationalEvent).not.toHaveBeenCalled();
+  });
+
+  it("hides and logs unexpected service failures without exposing database details", async () => {
+    dependencies.enrollInFreeCourse.mockRejectedValue(
+      new Error("database connection details")
+    );
+    const formData = new FormData();
+    formData.set("courseId", courseId);
+
+    await expect(enrollFreeCourseAction(formData)).resolves.toEqual({
+      message:
+        "Não foi possível concluir a inscrição gratuita. Tente novamente.",
+      ok: false,
+    });
+
+    expect(dependencies.logOperationalEvent).toHaveBeenCalledWith({
+      aggregateId: courseId,
+      correlationId: "correlation-1",
+      errorCode: "free_enrollment_action_failed",
+      operation: "student.free_enrollment",
+      outcome: "failure",
+      provider: "database",
+    });
+    expect(dependencies.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("keeps the successful enrollment result when cache revalidation fails", async () => {
+    dependencies.revalidatePath.mockImplementationOnce(() => {
+      throw new Error("cache unavailable");
+    });
+    const formData = new FormData();
+    formData.set("courseId", courseId);
+
+    await expect(enrollFreeCourseAction(formData)).resolves.toEqual({
+      courseId,
+      ok: true,
+    });
+
+    expect(dependencies.revalidatePath).toHaveBeenCalledTimes(3);
+    expect(dependencies.logOperationalEvent).toHaveBeenCalledWith({
+      aggregateId: courseId,
+      correlationId: "correlation-1",
+      errorCode: "free_enrollment_revalidation_failed",
+      operation: "student.free_enrollment.revalidation",
+      outcome: "failure",
+    });
   });
 });
 

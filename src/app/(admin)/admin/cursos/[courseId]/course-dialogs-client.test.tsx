@@ -153,6 +153,46 @@ const togglePaymentMethod = (method: "card" | "pix"): void => {
 };
 
 describe("course payment settings", () => {
+  it("shows the free-course note and hides paid controls for zero price", () => {
+    const markup = renderToStaticMarkup(
+      <CourseSettingsForm course={{ ...course, priceInCents: 0 }} />
+    );
+
+    expect(markup).toContain(
+      "Curso gratuito. A inscrição é feita diretamente pelo Hub."
+    );
+    expect(markup).not.toContain('id="course-payment-pix"');
+    expect(markup).not.toContain('id="course-payment-card"');
+    expect(markup).not.toContain('id="course-payment-installments"');
+    expect(markup).not.toContain("Checkout Asaas");
+  });
+
+  it("submits a zero-price Course without payment checkboxes", async () => {
+    renderCourseSettingsForm({ ...course, priceInCents: 0 });
+
+    await submitSettingsForm();
+
+    expect(saveCourseActionMock).toHaveBeenCalledOnce();
+    const submittedFormData = saveCourseActionMock.mock.calls[0]?.[0];
+    expect(submittedFormData.get("price")).toBe(formatCurrencyInCents(0));
+    expect(submittedFormData.get("paymentAllowPix")).toBeNull();
+    expect(submittedFormData.get("paymentAllowCreditCard")).toBeNull();
+    expect(submittedFormData.get("paymentMaxInstallmentCount")).toBeNull();
+  });
+
+  it("restores paid controls when a free Course becomes paid", () => {
+    renderCourseSettingsForm({ ...course, priceInCents: 0 });
+
+    setPrice("19,90");
+
+    expect(container?.querySelector("#course-payment-pix")).not.toBeNull();
+    expect(container?.querySelector("#course-payment-card")).not.toBeNull();
+    expect(
+      container?.querySelector("#course-payment-installments")
+    ).not.toBeNull();
+    expect(container?.textContent).toContain("Checkout Asaas");
+  });
+
   it("explains when price reduces the effective installment maximum", () => {
     const markup = renderToStaticMarkup(<CourseSettingsForm course={course} />);
 
@@ -220,6 +260,31 @@ describe("course payment settings", () => {
     renderCourseSettingsForm();
 
     togglePaymentMethod("card");
+    togglePaymentMethod("pix");
+
+    expect(
+      container
+        ?.querySelector<HTMLButtonElement>("#course-payment-pix")
+        ?.getAttribute("aria-checked")
+    ).toBe("true");
+  });
+
+  it("allows reactivating a payment method when both are disabled", () => {
+    renderCourseSettingsForm({
+      ...course,
+      paymentAllowCreditCard: false,
+      paymentAllowPix: false,
+    });
+
+    expect(
+      container?.querySelector<HTMLButtonElement>("#course-payment-pix")
+        ?.disabled
+    ).toBe(false);
+    expect(
+      container?.querySelector<HTMLButtonElement>("#course-payment-card")
+        ?.disabled
+    ).toBe(false);
+
     togglePaymentMethod("pix");
 
     expect(

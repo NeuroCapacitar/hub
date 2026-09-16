@@ -12,14 +12,109 @@ import {
   recordLessonWatchProgress,
   startLessonWatchSession,
 } from "@/features/courses/server";
+import { enrollInFreeCourse } from "@/features/enrollments/free-enrollment";
 import { setLearningAnalyticsPreference } from "@/features/learning-analytics/server";
 import { scheduleOutboxDrainAfterResponse } from "@/features/outbox/background-drain";
 import { createSupportRequest } from "@/features/support/server";
+import { createCorrelationId, logOperationalEvent } from "@/lib/observability";
 import { route } from "@/lib/routes";
-import { requireSession } from "@/lib/session";
+import { requireRole, requireSession } from "@/lib/session";
 
 const readString = (formData: FormData, key: string): string =>
   String(formData.get(key) ?? "").trim();
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const FREE_ENROLLMENT_DOMAIN_MESSAGES = new Set([
+  "Curso inválido.",
+  "Curso inexistente, arquivado, draft ou inativo.",
+  "Estado de vendas fechado.",
+  "Publicação de Curso ausente.",
+  "Preço diferente de zero.",
+  "Duração de acesso inválida.",
+  "Cronograma incompatível.",
+  "Matrícula revogada não pode receber novo acesso.",
+  "Concessão gratuita encerrada não pode ser reativada.",
+  "Concessão gratuita existente não pode ser substituída.",
+]);
+
+const getFreeEnrollmentDomainMessage = (error: unknown): string | null => {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  return FREE_ENROLLMENT_DOMAIN_MESSAGES.has(error.message)
+    ? error.message
+    : null;
+};
+
+const revalidateFreeEnrollmentPaths = (courseId: string): void => {
+  const paths: Array<{ path: string; type?: "page" }> = [
+    { path: "/app" },
+    { path: `/app/cursos/${courseId}` },
+    { path: "/comprar/[slug]", type: "page" },
+  ];
+
+  for (const { path, type } of paths) {
+    try {
+      if (type) {
+        revalidatePath(path, type);
+      } else {
+        revalidatePath(path);
+      }
+    } catch {
+      logOperationalEvent({
+        aggregateId: courseId,
+        correlationId: createCorrelationId(null),
+        errorCode: "free_enrollment_revalidation_failed",
+        operation: "student.free_enrollment.revalidation",
+        outcome: "failure",
+      });
+    }
+  }
+};
+
+export type FreeEnrollmentActionResult =
+  | { courseId: string; ok: true }
+  | { message: string; ok: false };
+
+export const enrollFreeCourseAction = async (
+  formData: FormData
+): Promise<FreeEnrollmentActionResult> => {
+  const session = await requireRole(["student"]);
+  const courseId = readString(formData, "courseId");
+
+  if (!UUID_PATTERN.test(courseId)) {
+    return { message: "Curso inválido.", ok: false };
+  }
+
+  try {
+    await enrollInFreeCourse({ courseId, userId: session.user.id });
+  } catch (error) {
+    const message = getFreeEnrollmentDomainMessage(error);
+    if (message) {
+      return { message, ok: false };
+    }
+
+    logOperationalEvent({
+      aggregateId: courseId,
+      correlationId: createCorrelationId(null),
+      errorCode: "free_enrollment_action_failed",
+      operation: "student.free_enrollment",
+      outcome: "failure",
+      provider: "database",
+    });
+    return {
+      message:
+        "Não foi possível concluir a inscrição gratuita. Tente novamente.",
+      ok: false,
+    };
+  }
+
+  revalidateFreeEnrollmentPaths(courseId);
+  return { courseId, ok: true };
+};
 
 export const completeLessonAction = async (formData: FormData) => {
   const session = await requireSession();

@@ -267,5 +267,7 @@ describe("payment revocation", () => {
     expect(query.mock.calls[2]?.[0]).toContain(
       "and status in ('active', 'expired')"
     );
+    expect(query.mock.calls[2]?.[0]).toContain("source_type = 'paid_order'");
+    expect(query.mock.calls[2]?.[0]).toContain("order_id = $4");
   });
 });

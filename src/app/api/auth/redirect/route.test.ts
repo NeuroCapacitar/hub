@@ -13,6 +13,14 @@ vi.mock("@/lib/session", () => ({
 
 import { GET } from "./route";
 
+const createRequest = (returnTo?: string): Request => {
+  const url = new URL("https://hub.example.test/api/auth/redirect");
+  if (returnTo !== undefined) {
+    url.searchParams.set("returnTo", returnTo);
+  }
+  return new Request(url);
+};
+
 describe("GET /api/auth/redirect", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -24,7 +32,9 @@ describe("GET /api/auth/redirect", () => {
       role: "admin",
     });
 
-    await expect((await GET()).json()).resolves.toEqual({
+    await expect(
+      (await GET(createRequest("/comprar/curso-gratis"))).json()
+    ).resolves.toEqual({
       redirectTo: "/admin",
     });
   });
@@ -35,7 +45,9 @@ describe("GET /api/auth/redirect", () => {
       role: "support",
     });
 
-    await expect((await GET()).json()).resolves.toEqual({
+    await expect(
+      (await GET(createRequest("/comprar/curso-gratis"))).json()
+    ).resolves.toEqual({
       redirectTo: "/admin",
     });
   });
@@ -46,7 +58,7 @@ describe("GET /api/auth/redirect", () => {
       role: "student",
     });
 
-    const response = await GET();
+    const response = await GET(createRequest("/comprar/curso-gratis"));
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({ error: "blocked" });
@@ -59,12 +71,50 @@ describe("GET /api/auth/redirect", () => {
       user: { id: "student-1" },
     });
 
-    const response = await GET();
+    const response = await GET(createRequest("/comprar/curso-gratis"));
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ redirectTo: "/app" });
+    await expect(response.json()).resolves.toEqual({
+      redirectTo: "/comprar/curso-gratis",
+    });
     expect(dependencies.recordStudentLastAccess).toHaveBeenCalledWith(
       "student-1"
     );
+  });
+
+  it("falls back to the student surface for an invalid return path", async () => {
+    dependencies.getCurrentSession.mockResolvedValue({
+      platformBlockedAt: null,
+      role: "student",
+      user: { id: "student-1" },
+    });
+
+    const response = await GET(createRequest("https://other.example/escape"));
+
+    await expect(response.json()).resolves.toEqual({ redirectTo: "/app" });
+  });
+
+  it("falls back to the student surface when returnTo is repeated", async () => {
+    dependencies.getCurrentSession.mockResolvedValue({
+      platformBlockedAt: null,
+      role: "student",
+      user: { id: "student-1" },
+    });
+    const url = new URL("https://hub.example.test/api/auth/redirect");
+    url.searchParams.append("returnTo", "/comprar/curso-gratis");
+    url.searchParams.append("returnTo", "/comprar/outro-curso");
+
+    const response = await GET(new Request(url));
+
+    await expect(response.json()).resolves.toEqual({ redirectTo: "/app" });
+  });
+
+  it("keeps unauthenticated users on the login surface", async () => {
+    dependencies.getCurrentSession.mockResolvedValue(null);
+
+    const response = await GET(createRequest("/comprar/curso-gratis"));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ redirectTo: "/entrar" });
   });
 });

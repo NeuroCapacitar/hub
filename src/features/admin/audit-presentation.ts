@@ -42,6 +42,7 @@ const ADMIN_AUDIT_ACTION_LABELS: Record<string, string> = {
   "enrollment.content_full_access_granted": "Acesso integral concedido",
   "enrollment.content_release_scheduled": "Liberação de conteúdo agendada",
   "enrollment.expiration_adjustment_reversed": "Ajuste de validade revertido",
+  "enrollment.free_enrollment_granted": "Inscrição gratuita",
   "enrollment.manual_access_granted": "Acesso manual concedido",
   "enrollment.payment_disputed": "Acesso revogado por disputa",
   "enrollment.payment_paid": "Pagamento aprovado e acesso liberado",

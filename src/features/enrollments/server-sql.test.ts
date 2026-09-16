@@ -44,7 +44,7 @@ describe("enrollment server SQL contracts", () => {
     );
     const revocationSource = source.slice(
       source.indexOf("export const applyPaymentRevocation"),
-      source.indexOf("const getActivePaidGrantForEnrollment")
+      source.indexOf("const getActiveGrantForEnrollment")
     );
 
     expect(source).toContain(
@@ -68,7 +68,7 @@ describe("enrollment server SQL contracts", () => {
     const source = await readServerSource();
     const lockByIdSource = source.slice(
       source.indexOf("const lockEnrollmentForGrantMutation"),
-      source.indexOf("const getPaidAccessGrantsForEnrollment")
+      source.indexOf("const getAccessGrantsForEnrollment")
     );
 
     expect(lockByIdSource).toContain("getEnrollmentCourseAccess");
@@ -94,8 +94,8 @@ describe("enrollment server SQL contracts", () => {
           : source.length
       );
       const firstGrantAccess = [
-        mutationSource.indexOf("getActivePaidGrantForEnrollment"),
-        mutationSource.indexOf("getPaidAccessGrantsForEnrollment"),
+        mutationSource.indexOf("getActiveGrantForEnrollment"),
+        mutationSource.indexOf("getAccessGrantsForEnrollment"),
       ].filter((position) => position >= 0);
 
       expect(mutationSource).toContain("lockEnrollmentForGrantMutation");
@@ -204,6 +204,30 @@ describe("enrollment server SQL contracts", () => {
     expect(source).toContain("insert into enrollment_grants");
     expect(source).toContain("rebuildEnrollmentProjection");
     expect(source).toContain("source_type = 'paid_order'");
+  });
+
+  it("keeps administrative grant access source-neutral and revocation paid-only", async () => {
+    const source = await readServerSource();
+    const administrativeSource = source.slice(
+      source.indexOf("const getActiveGrantForEnrollment"),
+      source.indexOf("export const grantEnrollmentFullContentAccess")
+    );
+    const revocationSource = source.slice(
+      source.indexOf("export const applyPaymentRevocation"),
+      source.indexOf("const getActiveGrantForEnrollment")
+    );
+
+    expect(source).toContain('| "free_enrollment_granted"');
+    expect(source).toContain("export const insertEnrollmentEvent");
+    expect(administrativeSource).toContain(
+      "and eg.status in ('active', 'expired')"
+    );
+    expect(administrativeSource).toContain(
+      "and eg.status = any($2::enrollment_grant_status[])"
+    );
+    expect(administrativeSource).not.toContain("eg.source_type = 'paid_order'");
+    expect(revocationSource).toContain("source_type = 'paid_order'");
+    expect(revocationSource).toContain("order_id = $4");
   });
 
   it("does not overwrite the original paid expiration when a paid event is replayed", async () => {

@@ -1,7 +1,7 @@
 ---
 status: index
 owner: product-and-engineering
-last_verified_commit: edad1eb
+last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
 ---
 
 # Planos de aconselhamento
@@ -21,6 +21,8 @@ pessoa responsável autorize sua execução.
 | [Auditoria profunda do Admin](admin-dashboard-review-2026-09-08.md) | Operação administrativa | review | — |
 | [Implementação do Admin](admin-dashboard-implementation-plan-2026-09-08.md) | Reorganização do Admin | implemented | auditoria do Admin |
 | [Pesquisa externa do Admin](admin-dashboard-external-research-2026-09-08.md) | Referências e operadores | research | — |
+| [Validação técnica de Curso gratuito](free-course-enrollment-analysis-2026-09-15.md) | Validação do relatório preliminar e decisões de domínio | proposed | plano de autoinscrição |
+| [Autoinscrição gratuita](free-course-enrollment-2026-09-15.md) | Curso gratuito, grants, handoff e segurança | implemented — Etapas 0–13 completas | — |
 
 Ao executar ou encerrar um plano, atualize seu `status` e esta tabela. O
 roadmap integrado do produto permanece em `plans/README.md`.

@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: product
-last_verified_commit: e325b7e
+last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
 ---
 
 # Registro de decisões de produto
@@ -268,6 +268,26 @@ Owner: engenharia. Mitigações: allowlists por ambiente, remetente identificado
 sufixo Dev em Development, guarda de ambiente que rejeita credenciais fora do escopo
 aprovado. Reabrir se um terceiro passar a operar os ambientes ou se um provider oferecer
 isolamento sem custo adicional.
+
+## DEC-DISC-017
+
+**Tema:** autoinscrição gratuita em Curso.
+**Estado:** aprovado pelo produto em 2026-09-16 e implementado; contrato descrito na
+[ADR-0016](adr/0016-free-course-self-enrollment.md).
+
+O contrato proposto trata `price_in_cents = 0` como aquisição local: uma Conta Student
+autenticada recebe Concessão `free_enrollment`, evento de concessão e Matrícula
+recomposta na mesma transação, sem Pedido, `orders`, Checkout ou Asaas. O Curso precisa
+estar ativo, listado, com vendas abertas, Publicação publicada e cronograma compatível;
+Concessão efetiva de qualquer origem torna a repetição um no-op. A janela usa a duração
+de acesso do Curso; a implementação permite reentrada explícita após expiração na mesma
+linha, mas não reativa Concessão terminal nem Matrícula revogada.
+
+Visitantes usam `/comprar/<slug>` e retorno interno seguro. O cadastro público continua
+desabilitado por padrão e, quando explicitamente habilitado, cria apenas a Conta; não
+cria Concessão nem Matrícula. A habilitação do cadastro em cada ambiente permanece uma
+configuração de release separada.
+
 ## Outras ratificações necessárias
 
 - tratamento de compra pública com e-mail já pertencente a Admin/Suporte;

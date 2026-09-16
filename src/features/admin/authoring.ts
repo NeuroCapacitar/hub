@@ -363,17 +363,19 @@ const readContentStatus = (formData: FormData): ContentStatus =>
   readAuthoringContentStatus(formData, CREATED_CONTENT_STATUS);
 
 const readCourseFormValues = (formData: FormData): CourseFormValues => {
-  const paymentOffer = formData.has("paymentOfferPresent")
-    ? parseCoursePaymentOffer({
-        allowCreditCard: formData.has("paymentAllowCreditCard"),
-        allowPix: formData.has("paymentAllowPix"),
-        maxInstallmentCount: readAuthoringNonNegativeInteger(
-          formData,
-          "paymentMaxInstallmentCount",
-          1
-        ),
-      })
-    : DEFAULT_COURSE_PAYMENT_OFFER;
+  const priceInCents = parseCoursePriceToCents(readString(formData, "price"));
+  const paymentOffer =
+    priceInCents === 0 || !formData.has("paymentOfferPresent")
+      ? DEFAULT_COURSE_PAYMENT_OFFER
+      : parseCoursePaymentOffer({
+          allowCreditCard: formData.has("paymentAllowCreditCard"),
+          allowPix: formData.has("paymentAllowPix"),
+          maxInstallmentCount: readAuthoringNonNegativeInteger(
+            formData,
+            "paymentMaxInstallmentCount",
+            1
+          ),
+        });
   const title = readString(formData, "title");
   if (!title) {
     throw new LessonAuthoringError("Informe o título do Curso.", "title");
@@ -392,7 +394,7 @@ const readCourseFormValues = (formData: FormData): CourseFormValues => {
     paymentAllowCreditCard: paymentOffer.allowCreditCard,
     paymentAllowPix: paymentOffer.allowPix,
     paymentMaxInstallmentCount: paymentOffer.maxInstallmentCount,
-    priceInCents: parseCoursePriceToCents(readString(formData, "price")),
+    priceInCents,
     subtitle: readString(formData, "subtitle") || null,
     title,
   };

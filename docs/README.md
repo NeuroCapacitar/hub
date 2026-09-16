@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: e0a55d04884851c21bd55fe605afd05cc52c5a4e
+last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
 ---
 
 # Documentação do Hub
@@ -76,6 +76,7 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 - [ADR-0013: ownership operacional entre Hub e provedores](adr/0013-provider-and-hub-operational-ownership.md)
 - [ADR-0014: identidade de Aula e estado entre publicações](adr/0014-lesson-identity-and-state-across-publications.md)
 - [ADR-0015: mídia administrável da tela de acesso](adr/0015-authentication-screen-media.md)
+- [ADR-0016: autoinscrição gratuita em Curso](adr/0016-free-course-self-enrollment.md)
 
 ### Revisões
 

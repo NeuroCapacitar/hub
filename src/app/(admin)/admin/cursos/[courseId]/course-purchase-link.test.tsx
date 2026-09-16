@@ -70,6 +70,9 @@ describe("CoursePurchaseLink", () => {
 
     expect(button?.textContent).toContain("Link público");
     expect(button?.type).toBe("button");
+    expect(container.querySelector("input")?.getAttribute("aria-label")).toBe(
+      "Link público do Curso"
+    );
     expect(container.querySelector("input:not(.sr-only)")).toBeNull();
     expect(document.querySelector(`a[href="${publicUrl}"]`)).toBeNull();
   });
@@ -129,7 +132,7 @@ describe("CoursePurchaseLink", () => {
       );
     });
 
-    expect(container.textContent).toContain("Checkout público indisponível");
+    expect(container.textContent).toContain("Checkout pago indisponível");
     expect(container.textContent).toContain("course_unpublished");
     expect(container.textContent).toContain("publicação publicada");
     expect(container.querySelector("input")?.getAttribute("value")).toBe(

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
 import {
   getNewPasswordValidationError,
   PASSWORD_MIN_LENGTH,
@@ -15,9 +16,28 @@ import {
 import { route } from "@/lib/routes";
 import { isSuccessfulSignUpPayload } from "./sign-up-result";
 
-export function SignUpForm(): React.JSX.Element {
+const getAuthRedirectPath = (returnTo: string | null): string => {
+  const searchParams = new URLSearchParams();
+  if (returnTo) {
+    searchParams.set("returnTo", returnTo);
+  }
+  const query = searchParams.toString();
+  return query ? `/api/auth/redirect?${query}` : "/api/auth/redirect";
+};
+
+export function SignUpForm({
+  returnTo = null,
+}: {
+  returnTo?: string | null;
+} = {}): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const safeReturnTo = getSafeAuthReturnTo(returnTo);
+  const signInHref = safeReturnTo
+    ? route(
+        `/entrar?${new URLSearchParams({ returnTo: safeReturnTo }).toString()}`
+      )
+    : route("/entrar");
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,7 +86,7 @@ export function SignUpForm(): React.JSX.Element {
         return;
       }
 
-      const redirectResponse = await fetch("/api/auth/redirect", {
+      const redirectResponse = await fetch(getAuthRedirectPath(safeReturnTo), {
         credentials: "same-origin",
         headers: { "ngrok-skip-browser-warning": "true" },
       });
@@ -147,7 +167,7 @@ export function SignUpForm(): React.JSX.Element {
       </Button>
       <Link
         className="mt-4 inline-flex text-muted-foreground text-sm underline-offset-4 hover:text-foreground hover:underline"
-        href={route("/entrar")}
+        href={signInHref}
       >
         Já tenho uma conta
       </Link>

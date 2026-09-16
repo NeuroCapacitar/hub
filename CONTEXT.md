@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: product
-last_verified_commit: e325b7e
+last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
 ---
 
 # Glossário do Hub
@@ -35,7 +35,13 @@ Operadora com subconjunto explícito de permissões administrativas; não é um 
 Registro da intenção e resultado financeiro de compra, com preço, duração e identidade como snapshots.
 
 **Concessão de acesso**  
-Direito de uma Conta acessar Curso, originado em fonte identificável como Pedido pago. Pode estar ativa, expirada, reembolsada, em disputa ou cancelada.
+Direito de uma Conta acessar Curso, originado em fonte identificável como Pedido
+pago, concessão manual ou autoinscrição gratuita. A origem e a janela do direito
+continuam distinguíveis mesmo quando o acesso expira ou é bloqueado.
+
+**Autoinscrição gratuita**
+Aquisição direta de acesso por uma Conta Student a um Curso oferecido sem cobrança. É
+uma forma de obter Concessão, não é Pedido, compra ou Matrícula independente.
 
 **Matrícula**  
 Projeção consolidada do acesso atual de uma Conta a um Curso. Pode refletir mais de uma Concessão e não é a origem do direito. Matrícula ativa lê a publicação vigente do Curso.
@@ -70,7 +76,8 @@ Define se o conteúdo pode ser entregue: rascunho, ativo ou arquivado. Não defi
 Define se pessoas sem Matrícula descobrem o Curso na vitrine. Ocultar não revoga acesso adquirido.
 
 **Estado de vendas**
-Define se o Hub aceita novas compras do Curso. Fechar vendas não altera Concessões ou Matrículas existentes.
+Define se o Hub aceita novas aquisições do Curso, por compra ou autoinscrição gratuita.
+Fechar vendas não altera Concessões ou Matrículas existentes.
 
 **Interesse de venda**
 Manifestação reversível de uma Conta Student para receber um único aviso na próxima abertura de vendas. Não é Pedido, Concessão ou Matrícula.
@@ -78,7 +85,8 @@ Manifestação reversível de uma Conta Student para receber um único aviso na 
 ## Aprendizagem e conteúdo
 
 **Curso**  
-Produto educacional vendável e publicável, composto por Módulos e Aulas.
+Produto educacional publicável, composto por Módulos e Aulas, que pode ser vendido ou
+oferecido gratuitamente.
 
 **Publicação de Curso (`CoursePublication`)**
 Revisão interna materializada de Módulos e Aulas, com estados rascunho, publicada e aposentada. A publicação vigente define o currículo vivo de todas as Matrículas ativas do Curso; não é produto nem direito comercial individual.
@@ -169,7 +177,8 @@ Valor oficial do Curso: soma das durações pedagógicas das Aulas ou override
 manual configurado; não define validade de acesso.
 
 **Duração comercial de acesso**  
-Quantidade de meses vendida e capturada no Pedido/Concessão.
+Quantidade de meses definida para o acesso e registrada no Pedido ou na Concessão; não é
+carga horária pedagógica.
 
 **Janela efetiva de acesso**  
 Intervalo real entre liberação e expiração após extensões, reduções, renovação ou bloqueio.

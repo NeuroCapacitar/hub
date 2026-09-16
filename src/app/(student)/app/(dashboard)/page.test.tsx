@@ -75,6 +75,28 @@ describe("Student dashboard availability", () => {
     dependencies.getActiveBannersData.mockResolvedValue({ banners: [] });
   });
 
+  it("uses a modal for free course acquisition", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        availabilityPreset: "available",
+        courseId: "course-free",
+        description: "Curso aberto para começar agora.",
+        lessonCount: 3,
+        priceInCents: 0,
+        slug: "curso-gratuito",
+        title: "Curso gratuito",
+        workloadHours: 2,
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+
+    expect(markup).toContain("Inscrever-se grátis");
+    expect(markup).toContain('aria-haspopup="dialog"');
+    expect(markup).not.toContain(">Adquirir acesso<");
+  });
+
   it("renders separate coming-soon and closed-enrollment sections with interest actions", async () => {
     dependencies.getStudentCourseCatalog.mockResolvedValue([
       course,

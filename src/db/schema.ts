@@ -70,7 +70,7 @@ export const enrollmentGrantStatusEnum = pgEnum("enrollment_grant_status", [
 ]);
 export const enrollmentGrantSourceTypeEnum = pgEnum(
   "enrollment_grant_source_type",
-  ["paid_order", "manual"]
+  ["paid_order", "manual", "free_enrollment"]
 );
 export const enrollmentAdjustmentTypeEnum = pgEnum(
   "enrollment_adjustment_type",
@@ -89,6 +89,7 @@ export const enrollmentEventTypeEnum = pgEnum("enrollment_event_type", [
   "projection_rebuilt",
   "content_release_scheduled",
   "content_full_access_granted",
+  "free_enrollment_granted",
 ]);
 export const orderStatusEnum = pgEnum("order_status", [
   "pending",
@@ -757,6 +758,9 @@ export const enrollmentGrants = pgTable(
     uniqueIndex("enrollment_grants_manual_reference_unique_idx").on(
       table.manualReference
     ),
+    uniqueIndex("enrollment_grants_free_user_course_unique_idx")
+      .on(table.userId, table.courseId)
+      .where(sql`${table.sourceType} = 'free_enrollment'`),
     index("enrollment_grants_user_course_status_idx").on(
       table.userId,
       table.courseId,
@@ -771,7 +775,7 @@ export const enrollmentGrants = pgTable(
     ),
     check(
       "enrollment_grants_source_shape_check",
-      sql`(${table.sourceType} = 'paid_order' and ${table.orderId} is not null and ${table.manualReference} is null) or (${table.sourceType} = 'manual' and ${table.orderId} is null and ${table.manualReference} is not null)`
+      sql`(${table.sourceType} = 'paid_order' and ${table.orderId} is not null and ${table.manualReference} is null) or (${table.sourceType} = 'manual' and ${table.orderId} is null and ${table.manualReference} is not null) or (${table.sourceType} = 'free_enrollment' and ${table.orderId} is null and ${table.manualReference} is null)`
     ),
   ]
 );

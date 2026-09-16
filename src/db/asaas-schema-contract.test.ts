@@ -7,6 +7,7 @@ import {
   buyerIdentityStatusEnum,
   checkoutStatusEnum,
   courses,
+  enrollmentEventTypeEnum,
   enrollmentGrantSourceTypeEnum,
   enrollmentGrants,
   financialEventSourceEnum,
@@ -68,13 +69,20 @@ describe("Asaas persistence contract", () => {
     );
   });
 
-  it("uses a provider-neutral paid order as the access grant source", () => {
+  it("keeps every enrollment grant source explicit and provider-neutral", () => {
     expect(enrollmentGrantSourceTypeEnum.enumValues).toEqual([
       "paid_order",
       "manual",
+      "free_enrollment",
     ]);
+    expect(enrollmentEventTypeEnum.enumValues).toContain(
+      "free_enrollment_granted"
+    );
     expect(checkNames(enrollmentGrants)).toContain(
       "enrollment_grants_source_shape_check"
+    );
+    expect(indexNames(enrollmentGrants)).toContain(
+      "enrollment_grants_free_user_course_unique_idx"
     );
   });
 

@@ -21,6 +21,7 @@ import { seedScheduledCourse } from "./e2e-seed/scheduled-course";
 
 const E2E_PASSWORD = "E2E-password-123!";
 const CERTIFIABLE_COURSE_TITLE = "Curso E2E certificável";
+const FREE_COURSE_TITLE = "Curso E2E gratuito";
 const FIXTURE_PATH = resolve(
   process.env.E2E_FIXTURE_PATH ?? ".e2e-fixture.json"
 );
@@ -52,6 +53,12 @@ export interface E2eFixture {
     lessonTwoId: string;
     releaseScheduleDigest: string;
     slug: string;
+  };
+  freeCourse: {
+    id: string;
+    lessonId: string;
+    slug: string;
+    title: string;
   };
   paymentCustomers: { blockedId: string; teamId: string };
   runId: string;
@@ -519,6 +526,72 @@ export const seedE2e = async (): Promise<E2eFixture> => {
       lessonIds.push(lessonId);
     }
 
+    const freeCourseSlug = `free-course-e2e-${suffix}`;
+    const { rows: freeCourses } = await client.query<{ id: string }>(
+      `
+        insert into courses (
+          slug, title, price_in_cents, workload_hours, status,
+          certificate_enabled, catalog_visibility, sales_status
+        )
+        values (
+          $1, $2, 0, 1, 'active', false,
+          'listed'::course_catalog_visibility, 'open'::course_sales_status
+        )
+        returning id
+      `,
+      [freeCourseSlug, FREE_COURSE_TITLE]
+    );
+    const freeCourseId = freeCourses[0]?.id;
+    if (!freeCourseId) {
+      throw new Error("Could not create free E2E course.");
+    }
+    const { rows: freeCoursePublications } = await client.query<{
+      id: string;
+    }>(
+      `
+        insert into course_publications (
+          course_id, publication_number, status, title_snapshot,
+          workload_hours_snapshot, published_at
+        )
+        values ($1, 1, 'published', $2, 1, now())
+        returning id
+      `,
+      [freeCourseId, FREE_COURSE_TITLE]
+    );
+    const freeCoursePublicationId = freeCoursePublications[0]?.id;
+    if (!freeCoursePublicationId) {
+      throw new Error("Could not create free E2E course publication.");
+    }
+    const { rows: freeCourseModules } = await client.query<{ id: string }>(
+      `
+        insert into modules (
+          course_id, course_publication_id, title, sort_order, status
+        )
+        values ($1, $2, 'Módulo gratuito E2E', 1, 'active')
+        returning id
+      `,
+      [freeCourseId, freeCoursePublicationId]
+    );
+    const freeCourseModuleId = freeCourseModules[0]?.id;
+    if (!freeCourseModuleId) {
+      throw new Error("Could not create free E2E module.");
+    }
+    const { rows: freeCourseLessons } = await client.query<{ id: string }>(
+      `
+        insert into lessons (
+          module_id, course_publication_id, title, duration_seconds,
+          sort_order, status
+        )
+        values ($1, $2, 'Aula gratuita E2E', 60, 1, 'active')
+        returning id
+      `,
+      [freeCourseModuleId, freeCoursePublicationId]
+    );
+    const freeCourseLessonId = freeCourseLessons[0]?.id;
+    if (!freeCourseLessonId) {
+      throw new Error("Could not create free E2E lesson.");
+    }
+
     const scheduledCourseSlug = `scheduled-course-e2e-${suffix}`;
     const scheduledCourse = await seedScheduledCourse({
       client,
@@ -727,6 +800,7 @@ export const seedE2e = async (): Promise<E2eFixture> => {
       cleanup: {
         courseIds: [
           courseId,
+          freeCourseId,
           scheduledCourseId,
           certifiableCourseId,
           certificateRecords.failed.courseId,
@@ -748,6 +822,12 @@ export const seedE2e = async (): Promise<E2eFixture> => {
         lessonTwoId,
         releaseScheduleDigest: courseReleaseScheduleDigest,
         slug: courseSlug,
+      },
+      freeCourse: {
+        id: freeCourseId,
+        lessonId: freeCourseLessonId,
+        slug: freeCourseSlug,
+        title: FREE_COURSE_TITLE,
       },
       scheduledCourse: {
         futureLessonId,

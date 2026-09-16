@@ -30,10 +30,6 @@ export const getCoursePurchaseLink = ({
   checkoutMode: PaymentsCheckoutMode;
   course: CoursePurchaseLinkCourse;
 }): CoursePurchaseLink => {
-  if (checkoutMode !== "public") {
-    return { available: false, reason: "checkout_disabled" };
-  }
-
   if (course.status !== "active") {
     return { available: false, reason: "course_inactive" };
   }
@@ -46,18 +42,27 @@ export const getCoursePurchaseLink = ({
     return { available: false, reason: "course_unpublished" };
   }
 
-  if (
-    !Number.isInteger(course.priceInCents) ||
-    course.priceInCents < ASAAS_MINIMUM_CHECKOUT_VALUE_IN_CENTS
-  ) {
+  if (!Number.isInteger(course.priceInCents) || course.priceInCents < 0) {
+    return { available: false, reason: "invalid_price" };
+  }
+
+  const getPublicUrl = (): string =>
+    new URL(`/comprar/${encodeURIComponent(course.slug)}`, appUrl).toString();
+
+  if (course.priceInCents === 0) {
+    return { available: true, url: getPublicUrl() };
+  }
+
+  if (checkoutMode !== "public") {
+    return { available: false, reason: "checkout_disabled" };
+  }
+
+  if (course.priceInCents < ASAAS_MINIMUM_CHECKOUT_VALUE_IN_CENTS) {
     return { available: false, reason: "invalid_price" };
   }
 
   return {
     available: true,
-    url: new URL(
-      `/comprar/${encodeURIComponent(course.slug)}`,
-      appUrl
-    ).toString(),
+    url: getPublicUrl(),
   };
 };

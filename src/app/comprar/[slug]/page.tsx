@@ -9,8 +9,11 @@ import {
   getPurchaseHandoffView,
   type PurchaseHandoffView,
 } from "@/features/payments/purchase-handoff";
+import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
+import { getServerEnv } from "@/lib/env";
 import { route } from "@/lib/routes";
 import { getCurrentSession } from "@/lib/session";
+import { FreeEnrollmentButton } from "./free-enrollment-button";
 import { PurchaseHandoffClient } from "./purchase-handoff-client";
 
 export const dynamic = "force-dynamic";
@@ -95,6 +98,72 @@ function CourseAccess({
         <Link href={route(view.href)}>Acessar curso</Link>
       </Button>
     </PurchaseSurface>
+  );
+}
+
+function FreeEnrollment({
+  allowPublicSignup,
+  session,
+  view,
+}: {
+  allowPublicSignup: boolean;
+  session: Awaited<ReturnType<typeof getCurrentSession>>;
+  view: Extract<PurchaseHandoffView, { kind: "free_enrollment" }>;
+}): React.JSX.Element {
+  if (session?.role === "student") {
+    return (
+      <PageContainer
+        as="main"
+        className="min-h-screen bg-background text-foreground"
+      >
+        <section className="max-w-2xl rounded-lg border bg-card p-6">
+          <p className="font-medium text-muted-foreground text-sm">
+            Curso gratuito
+          </p>
+          <h1 className="type-section-title mt-2">{view.courseTitle}</h1>
+          <p className="mt-3 text-muted-foreground text-sm leading-6">
+            Inscreva-se gratuitamente para liberar seu acesso ao Curso.
+          </p>
+          <FreeEnrollmentButton className="mt-6" courseId={view.courseId} />
+        </section>
+      </PageContainer>
+    );
+  }
+
+  const returnTo = getSafeAuthReturnTo(`/comprar/${view.courseSlug}`);
+  const returnQuery = returnTo
+    ? `?${new URLSearchParams({ returnTo }).toString()}`
+    : "";
+
+  return (
+    <PageContainer
+      as="main"
+      className="min-h-screen bg-background text-foreground"
+    >
+      <section className="max-w-2xl rounded-lg border bg-card p-6">
+        <p className="font-medium text-muted-foreground text-sm">
+          Curso gratuito
+        </p>
+        <h1 className="type-section-title mt-2">{view.courseTitle}</h1>
+        <p className="mt-3 text-muted-foreground text-sm leading-6">
+          {allowPublicSignup
+            ? "Crie sua conta ou entre para fazer sua inscrição gratuita."
+            : "Entre para fazer sua inscrição gratuita."}
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          {allowPublicSignup ? (
+            <Button asChild>
+              <Link href={route(`/cadastro${returnQuery}`)}>
+                Criar conta para se inscrever
+              </Link>
+            </Button>
+          ) : null}
+          <Button asChild variant="outline">
+            <Link href={route(`/entrar${returnQuery}`)}>Entrar</Link>
+          </Button>
+        </div>
+      </section>
+    </PageContainer>
   );
 }
 
@@ -186,6 +255,16 @@ export default async function PurchasePage({
 
   if (view.kind === "access") {
     return <CourseAccess view={view} />;
+  }
+
+  if (view.kind === "free_enrollment") {
+    return (
+      <FreeEnrollment
+        allowPublicSignup={getServerEnv().AUTH_PUBLIC_SIGNUP_ENABLED}
+        session={session}
+        view={view}
+      />
+    );
   }
 
   if (view.kind === "blocked") {

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   getCurrentSession: vi.fn(),
+  getServerEnv: vi.fn(),
   getPurchaseHandoffView: vi.fn(),
   redirect: vi.fn(),
   setCourseSaleInterestAction: vi.fn(),
@@ -19,6 +20,9 @@ vi.mock("@/app/(student)/app/actions", () => ({
 vi.mock("@/lib/session", () => ({
   getCurrentSession: dependencies.getCurrentSession,
 }));
+vi.mock("@/lib/env", () => ({
+  getServerEnv: dependencies.getServerEnv,
+}));
 vi.mock("@/features/payments/purchase-handoff", () => ({
   getPurchaseHandoffView: dependencies.getPurchaseHandoffView,
 }));
@@ -31,12 +35,20 @@ vi.mock("./purchase-handoff-client", () => ({
     courseTitle: string;
   }) => <div data-client={`${courseSlug}:${courseTitle}`} />,
 }));
+vi.mock("./free-enrollment-button", () => ({
+  FreeEnrollmentButton: ({ courseId }: { courseId: string }) => (
+    <div data-free-course-id={courseId}>Inscrever-se gratuitamente</div>
+  ),
+}));
 
 import PurchasePage, { dynamic } from "./page";
 
 beforeEach(() => {
   vi.resetAllMocks();
   dependencies.getCurrentSession.mockResolvedValue(null);
+  dependencies.getServerEnv.mockReturnValue({
+    AUTH_PUBLIC_SIGNUP_ENABLED: true,
+  });
   dependencies.redirect.mockImplementation(() => {
     throw new Error("NEXT_REDIRECT");
   });
@@ -79,6 +91,79 @@ describe("PurchasePage", () => {
     expect(markup).toContain('href="/app/cursos/course-1"');
     expect(markup).toContain("Acessar curso");
     expect(markup).not.toContain("data-client");
+  });
+
+  it("renderiza inscrição gratuita para Student autenticada", async () => {
+    dependencies.getCurrentSession.mockResolvedValue({
+      platformBlockedAt: null,
+      role: "student",
+      user: { id: "student-1" },
+    });
+    dependencies.getPurchaseHandoffView.mockResolvedValue({
+      courseId: "course-1",
+      courseSlug: "curso-gratis",
+      courseTitle: "Curso gratuito",
+      kind: "free_enrollment",
+    });
+
+    const markup = renderToStaticMarkup(
+      await PurchasePage({ params: Promise.resolve({ slug: "curso-gratis" }) })
+    );
+
+    expect(markup).toContain("Curso gratuito");
+    expect(markup).toContain('data-free-course-id="course-1"');
+    expect(markup).toContain("Inscrever-se gratuitamente");
+    expect(markup).not.toContain("Checkout");
+    expect(markup).not.toContain("Pedido");
+    expect(markup).not.toContain("Asaas");
+  });
+
+  it("renderiza links seguros para visitante de Curso gratuito", async () => {
+    dependencies.getPurchaseHandoffView.mockResolvedValue({
+      courseId: "course-1",
+      courseSlug: "curso-gratis",
+      courseTitle: "Curso gratuito",
+      kind: "free_enrollment",
+    });
+
+    const markup = renderToStaticMarkup(
+      await PurchasePage({ params: Promise.resolve({ slug: "curso-gratis" }) })
+    );
+
+    expect(markup).toContain(
+      'href="/cadastro?returnTo=%2Fcomprar%2Fcurso-gratis"'
+    );
+    expect(markup).toContain(
+      'href="/entrar?returnTo=%2Fcomprar%2Fcurso-gratis"'
+    );
+    expect(markup).toContain("Criar conta para se inscrever");
+    expect(markup).toContain("Entrar");
+    expect(markup).not.toContain("Checkout");
+    expect(markup).not.toContain("Pedido");
+    expect(markup).not.toContain("Asaas");
+  });
+
+  it("não promete cadastro público quando a flag está desabilitada", async () => {
+    dependencies.getServerEnv.mockReturnValue({
+      AUTH_PUBLIC_SIGNUP_ENABLED: false,
+    });
+    dependencies.getPurchaseHandoffView.mockResolvedValue({
+      courseId: "course-1",
+      courseSlug: "curso-gratis",
+      courseTitle: "Curso gratuito",
+      kind: "free_enrollment",
+    });
+
+    const markup = renderToStaticMarkup(
+      await PurchasePage({ params: Promise.resolve({ slug: "curso-gratis" }) })
+    );
+
+    expect(markup).not.toContain("/cadastro");
+    expect(markup).not.toContain("Criar conta para se inscrever");
+    expect(markup).toContain(
+      'href="/entrar?returnTo=%2Fcomprar%2Fcurso-gratis"'
+    );
+    expect(markup).toContain("Entre para fazer sua inscrição gratuita.");
   });
 
   it.each([

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { MigrationMeta } from "drizzle-orm/migrator";
 import { describe, expect, it, vi } from "vitest";
 import {
-  applyE2eMigrationsPerFile,
+  applyMigrationsPerFile,
   hasExecutableMigrationSql,
 } from "./e2e-migrator";
 
@@ -28,7 +28,7 @@ describe("E2E per-file migrator", () => {
       }),
     };
 
-    await applyE2eMigrationsPerFile({
+    await applyMigrationsPerFile({
       client: client as never,
       migrations: [
         migration(1, "hash-1", ["select 1"]),
@@ -58,7 +58,7 @@ describe("E2E per-file migrator", () => {
     };
 
     await expect(
-      applyE2eMigrationsPerFile({
+      applyMigrationsPerFile({
         client: client as never,
         migrations: [migration(1, "hash-1", ["invalid statement"])],
       })
@@ -76,11 +76,11 @@ describe("E2E per-file migrator", () => {
     };
 
     await expect(
-      applyE2eMigrationsPerFile({
+      applyMigrationsPerFile({
         client: client as never,
         migrations: [migration(1, "hash-1", ["select 1"])],
       })
-    ).rejects.toThrow("E2E migration journal drift at 1");
+    ).rejects.toThrow("Migration journal drift at 1");
   });
 
   it("accepts a historical hash that differs only by line endings", async () => {
@@ -99,11 +99,47 @@ describe("E2E per-file migrator", () => {
     };
 
     await expect(
-      applyE2eMigrationsPerFile({
+      applyMigrationsPerFile({
         client: client as never,
         migrations: [migration(1, sha256(sql), [sql])],
       })
     ).resolves.toBeUndefined();
+  });
+
+  it("can continue from a Development journal with historical hash drift", async () => {
+    const client = {
+      query: vi.fn(async (statement: string) => ({
+        rows: statement.trim().startsWith("select hash")
+          ? [{ created_at: "1", hash: "other" }]
+          : [],
+      })),
+    };
+
+    await expect(
+      applyMigrationsPerFile({
+        client: client as never,
+        migrations: [migration(1, "hash-1", ["select 1"])],
+        verifyAppliedHashes: false,
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it("still rejects an unknown journal timestamp when hashes are not verified", async () => {
+    const client = {
+      query: vi.fn(async (statement: string) => ({
+        rows: statement.trim().startsWith("select hash")
+          ? [{ created_at: "2", hash: "other" }]
+          : [],
+      })),
+    };
+
+    await expect(
+      applyMigrationsPerFile({
+        client: client as never,
+        migrations: [migration(1, "hash-1", ["select 1"])],
+        verifyAppliedHashes: false,
+      })
+    ).rejects.toThrow("Migration journal drift at 2");
   });
 
   it("recognizes blank and line-comment-only statements", () => {

@@ -1,9 +1,9 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: b6e6d63
-current_migration_tag: 0080_auth_media_slides
-migration_entry_count: 81
+last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
+current_migration_tag: 0082_free_enrollment_contract
+migration_entry_count: 83
 schema_table_count: 50
 ---
 
@@ -35,6 +35,18 @@ bun run db:migrations:check
 
 Revise SQL, journal e snapshot. Nunca edite journal ou snapshot manualmente e
 não use `db:push` para acelerar uma release.
+
+`bun run db:migrate:development`, `bun run db:migrate:staging` e
+`bun run db:migrate:production` usam o endpoint direto, lock compartilhado e uma
+transação por arquivo de migration. `bun run db:migrate:e2e` usa a mesma
+separação no banco descartável. A separação é necessária quando uma migration
+adiciona um valor de enum que será usado por uma migration posterior; o PostgreSQL
+exige que o primeiro `ALTER TYPE ... ADD VALUE` esteja commitado antes desse uso.
+Staging, Production e E2E validam os hashes do journal; Development avança pelos
+timestamps já registrados, mas ainda rejeita timestamps desconhecidos, preservando
+somente linhas históricas cujo hash possa divergir de uma fonte que não é autoridade.
+`db:migrations:check` valida a cadeia local e `db:migrations:inspect` audita o banco
+somente para leitura.
 
 ## Índice do histórico de liberação
 
@@ -119,6 +131,19 @@ bucket público acontece somente depois da confirmação do objeto privado; a
 manutenção repõe cópias ativas e limpa objetos sem referência após a janela
 de segurança. Antes de promover, confira também o prefixo público, a URL base
 e a permissão exclusiva de Admin descritos no ADR-0015.
+
+A migration `0081_free_enrollment_enums` adiciona os valores
+`free_enrollment` e `free_enrollment_granted` aos enums de concessões e
+eventos de matrícula. Ela deve ser aplicada separadamente da alteração de
+constraint porque o PostgreSQL não permite usar um valor de enum recém-criado
+na mesma transação que o adicionou.
+
+A migration `0082_free_enrollment_contract` permite que uma concessão de
+matrícula gratuita não tenha Pedido nem referência manual e cria um índice
+único parcial por usuário e curso para impedir mais de uma concessão gratuita,
+independentemente do status. O código que concede acesso ainda deve validar
+preço, publicação, duração e concessões ativas; o índice é uma proteção final
+contra concorrência e duplicidade.
 
 Na verificação de escala do Financeiro em Development, a base tinha 8 Pedidos e a
 busca textual usou `Seq Scan` com 2 buffers e 0,111 ms de execução; a ordenação por

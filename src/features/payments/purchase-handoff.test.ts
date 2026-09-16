@@ -76,8 +76,8 @@ describe("getPurchaseHandoffView", () => {
         status: "archived",
       },
     ],
-    ["Curso gratuito", { price_in_cents: 0 }],
     ["Curso sem publicacao", { has_published_publication: false }],
+    ["Curso oculto", { catalog_visibility: "hidden", sales_status: "open" }],
   ])("torna %s indisponivel", async (_label, rowOverride) => {
     dependencies.query.mockResolvedValue({
       rows: rowOverride ? [{ ...ACTIVE_COURSE, ...rowOverride }] : [],
@@ -118,6 +118,66 @@ describe("getPurchaseHandoffView", () => {
       kind: "unavailable",
       reason: "checkout_disabled",
     });
+  });
+
+  it("oferece inscrição gratuita sem ler a configuração do Checkout", async () => {
+    dependencies.getServerEnv.mockImplementation(() => {
+      throw new Error("Checkout environment must not be read for free access");
+    });
+    dependencies.query.mockResolvedValue({
+      rows: [{ ...ACTIVE_COURSE, price_in_cents: 0 }],
+    });
+
+    await expect(
+      getPurchaseHandoffView({ session: null, slug: "curso-publico" })
+    ).resolves.toEqual({
+      courseId: ACTIVE_COURSE.course_id,
+      courseSlug: ACTIVE_COURSE.course_slug,
+      courseTitle: ACTIVE_COURSE.course_title,
+      kind: "free_enrollment",
+    });
+    expect(dependencies.getServerEnv).not.toHaveBeenCalled();
+  });
+
+  it("keeps schedule validation for a free Course", async () => {
+    dependencies.getServerEnv.mockImplementation(() => {
+      throw new Error("Checkout environment must not be read for free access");
+    });
+    dependencies.query.mockResolvedValue({
+      rows: [
+        {
+          ...ACTIVE_COURSE,
+          price_in_cents: 0,
+          release_modules: [
+            { releaseDelayDays: 336, sortOrder: 1, title: "Último módulo" },
+          ],
+        },
+      ],
+    });
+
+    await expect(
+      getPurchaseHandoffView({ session: null, slug: "curso-publico" })
+    ).resolves.toEqual({
+      kind: "unavailable",
+      reason: "course_unavailable",
+    });
+    expect(dependencies.getServerEnv).not.toHaveBeenCalled();
+  });
+
+  it("keeps a positive subminimum Course unavailable for Checkout", async () => {
+    dependencies.query.mockResolvedValue({
+      rows: [{ ...ACTIVE_COURSE, price_in_cents: 999 }],
+    });
+    await expect(
+      getPurchaseHandoffView({
+        session: null,
+        slug: "curso-publico",
+      })
+    ).resolves.toEqual({
+      kind: "unavailable",
+      reason: "course_unavailable",
+    });
+    expect(dependencies.getServerEnv).not.toHaveBeenCalled();
   });
 
   it("oferece checkout ao visitante elegivel", async () => {
@@ -201,6 +261,26 @@ describe("getPurchaseHandoffView", () => {
           enrollment_status: "active",
           has_effective_access: true,
           sales_status: "closed",
+        },
+      ],
+    });
+
+    await expect(
+      getPurchaseHandoffView({
+        session: createSession(),
+        slug: "curso-publico",
+      })
+    ).resolves.toMatchObject({ kind: "access" });
+  });
+
+  it("prioritizes effective access before free acquisition", async () => {
+    dependencies.query.mockResolvedValue({
+      rows: [
+        {
+          ...ACTIVE_COURSE,
+          enrollment_status: "active",
+          has_effective_access: true,
+          price_in_cents: 0,
         },
       ],
     });

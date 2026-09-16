@@ -95,7 +95,8 @@ test("aluno navega do Dashboard ao Curso e à primeira Aula com teclado", async 
 
   const courseLink = page
     .locator("#main-content")
-    .getByRole("link", { exact: true, name: "Curso E2E" });
+    .locator(`a[href="/app/cursos/${fixture.course.id}"]`)
+    .filter({ hasText: "Curso E2E" });
   await focusWithTab(page, courseLink);
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(new RegExp(`/app/cursos/${fixture.course.id}$`));

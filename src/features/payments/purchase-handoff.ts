@@ -9,6 +9,7 @@ import { getContentReleaseScheduleDigest } from "@/features/courses/module-conte
 import { assertCheckoutAvailable } from "@/features/payments/checkout-availability";
 import { getServerEnv } from "@/lib/env";
 import type { AppSession } from "@/lib/session";
+import { ASAAS_MINIMUM_CHECKOUT_VALUE_IN_CENTS } from "./asaas";
 
 export type PurchaseHandoffView =
   | {
@@ -18,6 +19,12 @@ export type PurchaseHandoffView =
       kind: "checkout";
       releaseSchedule: ContentReleaseScheduleSnapshot;
       releaseScheduleDigest: string;
+    }
+  | {
+      courseId: string;
+      courseSlug: string;
+      courseTitle: string;
+      kind: "free_enrollment";
     }
   | {
       courseId: string;
@@ -132,14 +139,39 @@ const resolveOpenCheckoutView = (
   course: PurchaseHandoffRow
 ): Extract<
   PurchaseHandoffView,
-  { kind: "checkout" } | { kind: "unavailable" }
+  { kind: "checkout" } | { kind: "free_enrollment" } | { kind: "unavailable" }
 > => {
   if (
     course.status !== "active" ||
+    course.catalog_visibility !== "listed" ||
     course.sales_status !== "open" ||
-    course.price_in_cents <= 0 ||
     !course.has_published_publication
   ) {
+    return { kind: "unavailable", reason: "course_unavailable" };
+  }
+
+  if (course.price_in_cents === 0) {
+    try {
+      const releaseSchedule = buildContentReleaseScheduleSnapshot(
+        course.release_modules ?? []
+      );
+      assertScheduleFitsAccessDuration({
+        accessDurationMonths: course.access_duration_months,
+        snapshot: releaseSchedule,
+      });
+    } catch {
+      return { kind: "unavailable", reason: "course_unavailable" };
+    }
+
+    return {
+      courseId: course.course_id,
+      courseSlug: course.course_slug,
+      courseTitle: course.course_title,
+      kind: "free_enrollment",
+    };
+  }
+
+  if (course.price_in_cents < ASAAS_MINIMUM_CHECKOUT_VALUE_IN_CENTS) {
     return { kind: "unavailable", reason: "course_unavailable" };
   }
 
