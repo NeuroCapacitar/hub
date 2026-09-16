@@ -3,7 +3,7 @@ import { config } from "dotenv";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { Pool } from "pg";
 import { withVerifiedSslMode } from "../src/db/connection-url";
-import { applyE2eMigrationsPerFile } from "../src/db/e2e-migrator";
+import { applyMigrationsPerFile } from "../src/db/e2e-migrator";
 import { runMigrationWithLock } from "../src/db/migration-lock";
 import { getMigrationTargetProblems } from "../src/db/migration-target";
 
@@ -36,7 +36,7 @@ try {
   await runMigrationWithLock({
     client: lockClient,
     migrate: () =>
-      applyE2eMigrationsPerFile({
+      applyMigrationsPerFile({
         client: lockClient,
         migrations: readMigrationFiles({ migrationsFolder }),
         // Development preserves historical journal rows whose hashes can differ

@@ -138,7 +138,6 @@ Fontes oficiais:
 - [Price your products](https://support.teachable.com/en/articles/15627279-price-your-products)
 - [Publishing and product visibility](https://support.teachable.com/en/articles/11682484-publishing-and-product-visibility)
 - [Product Access Duration](https://support.teachable.com/en/articles/11682480-product-access-duration)
-- [Give Free Access to a Paid Course](https://support.teachable.com/en/articles/11682476-price-your-products)
 
 ### Moodle
 

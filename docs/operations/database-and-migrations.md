@@ -36,12 +36,15 @@ bun run db:migrations:check
 Revise SQL, journal e snapshot. Nunca edite journal ou snapshot manualmente e
 não use `db:push` para acelerar uma release.
 
-`bun run db:migrate:development` usa o endpoint direto, lock compartilhado e uma
-transação por arquivo de migration. A separação é necessária quando uma migration
+`bun run db:migrate:development`, `bun run db:migrate:staging` e
+`bun run db:migrate:production` usam o endpoint direto, lock compartilhado e uma
+transação por arquivo de migration. `bun run db:migrate:e2e` usa a mesma
+separação no banco descartável. A separação é necessária quando uma migration
 adiciona um valor de enum que será usado por uma migration posterior; o PostgreSQL
 exige que o primeiro `ALTER TYPE ... ADD VALUE` esteja commitado antes desse uso.
-O executor avança pelos timestamps já registrados no journal, preservando linhas
-históricas cujo hash possa divergir de uma fonte que não é autoridade, enquanto
+Staging, Production e E2E validam os hashes do journal; Development avança pelos
+timestamps já registrados, mas ainda rejeita timestamps desconhecidos, preservando
+somente linhas históricas cujo hash possa divergir de uma fonte que não é autoridade.
 `db:migrations:check` valida a cadeia local e `db:migrations:inspect` audita o banco
 somente para leitura.
 

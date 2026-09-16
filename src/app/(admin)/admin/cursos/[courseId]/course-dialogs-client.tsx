@@ -305,7 +305,6 @@ export function CourseSettingsForm({
                       <Field orientation="horizontal">
                         <Checkbox
                           checked={paymentAllowPix}
-                          disabled={!paymentAllowCreditCard}
                           id="course-payment-pix"
                           name="paymentAllowPix"
                           onCheckedChange={(checked) => {
@@ -322,7 +321,6 @@ export function CourseSettingsForm({
                       <Field orientation="horizontal">
                         <Checkbox
                           checked={paymentAllowCreditCard}
-                          disabled={!paymentAllowPix}
                           id="course-payment-card"
                           name="paymentAllowCreditCard"
                           onCheckedChange={(checked) => {

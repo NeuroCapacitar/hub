@@ -269,6 +269,31 @@ describe("course payment settings", () => {
     ).toBe("true");
   });
 
+  it("allows reactivating a payment method when both are disabled", () => {
+    renderCourseSettingsForm({
+      ...course,
+      paymentAllowCreditCard: false,
+      paymentAllowPix: false,
+    });
+
+    expect(
+      container?.querySelector<HTMLButtonElement>("#course-payment-pix")
+        ?.disabled
+    ).toBe(false);
+    expect(
+      container?.querySelector<HTMLButtonElement>("#course-payment-card")
+        ?.disabled
+    ).toBe(false);
+
+    togglePaymentMethod("pix");
+
+    expect(
+      container
+        ?.querySelector<HTMLButtonElement>("#course-payment-pix")
+        ?.getAttribute("aria-checked")
+    ).toBe("true");
+  });
+
   it("exposes a compact workload trigger and preserves the manual override", () => {
     const automaticMarkup = renderToStaticMarkup(
       <CourseSettingsForm course={course} />

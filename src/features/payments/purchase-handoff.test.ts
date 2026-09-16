@@ -77,6 +77,7 @@ describe("getPurchaseHandoffView", () => {
       },
     ],
     ["Curso sem publicacao", { has_published_publication: false }],
+    ["Curso oculto", { catalog_visibility: "hidden", sales_status: "open" }],
   ])("torna %s indisponivel", async (_label, rowOverride) => {
     dependencies.query.mockResolvedValue({
       rows: rowOverride ? [{ ...ACTIVE_COURSE, ...rowOverride }] : [],

@@ -230,6 +230,27 @@ describe("free enrollment service", () => {
     expect(client.query).toHaveBeenCalledWith("commit");
   });
 
+  it("prioritizes existing effective access over a terminal free grant", async () => {
+    const client = configureClient({
+      activeGrant: { id: "paid-grant-1" },
+      freeGrant: {
+        effective_expires_at: new Date("2026-10-15T12:00:00.000Z"),
+        id: "free-grant-1",
+        revoked_reason: "payment_refunded",
+        starts_at: NOW,
+        status: "refunded",
+      },
+    });
+
+    await expect(
+      enrollInFreeCourse({ courseId: COURSE_ID, now: NOW, userId: USER_ID })
+    ).resolves.toEqual({ status: "already_active" });
+
+    expect(dependencies.insertEnrollmentEvent).not.toHaveBeenCalled();
+    expect(dependencies.rebuildEnrollmentProjection).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith("commit");
+  });
+
   it("reactivates the same expired free grant with a new window", async () => {
     const previousStartsAt = new Date("2026-05-15T12:00:00.000Z");
     const previousExpiresAt = new Date("2026-08-15T12:00:00.000Z");

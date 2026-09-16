@@ -291,6 +291,28 @@ describe("enrollFreeCourseAction", () => {
     });
     expect(dependencies.revalidatePath).not.toHaveBeenCalled();
   });
+
+  it("keeps the successful enrollment result when cache revalidation fails", async () => {
+    dependencies.revalidatePath.mockImplementationOnce(() => {
+      throw new Error("cache unavailable");
+    });
+    const formData = new FormData();
+    formData.set("courseId", courseId);
+
+    await expect(enrollFreeCourseAction(formData)).resolves.toEqual({
+      courseId,
+      ok: true,
+    });
+
+    expect(dependencies.revalidatePath).toHaveBeenCalledTimes(3);
+    expect(dependencies.logOperationalEvent).toHaveBeenCalledWith({
+      aggregateId: courseId,
+      correlationId: "correlation-1",
+      errorCode: "free_enrollment_revalidation_failed",
+      operation: "student.free_enrollment.revalidation",
+      outcome: "failure",
+    });
+  });
 });
 
 describe("recordLessonWatchProgressAction", () => {

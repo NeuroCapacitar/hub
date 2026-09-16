@@ -46,6 +46,32 @@ const getFreeEnrollmentDomainMessage = (error: unknown): string | null => {
     : null;
 };
 
+const revalidateFreeEnrollmentPaths = (courseId: string): void => {
+  const paths: Array<{ path: string; type?: "page" }> = [
+    { path: "/app" },
+    { path: `/app/cursos/${courseId}` },
+    { path: "/comprar/[slug]", type: "page" },
+  ];
+
+  for (const { path, type } of paths) {
+    try {
+      if (type) {
+        revalidatePath(path, type);
+      } else {
+        revalidatePath(path);
+      }
+    } catch {
+      logOperationalEvent({
+        aggregateId: courseId,
+        correlationId: createCorrelationId(null),
+        errorCode: "free_enrollment_revalidation_failed",
+        operation: "student.free_enrollment.revalidation",
+        outcome: "failure",
+      });
+    }
+  }
+};
+
 export type FreeEnrollmentActionResult =
   | { courseId: string; ok: true }
   | { message: string; ok: false };
@@ -62,10 +88,6 @@ export const enrollFreeCourseAction = async (
 
   try {
     await enrollInFreeCourse({ courseId, userId: session.user.id });
-    revalidatePath("/app");
-    revalidatePath(`/app/cursos/${courseId}`);
-    revalidatePath("/comprar/[slug]", "page");
-    return { courseId, ok: true };
   } catch (error) {
     const message = getFreeEnrollmentDomainMessage(error);
     if (message) {
@@ -86,6 +108,9 @@ export const enrollFreeCourseAction = async (
       ok: false,
     };
   }
+
+  revalidateFreeEnrollmentPaths(courseId);
+  return { courseId, ok: true };
 };
 
 export const completeLessonAction = async (formData: FormData) => {

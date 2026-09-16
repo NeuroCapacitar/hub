@@ -304,15 +304,15 @@ export const enrollInFreeCourse = async ({
       userId,
       normalizedCourseId
     );
-    if (freeGrant && isTerminalGrantStatus(freeGrant.status)) {
-      throw new Error("Concessão gratuita encerrada não pode ser reativada.");
-    }
-
     if (
       await hasEffectiveAccessGrant(client, userId, normalizedCourseId, now)
     ) {
       await client.query("commit");
       return { status: "already_active" };
+    }
+
+    if (freeGrant && isTerminalGrantStatus(freeGrant.status)) {
+      throw new Error("Concessão gratuita encerrada não pode ser reativada.");
     }
 
     const reactivated = freeGrant

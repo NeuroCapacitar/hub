@@ -3,7 +3,7 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { Pool } from "pg";
 import { withVerifiedSslMode } from "../src/db/connection-url";
 import { assertSafeE2eDatabaseEnvironment } from "../src/db/e2e-database-guard";
-import { applyE2eMigrationsPerFile } from "../src/db/e2e-migrator";
+import { applyMigrationsPerFile } from "../src/db/e2e-migrator";
 import { runMigrationWithLock } from "../src/db/migration-lock";
 
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -49,7 +49,7 @@ if (import.meta.main) {
     await runMigrationWithLock({
       client,
       migrate: async () =>
-        await applyE2eMigrationsPerFile({
+        await applyMigrationsPerFile({
           client,
           migrations: readMigrationFiles({ migrationsFolder }),
         }),

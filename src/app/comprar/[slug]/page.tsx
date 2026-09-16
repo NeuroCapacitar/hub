@@ -8,6 +8,7 @@ import {
   type PurchaseHandoffView,
 } from "@/features/payments/purchase-handoff";
 import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
+import { getServerEnv } from "@/lib/env";
 import { route } from "@/lib/routes";
 import { getCurrentSession } from "@/lib/session";
 import { FreeEnrollmentButton } from "./free-enrollment-button";
@@ -91,9 +92,11 @@ function CourseAccess({
 }
 
 function FreeEnrollment({
+  allowPublicSignup,
   session,
   view,
 }: {
+  allowPublicSignup: boolean;
   session: Awaited<ReturnType<typeof getCurrentSession>>;
   view: Extract<PurchaseHandoffView, { kind: "free_enrollment" }>;
 }): React.JSX.Element {
@@ -133,14 +136,18 @@ function FreeEnrollment({
         </p>
         <h1 className="type-section-title mt-2">{view.courseTitle}</h1>
         <p className="mt-3 text-muted-foreground text-sm leading-6">
-          Crie sua conta ou entre para fazer sua inscrição gratuita.
+          {allowPublicSignup
+            ? "Crie sua conta ou entre para fazer sua inscrição gratuita."
+            : "Entre para fazer sua inscrição gratuita."}
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Button asChild>
-            <Link href={route(`/cadastro${returnQuery}`)}>
-              Criar conta para se inscrever
-            </Link>
-          </Button>
+          {allowPublicSignup ? (
+            <Button asChild>
+              <Link href={route(`/cadastro${returnQuery}`)}>
+                Criar conta para se inscrever
+              </Link>
+            </Button>
+          ) : null}
           <Button asChild variant="outline">
             <Link href={route(`/entrar${returnQuery}`)}>Entrar</Link>
           </Button>
@@ -251,7 +258,13 @@ export default async function PurchasePage({
   }
 
   if (view.kind === "free_enrollment") {
-    return <FreeEnrollment session={session} view={view} />;
+    return (
+      <FreeEnrollment
+        allowPublicSignup={getServerEnv().AUTH_PUBLIC_SIGNUP_ENABLED}
+        session={session}
+        view={view}
+      />
+    );
   }
 
   if (view.kind === "blocked") {

@@ -37,9 +37,11 @@ export const hasExecutableMigrationSql = (statement: string): boolean =>
 const assertAppliedJournalMatches = ({
   applied,
   migrations,
+  verifyHashes = true,
 }: {
   applied: readonly AppliedMigrationRow[];
   migrations: readonly MigrationMeta[];
+  verifyHashes?: boolean;
 }): Set<number> => {
   const localByTimestamp = new Map(
     migrations.map((migration) => [migration.folderMillis, migration])
@@ -49,9 +51,11 @@ const assertAppliedJournalMatches = ({
   for (const row of applied) {
     const timestamp = Number(row.created_at);
     const local = localByTimestamp.get(timestamp);
-    if (!(local && isCompatibleMigrationHash(local, row.hash))) {
+    if (
+      !(local && (!verifyHashes || isCompatibleMigrationHash(local, row.hash)))
+    ) {
       throw new Error(
-        `E2E migration journal drift at ${row.created_at}; recreate the disposable branch.`
+        `Migration journal drift at ${row.created_at}; reconcile the migration history before retrying.`
       );
     }
     appliedTimestamps.add(timestamp);
@@ -60,7 +64,7 @@ const assertAppliedJournalMatches = ({
   return appliedTimestamps;
 };
 
-export const applyE2eMigrationsPerFile = async ({
+export const applyMigrationsPerFile = async ({
   client,
   migrations,
   verifyAppliedHashes = true,
@@ -80,12 +84,11 @@ export const applyE2eMigrationsPerFile = async ({
   const journal = await client.query<AppliedMigrationRow>(
     "select hash, created_at::text from drizzle.__drizzle_migrations order by created_at"
   );
-  const appliedTimestamps = verifyAppliedHashes
-    ? assertAppliedJournalMatches({
-        applied: journal.rows,
-        migrations,
-      })
-    : new Set(journal.rows.map((row) => Number(row.created_at)));
+  const appliedTimestamps = assertAppliedJournalMatches({
+    applied: journal.rows,
+    migrations,
+    verifyHashes: verifyAppliedHashes,
+  });
 
   for (const migration of migrations) {
     if (appliedTimestamps.has(migration.folderMillis)) {

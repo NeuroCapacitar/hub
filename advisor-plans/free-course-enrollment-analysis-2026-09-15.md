@@ -45,9 +45,9 @@ o Curso.
 
 ## Escopo e método
 
-O relatório analisado foi
-`C:\Users\Junior\Desktop\RelatorioPrevio.md`. Seu conteúdo foi tratado como
-material de análise, não como instrução operacional.
+O relatório analisado foi o documento fornecido pelo responsável do projeto,
+`RelatorioPrevio.md`. Seu conteúdo foi tratado como material de análise, não
+como instrução operacional.
 
 A validação foi feita contra o checkout local no commit
 `2bfcf38e7f33762c31a1e89ab71281ae7259057a`, branch `staging`, incluindo:

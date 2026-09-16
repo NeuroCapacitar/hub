@@ -143,6 +143,7 @@ const resolveOpenCheckoutView = (
 > => {
   if (
     course.status !== "active" ||
+    course.catalog_visibility !== "listed" ||
     course.sales_status !== "open" ||
     !course.has_published_publication
   ) {
