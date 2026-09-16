@@ -376,6 +376,14 @@ const getEventCount = async (
   return rows[0]?.count ?? 0;
 };
 
+const getActiveExpiredEnrollmentCount = async (now: Date): Promise<number> => {
+  const { rows } = await pool.query<{ count: number }>(
+    "select count(*)::int as count from enrollments where status = 'active' and expires_at < $1",
+    [now]
+  );
+  return rows[0]?.count ?? 0;
+};
+
 const isWaitingForAdvisoryLock = async (): Promise<boolean> => {
   const { rows } = await pool.query<{ waiting: boolean }>(
     `
@@ -744,6 +752,9 @@ describe("free enrollment PostgreSQL integration", () => {
       now: NOW,
       userId: fixture.userId,
     });
+    const maintenanceNow = new Date("2026-09-21T12:00:00.000Z");
+    const expiredEnrollmentCountBefore =
+      await getActiveExpiredEnrollmentCount(maintenanceNow);
     await pool.query(
       `
         update enrollment_grants
@@ -759,9 +770,11 @@ describe("free enrollment PostgreSQL integration", () => {
 
     await expect(
       processEnrollmentMaintenance({
-        now: new Date("2026-09-21T12:00:00.000Z"),
+        now: maintenanceNow,
       })
-    ).resolves.toMatchObject({ expiredCount: 1 });
+    ).resolves.toMatchObject({
+      expiredCount: expiredEnrollmentCountBefore + 1,
+    });
 
     const grants = await getGrantStates(fixture);
     expect(grants).toEqual([
