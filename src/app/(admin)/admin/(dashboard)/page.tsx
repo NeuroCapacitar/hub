@@ -62,7 +62,6 @@ import {
   getCheckoutStatusPresentation,
   getOrderStatusPresentation,
 } from "@/features/admin/status-presentation";
-import { getSupportCourseOperations } from "@/features/admin/support-server";
 import { requirePermission } from "@/lib/auth-permissions";
 import {
   formatCurrencyInCents,
@@ -72,7 +71,6 @@ import {
 import { route } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { AdminMetricCard } from "../admin-metric-card";
-import { SupportDashboard } from "../support-dashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -189,40 +187,44 @@ const getDashboardIssues = ({
   const failedIntegrationCount =
     backlog.webhooks.failed + backlog.outbox.deadLetters;
   const uncertainFinancialCount =
-    financial.uncertainCheckoutCount +
-    financial.uncertainRefundCount +
-    financial.uncorrelatedOrderCount;
+    (financial.uncertainCheckoutCount ?? 0) +
+    (financial.uncertainRefundCount ?? 0) +
+    (financial.uncorrelatedOrderCount ?? 0);
 
-  add(attention, {
-    actionLabel: "Abrir fila",
-    count: financial.pendingPaymentReviewCount,
-    description:
-      "Exceções aguardam uma decisão antes de concluir o fluxo financeiro.",
-    href: "/admin/financeiro",
-    label: "Revisões financeiras",
-    tone: "attention",
-  });
+  if (financial.pendingPaymentReviewCount !== undefined) {
+    add(attention, {
+      actionLabel: "Abrir fila",
+      count: financial.pendingPaymentReviewCount,
+      description:
+        "Exceções aguardam uma decisão antes de concluir o fluxo financeiro.",
+      href: "/admin/financeiro",
+      label: "Revisões financeiras",
+      tone: "attention",
+    });
+  }
   add(attention, {
     actionLabel: "Ver financeiro",
     count: uncertainFinancialCount,
     description: formatCountBreakdown([
-      ["Checkouts incertos", financial.uncertainCheckoutCount],
-      ["Sem pagamento vinculado", financial.uncorrelatedOrderCount],
-      ["Reembolsos incertos", financial.uncertainRefundCount],
+      ["Checkouts incertos", financial.uncertainCheckoutCount ?? 0],
+      ["Sem pagamento vinculado", financial.uncorrelatedOrderCount ?? 0],
+      ["Reembolsos incertos", financial.uncertainRefundCount ?? 0],
     ]),
     href: "/admin/financeiro",
     label: "Resultados financeiros incertos",
     tone: "attention",
   });
-  add(attention, {
-    actionLabel: "Ver reembolsos",
-    count: operations.financial.failedRefundCount,
-    description:
-      "O reembolso falhou e precisa ser conferido antes de uma nova tentativa.",
-    href: "/admin/financeiro",
-    label: "Reembolsos com falha",
-    tone: "attention",
-  });
+  if (financial.failedRefundCount !== undefined) {
+    add(attention, {
+      actionLabel: "Ver reembolsos",
+      count: financial.failedRefundCount,
+      description:
+        "O reembolso falhou e precisa ser conferido antes de uma nova tentativa.",
+      href: "/admin/financeiro",
+      label: "Reembolsos com falha",
+      tone: "attention",
+    });
+  }
   add(attention, {
     actionLabel: "Abrir Operação",
     count: failedIntegrationCount,
@@ -276,7 +278,7 @@ const getDashboardIssues = ({
 
   add(watch, {
     actionLabel: "Ver pedidos",
-    count: overview.pendingOrders,
+    count: overview.pendingOrders ?? 0,
     description: "Checkouts ainda abertos; não entram na receita bruta paga.",
     href: "/admin/financeiro?tab=orders&status=pending&checkout=open",
     label: "Pedidos aguardando confirmação",
@@ -291,23 +293,27 @@ const getDashboardIssues = ({
     label: "Webhooks em retry",
     tone: "watch",
   });
-  add(watch, {
-    actionLabel: "Ver financeiro",
-    count: operations.financial.pendingRefundCount,
-    description: "Solicitações de reembolso ainda estão em processamento.",
-    href: "/admin/financeiro",
-    label: "Reembolsos em processamento",
-    tone: "watch",
-  });
-  add(watch, {
-    actionLabel: "Ver disputas",
-    count: operations.financial.disputedOrderCount,
-    description:
-      "Pedidos permanecem marcados como disputa no estado financeiro local.",
-    href: "/admin/financeiro?tab=orders&status=disputed",
-    label: "Pedidos em disputa",
-    tone: "watch",
-  });
+  if (financial.pendingRefundCount !== undefined) {
+    add(watch, {
+      actionLabel: "Ver financeiro",
+      count: financial.pendingRefundCount,
+      description: "Solicitações de reembolso ainda estão em processamento.",
+      href: "/admin/financeiro",
+      label: "Reembolsos em processamento",
+      tone: "watch",
+    });
+  }
+  if (financial.disputedOrderCount !== undefined) {
+    add(watch, {
+      actionLabel: "Ver disputas",
+      count: financial.disputedOrderCount,
+      description:
+        "Pedidos permanecem marcados como disputa no estado financeiro local.",
+      href: "/admin/financeiro?tab=orders&status=disputed",
+      label: "Pedidos em disputa",
+      tone: "watch",
+    });
+  }
   add(watch, {
     actionLabel: "Ver alunos",
     count: operations.access.expiringStudentCount,
@@ -373,22 +379,8 @@ const getDashboardIssues = ({
   return { attention, watch };
 };
 
-export default async function AdminPage({
-  searchParams,
-}: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-} = {}): Promise<React.JSX.Element> {
-  const session = await requirePermission("viewAdminPanel");
-
-  if (session.role === "support") {
-    const params = (await searchParams) ?? {};
-    const rawPage = Array.isArray(params.page) ? params.page[0] : params.page;
-    const requestedPage = Number.parseInt(rawPage ?? "1", 10);
-    const courseOperations = await getSupportCourseOperations({
-      page: Number.isFinite(requestedPage) ? requestedPage : 1,
-    });
-    return <SupportDashboard data={courseOperations} />;
-  }
+export default async function AdminPage(): Promise<React.JSX.Element> {
+  await requirePermission("viewAdminPanel");
 
   const [overview, data] = await Promise.all([
     getAdminOverview(),
@@ -444,22 +436,6 @@ function DashboardSummary({
     value: string;
   }> = [
     {
-      helper: "Histórico; não é saldo no Asaas",
-      help: (
-        <FinanceHelp
-          description="A receita é calculada a partir dos pedidos que o Hub mantém como pagos."
-          details={[
-            "É um histórico operacional do Hub; não representa saldo disponível ou liquidação no Asaas.",
-            "Pedidos em aberto aparecem separadamente no contexto financeiro.",
-          ]}
-          title="Receita bruta paga"
-        />
-      ),
-      icon: Money01Icon,
-      label: "Receita bruta paga",
-      value: formatCurrencyInCents(overview.paidRevenueInCents),
-    },
-    {
       helper: "Perfis de estudante",
       icon: UserGroupIcon,
       label: "Alunos cadastrados",
@@ -484,13 +460,34 @@ function DashboardSummary({
       label: "Vencendo em 30 dias",
       value: formatCount(operations.access.expiringStudentCount),
     },
-    {
+  ];
+
+  if (overview.paidRevenueInCents !== undefined) {
+    metrics.unshift({
+      helper: "Histórico; não é saldo no Asaas",
+      help: (
+        <FinanceHelp
+          description="A receita é calculada a partir dos pedidos que o Hub mantém como pagos."
+          details={[
+            "É um histórico operacional do Hub; não representa saldo disponível ou liquidação no Asaas.",
+            "Pedidos em aberto aparecem separadamente no contexto financeiro.",
+          ]}
+          title="Receita bruta paga"
+        />
+      ),
+      icon: Money01Icon,
+      label: "Receita bruta paga",
+      value: formatCurrencyInCents(overview.paidRevenueInCents),
+    });
+  }
+  if (overview.paidOrders !== undefined) {
+    metrics.push({
       helper: "Confirmados no histórico",
       icon: ShoppingCart01Icon,
       label: "Pedidos pagos",
       value: formatCount(overview.paidOrders),
-    },
-  ];
+    });
+  }
 
   return (
     <section aria-labelledby="dashboard-summary-title">
@@ -974,8 +971,13 @@ function OperationalContext({
   operations: AdminDashboardOperations;
 }): React.JSX.Element {
   const backlog = operations.integrations.backlog;
+  const financial = operations.financial;
   const support = operations.supportRequests;
   const webhookCount = backlog.webhooks.failed + backlog.webhooks.retryable;
+  const hasFinancialContext =
+    financial.pendingRevenueInCents !== undefined ||
+    financial.disputedOrderCount !== undefined ||
+    financial.refundedOrderCount !== undefined;
 
   return (
     <section aria-labelledby="dashboard-context-title">
@@ -988,37 +990,43 @@ function OperationalContext({
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
-        <ContextCard
-          help={
-            <FinanceHelp
-              description="Use estes números para acompanhar o fluxo local; o fechamento e o saldo continuam no Asaas."
-              details={[
-                "Valor em aberto inclui apenas pedidos pendentes com checkout ainda válido.",
-                "Disputas e reembolsos mostram o estado atual registrado pelo Hub.",
-              ]}
-              title="Contexto financeiro"
-            />
-          }
-          title="Financeiro"
-        >
-          <ContextMetric
-            helper="Pedidos abertos; ainda não recebidos"
-            label="Valor em aberto"
-            value={formatCurrencyInCents(
-              operations.financial.pendingRevenueInCents
+        {hasFinancialContext ? (
+          <ContextCard
+            help={
+              <FinanceHelp
+                description="Use estes números para acompanhar o fluxo local; o fechamento e o saldo continuam no Asaas."
+                details={[
+                  "Valor em aberto inclui apenas pedidos pendentes com checkout ainda válido.",
+                  "Disputas e reembolsos mostram o estado atual registrado pelo Hub.",
+                ]}
+                title="Contexto financeiro"
+              />
+            }
+            title="Financeiro"
+          >
+            {financial.pendingRevenueInCents === undefined ? null : (
+              <ContextMetric
+                helper="Pedidos abertos; ainda não recebidos"
+                label="Valor em aberto"
+                value={formatCurrencyInCents(financial.pendingRevenueInCents)}
+              />
             )}
-          />
-          <ContextMetric
-            helper="Estado atual dos pedidos"
-            label="Disputas"
-            value={formatCount(operations.financial.disputedOrderCount)}
-          />
-          <ContextMetric
-            helper="Histórico de pedidos"
-            label="Reembolsados"
-            value={formatCount(operations.financial.refundedOrderCount)}
-          />
-        </ContextCard>
+            {financial.disputedOrderCount === undefined ? null : (
+              <ContextMetric
+                helper="Estado atual dos pedidos"
+                label="Disputas"
+                value={formatCount(financial.disputedOrderCount)}
+              />
+            )}
+            {financial.refundedOrderCount === undefined ? null : (
+              <ContextMetric
+                helper="Histórico de pedidos"
+                label="Reembolsados"
+                value={formatCount(financial.refundedOrderCount)}
+              />
+            )}
+          </ContextCard>
+        ) : null}
         <ContextCard
           help={
             <FinanceHelp
@@ -1078,10 +1086,12 @@ function OperationalContext({
           />
         </ContextCard>
       </div>
-      <p className="mt-2 text-muted-foreground text-xs">
-        Receita bruta paga é o histórico do Hub. Saldo disponível, liquidação e
-        detalhes do provedor devem ser conferidos no Asaas.
-      </p>
+      {hasFinancialContext ? (
+        <p className="mt-2 text-muted-foreground text-xs">
+          Receita bruta paga é o histórico do Hub. Saldo disponível, liquidação
+          e detalhes do provedor devem ser conferidos no Asaas.
+        </p>
+      ) : null}
     </section>
   );
 }

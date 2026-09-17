@@ -83,6 +83,7 @@ function ActionDialogBody({
     return (
       <StudentPlatformAccessControls
         onSuccess={onRefresh}
+        readOnly={!capabilities.canManagePlatformAccess}
         showHeading={false}
         student={data.student}
       />
@@ -183,6 +184,7 @@ function ActionDialogContent({
     return (
       <StudentPlatformAccessControls
         onSuccess={onRefresh}
+        readOnly={!capabilities.canManagePlatformAccess}
         showHeading={false}
         student={platformStudent}
       />

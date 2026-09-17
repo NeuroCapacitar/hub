@@ -78,8 +78,10 @@ const INSTALLMENT_OPTIONS = Array.from(
 
 export function CourseSettingsForm({
   course,
+  readOnly = false,
 }: {
   course: CourseData;
+  readOnly?: boolean;
 }): React.JSX.Element {
   const [isPending, startTransition] = useTransition();
   const [isDirty, setIsDirty] = useState(false);
@@ -170,7 +172,11 @@ export function CourseSettingsForm({
     <>
       <form
         className="flex flex-col gap-8"
-        onChange={() => setIsDirty(true)}
+        onChange={() => {
+          if (!readOnly) {
+            setIsDirty(true);
+          }
+        }}
         onSubmit={handleSubmit}
       >
         {errorMessage ? (
@@ -179,7 +185,7 @@ export function CourseSettingsForm({
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         ) : null}
-        <fieldset className="contents" disabled={isPending}>
+        <fieldset className="contents" disabled={isPending || readOnly}>
           <input name="courseId" type="hidden" value={course.id} />
           <input
             name="workloadHoursOverride"

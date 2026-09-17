@@ -27,6 +27,7 @@ import {
 import { requirePermission } from "@/lib/auth-permissions";
 import { canPerform } from "@/lib/auth-policy";
 import { isValidCnpj } from "@/lib/cnpj";
+import type { AppSession } from "@/lib/session";
 import type { AdminAuditSource, AdminAuditTargetType } from "./audit-filters";
 import type { AdminAuditLog, AuditMetadata } from "./audit-types";
 import type { AdminFinancialPeriod } from "./financial-period";
@@ -54,12 +55,26 @@ export interface AdminOverview {
   activeEnrollments: number;
   courses: number;
   failedWebhooks: number;
-  paidOrders: number;
-  paidRevenueInCents: number;
-  pendingOrders: number;
+  paidOrders?: number;
+  paidRevenueInCents?: number;
+  pendingOrders?: number;
   retryableWebhooks: number;
   students: number;
 }
+
+export interface AdminDashboardAccessScope {
+  canViewFinancialAnalysis: boolean;
+  canViewFinancialOrders: boolean;
+  canViewFinancialReviews: boolean;
+}
+
+export const getAdminDashboardAccessScope = (
+  session: AppSession
+): AdminDashboardAccessScope => ({
+  canViewFinancialAnalysis: canPerform(session, "viewFinancialAnalysis"),
+  canViewFinancialOrders: canPerform(session, "viewFinancialOrders"),
+  canViewFinancialReviews: canPerform(session, "viewFinancialReviews"),
+});
 
 export interface AdminDashboardCourseHealth {
   actionTab: "content" | "settings";
@@ -137,7 +152,7 @@ export interface AdminDashboardOperations {
     pending: AdminDashboardPendingCertificate[];
     pendingCount: number;
   };
-  financial: {
+  financial: Partial<{
     disputedOrderCount: number;
     failedRefundCount: number;
     pendingPaymentReviewCount: number;
@@ -147,7 +162,7 @@ export interface AdminDashboardOperations {
     uncertainCheckoutCount: number;
     uncertainRefundCount: number;
     uncorrelatedOrderCount: number;
-  };
+  }>;
   integrations: {
     backlog: OperationalBacklogSnapshot;
     failedJmvDeleteCount: number;
@@ -166,21 +181,17 @@ export interface AdminDashboardOperations {
 }
 
 export const getAdminOverview = async (): Promise<AdminOverview> => {
-  await requirePermission("viewAdminPanel");
-  await requirePermission("viewFinancials");
-  await requirePermission("viewGlobalAudit");
-
+  const session = await requirePermission("viewAdminPanel");
+  const accessScope = getAdminDashboardAccessScope(session);
   const pool = getPool();
-  const counts = await pool.query<{
-    active_enrollments: number;
-    courses: number;
-    failed_webhooks: number;
-    paid_orders: number;
-    paid_revenue_in_cents: number | string;
-    pending_orders: number;
-    retryable_webhooks: number;
-    students: number;
-  }>(`
+  const [counts, financialAnalysis, financialOrders] = await Promise.all([
+    pool.query<{
+      active_enrollments: number;
+      courses: number;
+      failed_webhooks: number;
+      retryable_webhooks: number;
+      students: number;
+    }>(`
       select
         (select count(*)::int from courses) as courses,
         (select count(*)::int from profiles where role = 'student') as students,
@@ -201,23 +212,52 @@ export const getAdminOverview = async (): Promise<AdminOverview> => {
               where cp.course_id = c.id and cp.status = 'published'
             )
         ) as active_enrollments,
-        (select count(*)::int from orders where status = 'paid') as paid_orders,
-        (select coalesce(sum(coalesce(paid_amount_in_cents, amount_in_cents)) filter (where status = 'paid'), 0)::bigint from orders) as paid_revenue_in_cents,
-        (select count(*)::int from orders where status = 'pending' and checkout_status not in ('failed', 'cancelled', 'expired')) as pending_orders,
         (select count(*)::int from webhook_events where provider = 'asaas' and status = 'failed') as failed_webhooks,
         (select count(*)::int from webhook_events where provider = 'asaas' and status = 'retryable') as retryable_webhooks
-    `);
+    `),
+    accessScope.canViewFinancialAnalysis
+      ? pool.query<{ paid_revenue_in_cents: number | string }>(`
+          select coalesce(
+            sum(coalesce(paid_amount_in_cents, amount_in_cents))
+              filter (where status = 'paid'),
+            0
+          )::bigint as paid_revenue_in_cents
+          from orders
+        `)
+      : Promise.resolve(null),
+    accessScope.canViewFinancialOrders
+      ? pool.query<{
+          paid_orders: number;
+          pending_orders: number;
+        }>(`
+          select
+            (select count(*)::int from orders where status = 'paid') as paid_orders,
+            (select count(*)::int
+             from orders
+             where status = 'pending'
+               and checkout_status not in ('failed', 'cancelled', 'expired')) as pending_orders
+        `)
+      : Promise.resolve(null),
+  ]);
   const countRow = counts.rows[0];
+  const analysisRow = financialAnalysis?.rows[0];
+  const ordersRow = financialOrders?.rows[0];
 
   return {
     courses: countRow?.courses ?? 0,
     students: countRow?.students ?? 0,
     activeEnrollments: countRow?.active_enrollments ?? 0,
-    paidOrders: countRow?.paid_orders ?? 0,
-    paidRevenueInCents: Number(countRow?.paid_revenue_in_cents ?? 0),
-    pendingOrders: countRow?.pending_orders ?? 0,
     retryableWebhooks: countRow?.retryable_webhooks ?? 0,
     failedWebhooks: countRow?.failed_webhooks ?? 0,
+    ...(analysisRow
+      ? { paidRevenueInCents: Number(analysisRow.paid_revenue_in_cents ?? 0) }
+      : {}),
+    ...(ordersRow
+      ? {
+          paidOrders: ordersRow.paid_orders ?? 0,
+          pendingOrders: ordersRow.pending_orders ?? 0,
+        }
+      : {}),
   };
 };
 
@@ -230,9 +270,13 @@ export interface CourseRevenueSummary {
 }
 
 export interface AdminAuditQuery {
+  allowedSources?: readonly Exclude<AdminAuditSource, "all">[];
+  allowedTargetTypes?: readonly Exclude<AdminAuditTargetType, "all">[];
+  excludedActions?: readonly string[];
   from?: string;
   page?: number;
   pageSize?: number;
+  scope?: "global" | "support";
   search?: string;
   source?: AdminAuditSource;
   targetType?: AdminAuditTargetType;
@@ -299,7 +343,7 @@ export interface AdminCourse {
 
 export interface AdminCourseOverviewSummary {
   activeEnrollmentCount: number;
-  paidOrderCount: number;
+  paidOrderCount?: number;
   validCertificateCount: number;
 }
 
@@ -561,9 +605,9 @@ export interface AdminOrderPage {
 }
 
 export interface AdminFinancialOverviewData {
-  coursesRevenue: AdminCourseRevenueData;
-  financialHealth: AdminFinancialHealthSummary;
-  paymentReviews: AdminPaymentReviewPage;
+  coursesRevenue: AdminCourseRevenueData | null;
+  financialHealth: AdminFinancialHealthSummary | null;
+  paymentReviews: AdminPaymentReviewPage | null;
 }
 
 export interface AdminFinancialAnalytics {
@@ -688,53 +732,62 @@ const readDashboardAccessOperations = async (): Promise<
   };
 };
 
-const readDashboardFinancialOperations = async (): Promise<
-  Pick<
-    AdminDashboardOperations["financial"],
-    | "disputedOrderCount"
-    | "failedRefundCount"
-    | "pendingPaymentReviewCount"
-    | "pendingRefundCount"
-    | "pendingRevenueInCents"
-    | "refundedOrderCount"
-  >
-> => {
-  const { rows } = await getPool().query<{
-    disputed_orders: number;
-    failed_refunds: number;
-    pending_payment_reviews: number;
-    pending_refunds: number;
-    pending_revenue_in_cents: number | string;
-    refunded_orders: number;
-  }>(`
-    select
-      (select count(*)::int from payment_reviews where status = 'pending')
-        as pending_payment_reviews,
-      (select count(*)::int
-       from refund_requests
-       where status in ('requested', 'processing')) as pending_refunds,
-      (select count(*)::int
-       from refund_requests
-       where status = 'failed') as failed_refunds,
-      (select count(*)::int from orders where status = 'disputed')
-        as disputed_orders,
-      (select count(*)::int from orders where status = 'refunded')
-        as refunded_orders,
-      (select coalesce(sum(amount_in_cents), 0)::bigint
-       from orders
-       where status = 'pending'
-         and checkout_status not in ('failed', 'cancelled', 'expired'))
-        as pending_revenue_in_cents
-  `);
-  const row = rows[0];
+const readDashboardFinancialOperations = async (
+  accessScope: AdminDashboardAccessScope
+): Promise<AdminDashboardOperations["financial"]> => {
+  const [orders, reviews] = await Promise.all([
+    accessScope.canViewFinancialOrders
+      ? getPool().query<{
+          disputed_orders: number;
+          failed_refunds: number;
+          pending_refunds: number;
+          pending_revenue_in_cents: number | string;
+          refunded_orders: number;
+        }>(`
+          select
+            (select count(*)::int from refund_requests where status = 'failed')
+              as failed_refunds,
+            (select count(*)::int
+             from refund_requests
+             where status in ('requested', 'processing')) as pending_refunds,
+            (select count(*)::int from orders where status = 'disputed')
+              as disputed_orders,
+            (select count(*)::int from orders where status = 'refunded')
+              as refunded_orders,
+            (select coalesce(sum(amount_in_cents), 0)::bigint
+             from orders
+             where status = 'pending'
+               and checkout_status not in ('failed', 'cancelled', 'expired'))
+              as pending_revenue_in_cents
+        `)
+      : Promise.resolve(null),
+    accessScope.canViewFinancialReviews
+      ? getPool().query<{ pending_payment_reviews: number }>(`
+          select count(*)::int as pending_payment_reviews
+          from payment_reviews
+          where status = 'pending'
+        `)
+      : Promise.resolve(null),
+  ]);
+
+  const ordersRow = orders?.rows[0];
+  const reviewsRow = reviews?.rows[0];
 
   return {
-    disputedOrderCount: row?.disputed_orders ?? 0,
-    failedRefundCount: row?.failed_refunds ?? 0,
-    pendingPaymentReviewCount: row?.pending_payment_reviews ?? 0,
-    pendingRefundCount: row?.pending_refunds ?? 0,
-    pendingRevenueInCents: Number(row?.pending_revenue_in_cents ?? 0),
-    refundedOrderCount: row?.refunded_orders ?? 0,
+    ...(ordersRow
+      ? {
+          disputedOrderCount: ordersRow.disputed_orders ?? 0,
+          failedRefundCount: ordersRow.failed_refunds ?? 0,
+          pendingRefundCount: ordersRow.pending_refunds ?? 0,
+          pendingRevenueInCents: Number(
+            ordersRow.pending_revenue_in_cents ?? 0
+          ),
+          refundedOrderCount: ordersRow.refunded_orders ?? 0,
+        }
+      : {}),
+    ...(reviewsRow
+      ? { pendingPaymentReviewCount: reviewsRow.pending_payment_reviews ?? 0 }
+      : {}),
   };
 };
 
@@ -923,15 +976,19 @@ const readDashboardSupportRequests = async (): Promise<
   };
 };
 
-const readDashboardOperations = async (): Promise<AdminDashboardOperations> => {
+const readDashboardOperations = async (
+  accessScope: AdminDashboardAccessScope
+): Promise<AdminDashboardOperations> => {
   const [access, financial, certificates, jmv, supportRequests, backlog] =
     await Promise.all([
       readDashboardAccessOperations(),
-      readDashboardFinancialOperations(),
+      readDashboardFinancialOperations(accessScope),
       readDashboardPendingCertificates(),
       readDashboardJmvOperations(),
       readDashboardSupportRequests(),
-      getOperationalBacklogSnapshot(),
+      getOperationalBacklogSnapshot({
+        includePayments: accessScope.canViewFinancialOrders,
+      }),
     ]);
 
   return {
@@ -939,9 +996,13 @@ const readDashboardOperations = async (): Promise<AdminDashboardOperations> => {
     certificates,
     financial: {
       ...financial,
-      uncertainCheckoutCount: backlog.payments.uncertainCheckouts,
-      uncertainRefundCount: backlog.payments.uncertainRefunds,
-      uncorrelatedOrderCount: backlog.payments.uncorrelatedOrders,
+      ...(backlog.payments
+        ? {
+            uncertainCheckoutCount: backlog.payments.uncertainCheckouts,
+            uncertainRefundCount: backlog.payments.uncertainRefunds,
+            uncorrelatedOrderCount: backlog.payments.uncorrelatedOrders,
+          }
+        : {}),
     },
     integrations: {
       backlog,
@@ -2618,10 +2679,14 @@ const getAuditRecordSource = (
 };
 
 const readAuditLogs = async ({
+  allowedSources,
+  allowedTargetTypes,
+  excludedActions,
   from,
   page = 1,
   pageSize = DEFAULT_ADMIN_AUDIT_PAGE_SIZE,
   search = "",
+  scope = "global",
   source = "all",
   targetType = "all",
   to,
@@ -2639,12 +2704,38 @@ const readAuditLogs = async ({
     values.push(value);
     return `$${values.length}`;
   };
+  const addAllowedArrayFilter = (
+    field: string,
+    allowedValues: readonly unknown[] | undefined
+  ): void => {
+    if (!allowedValues) {
+      return;
+    }
+    filters.push(
+      allowedValues.length > 0
+        ? `${field} = any(${addValue([...allowedValues])}::text[])`
+        : "1 = 0"
+    );
+  };
 
   if (source !== "all") {
     filters.push(`source = ${addValue(source)}`);
   }
+  addAllowedArrayFilter("source", allowedSources);
+  addAllowedArrayFilter("target_type", allowedTargetTypes);
+  if (excludedActions) {
+    filters.push(
+      excludedActions.length > 0
+        ? `action <> all(${addValue([...excludedActions])}::text[])`
+        : "1 = 1"
+    );
+  }
   if (targetType !== "all") {
     filters.push(`target_type = ${addValue(targetType)}`);
+  }
+  if (scope === "support") {
+    filters.push("target_type <> 'staff'");
+    filters.push("action not like 'auth.%'");
   }
   if (normalizedSearch) {
     const searchParameter = addValue(`%${normalizedSearch}%`);
@@ -2729,7 +2820,8 @@ const readAuditLogs = async ({
             when 'faq' then (select question from faq_items where id::text = a.target_id)
             when 'lesson' then (select title from lessons where id::text = a.target_id)
             when 'module' then (select title from modules where id::text = a.target_id)
-            when 'student' then (select name from users where id::text = a.target_id)
+             when 'student' then (select name from users where id::text = a.target_id)
+             when 'staff' then (select name from users where id::text = a.target_id)
             when 'enrollment' then (
               select concat('Matrícula · ', c.title)
               from enrollments e
@@ -2869,6 +2961,7 @@ const readAuditLogs = async ({
               when 'lesson' then (select title from lessons where id::text = a.target_id)
               when 'module' then (select title from modules where id::text = a.target_id)
               when 'student' then (select name from users where id::text = a.target_id)
+              when 'staff' then (select name from users where id::text = a.target_id)
               when 'enrollment' then (
                 select concat('Matrícula · ', c.title)
                 from enrollments e
@@ -3288,15 +3381,16 @@ export const getAdminDashboardProjection = async (): Promise<{
   recentCertificates: AdminDashboardRecentCertificate[];
   recentOrders: AdminDashboardRecentOrder[];
 }> => {
-  await requirePermission("manageContent");
-  await requirePermission("viewFinancials");
-  await requirePermission("viewGlobalAudit");
+  const session = await requirePermission("viewAdminPanel");
+  const accessScope = getAdminDashboardAccessScope(session);
   const [courseHealth, recentOrders, recentCertificates, operations] =
     await Promise.all([
       readDashboardCourseHealth(),
-      readDashboardRecentOrders(),
+      accessScope.canViewFinancialOrders
+        ? readDashboardRecentOrders()
+        : Promise.resolve([]),
       readDashboardRecentCertificates(),
-      readDashboardOperations(),
+      readDashboardOperations(accessScope),
     ]);
   return { courseHealth, operations, recentCertificates, recentOrders };
 };
@@ -3313,7 +3407,7 @@ export const getAdminStudentsData = async (
   students: AdminStudentSummary[];
   totalCount: number;
 }> => {
-  await requirePermission("manageEnrollmentAccess");
+  await requirePermission("viewStudents");
   const [profilePage, accessSummary] = await Promise.all([
     readStudentProfiles(options),
     readAdminStudentAccessSummary(),
@@ -3352,8 +3446,59 @@ export const getAdminStudentsData = async (
 export const getAdminAuditData = async (
   options: AdminAuditQuery = {}
 ): Promise<AdminAuditLogPage> => {
-  await requirePermission("viewGlobalAudit");
-  return await readAuditLogs(options);
+  const session = await requirePermission("viewAudit");
+  const allowedSources:
+    | readonly Exclude<AdminAuditSource, "all">[]
+    | undefined =
+    session.role === "admin"
+      ? undefined
+      : ([
+          "administrative",
+          "enrollment",
+          ...(canPerform(session, "viewFinancials") ? ["financial"] : []),
+        ] as Exclude<AdminAuditSource, "all">[]);
+  const allowedTargetTypes:
+    | readonly Exclude<AdminAuditTargetType, "all">[]
+    | undefined =
+    session.role === "admin"
+      ? undefined
+      : ([
+          "auth_media_slide",
+          "banner",
+          "certificate",
+          "certificate_template",
+          "course",
+          "course_publication",
+          "enrollment",
+          "faq",
+          "lesson",
+          "module",
+          "outbox_message",
+          "settings",
+          "student",
+          "webhook_event",
+          ...(canPerform(session, "viewFinancialOrders")
+            ? ["financial_event", "order", "refund_request"]
+            : []),
+          ...(canPerform(session, "viewFinancialReviews")
+            ? ["financial_event", "payment_review"]
+            : []),
+        ] as Exclude<AdminAuditTargetType, "all">[]);
+  const excludedActions =
+    session.role === "admin" || canPerform(session, "viewFinancialOrders")
+      ? undefined
+      : [
+          "enrollment.payment_paid",
+          "enrollment.payment_refunded",
+          "enrollment.payment_disputed",
+        ];
+  return await readAuditLogs({
+    ...options,
+    ...(allowedSources ? { allowedSources } : {}),
+    ...(allowedTargetTypes ? { allowedTargetTypes } : {}),
+    ...(excludedActions ? { excludedActions } : {}),
+    scope: session.role === "admin" ? "global" : "support",
+  });
 };
 
 const readAdminWebhookEvents = async (
@@ -3447,7 +3592,7 @@ const readAdminWebhookEvents = async (
 export const getAdminWebhookEvents = async (
   options: AdminWebhookEventQuery = {}
 ): Promise<AdminWebhookEventPage> => {
-  await requirePermission("viewGlobalAudit");
+  await requirePermission("viewOperations");
   return await readAdminWebhookEvents(options);
 };
 
@@ -3469,22 +3614,24 @@ export const getAdminOperationsData = async ({
   resendWebhookDeadLetters: ResendWebhookDeadLetterPage;
   webhookEvents: AdminWebhookEventPage;
 }> => {
-  const session = await requirePermission("viewGlobalAudit");
+  const session = await requirePermission("viewOperations");
   const [
     operationalBacklog,
     outboxDeadLetters,
     resendWebhookDeadLetters,
     webhookEvents,
   ] = await Promise.all([
-    getOperationalBacklogSnapshot(),
+    getOperationalBacklogSnapshot({
+      includePayments: canPerform(session, "viewFinancialOrders"),
+    }),
     listOutboxDeadLetters({ page: outboxPage }),
     listResendWebhookDeadLetters({ page: resendPage }),
     readAdminWebhookEvents({ page: webhookPage, search: webhookSearch }),
   ]);
 
   return {
-    canRetryOutbox: canPerform(session.role, "retryOutbox"),
-    canRetryWebhook: canPerform(session.role, "retryWebhook"),
+    canRetryOutbox: canPerform(session, "manageOperations"),
+    canRetryWebhook: canPerform(session, "manageOperations"),
     operationalBacklog,
     outboxDeadLetters,
     resendWebhookDeadLetters,
@@ -3495,7 +3642,7 @@ export const getAdminOperationsData = async ({
 export const getAdminSettingsData = async (): Promise<{
   settings: AdminSettings;
 }> => {
-  await requirePermission("manageSettings");
+  await requirePermission("viewSettings");
   return { settings: await readSettings() };
 };
 
@@ -3508,7 +3655,7 @@ export const getAdminCourseCatalogData = async (
   pageSize: number;
   totalCount: number;
 }> => {
-  await requirePermission("manageContent");
+  await requirePermission("viewCourses");
   const requestedPage = Math.trunc(options.page ?? 1);
   const page = Number.isFinite(requestedPage)
     ? Math.min(MAX_ADMIN_COURSE_PAGE, Math.max(1, requestedPage))
@@ -3533,18 +3680,20 @@ export const getAdminCourseCatalogData = async (
 };
 
 export const getAdminFaqData = async (): Promise<{ faqs: AdminFaq[] }> => {
-  await requirePermission("manageContent");
+  await requirePermission("viewSettings");
   return { faqs: await readFaqs() };
 };
 
 export const getAdminFinancialOverviewData = async (
   reviewQuery: AdminPaymentReviewQuery = {}
 ): Promise<AdminFinancialOverviewData> => {
-  await requirePermission("viewFinancials");
+  const session = await requirePermission("viewFinancials");
+  const canViewAnalysis = canPerform(session, "viewFinancialAnalysis");
+  const canViewReviews = canPerform(session, "viewFinancialReviews");
   const [financialHealth, paymentReviews, coursesRevenue] = await Promise.all([
-    readFinancialHealth(),
-    readPaymentReviews(reviewQuery),
-    readCourseRevenue(),
+    canViewAnalysis ? readFinancialHealth() : Promise.resolve(null),
+    canViewReviews ? readPaymentReviews(reviewQuery) : Promise.resolve(null),
+    canViewAnalysis ? readCourseRevenue() : Promise.resolve(null),
   ]);
 
   return { coursesRevenue, financialHealth, paymentReviews };
@@ -3553,7 +3702,7 @@ export const getAdminFinancialOverviewData = async (
 export const getAdminFinancialAnalysisData = async (
   period: AdminFinancialPeriod
 ): Promise<AdminFinancialAnalysisData> => {
-  await requirePermission("viewFinancials");
+  await requirePermission("viewFinancialAnalysis");
   const analytics = await readFinancialAnalytics(period);
 
   return { analytics };
@@ -3562,7 +3711,7 @@ export const getAdminFinancialAnalysisData = async (
 export const getAdminFinancialOrdersData = async (
   orderQuery: AdminOrderQuery = {}
 ): Promise<AdminFinancialOrdersData> => {
-  await requirePermission("viewFinancials");
+  await requirePermission("viewFinancialOrders");
   const orderPage = await readOrders(orderQuery);
 
   return {
@@ -3575,10 +3724,14 @@ export const getAdminFinancialOrdersData = async (
 export const getAdminCourseOverviewSummary = async (
   courseId: string
 ): Promise<AdminCourseOverviewSummary> => {
-  await requirePermission("manageContent");
+  const session = await requirePermission("viewCourses");
+  const includeFinancialOrders = canPerform(session, "viewFinancialOrders");
+  const paidOrderProjection = includeFinancialOrders
+    ? "(select count(*)::int from orders where course_id = $1 and status = 'paid') as paid_order_count,"
+    : "";
   const { rows } = await getPool().query<{
     active_enrollment_count: number;
-    paid_order_count: number;
+    paid_order_count?: number;
     valid_certificate_count: number;
   }>(
     `
@@ -3598,7 +3751,7 @@ export const getAdminCourseOverviewSummary = async (
               where cp.course_id = c.id and cp.status = 'published'
             )
         ) as active_enrollment_count,
-        (select count(*)::int from orders where course_id = $1 and status = 'paid') as paid_order_count,
+        ${paidOrderProjection}
         (select count(*)::int from certificates where course_id = $1 and status = 'valid') as valid_certificate_count
     `,
     [courseId]
@@ -3607,8 +3760,10 @@ export const getAdminCourseOverviewSummary = async (
 
   return {
     activeEnrollmentCount: row?.active_enrollment_count ?? 0,
-    paidOrderCount: row?.paid_order_count ?? 0,
     validCertificateCount: row?.valid_certificate_count ?? 0,
+    ...(row?.paid_order_count === undefined
+      ? {}
+      : { paidOrderCount: row.paid_order_count }),
   };
 };
 
@@ -3628,7 +3783,7 @@ export const getAdminCourseDetailData = async (
   lessons: AdminLesson[];
   modules: AdminModule[];
 } | null> => {
-  await requirePermission("manageContent");
+  await requirePermission("viewCourses");
   const [courses, modules, lessons, enrollmentsPage] = await Promise.all([
     readCourses(courseId),
     readModules(courseId),
@@ -3707,7 +3862,7 @@ export const getAdminCourseTabData = async ({
   enrollmentQuery?: AdminCourseEnrollmentQuery;
   tab: AdminCourseManagementTab;
 }): Promise<AdminCourseTabData | null> => {
-  await requirePermission("manageContent");
+  await requirePermission("viewCourses");
 
   if (tab === "overview") {
     const [courses, modules, lessons, overviewSummary, publicationState] =
@@ -3761,7 +3916,7 @@ export const getAdminCourseTabData = async ({
 export const getAdminCoursePublicationState = async (
   courseId: string
 ): Promise<{ hasDraft: boolean; hasPublished: boolean }> => {
-  await requirePermission("manageContent");
+  await requirePermission("viewCourses");
   const result = await getPool().query<{
     has_draft: boolean;
     has_published: boolean;
@@ -3792,7 +3947,7 @@ export const getAdminLessonEditorData = async ({
   lesson: AdminLesson;
   module: AdminModule;
 } | null> => {
-  await requirePermission("manageContent");
+  await requirePermission("viewCourses");
   const [courses, lessonEditor, assets] = await Promise.all([
     readCourses(courseId),
     readLessonEditor({ courseId, lessonId }),
@@ -3824,7 +3979,7 @@ export const getAdminLessonEditorData = async ({
 export const getAdminStudentDetail = async (
   userId: string
 ): Promise<AdminStudentDetail | null> => {
-  await requirePermission("manageEnrollmentAccess");
+  await requirePermission("viewStudents");
 
   const pool = getPool();
   const result = await pool.query<{
@@ -3925,7 +4080,7 @@ export const getAdminStudentSheetData = async ({
   courseId?: string;
   userId: string;
 }): Promise<AdminStudentSheetData | null> => {
-  await requirePermission("manageEnrollmentAccess");
+  await requirePermission("viewStudents");
   const [student, certificates] = await Promise.all([
     getAdminStudentDetail(userId),
     getCertificateOperationsForUser(userId),
@@ -3973,7 +4128,7 @@ export interface AdminBanner {
 export const getAdminBannersData = async (): Promise<{
   banners: AdminBanner[];
 }> => {
-  await requirePermission("manageSettings");
+  await requirePermission("viewSettings");
 
   const { rows } = await getPool().query<{
     blur_data_url: string | null;

@@ -115,8 +115,20 @@ const main = async (): Promise<void> => {
 
   await db
     .insert(profiles)
-    .values({ role: "student", userId })
-    .onConflictDoUpdate({ set: { role: "student" }, target: profiles.userId });
+    .values({
+      role: "student",
+      supportPermissionGrants: [],
+      supportPermissionViews: [],
+      userId,
+    })
+    .onConflictDoUpdate({
+      set: {
+        role: "student",
+        supportPermissionGrants: [],
+        supportPermissionViews: [],
+      },
+      target: profiles.userId,
+    });
 
   const client = await pool.connect();
   try {

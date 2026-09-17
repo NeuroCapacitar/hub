@@ -141,11 +141,13 @@ export function CourseOverview({
           label="Matrículas ativas"
           value={overviewSummary.activeEnrollmentCount}
         />
-        <CourseMetric
-          helper="Pagamentos confirmados."
-          label="Pedidos pagos"
-          value={overviewSummary.paidOrderCount}
-        />
+        {overviewSummary.paidOrderCount === undefined ? null : (
+          <CourseMetric
+            helper="Pagamentos confirmados."
+            label="Pedidos pagos"
+            value={overviewSummary.paidOrderCount}
+          />
+        )}
         <CourseMetric
           helper="Documentos atualmente válidos."
           label="Certificados válidos"

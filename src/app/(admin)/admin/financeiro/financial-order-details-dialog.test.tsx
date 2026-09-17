@@ -109,6 +109,7 @@ describe("FinancialOrderDetailsDialog", () => {
         <table>
           <tbody>
             <FinancialOrdersTableClient
+              canExecuteRefund
               canManageFinancialOperations
               orders={[paidOrder]}
             />
@@ -157,12 +158,41 @@ describe("FinancialOrderDetailsDialog", () => {
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   });
 
-  it("keeps support actions scoped while preserving the refund operation", () => {
+  it("hides the refund operation when support lacks the individual grant", () => {
     act(() => {
       root.render(
         <table>
           <tbody>
             <FinancialOrdersTableClient
+              canManageFinancialOperations={false}
+              orders={[paidOrder]}
+            />
+          </tbody>
+        </table>
+      );
+    });
+
+    act(() => {
+      document
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label^="Abrir detalhes do pedido"]'
+        )
+        ?.click();
+    });
+
+    expect(document.body.textContent).not.toContain(
+      "Solicitar reembolso integral"
+    );
+    expect(document.body.textContent).not.toContain("Conciliar pagamento");
+  });
+
+  it("shows the refund operation when support has the individual grant", () => {
+    act(() => {
+      root.render(
+        <table>
+          <tbody>
+            <FinancialOrdersTableClient
+              canExecuteRefund
               canManageFinancialOperations={false}
               orders={[paidOrder]}
             />

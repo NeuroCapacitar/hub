@@ -48,9 +48,13 @@ import { SortableBannerItem } from "./sortable-banner-item";
 
 interface BannerGalleryProps {
   initialBanners: AdminBanner[];
+  readOnly?: boolean;
 }
 
-export function BannerGallery({ initialBanners }: BannerGalleryProps) {
+export function BannerGallery({
+  initialBanners,
+  readOnly = false,
+}: BannerGalleryProps) {
   const router = useRouter();
   const [banners, setBanners] = useState<AdminBanner[]>(initialBanners);
   const [isDragging, setIsDragging] = useState(false);
@@ -93,7 +97,7 @@ export function BannerGallery({ initialBanners }: BannerGalleryProps) {
   const maxSize = 5 * 1024 * 1024; // 5MB
 
   const handleDragEnd = (event: DragEndEvent) => {
-    if (isPending) {
+    if (readOnly || isPending) {
       return;
     }
 
@@ -188,6 +192,9 @@ export function BannerGallery({ initialBanners }: BannerGalleryProps) {
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
+      if (readOnly) {
+        return;
+      }
       const newErrors: string[] = [];
       const filesArray = Array.from(files);
 
@@ -221,7 +228,7 @@ export function BannerGallery({ initialBanners }: BannerGalleryProps) {
         setAutoOpenBannerId(firstNewBannerId);
       }
     },
-    [banners.length, uploadFile, router]
+    [banners.length, readOnly, uploadFile, router]
   );
 
   const onDragEnter = useCallback((e: React.DragEvent) => {
@@ -230,23 +237,29 @@ export function BannerGallery({ initialBanners }: BannerGalleryProps) {
     setIsDragging(true);
   }, []);
 
-  const handleFileSelection = useCallback((files: FileList | File[]) => {
-    try {
-      const file = readBannerFileSelection(files);
-      validateBannerUploadRequest({
-        contentType: file.type,
-        sizeBytes: file.size,
-      });
-      setErrors([]);
-      setPendingCropFile(file);
-    } catch (error: unknown) {
-      setErrors([
-        error instanceof Error
-          ? error.message
-          : "Não foi possível ler o banner.",
-      ]);
-    }
-  }, []);
+  const handleFileSelection = useCallback(
+    (files: FileList | File[]) => {
+      if (readOnly) {
+        return;
+      }
+      try {
+        const file = readBannerFileSelection(files);
+        validateBannerUploadRequest({
+          contentType: file.type,
+          sizeBytes: file.size,
+        });
+        setErrors([]);
+        setPendingCropFile(file);
+      } catch (error: unknown) {
+        setErrors([
+          error instanceof Error
+            ? error.message
+            : "Não foi possível ler o banner.",
+        ]);
+      }
+    },
+    [readOnly]
+  );
 
   const handleCropComplete = useCallback(
     async (file: File) => {
@@ -308,6 +321,7 @@ export function BannerGallery({ initialBanners }: BannerGalleryProps) {
         >
           <ResourceListHeader
             actions={
+              !readOnly &&
               banners.length < maxFiles && (
                 <div className="relative">
                   <input
@@ -350,7 +364,7 @@ export function BannerGallery({ initialBanners }: BannerGalleryProps) {
                 collisionDetection={closestCenter}
                 id="banner-gallery-dnd"
                 onDragEnd={handleDragEnd}
-                sensors={sensors}
+                sensors={readOnly ? [] : sensors}
               >
                 <SortableContext
                   items={banners}
@@ -362,6 +376,7 @@ export function BannerGallery({ initialBanners }: BannerGalleryProps) {
                       key={banner.id}
                       onDelete={() => removeBanner(banner.id)}
                       onEdit={() => setEditingBanner(banner)}
+                      readOnly={readOnly}
                     />
                   ))}
                 </SortableContext>

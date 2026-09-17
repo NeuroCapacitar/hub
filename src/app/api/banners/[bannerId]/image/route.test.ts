@@ -38,7 +38,7 @@ describe("GET /api/banners/[bannerId]/image", () => {
     ).rejects.toThrow("permission_denied");
 
     expect(dependencies.requirePermission).toHaveBeenCalledWith(
-      "manageSettings"
+      "manageBanners"
     );
     expect(dependencies.query).not.toHaveBeenCalled();
     expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();

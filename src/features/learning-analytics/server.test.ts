@@ -44,7 +44,7 @@ describe("learning analytics preference persistence", () => {
     );
     expect(metricsQuery).not.toContain("where occurred_at >= current_date");
     expect(dependencies.requirePermission).toHaveBeenCalledWith(
-      "manageLearningAnalytics"
+      "viewLearningAnalytics"
     );
   });
 

@@ -1,15 +1,8 @@
 import { PageContainer } from "@/components/page-container";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getCurrentSession } from "@/lib/session";
 
-export default async function AdminAreaLoading(): Promise<React.JSX.Element> {
-  const session = await getCurrentSession();
-
-  return session?.role === "support" ? (
-    <SupportDashboardLoading />
-  ) : (
-    <AdminDashboardLoading />
-  );
+export default function AdminAreaLoading(): React.JSX.Element {
+  return <AdminDashboardLoading />;
 }
 
 function LoadingHeader() {
@@ -37,21 +30,6 @@ function MetricLoadingBand(): React.JSX.Element {
           />
         ))}
       </div>
-    </section>
-  );
-}
-
-function SupportMetricLoadingGrid(): React.JSX.Element {
-  const metricKeys = ["orders", "revenue", "enrollments", "courses"];
-
-  return (
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {metricKeys.map((key) => (
-        <Skeleton
-          className="h-[126px] rounded-xl"
-          key={`support-loading-metric-${key}`}
-        />
-      ))}
     </section>
   );
 }
@@ -107,19 +85,6 @@ function AdminDashboardLoading(): React.JSX.Element {
             <Skeleton className="h-[420px] rounded-xl" />
           </div>
         </section>
-      </div>
-    </PageContainer>
-  );
-}
-
-function SupportDashboardLoading(): React.JSX.Element {
-  return (
-    <PageContainer>
-      <div aria-busy="true" className="flex flex-col gap-6" role="status">
-        <span className="sr-only">Carregando o painel de suporte…</span>
-        <LoadingHeader />
-        <Skeleton className="h-[360px] rounded-xl" />
-        <SupportMetricLoadingGrid />
       </div>
     </PageContainer>
   );

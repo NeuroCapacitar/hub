@@ -67,17 +67,20 @@ const getReviewPageHref = (page: number): string =>
   page > 1 ? `/admin/financeiro?reviewPage=${page}` : "/admin/financeiro";
 
 interface PaymentReviewsSectionProps {
+  canExecuteRefund: boolean;
   canManageFinancialOperations: boolean;
   canManageFinancialReviews: boolean;
   paymentReviews: AdminPaymentReviewPage;
 }
 
 function PaymentReviewContent({
+  canExecuteRefund,
   canManageFinancialOperations,
   canManageFinancialReviews,
   paymentReviews,
 }: Pick<
   PaymentReviewsSectionProps,
+  | "canExecuteRefund"
   | "canManageFinancialOperations"
   | "canManageFinancialReviews"
   | "paymentReviews"
@@ -87,6 +90,7 @@ function PaymentReviewContent({
       <>
         {paymentReviews.reviews.map((review) => (
           <PaymentReviewOperation
+            canExecuteRefund={canExecuteRefund}
             canManageFinancialOperations={canManageFinancialOperations}
             canManageFinancialReviews={canManageFinancialReviews}
             key={review.id}
@@ -133,6 +137,7 @@ function PaymentReviewContent({
 }
 
 function PaymentReviewsSection({
+  canExecuteRefund,
   canManageFinancialOperations,
   canManageFinancialReviews,
   paymentReviews,
@@ -170,6 +175,7 @@ function PaymentReviewsSection({
       </CardHeader>
       <CardContent className="grid gap-3">
         <PaymentReviewContent
+          canExecuteRefund={canExecuteRefund}
           canManageFinancialOperations={canManageFinancialOperations}
           canManageFinancialReviews={canManageFinancialReviews}
           paymentReviews={paymentReviews}
@@ -207,7 +213,9 @@ function PaymentReviewsSection({
   );
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: the overview composes independent financial facets and their empty, pending, and audit states
 export function FinancialOverview({
+  canExecuteRefund,
   canManageFinancialOperations,
   canManageFinancialReviews,
   canViewGlobalAudit,
@@ -215,13 +223,27 @@ export function FinancialOverview({
   financialHealth,
   paymentReviews,
 }: {
+  canExecuteRefund: boolean;
   canManageFinancialOperations: boolean;
   canManageFinancialReviews: boolean;
   canViewGlobalAudit: boolean;
-  coursesRevenue: AdminCourseRevenueData;
-  financialHealth: AdminFinancialHealthSummary;
-  paymentReviews: AdminPaymentReviewPage;
-}): React.JSX.Element {
+  coursesRevenue: AdminCourseRevenueData | null;
+  financialHealth: AdminFinancialHealthSummary | null;
+  paymentReviews: AdminPaymentReviewPage | null;
+}): React.JSX.Element | null {
+  const paymentReviewsSection = paymentReviews ? (
+    <PaymentReviewsSection
+      canExecuteRefund={canExecuteRefund}
+      canManageFinancialOperations={canManageFinancialOperations}
+      canManageFinancialReviews={canManageFinancialReviews}
+      paymentReviews={paymentReviews}
+    />
+  ) : null;
+
+  if (!financialHealth) {
+    return paymentReviewsSection;
+  }
+
   const failedWebhooks = financialHealth.failedWebhooks;
   const retryableWebhooks = financialHealth.retryableWebhooks;
   const hasIntegrationNotice =
@@ -244,18 +266,11 @@ export function FinancialOverview({
     financialHealth.totalOrders > 0
       ? "Pedidos pagos divididos por pedidos registrados no histórico."
       : "Sem base: ainda não há pedidos registrados no histórico.";
-  const hasPendingReviews = paymentReviews.totalCount > 0;
-  const paymentReviewsSection = (
-    <PaymentReviewsSection
-      canManageFinancialOperations={canManageFinancialOperations}
-      canManageFinancialReviews={canManageFinancialReviews}
-      paymentReviews={paymentReviews}
-    />
-  );
+  const hasPendingReviews = (paymentReviews?.totalCount ?? 0) > 0;
 
   return (
     <>
-      {hasPendingReviews ? (
+      {hasPendingReviews && paymentReviewsSection ? (
         <section aria-label="Ações financeiras pendentes">
           {paymentReviewsSection}
         </section>
@@ -410,29 +425,31 @@ export function FinancialOverview({
 
       <section className="grid min-w-0 gap-8 xl:grid-cols-2">
         {hasPendingReviews ? null : paymentReviewsSection}
-        <Card
-          className={hasPendingReviews ? "min-w-0 xl:col-span-2" : "min-w-0"}
-        >
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-2">
-              <HugeiconsIcon
-                aria-hidden="true"
-                icon={Analytics01Icon}
-                size={18}
-                strokeWidth={2}
-              />
-              <CardTitle as="h2" className="font-medium text-base">
-                Receita por curso
-              </CardTitle>
-            </div>
-            <CardDescription className="mt-1">
-              Pedidos pagos e receita bruta por curso no histórico completo.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <CoursesRevenueTable data={coursesRevenue.courses} />
-          </CardContent>
-        </Card>
+        {coursesRevenue ? (
+          <Card
+            className={hasPendingReviews ? "min-w-0 xl:col-span-2" : "min-w-0"}
+          >
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-2">
+                <HugeiconsIcon
+                  aria-hidden="true"
+                  icon={Analytics01Icon}
+                  size={18}
+                  strokeWidth={2}
+                />
+                <CardTitle as="h2" className="font-medium text-base">
+                  Receita por curso
+                </CardTitle>
+              </div>
+              <CardDescription className="mt-1">
+                Pedidos pagos e receita bruta por curso no histórico completo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CoursesRevenueTable data={coursesRevenue.courses} />
+            </CardContent>
+          </Card>
+        ) : null}
       </section>
     </>
   );

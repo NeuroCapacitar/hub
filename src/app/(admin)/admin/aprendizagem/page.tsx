@@ -22,6 +22,8 @@ import {
   getLessonAnalyticsMetrics,
 } from "@/features/learning-analytics/server";
 import type { LearningAnalyticsCourseOption } from "@/features/learning-analytics/types";
+import { requirePermission } from "@/lib/auth-permissions";
+import { canPerform } from "@/lib/auth-policy";
 import { LearningAnalyticsReport } from "./learning-analytics-report";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +47,7 @@ export default async function LearningAnalyticsPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 } = {}): Promise<React.JSX.Element> {
+  const session = await requirePermission("viewLearningAnalytics");
   const params = (await searchParams) ?? {};
   const requestedCourseId = firstSearchParam(params.courseId)?.trim() ?? "";
   const requestedPage = Number.parseInt(
@@ -76,9 +79,10 @@ export default async function LearningAnalyticsPage({
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE
   );
-  const exportHref = selectedCourse
-    ? `/api/admin/learning-analytics/export?courseId=${encodeURIComponent(selectedCourse.id)}&period=${period}`
-    : null;
+  const exportHref =
+    selectedCourse && canPerform(session, "exportLearningAnalytics")
+      ? `/api/admin/learning-analytics/export?courseId=${encodeURIComponent(selectedCourse.id)}&period=${period}`
+      : null;
 
   return (
     <PageContainer>
@@ -92,7 +96,7 @@ export default async function LearningAnalyticsPage({
           <LearningAnalyticsReport
             course={selectedCourse}
             courses={courses}
-            exportHref={exportHref ?? ""}
+            exportHref={exportHref}
             kpis={kpis}
             lessons={visibleLessons}
             page={page}

@@ -101,6 +101,7 @@ const renderPanel = ({
 }): string =>
   renderToStaticMarkup(
     <CourseContentPanel
+      canManageContent
       contentSignal={contentSignal}
       course={course}
       lessons={lessons}

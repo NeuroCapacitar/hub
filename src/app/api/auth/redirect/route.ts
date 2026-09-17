@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAdminLandingPath } from "@/lib/auth-policy";
 import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
 import { createCorrelationId, logOperationalEvent } from "@/lib/observability";
 import { getCurrentSession, recordStudentLastAccess } from "@/lib/session";
@@ -34,6 +35,8 @@ export const GET = async (request: Request): Promise<NextResponse> => {
 
   return NextResponse.json({
     redirectTo:
-      session.role === "student" ? (safeReturnTo ?? "/app") : "/admin",
+      session.role === "student"
+        ? (safeReturnTo ?? "/app")
+        : (getAdminLandingPath(session) ?? "/app"),
   });
 };

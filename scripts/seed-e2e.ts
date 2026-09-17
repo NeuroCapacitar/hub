@@ -140,13 +140,30 @@ const createUser = async ({
 
   await getPool().query(
     `
-      insert into profiles (user_id, role)
-      values ($1, $2::role)
+      insert into profiles (user_id, role, support_permission_grants, support_permission_views)
+      values ($1, $2::role, '{}'::text[], $3::text[])
       on conflict (user_id) do update
       set role = excluded.role,
+          support_permission_grants = excluded.support_permission_grants,
+          support_permission_views = excluded.support_permission_views,
           updated_at = now()
     `,
-    [userId, role]
+    [
+      userId,
+      role,
+      role === "support"
+        ? [
+            "viewAdminPanel",
+            "viewLearningAnalytics",
+            "viewCourses",
+            "viewStudents",
+            "viewFinancials",
+            "viewOperations",
+            "viewAudit",
+            "viewSettings",
+          ]
+        : [],
+    ]
   );
   return userId;
 };

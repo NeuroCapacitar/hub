@@ -72,6 +72,7 @@ const ADMIN_AUDIT_ACTION_LABELS: Record<string, string> = {
   "refund.requested": "Reembolso solicitado",
   "refund.uncertain": "Reembolso em estado incerto",
   "settings.updated": "Configurações globais atualizadas",
+  "staff.access_changed": "Acesso da Equipe alterado",
   "student.created": "Aluno cadastrado",
   "student.platform_blocked": "Aluno bloqueado na plataforma",
   "student.platform_restored": "Acesso do Aluno restaurado na plataforma",

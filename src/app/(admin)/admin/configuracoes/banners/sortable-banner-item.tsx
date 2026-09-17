@@ -24,12 +24,14 @@ interface SortableBannerItemProps {
   banner: AdminBanner;
   onDelete: () => void;
   onEdit: () => void;
+  readOnly?: boolean;
 }
 
 export function SortableBannerItem({
   banner,
   onEdit,
   onDelete,
+  readOnly = false,
 }: SortableBannerItemProps) {
   const {
     attributes,
@@ -47,12 +49,14 @@ export function SortableBannerItem({
 
   return (
     <ResourceItem isDragging={isDragging} nodeRef={setNodeRef} style={style}>
-      <ResourceItemDragHandle
-        ariaLabel={`Reordenar banner ${banner.buttonText ?? banner.id}`}
-        attributes={attributes}
-        icon={DragDropVerticalIcon}
-        listeners={listeners}
-      />
+      {readOnly ? null : (
+        <ResourceItemDragHandle
+          ariaLabel={`Reordenar banner ${banner.buttonText ?? banner.id}`}
+          attributes={attributes}
+          icon={DragDropVerticalIcon}
+          listeners={listeners}
+        />
+      )}
 
       <ResourceItemVisual
         className={`aspect-[4/1] w-24 sm:w-32 ${
@@ -88,26 +92,30 @@ export function SortableBannerItem({
       </ResourceItemContent>
 
       <ResourceItemActions>
-        <Button
-          aria-label="Editar banner"
-          className="size-11 text-muted-foreground transition-[color,background-color] hover:text-foreground sm:size-10"
-          onClick={onEdit}
-          size="icon"
-          type="button"
-          variant="ghost"
-        >
-          <HugeiconsIcon
-            aria-hidden="true"
-            icon={PencilEdit01Icon}
-            size={16}
-            strokeWidth={2}
-          />
-        </Button>
-        <ResourceDeleteAction
-          description="Tem certeza que deseja excluir este banner permanentemente?"
-          onDelete={onDelete}
-          title="Excluir banner"
-        />
+        {readOnly ? null : (
+          <>
+            <Button
+              aria-label="Editar banner"
+              className="size-11 text-muted-foreground transition-[color,background-color] hover:text-foreground sm:size-10"
+              onClick={onEdit}
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <HugeiconsIcon
+                aria-hidden="true"
+                icon={PencilEdit01Icon}
+                size={16}
+                strokeWidth={2}
+              />
+            </Button>
+            <ResourceDeleteAction
+              description="Tem certeza que deseja excluir este banner permanentemente?"
+              onDelete={onDelete}
+              title="Excluir banner"
+            />
+          </>
+        )}
       </ResourceItemActions>
     </ResourceItem>
   );

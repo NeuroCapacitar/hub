@@ -12,7 +12,7 @@ const readFunction = (
 };
 
 describe("admin read authorization contract", () => {
-  it("keeps dashboard, audit, settings and FAQ projections admin-only", async () => {
+  it("keeps read projections separate from mutation capabilities", async () => {
     const source = await readFile(
       new URL("./server.ts", import.meta.url),
       "utf8"
@@ -31,25 +31,18 @@ describe("admin read authorization contract", () => {
         "getAdminDashboardProjection",
         "getAdminStudentsData"
       )
-    ).toContain('requirePermission("manageContent")');
-    expect(
-      readFunction(
-        source,
-        "getAdminDashboardProjection",
-        "getAdminStudentsData"
-      )
-    ).toContain('requirePermission("viewFinancials")');
+    ).toContain('requirePermission("viewAdminPanel")');
     expect(
       readFunction(source, "getAdminAuditData", "getAdminSettingsData")
-    ).toContain('requirePermission("viewGlobalAudit")');
+    ).toContain('requirePermission("viewAudit")');
     expect(
       readFunction(source, "getAdminSettingsData", "getAdminCourseCatalogData")
-    ).toContain('requirePermission("manageSettings")');
+    ).toContain('requirePermission("viewSettings")');
     expect(
       readFunction(source, "getAdminFaqData", "getAdminFinancialOverviewData")
-    ).toContain('requirePermission("manageContent")');
+    ).toContain('requirePermission("viewSettings")');
     expect(
       source.slice(source.indexOf("export const getAdminBannersData"))
-    ).toContain('requirePermission("manageSettings")');
+    ).toContain('requirePermission("viewSettings")');
   });
 });

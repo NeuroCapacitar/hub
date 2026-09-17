@@ -2,8 +2,8 @@
 status: canonical
 owner: engineering
 last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
-current_migration_tag: 0082_free_enrollment_contract
-migration_entry_count: 83
+current_migration_tag: 0085_superb_wonder_man
+migration_entry_count: 86
 schema_table_count: 50
 ---
 
@@ -43,8 +43,12 @@ separação no banco descartável. A separação é necessária quando uma migra
 adiciona um valor de enum que será usado por uma migration posterior; o PostgreSQL
 exige que o primeiro `ALTER TYPE ... ADD VALUE` esteja commitado antes desse uso.
 Staging, Production e E2E validam os hashes do journal; Development avança pelos
-timestamps já registrados, mas ainda rejeita timestamps desconhecidos, preservando
-somente linhas históricas cujo hash possa divergir de uma fonte que não é autoridade.
+timestamps já registrados, preservando somente linhas históricas cujo hash possa
+divergir de uma fonte que não é autoridade. Para registros legados
+identificados por timestamp e hash exatos, o runner de Development usa uma
+allowlist explícita de compatibilidade: ele reconhece as linhas já aplicadas sem
+editar o ledger, reordenar migrations ou executar SQL histórico desconhecido.
+Essa compatibilidade nunca é habilitada em Staging, Production ou E2E.
 `db:migrations:check` valida a cadeia local e `db:migrations:inspect` audita o banco
 somente para leitura.
 
@@ -144,6 +148,23 @@ matrícula gratuita não tenha Pedido nem referência manual e cria um índice
 independentemente do status. O código que concede acesso ainda deve validar
 preço, publicação, duração e concessões ativas; o índice é uma proteção final
 contra concorrência e duplicidade.
+
+A migration `0083_support_permission_grants` adiciona os arrays de grants do
+papel `support`; `0084_support_permission_views` adiciona as views de rota da
+implementação inicial. Essas migrations permanecem no histórico e não são
+editadas.
+
+A migration `0085_superb_wonder_man` substitui a matriz inicial por views
+protegidas de Financeiro/Auditoria e grants granulares de Cursos, Alunos,
+Certificados, Financeiro e Operação. Antes de recriar as constraints, ela limpa
+os arrays configuráveis de todos os Supports existentes, conforme a decisão de
+reconfiguração manual. Acesso padrão a Painel, Aprendizagem, Cursos, Alunos,
+Operação, FAQ, Banners e mídias de acesso não é persistido como grant.
+
+O runner de Development aplicou `0085` em 2026-09-17. A auditoria read-only
+confirmou o check `allowlist refinada e grants configuráveis limpos` e nenhum
+Support permaneceu com view/grant configurável. Não houve alteração em Staging
+ou Production.
 
 Na verificação de escala do Financeiro em Development, a base tinha 8 Pedidos e a
 busca textual usou `Seq Scan` com 2 buffers e 0,111 ms de execução; a ordenação por

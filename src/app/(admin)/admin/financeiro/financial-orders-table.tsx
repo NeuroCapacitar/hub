@@ -99,6 +99,7 @@ function OrderTableEmptyState({
 }
 
 export function FinancialOrdersTable({
+  canExecuteRefund = false,
   canManageFinancialOperations,
   checkout,
   hasNextPage,
@@ -109,6 +110,7 @@ export function FinancialOrdersTable({
   status,
   totalCount,
 }: {
+  canExecuteRefund?: boolean;
   canManageFinancialOperations: boolean;
   checkout?: AdminOrderCheckoutFilter | undefined;
   hasNextPage: boolean;
@@ -185,6 +187,7 @@ export function FinancialOrdersTable({
           <TableBody>
             {orders.length > 0 ? (
               <FinancialOrdersTableClient
+                canExecuteRefund={canExecuteRefund}
                 canManageFinancialOperations={canManageFinancialOperations}
                 orders={orders}
               />

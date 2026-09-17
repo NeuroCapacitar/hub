@@ -25,6 +25,7 @@ export const ADMIN_AUDIT_TARGET_TYPES = [
   "payment_review",
   "refund_request",
   "settings",
+  "staff",
   "student",
   "webhook_event",
 ] as const;
@@ -75,6 +76,7 @@ export const ADMIN_AUDIT_TARGET_LABELS: Record<
   payment_review: "Revisão financeira",
   refund_request: "Reembolso",
   settings: "Configurações",
+  staff: "Equipe",
   student: "Aluno",
   webhook_event: "Webhook",
 };

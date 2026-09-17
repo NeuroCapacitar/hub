@@ -3,28 +3,28 @@ import { describe, expect, it } from "vitest";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AdminSidebarNav } from "./admin-sidebar-nav";
 
-const renderNav = (role: "admin" | "support"): string =>
+const renderNav = (permissions: readonly string[]): string =>
   renderToStaticMarkup(
     <SidebarProvider>
-      <AdminSidebarNav role={role} />
+      <AdminSidebarNav permissions={permissions} />
     </SidebarProvider>
   );
 
+const ALL_NAV_PERMISSIONS = [
+  "viewAdminPanel",
+  "viewLearningAnalytics",
+  "viewCourses",
+  "viewStudents",
+  "viewFinancials",
+  "viewOperations",
+  "viewAudit",
+  "viewSettings",
+  "manageStaffAccess",
+];
+
 describe("AdminSidebarNav", () => {
-  it("shows support only the panel and financial link", () => {
-    const markup = renderNav("support");
-
-    expect(markup).toContain('href="/admin"');
-    expect(markup).toContain('href="/admin/financeiro"');
-    expect(markup).not.toContain('href="/admin/cursos"');
-    expect(markup).not.toContain('href="/admin/alunos"');
-    expect(markup).not.toContain('href="/admin/aprendizagem"');
-    expect(markup).not.toContain('href="/admin/auditoria"');
-    expect(markup).not.toContain('href="/admin/configuracoes"');
-  });
-
-  it("preserves every existing admin link", () => {
-    const markup = renderNav("admin");
+  it("shows Support the shared read surfaces and Team with its capability", () => {
+    const markup = renderNav(ALL_NAV_PERMISSIONS);
 
     for (const href of [
       "/admin",
@@ -35,9 +35,20 @@ describe("AdminSidebarNav", () => {
       "/admin/operacao",
       "/admin/auditoria",
       "/admin/configuracoes",
+      "/admin/equipe",
     ]) {
       expect(markup).toContain(`href="${href}"`);
     }
-    expect(markup).not.toContain('href="/admin/operacao/cursos"');
+    expect(markup.indexOf("/admin/equipe")).toBeLessThan(
+      markup.indexOf("/admin/alunos")
+    );
+  });
+
+  it("does not show Team without the management capability", () => {
+    const markup = renderNav(["viewAdminPanel", "viewCourses"]);
+
+    expect(markup).toContain('href="/admin"');
+    expect(markup).toContain('href="/admin/cursos"');
+    expect(markup).not.toContain('href="/admin/equipe"');
   });
 });

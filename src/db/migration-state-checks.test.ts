@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   certificateMigrationStateChecks,
   courseContentMigrationStateChecks,
+  supportPermissionMigrationStateChecks,
+  supportPermissionRefinementMigrationStateChecks,
+  supportPermissionViewsMigrationStateChecks,
 } from "./migration-state-checks";
 
 const MUTATING_STATEMENT_PATTERN =
@@ -60,8 +63,31 @@ describe("migration state checks", () => {
     for (const check of [
       ...courseContentMigrationStateChecks,
       ...certificateMigrationStateChecks,
+      ...supportPermissionMigrationStateChecks,
+      ...supportPermissionViewsMigrationStateChecks,
+      ...supportPermissionRefinementMigrationStateChecks,
     ]) {
       expect(check.statement).not.toMatch(MUTATING_STATEMENT_PATTERN);
     }
+  });
+
+  it("reports missing support grants schema as absent without referencing a missing column", () => {
+    const [check] = supportPermissionMigrationStateChecks;
+
+    expect(check?.migration).toBe("0083_support_permission_grants");
+    expect(check?.statement).toContain("case when exists");
+    expect(check?.statement).toContain("to_jsonb(profiles)");
+    expect(check?.statement).toContain("else false end as present");
+  });
+
+  it("checks the refined allowlist and the intentional grant reset", () => {
+    const [check] = supportPermissionRefinementMigrationStateChecks;
+
+    expect(check?.migration).toBe("0085_superb_wonder_man");
+    expect(check?.statement).toContain("createCourse");
+    expect(check?.statement).toContain("viewFinancialAnalysis");
+    expect(check?.statement).toContain(
+      "cardinality(support_permission_grants)"
+    );
   });
 });

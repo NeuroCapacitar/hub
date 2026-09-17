@@ -100,7 +100,7 @@ describe("GET /app/certificados/[code]/pdf", () => {
       user: { id: "student-1" },
     });
     dependencies.canPerform.mockImplementation(
-      (role: string) => role === "admin"
+      (subject: { role: string }) => subject.role === "admin"
     );
     dependencies.createR2ObjectReadUrl.mockResolvedValue(
       "https://private-r2.example.test/signed"
@@ -174,7 +174,7 @@ describe("GET /app/certificados/[code]/pdf", () => {
     expect(sql).toContain("($2::boolean or user_id = $3)");
     expect(parameters).toEqual(["OWNER-READY", false, "student-2"]);
     expect(dependencies.canPerform).toHaveBeenCalledWith(
-      "student",
+      { role: "student", user: { id: "student-2" } },
       "manageCertificates"
     );
   });
@@ -209,7 +209,7 @@ describe("GET /app/certificados/[code]/pdf", () => {
     expect(sql).toContain("($2::boolean or user_id = $3)");
     expect(parameters).toEqual(["OWNER-READY", true, "admin-1"]);
     expect(dependencies.canPerform).toHaveBeenCalledWith(
-      "admin",
+      { role: "admin", user: { id: "admin-1" } },
       "manageCertificates"
     );
   });

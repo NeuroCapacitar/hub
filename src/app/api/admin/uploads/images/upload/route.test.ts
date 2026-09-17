@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   confirmStagedAdminImageUpload: vi.fn(),
+  getStagedAdminImagePermission: vi.fn(),
   parseStagedAdminImageReference: vi.fn(),
-  requireRole: vi.fn(),
+  requirePermission: vi.fn(),
   uploadStagedAdminImageFile: vi.fn(),
 }));
 
@@ -12,12 +13,15 @@ vi.mock("@/features/storage/r2", () => ({
   uploadStagedAdminImageFile: dependencies.uploadStagedAdminImageFile,
 }));
 vi.mock("@/features/storage/staged-image-upload", () => ({
+  getStagedAdminImagePermission: dependencies.getStagedAdminImagePermission,
   parseStagedAdminImageReference: dependencies.parseStagedAdminImageReference,
 }));
 vi.mock("@/features/storage/staged-image-upload-registry", () => ({
   confirmStagedAdminImageUpload: dependencies.confirmStagedAdminImageUpload,
 }));
-vi.mock("@/lib/session", () => ({ requireRole: dependencies.requireRole }));
+vi.mock("@/lib/auth-permissions", () => ({
+  requirePermission: dependencies.requirePermission,
+}));
 
 import { POST } from "./route";
 
@@ -54,7 +58,12 @@ const createRequest = ({
 describe("POST /api/admin/uploads/images/upload", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    dependencies.requireRole.mockResolvedValue({ user: { id: "admin-1" } });
+    dependencies.requirePermission.mockResolvedValue({
+      user: { id: "admin-1" },
+    });
+    dependencies.getStagedAdminImagePermission.mockReturnValue(
+      "manageCourseDetails"
+    );
     dependencies.parseStagedAdminImageReference.mockReturnValue(reference);
     dependencies.uploadStagedAdminImageFile.mockResolvedValue(undefined);
     dependencies.confirmStagedAdminImageUpload.mockResolvedValue(undefined);

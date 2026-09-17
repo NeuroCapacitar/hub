@@ -85,10 +85,16 @@ await db
   .insert(profiles)
   .values({
     role: "admin",
+    supportPermissionGrants: [],
+    supportPermissionViews: [],
     userId,
   })
   .onConflictDoUpdate({
-    set: { role: "admin" },
+    set: {
+      role: "admin",
+      supportPermissionGrants: [],
+      supportPermissionViews: [],
+    },
     target: profiles.userId,
   });
 

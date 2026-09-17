@@ -13,7 +13,7 @@ export const GET = async (
 ) => {
   const session = await requireSession();
   const { code } = await params;
-  const canManageCertificates = canPerform(session.role, "manageCertificates");
+  const canManageCertificates = canPerform(session, "manageCertificates");
   const result = await getPool().query<{
     pdf_sha256: string | null;
     pdf_storage_key: string | null;

@@ -3,6 +3,7 @@ import { config } from "dotenv";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { Pool } from "pg";
 import { withVerifiedSslMode } from "../src/db/connection-url";
+import { DEVELOPMENT_LEGACY_MIGRATIONS } from "../src/db/development-migration-compatibility";
 import { applyMigrationsPerFile } from "../src/db/e2e-migrator";
 import { runMigrationWithLock } from "../src/db/migration-lock";
 import { getMigrationTargetProblems } from "../src/db/migration-target";
@@ -38,6 +39,7 @@ try {
     migrate: () =>
       applyMigrationsPerFile({
         client: lockClient,
+        legacyMigrations: DEVELOPMENT_LEGACY_MIGRATIONS,
         migrations: readMigrationFiles({ migrationsFolder }),
         // Development preserves historical journal rows whose hashes can differ
         // from the current source after non-authoritative rewrites. Drizzle's

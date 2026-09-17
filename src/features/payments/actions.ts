@@ -143,6 +143,7 @@ export const reconcileAsaasPaymentAction = async (
 };
 
 export const getAdminInstallmentPaymentsAction = async (orderId: string) => {
+  await requirePermission("viewFinancialOrders");
   const normalizedOrderId = orderId.trim();
   if (!UUID_PATTERN.test(normalizedOrderId)) {
     throw new Error("Pedido invalido.");
@@ -194,7 +195,7 @@ export const resolvePaymentReviewAction = async (
 export const retryFailedAsaasWebhookAction = async (
   formData: FormData
 ): Promise<void> => {
-  const session = await requirePermission("retryWebhook");
+  const session = await requirePermission("manageOperations");
   const webhookEventId = readString(formData, "webhookEventId");
 
   if (!webhookEventId) {

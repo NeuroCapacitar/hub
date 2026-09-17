@@ -64,8 +64,9 @@ canônica `/comprar/<slug>`, validada por `getSafeAuthReturnTo` em
 fragmento, barra invertida, encoding ou host externo, e possui limite de tamanho.
 O formulário usa `URLSearchParams` para transportar o valor validado até
 `/api/auth/redirect`; o Route Handler valida novamente. Student autenticada pode
-voltar ao Curso, enquanto Admin e Support permanecem em `/admin`; Student
-bloqueada continua recebendo `403`. O fluxo de recuperação de senha não carrega
+voltar ao Curso, enquanto Admin e Support permanecem na primeira superfície
+administrativa autorizada; Student bloqueada continua recebendo `403`. O fluxo de
+recuperação de senha não carrega
 esse retorno.
 
 O trigger `users_create_student_profile`, da migration `0041_public_signup_student_profiles.sql`, cria o Perfil `student` junto com cada nova Conta. A migration também preenche Perfis ausentes de Contas legadas, para que as novas Contas apareçam na administração sem depender de hook assíncrono da aplicação.
@@ -79,20 +80,24 @@ cria Concessão ou Matrícula por si só.
 
 ### REG-IDA-003 Autorização é por capacidade
 
-`canPerform`, em `src/lib/auth-policy.ts`, é a fonte do RBAC:
+`canPerform`, em `src/lib/auth-policy.ts`, é a fonte do RBAC e recebe o sujeito
+completo:
 
 - `admin`: todas as capacidades;
-- `support`: `executeRefund`, `manageEnrollmentSupport`,
-  `reissueCertificates`, `viewAdminPanel`, `viewCourseOperations`,
-  `viewFinancials`, `viewScopedAudit` e `viewStudentOperations`;
+- `support`: visualizações de rota persistidas em
+  `profiles.support_permission_views` e alterações delegáveis persistidas em
+  `profiles.support_permission_grants`;
 - `student`: nenhuma capacidade administrativa.
 
 Essa matriz central já representa a fronteira aprovada no
-[DEC-DISC-014](../decisions.md#dec-disc-014). `viewAdminPanel` autoriza somente o
-shell; toda leitura e mutação de domínio ainda exige sua capacidade específica.
+[DEC-DISC-014](../decisions.md#dec-disc-014) e refinada em
+[ADR-0017](../adr/0017-support-granular-permissions.md). O Painel é uma
+capacidade padrão do shell para Admin e Suporte; Financeiro e Auditoria têm
+views protegidas, enquanto Cursos, Alunos, Aprendizagem e Operação têm leitura
+padrão. Toda leitura e mutação de domínio ainda exige sua capacidade específica.
 Páginas, Route Handlers, Server Actions e projeções aplicam essas capacidades no
-servidor. `support` usa consultas próprias por Curso e não executa primeiro uma
-consulta ampla para filtrá-la depois.
+servidor. O Painel e Auditoria não carregam primeiro uma projeção ampla para
+filtrá-la depois.
 
 A ficha contextual de `support` combina somente dados do Aluno no Curso
 selecionado: estado e validade da Matrícula, bloqueio contextual, progresso das
@@ -102,18 +107,32 @@ de conteúdo, configuração da plataforma, auditoria global ou controles Admin.
 Admin continua usando sua projeção própria e não herda a restrição de
 Certificado mais recente aplicada ao Suporte.
 
-`manageFinancialOperations` e `manageFinancialReviews` são capacidades mutáveis
-exclusivas de Admin. Conciliação por pagamento e sincronização local do extrato exigem a
-primeira; qualquer decisão manual que altere Revisão, Pedido ou acesso exige a
-segunda. `viewFinancials` permanece estritamente leitura. `executeRefund` continua
-separada para o Suporte iniciar o fluxo explícito de estorno autorizado.
+`manageFinancialOperations`, `manageFinancialReviews` e `executeRefund` são
+capacidades mutáveis que o Admin pode conceder individualmente. Cada uma exige a
+view financeira correspondente. `viewFinancials` é uma derivação interna para
+navegação e não substitui as três views protegidas: Análise, Pedidos e Revisões.
+
+### REG-IDA-003A Permissões delegáveis de Suporte
+
+As views protegidas e alterações de `SUPPORT_PERMISSION_GROUPS` aparecem na
+Equipe; acessos padrão não viram checkboxes. O catálogo inclui grants granulares
+para Cursos, Alunos, Certificados, Financeiro e Operação, além de
+`viewFinancialAnalysis`, `viewFinancialOrders`, `viewFinancialReviews` e
+`viewAudit`. FAQ, Banners e mídias da Tela de acesso são padrão para Admin e
+Suporte e continuam auditados. O Postgres e o TypeScript rejeitam qualquer
+outro valor. A migration 0085 limpou views/grants configuráveis de Supports
+existentes; novas Contas começam da mesma forma. Admin e Student não persistem
+grants ou views. Alterar apenas grants ou views não revoga a sessão, pois a
+policy relê o Perfil na próxima resolução server-side; alterar o papel revoga as
+sessões do alvo.
 
 Server Actions e páginas devem checar a capacidade apropriada; esconder botão não é autorização.
 
 ### Segurança de Admin/Suporte
 
 MFA administrativo não faz parte do produto atual. `admin` e `support` entram
-com sessão Better Auth válida e são autorizados pela matriz RBAC, pelas regras de
+com sessão Better Auth válida e são autorizados pela matriz RBAC, pelos grants do
+Perfil, pelas regras de
 bloqueio e pelas confirmações próprias de cada operação sensível. Uma adoção
 futura de MFA exigirá nova decisão de produto, especificação, implementação e
 requalificação; a tabela legada `two_factors` não representa um recurso ativo.

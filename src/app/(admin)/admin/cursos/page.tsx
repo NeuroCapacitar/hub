@@ -38,6 +38,7 @@ import { resolveCourseAvailability } from "@/features/courses/availability";
 import { CourseCoverImage } from "@/features/courses/course-cover-image";
 import { getCourseCoverBlurDataUrl } from "@/features/storage/course-cover";
 import { requirePermission } from "@/lib/auth-permissions";
+import { canPerform } from "@/lib/auth-policy";
 import { formatCurrencyInCents } from "@/lib/formatters";
 import { route } from "@/lib/routes";
 
@@ -90,7 +91,8 @@ const firstSearchParam = (
 export default async function AdminCoursesPage({
   searchParams,
 }: AdminCoursesPageProps): Promise<React.JSX.Element> {
-  await requirePermission("manageContent");
+  const session = await requirePermission("viewCourses");
+  const canCreateCourse = canPerform(session, "createCourse");
   const params = (await searchParams) ?? {};
   const rawPage = Number.parseInt(firstSearchParam(params.page) ?? "1", 10);
   const data = await getAdminCourseCatalogData({
@@ -113,24 +115,28 @@ export default async function AdminCoursesPage({
       <div className="flex flex-col gap-8">
         <PageHeader
           actions={
-            <DiscardAwareDialog
-              description="Crie o curso antes de cadastrar seus módulos e aulas."
-              title="Novo curso"
-              trigger={
-                <DialogTriggerButton>
-                  <HugeiconsIcon
-                    aria-hidden="true"
-                    data-icon="inline-start"
-                    icon={Add01Icon}
-                    size={18}
-                    strokeWidth={2}
-                  />
-                  Novo curso
-                </DialogTriggerButton>
-              }
-            >
-              <CourseForm priceFieldId="header-course-price" />
-            </DiscardAwareDialog>
+            canCreateCourse ? (
+              <DiscardAwareDialog
+                description="Crie o curso antes de cadastrar seus módulos e aulas."
+                title="Novo curso"
+                trigger={
+                  <DialogTriggerButton>
+                    <HugeiconsIcon
+                      aria-hidden="true"
+                      data-icon="inline-start"
+                      icon={Add01Icon}
+                      size={18}
+                      strokeWidth={2}
+                    />
+                    Novo curso
+                  </DialogTriggerButton>
+                }
+              >
+                <CourseForm priceFieldId="header-course-price" />
+              </DiscardAwareDialog>
+            ) : (
+              <Badge variant="outline">Somente leitura</Badge>
+            )
           }
           description="Gerencie cursos em uma visão limpa. Entre em um curso para organizar módulos, aulas, alunos e publicação."
           title="Cursos"
@@ -145,30 +151,33 @@ export default async function AdminCoursesPage({
                 </EmptyMedia>
                 <EmptyTitle as="h2">Nenhum curso cadastrado</EmptyTitle>
                 <EmptyDescription>
-                  Crie o primeiro curso para começar a adicionar módulos e
-                  aulas.
+                  {canCreateCourse
+                    ? "Crie o primeiro curso para começar a adicionar módulos e aulas."
+                    : "Nenhum curso disponível para consulta."}
                 </EmptyDescription>
               </EmptyHeader>
-              <EmptyContent>
-                <DiscardAwareDialog
-                  description="Crie o curso antes de cadastrar seus módulos e aulas."
-                  title="Novo curso"
-                  trigger={
-                    <DialogTriggerButton>
-                      <HugeiconsIcon
-                        aria-hidden="true"
-                        data-icon="inline-start"
-                        icon={Add01Icon}
-                        size={18}
-                        strokeWidth={2}
-                      />
-                      Criar primeiro curso
-                    </DialogTriggerButton>
-                  }
-                >
-                  <CourseForm priceFieldId="empty-course-price" />
-                </DiscardAwareDialog>
-              </EmptyContent>
+              {canCreateCourse ? (
+                <EmptyContent>
+                  <DiscardAwareDialog
+                    description="Crie o curso antes de cadastrar seus módulos e aulas."
+                    title="Novo curso"
+                    trigger={
+                      <DialogTriggerButton>
+                        <HugeiconsIcon
+                          aria-hidden="true"
+                          data-icon="inline-start"
+                          icon={Add01Icon}
+                          size={18}
+                          strokeWidth={2}
+                        />
+                        Criar primeiro curso
+                      </DialogTriggerButton>
+                    }
+                  >
+                    <CourseForm priceFieldId="empty-course-price" />
+                  </DiscardAwareDialog>
+                </EmptyContent>
+              ) : null}
             </Empty>
           ) : (
             data.courses.map((course) => {
@@ -255,7 +264,9 @@ export default async function AdminCoursesPage({
                       variant="secondary"
                     >
                       <Link href={route(`/admin/cursos/${course.id}`)}>
-                        Gerenciar curso
+                        {canCreateCourse
+                          ? "Gerenciar curso"
+                          : "Consultar curso"}
                       </Link>
                     </Button>
                   </div>

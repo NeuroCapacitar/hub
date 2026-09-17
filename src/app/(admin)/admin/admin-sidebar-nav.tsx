@@ -18,32 +18,39 @@ import {
   SidebarMenuItem,
   SidebarMenuLink,
 } from "@/components/ui/sidebar";
+import type { AuthPermission } from "@/lib/auth-policy";
 import { route } from "@/lib/routes";
-import type { AppRole } from "@/lib/session";
 
 const adminNavItems = [
-  ["Painel", "/admin", Analytics01Icon],
-  ["Aprendizagem", "/admin/aprendizagem", Analytics01Icon],
-  ["Cursos", "/admin/cursos", Book01Icon],
-  ["Alunos", "/admin/alunos", UserGroupIcon],
-  ["Financeiro", "/admin/financeiro", Invoice01Icon],
-  ["Operação", "/admin/operacao", Activity03Icon],
-  ["Auditoria", "/admin/auditoria", HistoryIcon],
-  ["Configurações", "/admin/configuracoes", AccountSetting01Icon],
-] as const;
-
-const supportNavItems = [
-  ["Painel", "/admin", Analytics01Icon],
-  ["Cursos", "/admin/operacao/cursos", Book01Icon],
-  ["Financeiro", "/admin/financeiro", Invoice01Icon],
+  ["Painel", "/admin", Analytics01Icon, "viewAdminPanel"],
+  [
+    "Aprendizagem",
+    "/admin/aprendizagem",
+    Analytics01Icon,
+    "viewLearningAnalytics",
+  ],
+  ["Cursos", "/admin/cursos", Book01Icon, "viewCourses"],
+  ["Equipe", "/admin/equipe", UserGroupIcon, "manageStaffAccess"],
+  ["Alunos", "/admin/alunos", UserGroupIcon, "viewStudents"],
+  ["Financeiro", "/admin/financeiro", Invoice01Icon, "viewFinancials"],
+  ["Operação", "/admin/operacao", Activity03Icon, "viewOperations"],
+  ["Auditoria", "/admin/auditoria", HistoryIcon, "viewAudit"],
+  [
+    "Configurações",
+    "/admin/configuracoes",
+    AccountSetting01Icon,
+    "viewSettings",
+  ],
 ] as const;
 
 export function AdminSidebarNav({
-  role,
+  permissions,
 }: {
-  role: Extract<AppRole, "admin" | "support">;
+  permissions: readonly (AuthPermission | string)[];
 }): React.JSX.Element {
-  const navItems = role === "support" ? supportNavItems : adminNavItems;
+  const navItems = adminNavItems.filter(([, , , permission]) =>
+    permissions.includes(permission)
+  );
 
   return (
     <SidebarGroup>

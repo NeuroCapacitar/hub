@@ -790,15 +790,18 @@ function OrderTechnicalDetailsSection({
 }
 
 function OrderActionsSection({
+  canExecuteRefund,
   canManageFinancialOperations,
   hasPendingBuyerIdentityReview,
   order,
 }: {
+  canExecuteRefund: boolean;
   canManageFinancialOperations: boolean;
   hasPendingBuyerIdentityReview: boolean;
   order: AdminOrder;
 }): React.JSX.Element {
   const hasRefundAction =
+    canExecuteRefund &&
     order.status === "paid" &&
     !hasPendingBuyerIdentityReview &&
     (!order.refundRequestStatus || order.refundRequestStatus === "failed");
@@ -854,10 +857,12 @@ function OrderActionsSection({
 }
 
 function OrderDetailsBody({
+  canExecuteRefund,
   canManageFinancialOperations,
   hasPendingBuyerIdentityReview,
   order,
 }: {
+  canExecuteRefund: boolean;
   canManageFinancialOperations: boolean;
   hasPendingBuyerIdentityReview: boolean;
   order: AdminOrder;
@@ -870,6 +875,7 @@ function OrderDetailsBody({
         <OrderValuesSection order={order} />
         <Separator />
         <OrderActionsSection
+          canExecuteRefund={canExecuteRefund}
           canManageFinancialOperations={canManageFinancialOperations}
           hasPendingBuyerIdentityReview={hasPendingBuyerIdentityReview}
           order={order}
@@ -890,6 +896,7 @@ function OrderDetailsBody({
 }
 
 export function FinancialOrderDetailsDialog({
+  canExecuteRefund = false,
   canManageFinancialOperations,
   hasPendingBuyerIdentityReview,
   onOpenChange,
@@ -897,6 +904,7 @@ export function FinancialOrderDetailsDialog({
   order,
   triggerRef,
 }: {
+  canExecuteRefund?: boolean;
   canManageFinancialOperations: boolean;
   hasPendingBuyerIdentityReview: boolean;
   onOpenChange: (open: boolean) => void;
@@ -923,6 +931,7 @@ export function FinancialOrderDetailsDialog({
         </DialogHeader>
 
         <OrderDetailsBody
+          canExecuteRefund={canExecuteRefund}
           canManageFinancialOperations={canManageFinancialOperations}
           hasPendingBuyerIdentityReview={hasPendingBuyerIdentityReview}
           order={order}

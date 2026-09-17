@@ -140,17 +140,57 @@ beforeEach(() => {
 });
 
 describe("AdminPage", () => {
-  it("selects the support projection before any broad admin loader", async () => {
-    dependencies.requirePermission.mockResolvedValue({ role: "support" });
+  it("uses the shared dashboard for Support after the read guard", async () => {
+    dependencies.requirePermission.mockResolvedValue({
+      role: "support",
+      supportPermissionGrants: [],
+    });
 
     const markup = renderToStaticMarkup(await AdminPage());
 
-    expect(markup).toContain("Operação de suporte");
-    expect(dependencies.getSupportCourseOperations).toHaveBeenCalledWith({
-      page: 1,
+    expect(markup).toContain("Operação diária");
+    expect(dependencies.getAdminOverview).toHaveBeenCalledOnce();
+    expect(dependencies.getAdminDashboardProjection).toHaveBeenCalledOnce();
+    expect(dependencies.getSupportCourseOperations).not.toHaveBeenCalled();
+  });
+
+  it("does not render financial facets for Support without financial views", async () => {
+    dependencies.requirePermission.mockResolvedValue({
+      role: "support",
+      supportPermissionGrants: [],
+      supportPermissionViews: [],
     });
-    expect(dependencies.getAdminOverview).not.toHaveBeenCalled();
-    expect(dependencies.getAdminDashboardProjection).not.toHaveBeenCalled();
+    dependencies.getAdminOverview.mockResolvedValue({
+      activeEnrollments: 3,
+      courses: 1,
+      failedWebhooks: 0,
+      retryableWebhooks: 0,
+      students: 4,
+    });
+    dependencies.getAdminDashboardProjection.mockResolvedValue({
+      courseHealth: emptyCourseHealth,
+      operations: {
+        ...emptyOperations,
+        financial: {},
+        integrations: {
+          ...emptyOperations.integrations,
+          backlog: {
+            ...emptyOperations.integrations.backlog,
+            payments: null,
+          },
+        },
+      },
+      recentCertificates: [],
+      recentOrders: [],
+    });
+
+    const markup = renderToStaticMarkup(await AdminPage());
+
+    expect(markup).toContain("Alunos cadastrados");
+    expect(markup).not.toContain("Receita bruta paga");
+    expect(markup).not.toContain("Pedidos pagos");
+    expect(markup).not.toContain("Pendências financeiras");
+    expect(markup).not.toContain("Últimas compras");
   });
 
   it("renders the admin home as an operational command center", async () => {

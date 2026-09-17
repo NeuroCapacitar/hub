@@ -63,8 +63,10 @@ const getPreset = (course: AvailabilityCourse) =>
 
 export function CourseAvailabilityForm({
   course,
+  readOnly = false,
 }: {
   course: AvailabilityCourse;
+  readOnly?: boolean;
 }): React.JSX.Element {
   const initialPreset = getPreset(course);
   const [preset, setPreset] = useState<CourseAvailabilityPreset>(
@@ -97,6 +99,7 @@ export function CourseAvailabilityForm({
           </Alert>
         ) : null}
         <Button
+          disabled={readOnly}
           loading={isPending}
           onClick={() => {
             setErrorMessage(null);
@@ -127,7 +130,11 @@ export function CourseAvailabilityForm({
   return (
     <form
       className="flex flex-col gap-4"
-      onChange={() => setIsDirty(true)}
+      onChange={() => {
+        if (!readOnly) {
+          setIsDirty(true);
+        }
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         setErrorMessage(null);
@@ -157,172 +164,181 @@ export function CourseAvailabilityForm({
         });
       }}
     >
-      <input name="courseId" type="hidden" value={course.id} />
-      {errorMessage ? (
-        <Alert role="alert" variant="destructive">
-          <AlertTitle>Não foi possível atualizar a disponibilidade</AlertTitle>
-          <AlertDescription>{errorMessage}</AlertDescription>
-        </Alert>
-      ) : null}
-      <Field>
-        <FieldLabel htmlFor="course-availability-preset">
-          Disponibilidade
-        </FieldLabel>
-        <Select
-          name="preset"
-          onValueChange={(value) => {
-            setPreset(value as CourseAvailabilityPreset);
-            setIsDirty(true);
-          }}
-          value={preset}
-        >
-          <SelectTrigger id="course-availability-preset">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {availabilityOptions.map((option) => (
-              <SelectItem
-                disabled={option.disabled}
-                key={option.value}
-                value={option.value}
-              >
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <FieldDescription className="text-xs">
-          Atual:{" "}
-          {availabilityOptions.find((option) => option.value === preset)?.label}
-        </FieldDescription>
-        {course.hasCommercialHistory ? (
-          <FieldDescription className="text-xs">
-            Rascunho e Em breve estão indisponíveis porque este Curso já possui
-            histórico comercial.
-          </FieldDescription>
+      <fieldset className="contents" disabled={isPending || readOnly}>
+        <input name="courseId" type="hidden" value={course.id} />
+        {errorMessage ? (
+          <Alert role="alert" variant="destructive">
+            <AlertTitle>
+              Não foi possível atualizar a disponibilidade
+            </AlertTitle>
+            <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
         ) : null}
-      </Field>
-
-      {preset === "coming_soon" || preset === "sales_paused" ? (
-        <div
-          className={
-            preset === "coming_soon" ? "grid gap-4 sm:grid-cols-2" : "max-w-xl"
-          }
-        >
-          {preset === "coming_soon" ? (
-            <Field>
-              <FieldLabel htmlFor="course-launch-date">
-                Data prevista
-              </FieldLabel>
-              <DatePickerField
-                defaultValue={course.launchDate ?? ""}
-                id="course-launch-date"
-                name="launchDate"
-                placeholder="Definir data prevista"
-              />
-              <FieldDescription className="text-xs">
-                Definir data prevista é opcional.
-              </FieldDescription>
-            </Field>
-          ) : null}
-          <Field>
-            <FieldLabel htmlFor="course-launch-landing">
-              Landing externa
-            </FieldLabel>
-            <Input
-              defaultValue={course.launchLandingUrl ?? ""}
-              id="course-launch-landing"
-              name="launchLandingUrl"
-              placeholder="https://exemplo.com/curso"
-              type="url"
-            />
-          </Field>
-        </div>
-      ) : null}
-
-      {preset === "sales_paused" ? (
-        <Field orientation="horizontal">
-          <Switch
-            checked={showInCatalog}
-            id="course-show-in-catalog"
-            onCheckedChange={(checked) => {
-              setShowInCatalog(checked);
+        <Field>
+          <FieldLabel htmlFor="course-availability-preset">
+            Disponibilidade
+          </FieldLabel>
+          <Select
+            name="preset"
+            onValueChange={(value) => {
+              setPreset(value as CourseAvailabilityPreset);
               setIsDirty(true);
             }}
-          />
-          <div>
-            <FieldLabel htmlFor="course-show-in-catalog">
-              Exibir na vitrine
-            </FieldLabel>
-          </div>
-          {showInCatalog ? (
-            <input name="showInCatalog" type="hidden" value="on" />
+            value={preset}
+          >
+            <SelectTrigger id="course-availability-preset">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {availabilityOptions.map((option) => (
+                <SelectItem
+                  disabled={option.disabled}
+                  key={option.value}
+                  value={option.value}
+                >
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FieldDescription className="text-xs">
+            Atual:{" "}
+            {
+              availabilityOptions.find((option) => option.value === preset)
+                ?.label
+            }
+          </FieldDescription>
+          {course.hasCommercialHistory ? (
+            <FieldDescription className="text-xs">
+              Rascunho e Em breve estão indisponíveis porque este Curso já
+              possui histórico comercial.
+            </FieldDescription>
           ) : null}
         </Field>
-      ) : null}
 
-      {course.interestCount > 0 ||
-      course.pendingInterestNotifications > 0 ||
-      course.interestNotificationsSent > 0 ||
-      course.pendingCheckoutCancellations > 0 ? (
-        <p className="text-muted-foreground text-xs">
-          {course.interestCount} interessadas ·{" "}
-          {course.pendingInterestNotifications} avisos pendentes ·{" "}
-          {course.interestNotificationsSent} enviados ·{" "}
-          {course.pendingCheckoutCancellations} cancelamento pendente
-        </p>
-      ) : null}
+        {preset === "coming_soon" || preset === "sales_paused" ? (
+          <div
+            className={
+              preset === "coming_soon"
+                ? "grid gap-4 sm:grid-cols-2"
+                : "max-w-xl"
+            }
+          >
+            {preset === "coming_soon" ? (
+              <Field>
+                <FieldLabel htmlFor="course-launch-date">
+                  Data prevista
+                </FieldLabel>
+                <DatePickerField
+                  defaultValue={course.launchDate ?? ""}
+                  id="course-launch-date"
+                  name="launchDate"
+                  placeholder="Definir data prevista"
+                />
+                <FieldDescription className="text-xs">
+                  Definir data prevista é opcional.
+                </FieldDescription>
+              </Field>
+            ) : null}
+            <Field>
+              <FieldLabel htmlFor="course-launch-landing">
+                Landing externa
+              </FieldLabel>
+              <Input
+                defaultValue={course.launchLandingUrl ?? ""}
+                id="course-launch-landing"
+                name="launchLandingUrl"
+                placeholder="https://exemplo.com/curso"
+                type="url"
+              />
+            </Field>
+          </div>
+        ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        <Button loading={isPending} size="sm" type="submit">
-          Salvar disponibilidade
-        </Button>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button
-              disabled={isPending}
-              size="sm"
-              type="button"
-              variant="destructive"
-            >
-              Arquivar curso
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Arquivar este Curso?</AlertDialogTitle>
-              <AlertDialogDescription>
-                O Curso sairá da vitrine, as vendas serão fechadas e todas as
-                alunos perderão acesso até uma restauração.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  setErrorMessage(null);
-                  startTransition(async () => {
-                    try {
-                      await archiveCourseAction(course.id);
-                      toast.success("Curso arquivado.");
-                    } catch (error) {
-                      const message =
-                        error instanceof Error
-                          ? error.message
-                          : "Não foi possível arquivar o Curso.";
-                      setErrorMessage(message);
-                      toast.error(message);
-                    }
-                  });
-                }}
+        {preset === "sales_paused" ? (
+          <Field orientation="horizontal">
+            <Switch
+              checked={showInCatalog}
+              id="course-show-in-catalog"
+              onCheckedChange={(checked) => {
+                setShowInCatalog(checked);
+                setIsDirty(true);
+              }}
+            />
+            <div>
+              <FieldLabel htmlFor="course-show-in-catalog">
+                Exibir na vitrine
+              </FieldLabel>
+            </div>
+            {showInCatalog ? (
+              <input name="showInCatalog" type="hidden" value="on" />
+            ) : null}
+          </Field>
+        ) : null}
+
+        {course.interestCount > 0 ||
+        course.pendingInterestNotifications > 0 ||
+        course.interestNotificationsSent > 0 ||
+        course.pendingCheckoutCancellations > 0 ? (
+          <p className="text-muted-foreground text-xs">
+            {course.interestCount} interessadas ·{" "}
+            {course.pendingInterestNotifications} avisos pendentes ·{" "}
+            {course.interestNotificationsSent} enviados ·{" "}
+            {course.pendingCheckoutCancellations} cancelamento pendente
+          </p>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          <Button loading={isPending} size="sm" type="submit">
+            Salvar disponibilidade
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                disabled={isPending}
+                size="sm"
+                type="button"
                 variant="destructive"
               >
                 Arquivar curso
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Arquivar este Curso?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  O Curso sairá da vitrine, as vendas serão fechadas e todos os
+                  alunos perderão acesso até uma restauração.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    setErrorMessage(null);
+                    startTransition(async () => {
+                      try {
+                        await archiveCourseAction(course.id);
+                        toast.success("Curso arquivado.");
+                      } catch (error) {
+                        const message =
+                          error instanceof Error
+                            ? error.message
+                            : "Não foi possível arquivar o Curso.";
+                        setErrorMessage(message);
+                        toast.error(message);
+                      }
+                    });
+                  }}
+                  variant="destructive"
+                >
+                  Arquivar curso
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </fieldset>
     </form>
   );
 }

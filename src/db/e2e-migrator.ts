@@ -7,6 +7,11 @@ interface AppliedMigrationRow {
   hash: string;
 }
 
+export interface LegacyMigrationCompatibility {
+  createdAt: number;
+  hash: string;
+}
+
 const COMMENT_ONLY_LINE = /^\s*(?:--.*)?$/;
 const MIGRATION_LINE_BREAK = /\r?\n/;
 const MIGRATION_LINE_ENDING = /\r\n?|\n/g;
@@ -36,10 +41,12 @@ export const hasExecutableMigrationSql = (statement: string): boolean =>
 
 const assertAppliedJournalMatches = ({
   applied,
+  legacyMigrations = [],
   migrations,
   verifyHashes = true,
 }: {
   applied: readonly AppliedMigrationRow[];
+  legacyMigrations?: readonly LegacyMigrationCompatibility[];
   migrations: readonly MigrationMeta[];
   verifyHashes?: boolean;
 }): Set<number> => {
@@ -54,6 +61,15 @@ const assertAppliedJournalMatches = ({
     if (
       !(local && (!verifyHashes || isCompatibleMigrationHash(local, row.hash)))
     ) {
+      if (
+        !verifyHashes &&
+        legacyMigrations.some(
+          (legacy) => legacy.createdAt === timestamp && legacy.hash === row.hash
+        )
+      ) {
+        appliedTimestamps.add(timestamp);
+        continue;
+      }
       throw new Error(
         `Migration journal drift at ${row.created_at}; reconcile the migration history before retrying.`
       );
@@ -66,10 +82,12 @@ const assertAppliedJournalMatches = ({
 
 export const applyMigrationsPerFile = async ({
   client,
+  legacyMigrations = [],
   migrations,
   verifyAppliedHashes = true,
 }: {
   client: Pick<PoolClient, "query">;
+  legacyMigrations?: readonly LegacyMigrationCompatibility[];
   migrations: readonly MigrationMeta[];
   verifyAppliedHashes?: boolean;
 }): Promise<void> => {
@@ -86,6 +104,7 @@ export const applyMigrationsPerFile = async ({
   );
   const appliedTimestamps = assertAppliedJournalMatches({
     applied: journal.rows,
+    legacyMigrations,
     migrations,
     verifyHashes: verifyAppliedHashes,
   });

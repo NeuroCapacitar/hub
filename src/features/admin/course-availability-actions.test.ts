@@ -3,12 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const dependencies = vi.hoisted(() => ({
   archiveCourse: vi.fn(),
   revalidatePath: vi.fn(),
-  requireRole: vi.fn(),
+  requirePermission: vi.fn(),
   restoreCourse: vi.fn(),
   scheduleOutboxDrainAfterResponse: vi.fn(),
   setCourseAvailability: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: dependencies.revalidatePath }));
 vi.mock("@/features/courses/availability-server", () => ({
   archiveCourse: dependencies.archiveCourse,
@@ -19,7 +20,9 @@ vi.mock("@/features/outbox/background-drain", () => ({
   scheduleOutboxDrainAfterResponse:
     dependencies.scheduleOutboxDrainAfterResponse,
 }));
-vi.mock("@/lib/session", () => ({ requireRole: dependencies.requireRole }));
+vi.mock("@/lib/auth-permissions", () => ({
+  requirePermission: dependencies.requirePermission,
+}));
 
 import {
   archiveCourseAction,
@@ -30,7 +33,12 @@ import {
 describe("Course availability actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dependencies.requireRole.mockResolvedValue({ user: { id: "admin-1" } });
+    dependencies.requirePermission.mockResolvedValue({
+      role: "admin",
+      supportPermissionGrants: [],
+      supportPermissionViews: [],
+      user: { id: "admin-1" },
+    });
     dependencies.setCourseAvailability.mockResolvedValue({
       checkoutCancellationsEnqueued: 2,
       notificationsEnqueued: 0,

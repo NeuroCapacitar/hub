@@ -112,8 +112,20 @@ const ensureUser = async ({
   }
   await db
     .insert(profiles)
-    .values({ role, userId })
-    .onConflictDoUpdate({ set: { role }, target: profiles.userId });
+    .values({
+      role,
+      supportPermissionGrants: [],
+      supportPermissionViews: [],
+      userId,
+    })
+    .onConflictDoUpdate({
+      set: {
+        role,
+        supportPermissionGrants: [],
+        supportPermissionViews: [],
+      },
+      target: profiles.userId,
+    });
   return userId;
 };
 

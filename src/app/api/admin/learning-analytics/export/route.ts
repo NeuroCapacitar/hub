@@ -1,5 +1,5 @@
 import { parseLearningAnalyticsPeriod } from "@/features/learning-analytics/period";
-import { getLessonAnalyticsMetrics } from "@/features/learning-analytics/server";
+import { getLessonAnalyticsExportMetrics } from "@/features/learning-analytics/server";
 
 export const runtime = "nodejs";
 
@@ -20,7 +20,7 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
-  const metrics = await getLessonAnalyticsMetrics({ courseId, period });
+  const metrics = await getLessonAnalyticsExportMetrics({ courseId, period });
   const header = [
     "curso",
     "ordem_modulo",

@@ -16,6 +16,7 @@ const dependencies = vi.hoisted(() => {
     getPool: vi.fn(() => pool),
     revalidatePath: vi.fn(),
     requireRole: vi.fn(),
+    requireSession: vi.fn(),
     writeAuditLog: vi.fn(),
   };
 });
@@ -28,7 +29,10 @@ vi.mock("@/db", () => ({ getPool: dependencies.getPool }));
 vi.mock("@/features/admin/audit-log", () => ({
   writeAuditLog: dependencies.writeAuditLog,
 }));
-vi.mock("@/lib/session", () => ({ requireRole: dependencies.requireRole }));
+vi.mock("@/lib/session", () => ({
+  requireRole: dependencies.requireRole,
+  requireSession: dependencies.requireSession,
+}));
 
 import {
   deleteFaqAction,
@@ -61,6 +65,12 @@ describe("saveSettingsAction", () => {
     vi.clearAllMocks();
     dependencies.requireRole.mockResolvedValue({
       role: "admin",
+      supportPermissionGrants: [],
+      user: { id: "admin-1" },
+    });
+    dependencies.requireSession.mockResolvedValue({
+      role: "admin",
+      supportPermissionGrants: [],
       user: { id: "admin-1" },
     });
     dependencies.clientQuery.mockImplementation((sql: string) => {

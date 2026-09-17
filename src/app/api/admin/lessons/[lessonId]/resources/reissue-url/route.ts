@@ -4,7 +4,7 @@ import {
 } from "@/features/storage/lesson-resource-upload-observability";
 import { getPreparedLessonResourceUpload } from "@/features/storage/lesson-resource-upload-registry";
 import { createLessonResourceUploadUrlForReference } from "@/features/storage/r2";
-import { requireRole } from "@/lib/session";
+import { requirePermission } from "@/lib/auth-permissions";
 
 export const runtime = "nodejs";
 
@@ -15,7 +15,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ lessonId: string }> }
 ): Promise<Response> {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageCourseContent");
   const { lessonId } = await context.params;
   const correlationId = getLessonResourceUploadCorrelationId(request);
   let body: unknown;

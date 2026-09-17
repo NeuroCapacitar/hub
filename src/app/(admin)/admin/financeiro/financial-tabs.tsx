@@ -15,8 +15,18 @@ type FinancialTab = (typeof FINANCIAL_TABS)[number]["value"];
 const isFinancialTab = (value: string | null): value is FinancialTab =>
   FINANCIAL_TABS.some((tab) => tab.value === value);
 
-const getActiveTab = (value: string | null): FinancialTab =>
-  isFinancialTab(value) ? value : "overview";
+const getActiveTab = (
+  value: string | null,
+  visibleTabs: Readonly<Record<FinancialTab, boolean>>
+): FinancialTab => {
+  if (isFinancialTab(value) && visibleTabs[value]) {
+    return value;
+  }
+
+  return (
+    FINANCIAL_TABS.find((tab) => visibleTabs[tab.value])?.value ?? "overview"
+  );
+};
 
 const TAB_QUERY_KEYS: Record<FinancialTab, readonly string[]> = {
   analysis: ["period"],
@@ -28,14 +38,21 @@ export function FinancialTabs({
   analysis,
   orders,
   overview,
+  visibleTabs,
 }: {
   analysis: ReactNode;
   orders: ReactNode;
   overview: ReactNode;
+  visibleTabs?: Readonly<Record<FinancialTab, boolean>>;
 }): React.JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const activeTab = getActiveTab(searchParams.get("tab"));
+  const effectiveVisibleTabs = visibleTabs ?? {
+    analysis: true,
+    orders: true,
+    overview: true,
+  };
+  const activeTab = getActiveTab(searchParams.get("tab"), effectiveVisibleTabs);
 
   const changeTab = (value: string): void => {
     if (!isFinancialTab(value)) {
@@ -68,11 +85,13 @@ export function FinancialTabs({
           className="min-w-max flex-nowrap"
           variant="line"
         >
-          {FINANCIAL_TABS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}>
-              {tab.label}
-            </TabsTrigger>
-          ))}
+          {FINANCIAL_TABS.filter((tab) => effectiveVisibleTabs[tab.value]).map(
+            (tab) => (
+              <TabsTrigger key={tab.value} value={tab.value}>
+                {tab.label}
+              </TabsTrigger>
+            )
+          )}
         </TabsList>
       </div>
       <TabsContent className="flex flex-col gap-8" value="overview">

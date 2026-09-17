@@ -88,7 +88,6 @@ import {
   createCorrelationId,
 } from "@/lib/observability";
 import { observeOperation } from "@/lib/observe-operation";
-import { requireRole } from "@/lib/session";
 
 const readString = (formData: FormData, key: string): string =>
   String(formData.get(key) ?? "").trim();
@@ -274,8 +273,10 @@ const revalidateEnrollmentAdminPaths = (): void => {
 };
 
 export const saveCourseAction = async (formData: FormData): Promise<void> => {
-  const session = await requireRole(["admin"]);
-  readAuthoringUuid({ field: "courseId", formData });
+  const courseIdInput = readAuthoringUuid({ field: "courseId", formData });
+  const session = await requirePermission(
+    courseIdInput ? "manageCourseDetails" : "createCourse"
+  );
   const { courseId } = await saveCourse({
     actorUserId: session.user.id,
     formData,
@@ -300,7 +301,7 @@ export const createCoursePublicationDraftAction = async (
   courseId: string
 ): Promise<CoursePublicationActionResult> => {
   try {
-    const session = await requireRole(["admin"]);
+    const session = await requirePermission("manageCourseContent");
     const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
     await createCoursePublicationDraft({
       actorUserId: session.user.id,
@@ -320,7 +321,7 @@ export const publishCoursePublicationAction = async (
   courseId: string
 ): Promise<CoursePublicationActionResult> => {
   try {
-    const session = await requireRole(["admin"]);
+    const session = await requirePermission("manageCourseContent");
     const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
     const result = await publishCoursePublication({
       actorUserId: session.user.id,
@@ -345,7 +346,7 @@ export const publishCoursePublicationAction = async (
 };
 
 export const saveModuleAction = async (formData: FormData): Promise<void> => {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageCourseContent");
   readAuthoringUuid({
     field: "courseId",
     formData,
@@ -360,7 +361,7 @@ export const saveModuleAction = async (formData: FormData): Promise<void> => {
 export const createLessonDraftAction = async (
   formData: FormData
 ): Promise<void> => {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageCourseContent");
   readAuthoringUuid({
     field: "moduleId",
     formData,
@@ -395,7 +396,7 @@ export const saveLessonAction = async (
       ...(submittedLessonId ? { aggregateId: submittedLessonId } : {}),
       correlationId,
       execute: async () => {
-        const session = await requireRole(["admin"]);
+        const session = await requirePermission("manageCourseContent");
         return await saveLesson({ actorUserId: session.user.id, formData });
       },
       failureErrorCode: "lesson_save_failed",
@@ -427,7 +428,7 @@ export const saveLessonFormAction = async (
 export const ensureJmvstreamCourseFolderAction = async (
   courseId: string
 ): Promise<void> => {
-  await requireRole(["admin"]);
+  await requirePermission("manageCourseContent");
   const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
   await ensureJmvstreamCourseFolder(normalizedCourseId);
   revalidateAdmin();
@@ -442,7 +443,7 @@ export const initJmvstreamUploadAction = async (input: {
   | { data: Awaited<ReturnType<typeof initJmvstreamUpload>>; ok: true }
   | { error: string; ok: false }
 > => {
-  await requireRole(["admin"]);
+  await requirePermission("manageCourseContent");
 
   try {
     const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
@@ -479,7 +480,7 @@ export const completeJmvstreamUploadAction = async (input: {
   uploadId: string;
   videoHash: string;
 }): Promise<void> => {
-  await requireRole(["admin"]);
+  await requirePermission("manageCourseContent");
   const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
   const normalizedUploadSessionId = parseAuthoringUuid(
     input?.uploadSessionId,
@@ -496,7 +497,7 @@ export const completeJmvstreamUploadAction = async (input: {
 export const syncJmvstreamLessonPlayerAction = async (input: {
   lessonId: string;
 }): Promise<{ playerUrl: null | string; ready: boolean }> => {
-  await requireRole(["admin"]);
+  await requirePermission("manageCourseContent");
   const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
   const result = await syncJmvstreamLessonPlayer(normalizedLessonId);
 
@@ -510,7 +511,7 @@ export const syncJmvstreamLessonPlayerAction = async (input: {
 export const removeJmvstreamVideoFromLessonAction = async (input: {
   lessonId: string;
 }): Promise<{ deletePending: boolean }> => {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageCourseContent");
   const normalizedLessonId = parseAuthoringUuid(input?.lessonId, "lessonId");
   const { courseId, deletePending } = await removeLessonVideo({
     actorUserId: session.user.id,
@@ -528,7 +529,7 @@ export const markJmvstreamUploadFailedAction = async (input: {
   lastError: string;
   videoHash: string;
 }): Promise<void> => {
-  await requireRole(["admin"]);
+  await requirePermission("manageCourseContent");
   await markJmvstreamUploadFailed(input);
   revalidateAdmin();
 };
@@ -536,7 +537,7 @@ export const markJmvstreamUploadFailedAction = async (input: {
 export const discardJmvstreamUploadAction = async (input: {
   assetId: string;
 }): Promise<void> => {
-  await requireRole(["admin"]);
+  await requirePermission("manageCourseContent");
   const normalizedAssetId = parseAuthoringUuid(input?.assetId, "assetId");
   await discardJmvstreamUpload({ ...input, assetId: normalizedAssetId });
   revalidateAdmin();
@@ -547,7 +548,7 @@ export const retryJmvstreamDeleteAction = async ({
 }: {
   assetId: string;
 }): Promise<{ error: string; ok: false } | { ok: true }> => {
-  await requireRole(["admin"]);
+  await requirePermission("manageCourseContent");
   const normalizedAssetId = parseAuthoringUuid(assetId, "assetId");
   try {
     await retryJmvstreamAssetDelete(normalizedAssetId);
@@ -765,7 +766,7 @@ export const restoreStudentPlatformAccessAction = async (
 };
 
 export const saveFaqAction = async (formData: FormData): Promise<void> => {
-  const session = await requirePermission("manageContent");
+  const session = await requirePermission("manageFaq");
   const faqId = readString(formData, "faqId");
   const question = readString(formData, "question");
   const answer = readString(formData, "answer");
@@ -864,7 +865,7 @@ export const saveFaqAction = async (formData: FormData): Promise<void> => {
 };
 
 export const deleteFaqAction = async (formData: FormData): Promise<void> => {
-  const session = await requirePermission("manageContent");
+  const session = await requirePermission("manageFaq");
   const faqId = readString(formData, "faqId");
 
   if (!faqId) {
@@ -930,7 +931,7 @@ export const deleteFaqAction = async (formData: FormData): Promise<void> => {
 export const reorderFaqsAction = async (
   orderedFaqIds: string[]
 ): Promise<void> => {
-  const session = await requirePermission("manageContent");
+  const session = await requirePermission("manageFaq");
 
   const pool = getPool();
   const client = await pool.connect();
@@ -1007,7 +1008,7 @@ export const reorderFaqsAction = async (
 };
 
 export const saveSettingsAction = async (formData: FormData): Promise<void> => {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageCertificateIssuerProfile");
 
   const certificateSignerName =
     readString(formData, "certificateSignerName") || null;
@@ -1253,7 +1254,7 @@ export const saveCertificateTemplateDraftFormAction = async (
   formData: FormData
 ): Promise<CertificateTemplateActionState> => {
   try {
-    const session = await requireRole(["admin"]);
+    const session = await requirePermission("manageCourseCertificate");
     await persistCertificateTemplateDraft({
       actorUserId: session.user.id,
       formData,
@@ -1277,7 +1278,7 @@ export const publishCertificateTemplateFormAction = async (
   formData: FormData
 ): Promise<CertificateTemplateActionState> => {
   try {
-    const session = await requireRole(["admin"]);
+    const session = await requirePermission("manageCourseCertificate");
     await saveAndPublishCertificateTemplate({
       formData,
       publishDraft: (courseId) =>
@@ -1308,7 +1309,7 @@ export const publishCertificateTemplateFormAction = async (
 export const disableCertificateForCourseAction = async (
   courseId: string
 ): Promise<void> => {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageCourseCertificate");
   const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
   await disableCertificateForCourse(normalizedCourseId, session.user.id);
   revalidateAdmin();
@@ -1317,7 +1318,7 @@ export const disableCertificateForCourseAction = async (
 export const enableCertificateForCourseAction = async (
   courseId: string
 ): Promise<void> => {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageCourseCertificate");
   const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
   await enableCertificateForCourse(normalizedCourseId, session.user.id);
   revalidateAdmin();
@@ -1339,7 +1340,7 @@ export const reorderModulesAction = async (
       aggregateId: normalizedCourseId,
       correlationId,
       execute: async () => {
-        const session = await requireRole(["admin"]);
+        const session = await requirePermission("manageCourseContent");
         const client = await getPool().connect();
         try {
           await client.query("BEGIN");
@@ -1446,7 +1447,7 @@ export const reorderLessonsAction = async (
       aggregateId: normalizedCourseId,
       correlationId,
       execute: async () => {
-        const session = await requireRole(["admin"]);
+        const session = await requirePermission("manageCourseContent");
         const client = await getPool().connect();
         try {
           await client.query("BEGIN");
@@ -1824,7 +1825,7 @@ const persistDashboardBanner = async ({
 export const saveBannerAction = async (
   formData: FormData
 ): Promise<{ bannerId?: string } | undefined> => {
-  const session = await requirePermission("manageSettings");
+  const session = await requirePermission("manageBanners");
   const existingBannerId = readString(formData, "bannerId");
   const linkUrl = readString(formData, "linkUrl") || null;
   const buttonText = readString(formData, "buttonText") || null;
@@ -1859,7 +1860,7 @@ export const saveBannerAction = async (
 };
 
 export const deleteBannerAction = async (formData: FormData): Promise<void> => {
-  const session = await requirePermission("manageSettings");
+  const session = await requirePermission("manageBanners");
   const bannerId = readString(formData, "bannerId");
 
   if (!bannerId) {
@@ -1920,7 +1921,7 @@ export const deleteBannerAction = async (formData: FormData): Promise<void> => {
 export const reorderBannersAction = async (
   orderedBannerIds: string[]
 ): Promise<void> => {
-  const session = await requirePermission("manageSettings");
+  const session = await requirePermission("manageBanners");
 
   const pool = getPool();
   const client = await pool.connect();

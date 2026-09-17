@@ -282,10 +282,12 @@ function PaymentReviewTechnicalDetails({
 }
 
 const getReviewNextAction = ({
+  canExecuteRefund,
   canManageFinancialReviews,
   reasonInstruction,
   review,
 }: {
+  canExecuteRefund: boolean;
   canManageFinancialReviews: boolean;
   reasonInstruction: string;
   review: AdminPaymentReview;
@@ -294,7 +296,9 @@ const getReviewNextAction = ({
     return null;
   }
   if (review.type === "buyer_identity") {
-    return `${BUYER_IDENTITY_REVIEW_NO_ACCESS_MESSAGE} Solicite o reembolso integral.`;
+    return canExecuteRefund
+      ? `${BUYER_IDENTITY_REVIEW_NO_ACCESS_MESSAGE} Solicite o reembolso integral.`
+      : `${BUYER_IDENTITY_REVIEW_NO_ACCESS_MESSAGE} Aguardando uma pessoa autorizada para solicitar o reembolso.`;
   }
   if (review.type === "amount_mismatch") {
     if (!canManageFinancialReviews) {
@@ -311,10 +315,12 @@ const getReviewNextAction = ({
 };
 
 export function PaymentReviewOperation({
+  canExecuteRefund = false,
   canManageFinancialReviews,
   canManageFinancialOperations,
   review,
 }: {
+  canExecuteRefund?: boolean;
   canManageFinancialReviews: boolean;
   canManageFinancialOperations: boolean;
   review: AdminPaymentReview;
@@ -328,6 +334,7 @@ export function PaymentReviewOperation({
     review.type
   );
   const nextAction = getReviewNextAction({
+    canExecuteRefund,
     canManageFinancialReviews,
     reasonInstruction: reasonPresentation.instruction,
     review,
@@ -372,7 +379,9 @@ export function PaymentReviewOperation({
           {nextAction}
         </p>
       ) : null}
-      {review.status === "pending" && review.type === "buyer_identity" ? (
+      {review.status === "pending" &&
+      review.type === "buyer_identity" &&
+      canExecuteRefund ? (
         <RefundOperation identityReview orderId={review.orderId} />
       ) : null}
       {review.status === "pending" &&

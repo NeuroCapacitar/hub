@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
-  getLessonAnalyticsMetrics: vi.fn(),
+  getLessonAnalyticsExportMetrics: vi.fn(),
 }));
 
 vi.mock("@/features/learning-analytics/server", () => ({
-  getLessonAnalyticsMetrics: dependencies.getLessonAnalyticsMetrics,
+  getLessonAnalyticsExportMetrics: dependencies.getLessonAnalyticsExportMetrics,
 }));
 
 import { GET, runtime } from "./route";
@@ -24,11 +24,11 @@ describe("GET /api/admin/learning-analytics/export", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Selecione um Curso antes de exportar as métricas.",
     });
-    expect(dependencies.getLessonAnalyticsMetrics).not.toHaveBeenCalled();
+    expect(dependencies.getLessonAnalyticsExportMetrics).not.toHaveBeenCalled();
   });
 
   it("returns a no-store CSV with escaped metric values", async () => {
-    dependencies.getLessonAnalyticsMetrics.mockResolvedValue([
+    dependencies.getLessonAnalyticsExportMetrics.mockResolvedValue([
       {
         activeEnrollments: 5,
         completed: 2,
@@ -68,7 +68,7 @@ describe("GET /api/admin/learning-analytics/export", () => {
         '"Curso de exemplo","1","2","Módulo inicial","Aula ""Inicial"", 1","3","published","5","4","2","75.5","3600","","2","1"',
       ].join("\n")
     );
-    expect(dependencies.getLessonAnalyticsMetrics).toHaveBeenCalledWith({
+    expect(dependencies.getLessonAnalyticsExportMetrics).toHaveBeenCalledWith({
       courseId: "course-1",
       period: "30d",
     });
@@ -76,7 +76,7 @@ describe("GET /api/admin/learning-analytics/export", () => {
 
   it("does not generate a file when the permission guard rejects", async () => {
     const forbidden = new Error("permission denied for analytics");
-    dependencies.getLessonAnalyticsMetrics.mockRejectedValue(forbidden);
+    dependencies.getLessonAnalyticsExportMetrics.mockRejectedValue(forbidden);
 
     await expect(
       GET(
@@ -85,7 +85,7 @@ describe("GET /api/admin/learning-analytics/export", () => {
         )
       )
     ).rejects.toBe(forbidden);
-    expect(dependencies.getLessonAnalyticsMetrics).toHaveBeenCalledWith({
+    expect(dependencies.getLessonAnalyticsExportMetrics).toHaveBeenCalledWith({
       courseId: "course-1",
       period: "90d",
     });

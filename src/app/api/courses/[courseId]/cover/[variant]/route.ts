@@ -43,7 +43,7 @@ export async function GET(
     return Response.redirect(getPublicMediaUrl(image.key), 302);
   }
 
-  await requirePermission("manageContent");
+  await requirePermission("manageCourseDetails");
 
   const signedUrl = await createR2ObjectReadUrl({ key: image.key });
 

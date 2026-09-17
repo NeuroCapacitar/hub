@@ -21,6 +21,7 @@ describe("FinancialOverview", () => {
   it("keeps the review queue ahead of course revenue and identifies an empty page", () => {
     const markup = renderToStaticMarkup(
       <FinancialOverview
+        canExecuteRefund={false}
         canManageFinancialOperations={false}
         canManageFinancialReviews={false}
         canViewGlobalAudit={false}

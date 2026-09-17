@@ -98,6 +98,21 @@ describe("operational backlog snapshot", () => {
     });
   });
 
+  it("omite consultas e projeção financeira quando o facet não é autorizado", async () => {
+    const snapshot = await getOperationalBacklogSnapshot({
+      includePayments: false,
+    });
+    const query = dependencies.getPool.mock.results[0]?.value.query;
+
+    expect(snapshot.payments).toBeNull();
+    expect(query).toHaveBeenCalledWith(
+      expect.not.stringContaining("from orders")
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.not.stringContaining("from refund_requests")
+    );
+  });
+
   it("alerts whenever the outbox contains a dead letter", async () => {
     const pool = dependencies.getPool();
     pool.query.mockResolvedValueOnce({

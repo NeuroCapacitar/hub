@@ -24,6 +24,7 @@ interface CoursePublicationState {
 }
 
 interface CourseContentPanelProps {
+  canManageContent: boolean;
   contentSignal: AdminCourseContentSignal;
   course: AdminCourse;
   lessons: AdminLesson[];
@@ -54,39 +55,47 @@ const getPublicationLabel = ({
 };
 
 function EmptyCourseContent({
+  canManageContent,
   course,
   nextModuleSortOrder,
   publicationState,
 }: Pick<
   CourseContentPanelProps,
-  "course" | "nextModuleSortOrder" | "publicationState"
+  "canManageContent" | "course" | "nextModuleSortOrder" | "publicationState"
 >) {
+  let emptyDescription =
+    "O conteúdo está disponível para consulta; alterações ficam restritas às permissões delegadas.";
+  if (canManageContent) {
+    emptyDescription = publicationState.hasDraft
+      ? "Crie a primeira unidade para começar a estruturar o conteúdo do Curso."
+      : "Prepare alterações antes de criar a primeira unidade do Curso.";
+  }
+
   return (
     <Empty className="border bg-card">
       <EmptyHeader>
         <EmptyTitle as="h3">Nenhum módulo cadastrado</EmptyTitle>
-        <EmptyDescription>
-          {publicationState.hasDraft
-            ? "Crie a primeira unidade para começar a estruturar o conteúdo do Curso."
-            : "Prepare alterações antes de criar a primeira unidade do Curso."}
-        </EmptyDescription>
+        <EmptyDescription>{emptyDescription}</EmptyDescription>
       </EmptyHeader>
-      <EmptyContent>
-        {publicationState.hasDraft ? (
-          <CreateModuleDialog
-            course={course}
-            nextModuleSortOrder={nextModuleSortOrder}
-            triggerLabel="Criar primeiro módulo"
-          />
-        ) : (
-          <CoursePublicationAction action="prepare" courseId={course.id} />
-        )}
-      </EmptyContent>
+      {canManageContent ? (
+        <EmptyContent>
+          {publicationState.hasDraft ? (
+            <CreateModuleDialog
+              course={course}
+              nextModuleSortOrder={nextModuleSortOrder}
+              triggerLabel="Criar primeiro módulo"
+            />
+          ) : (
+            <CoursePublicationAction action="prepare" courseId={course.id} />
+          )}
+        </EmptyContent>
+      ) : null}
     </Empty>
   );
 }
 
 export function CourseContentPanel({
+  canManageContent,
   contentSignal,
   course,
   lessons,
@@ -95,6 +104,22 @@ export function CourseContentPanel({
   publicationState,
 }: CourseContentPanelProps): React.JSX.Element {
   const hasModules = modules.length > 0;
+  let contentNotice: React.JSX.Element | null = null;
+  if (!canManageContent) {
+    contentNotice = (
+      <p className="rounded-lg border bg-muted/30 px-4 py-3 text-muted-foreground text-sm">
+        Conteúdo disponível para consulta. Permissão de alteração não concedida
+        para esta Conta.
+      </p>
+    );
+  } else if (!publicationState.hasDraft) {
+    contentNotice = (
+      <p className="rounded-lg border bg-muted/30 px-4 py-3 text-muted-foreground text-sm">
+        Prepare alterações para editar a estrutura atual. O conteúdo publicado
+        permanece disponível aos alunos até a próxima publicação.
+      </p>
+    );
+  }
 
   return (
     <section className="space-y-6">
@@ -120,7 +145,7 @@ export function CourseContentPanel({
           </div>
         </div>
 
-        {hasModules ? (
+        {hasModules && canManageContent ? (
           <div className="flex w-full shrink-0 flex-wrap gap-2 lg:w-auto lg:justify-end">
             {publicationState.hasDraft ? (
               <>
@@ -141,22 +166,18 @@ export function CourseContentPanel({
         ) : null}
       </div>
 
-      {publicationState.hasDraft ? null : (
-        <p className="rounded-lg border bg-muted/30 px-4 py-3 text-muted-foreground text-sm">
-          Prepare alterações para editar a estrutura atual. O conteúdo publicado
-          permanece disponível aos alunos até a próxima publicação.
-        </p>
-      )}
+      {contentNotice}
 
       {hasModules ? (
         <CourseBuilderWrapper
           course={course}
-          editable={publicationState.hasDraft}
+          editable={canManageContent && publicationState.hasDraft}
           lessons={lessons}
           modules={modules}
         />
       ) : (
         <EmptyCourseContent
+          canManageContent={canManageContent}
           course={course}
           nextModuleSortOrder={nextModuleSortOrder}
           publicationState={publicationState}

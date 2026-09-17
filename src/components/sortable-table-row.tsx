@@ -12,6 +12,7 @@ interface SortableTableRowProps {
   children: React.ReactNode;
   className?: string;
   data?: Record<string, unknown>;
+  disabled?: boolean;
   id: string;
 }
 
@@ -20,6 +21,7 @@ export function SortableTableRow({
   children,
   className,
   data,
+  disabled = false,
 }: SortableTableRowProps) {
   const {
     attributes,
@@ -56,8 +58,9 @@ export function SortableTableRow({
         <button
           aria-label="Reordenar item"
           className="relative flex size-11 cursor-grab items-center justify-center rounded-md border-0 bg-transparent p-0 text-muted-foreground/40 outline-none transition-[color,background-color] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 active:cursor-grabbing group-hover/sortable:text-muted-foreground sm:size-10"
-          {...attributes}
-          {...listeners}
+          {...(disabled ? {} : attributes)}
+          {...(disabled ? {} : listeners)}
+          disabled={disabled}
           type="button"
         >
           <HugeiconsIcon

@@ -43,6 +43,16 @@ describe("GET /api/auth/redirect", () => {
     dependencies.getCurrentSession.mockResolvedValue({
       platformBlockedAt: null,
       role: "support",
+      supportPermissionViews: [
+        "viewAdminPanel",
+        "viewLearningAnalytics",
+        "viewCourses",
+        "viewStudents",
+        "viewFinancials",
+        "viewOperations",
+        "viewAudit",
+        "viewSettings",
+      ],
     });
 
     await expect(
