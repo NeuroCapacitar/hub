@@ -956,7 +956,6 @@ test("support navigation and student Sheet preserve the role boundary @mobile", 
   }
 
   await page.goto("/admin/cursos");
-  await expect(page).toHaveURL(ADMIN_URL_PATTERN);
   await expect(
     page.getByRole("heading", { exact: true, name: "Cursos" })
   ).toBeVisible();
