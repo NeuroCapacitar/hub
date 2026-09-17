@@ -34,6 +34,43 @@ force-push e merges sem o check `CI`; um ruleset separado exige Pull Request
 para `staging`. `main` é avançada somente pelo workflow de release depois dos
 gates descritos abaixo. Não faça push manual em `main`.
 
+## Sincronização local das branches persistentes
+
+`origin/staging` e `origin/main` são referências locais que representam o estado
+mais recente das branches no GitHub. `staging` e `main` são ponteiros locais
+separados e não avançam automaticamente depois de um merge remoto. Portanto,
+antes de criar uma branch ou worktree, atualize as referências remotas:
+
+```bash
+git fetch --prune origin main staging
+git rev-list --left-right --count staging...origin/staging
+git rev-list --left-right --count main...origin/main
+```
+
+Os dois comandos de divergência devem retornar `0 0` antes de usar a branch
+local correspondente como base. Em um checkout de manutenção limpo, onde a
+branch não esteja presa a outro worktree, sincronize somente por fast-forward:
+
+```bash
+git switch staging
+git pull --ff-only origin staging
+git switch main
+git pull --ff-only origin main
+```
+
+Se uma branch persistente estiver presa a outro worktree, não altere esse
+worktree para sincronizá-la. Crie o trabalho diretamente do remoto atual:
+
+```bash
+git fetch --prune origin staging
+git worktree add <caminho> -b codex/<tarefa> origin/staging
+```
+
+Nunca use `reset`, force-push ou atualização forçada dos ponteiros persistentes
+como atalho. O deploy, as migrations e os checks usam o SHA remoto do GitHub;
+essa sincronização local evita apenas iniciar trabalho a partir de uma base
+obsoleta.
+
 Depois de uma release normal, `main` e `staging` apontam para o mesmo commit.
 A promoção de `staging` para `main` usa fast-forward; não se deve criar um
 segundo PR de release, fazer squash da promoção ou criar uma branch de
