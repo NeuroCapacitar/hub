@@ -148,22 +148,7 @@ const createUser = async ({
           support_permission_views = excluded.support_permission_views,
           updated_at = now()
     `,
-    [
-      userId,
-      role,
-      role === "support"
-        ? [
-            "viewAdminPanel",
-            "viewLearningAnalytics",
-            "viewCourses",
-            "viewStudents",
-            "viewFinancials",
-            "viewOperations",
-            "viewAudit",
-            "viewSettings",
-          ]
-        : [],
-    ]
+    [userId, role, []]
   );
   return userId;
 };
