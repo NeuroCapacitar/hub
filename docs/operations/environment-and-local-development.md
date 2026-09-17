@@ -268,6 +268,11 @@ Não há variável de “aprovação jurídica” ou “retenção de privacidad
 
 ## Setup local
 
+Antes de iniciar trabalho baseado em Staging, siga a seção
+[Sincronização local das branches persistentes](release-flow.md#sincronização-local-das-branches-persistentes).
+Use `origin/staging` como base quando houver qualquer dúvida sobre o estado da
+branch local; o checkout local não é a fonte do deploy.
+
 1. Instale Bun 1.3.11 e execute `bun install`. O projeto fixa `sharp` na mesma
    linha compatível com o `sharp` opcional do Next; não force outra versão no
    `overrides`, pois dois runtimes nativos de `sharp` no mesmo processo Windows
