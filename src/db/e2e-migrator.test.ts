@@ -142,6 +142,25 @@ describe("E2E per-file migrator", () => {
     ).rejects.toThrow("Migration journal drift at 2");
   });
 
+  it("accepts only an exact legacy timestamp and hash in Development mode", async () => {
+    const client = {
+      query: vi.fn(async (statement: string) => ({
+        rows: statement.trim().startsWith("select hash")
+          ? [{ created_at: "2", hash: "legacy-hash" }]
+          : [],
+      })),
+    };
+
+    await expect(
+      applyMigrationsPerFile({
+        client: client as never,
+        legacyMigrations: [{ createdAt: 2, hash: "legacy-hash" }],
+        migrations: [migration(1, "hash-1", ["select 1"])],
+        verifyAppliedHashes: false,
+      })
+    ).resolves.toBeUndefined();
+  });
+
   it("recognizes blank and line-comment-only statements", () => {
     expect(hasExecutableMigrationSql("\n-- baseline\n  -- retained\n")).toBe(
       false

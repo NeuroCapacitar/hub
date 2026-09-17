@@ -11,7 +11,7 @@ describe("admin actions and schema", () => {
       source.indexOf("const assertBannerLink")
     );
 
-    expect(bannerSection).toContain('requirePermission("manageSettings")');
+    expect(bannerSection).toContain('requirePermission("manageBanners")');
     expect(bannerSection).not.toContain('requireRole(["admin", "support"])');
   });
 

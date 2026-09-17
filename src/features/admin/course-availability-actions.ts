@@ -12,7 +12,7 @@ import {
   setCourseAvailability,
 } from "@/features/courses/availability-server";
 import { scheduleOutboxDrainAfterResponse } from "@/features/outbox/background-drain";
-import { requireRole } from "@/lib/session";
+import { requirePermission } from "@/lib/auth-permissions";
 
 const PRESETS = new Set<CourseAvailabilityPreset>([
   "available",
@@ -43,7 +43,7 @@ export const saveCourseAvailabilityAction = async (
   formData: FormData
 ): Promise<CourseAvailabilityActionResult> => {
   try {
-    const session = await requireRole(["admin"]);
+    const session = await requirePermission("manageCourseAvailability");
     const courseId = readAuthoringUuid({ field: "courseId", formData });
     const preset = readString(formData, "preset") as CourseAvailabilityPreset;
     if (!(courseId && PRESETS.has(preset))) {
@@ -81,7 +81,7 @@ export const saveCourseAvailabilityAction = async (
 };
 
 export const archiveCourseAction = async (courseId: string): Promise<void> => {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageCourseAvailability");
   const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
   await archiveCourse({
     actorUserId: session.user.id,
@@ -91,7 +91,7 @@ export const archiveCourseAction = async (courseId: string): Promise<void> => {
 };
 
 export const restoreCourseAction = async (courseId: string): Promise<void> => {
-  const session = await requireRole(["admin"]);
+  const session = await requirePermission("manageCourseAvailability");
   const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
   await restoreCourse({
     actorUserId: session.user.id,

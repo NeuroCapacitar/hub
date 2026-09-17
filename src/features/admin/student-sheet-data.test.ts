@@ -145,7 +145,7 @@ describe("getAdminStudentSheetData", () => {
 
     await getAdminStudentSheetData({ userId: "student-1" });
 
-    expect(requirePermission).toHaveBeenCalledWith("manageEnrollmentAccess");
+    expect(requirePermission).toHaveBeenCalledWith("viewStudents");
   });
 
   it("filters the course context to one enrollment and its certificates", async () => {

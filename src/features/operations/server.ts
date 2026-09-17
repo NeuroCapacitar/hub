@@ -25,7 +25,7 @@ export interface OperationalBacklogSnapshot {
     uncertainCheckouts: number;
     uncorrelatedOrders: number;
     uncertainRefunds: number;
-  };
+  } | null;
   videos: {
     oldestPendingAt: Date | null;
     pending: number;
@@ -239,10 +239,18 @@ const buildEmailDeliverySnapshot = (
 });
 
 export const getOperationalBacklogSnapshot = async ({
+  includePayments = true,
   now = () => new Date(),
 }: {
+  includePayments?: boolean;
   now?: () => Date;
 } = {}): Promise<OperationalBacklogSnapshot> => {
+  const paymentColumns = includePayments
+    ? `
+      (select count(*) from orders where provider = 'asaas' and checkout_status = 'uncertain') as uncertain_checkouts,
+      (select count(*) from orders where provider = 'asaas' and status = 'paid' and provider_payment_id is null) as uncorrelated_orders,
+      (select count(*) from refund_requests where status = 'uncertain') as uncertain_refunds,`
+    : "";
   const { rows } = await getPool().query<OperationalBacklogRow>(`
     select
       (select count(*) from outbox_messages where status in (${BACKLOG_STATUSES})) as outbox_ready,
@@ -263,9 +271,7 @@ export const getOperationalBacklogSnapshot = async ({
       (select min(created_at) from webhook_events where provider = 'asaas' and status = 'retryable') as oldest_webhook_retry_at,
       (select count(*) from webhook_events where provider = 'asaas' and status in ('received', 'processing')) as webhooks_ready,
       (select count(*) from webhook_events where provider = 'asaas' and status = 'retryable') as webhooks_retryable,
-      (select count(*) from orders where provider = 'asaas' and checkout_status = 'uncertain') as uncertain_checkouts,
-      (select count(*) from orders where provider = 'asaas' and status = 'paid' and provider_payment_id is null) as uncorrelated_orders,
-      (select count(*) from refund_requests where status = 'uncertain') as uncertain_refunds,
+      ${paymentColumns}
       (select count(*) from jmvstream_video_assets where upload_status in (${PENDING_VIDEO_STATUSES})) as videos_pending,
       (select min(updated_at) from jmvstream_video_assets where upload_status in (${PENDING_VIDEO_STATUSES})) as oldest_video_at
   `);
@@ -300,11 +306,13 @@ export const getOperationalBacklogSnapshot = async ({
       oldestPendingAt: row?.oldest_video_at ?? null,
       pending: Number(row?.videos_pending ?? 0),
     },
-    payments: {
-      uncertainCheckouts: Number(row?.uncertain_checkouts ?? 0),
-      uncorrelatedOrders: Number(row?.uncorrelated_orders ?? 0),
-      uncertainRefunds: Number(row?.uncertain_refunds ?? 0),
-    },
+    payments: includePayments
+      ? {
+          uncertainCheckouts: Number(row?.uncertain_checkouts ?? 0),
+          uncorrelatedOrders: Number(row?.uncorrelated_orders ?? 0),
+          uncertainRefunds: Number(row?.uncertain_refunds ?? 0),
+        }
+      : null,
     webhooks,
   };
 };

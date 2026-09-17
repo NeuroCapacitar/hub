@@ -10,6 +10,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { AdminSearchPill } from "@/components/admin/admin-search-pill";
 import { StudentActionsMenu } from "@/components/admin/student-actions-menu";
+import type { StudentManagementCapabilities } from "@/components/admin/student-management-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,6 +61,14 @@ export interface StudentTableRow {
   status: string;
   userId: string;
 }
+
+const FULL_STUDENT_MANAGEMENT_CAPABILITIES: StudentManagementCapabilities = {
+  canManageCertificates: true,
+  canManageEnrollmentAccess: true,
+  canManageEnrollmentSupport: true,
+  canManagePlatformAccess: true,
+  canReissueCertificates: true,
+};
 
 const formatNullableDateTime = (value: string | null): string =>
   value ? formatDateTime(value) : "Sem registro";
@@ -249,6 +258,7 @@ export function StudentsTable({
   hasNextPage = false,
   onInitialOverlayClose,
   page = 1,
+  managementCapabilities = FULL_STUDENT_MANAGEMENT_CAPABILITIES,
   search = "",
   totalCount = students.length,
 }: {
@@ -256,6 +266,7 @@ export function StudentsTable({
   hasNextPage?: boolean;
   initialAction?: AdminCourseStudentAction | undefined;
   initialStudentId?: string | undefined;
+  managementCapabilities?: StudentManagementCapabilities;
   onInitialOverlayClose?: (() => void) | undefined;
   students: StudentTableRow[];
   page?: number;
@@ -363,6 +374,9 @@ export function StudentsTable({
                             onInitialOverlayClose,
                           }
                         : {})}
+                      certificateCapabilities={managementCapabilities}
+                      enrollmentCapabilities={managementCapabilities}
+                      platformCapabilities={managementCapabilities}
                       student={student}
                     />
                   </TableCell>

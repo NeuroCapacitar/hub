@@ -127,13 +127,14 @@ test("support surfaces have no moderate or higher accessibility violations", asy
   const fixture = await readFixture();
   await signIn(page, fixture.support, ADMIN_URL_PATTERN);
   await expect(
-    page.getByRole("heading", { name: "Operação de suporte" })
+    page.getByRole("heading", { name: "Operação diária" })
   ).toBeVisible();
   await assertNoBlockingAccessibilityViolations(page, "support dashboard");
 
   await page.goto("/admin/operacao/cursos");
+  await expect(page).toHaveURL(ADMIN_URL_PATTERN);
   await expect(
-    page.getByRole("heading", { name: "Operação de suporte" })
+    page.getByRole("heading", { name: "Operação diária" })
   ).toBeVisible();
   await assertNoBlockingAccessibilityViolations(page, "support courses");
 

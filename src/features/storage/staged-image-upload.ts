@@ -6,6 +6,7 @@ import { AUTH_MEDIA_MAX_BYTES } from "@/features/storage/auth-media-image-contra
 import { MAX_BANNER_BYTES } from "@/features/storage/banner-image";
 import { MAX_ORIGINAL_COVER_BYTES } from "@/features/storage/course-cover";
 import { sanitizeR2FileName } from "@/features/storage/r2-objects";
+import type { AuthPermission } from "@/lib/auth-policy";
 
 export const STAGED_ADMIN_IMAGE_PREFIX = "uploads/admin-images";
 
@@ -35,6 +36,24 @@ const STAGED_ADMIN_IMAGE_CATALOG = {
 export type StagedAdminImagePurpose = keyof typeof STAGED_ADMIN_IMAGE_CATALOG;
 export type StagedAdminImageAggregateType =
   (typeof STAGED_ADMIN_IMAGE_CATALOG)[StagedAdminImagePurpose]["aggregateType"];
+
+export const getStagedAdminImagePermission = (
+  purpose: StagedAdminImagePurpose
+): AuthPermission => {
+  switch (purpose) {
+    case "auth-media":
+      return "manageAuthMedia";
+    case "certificate-background":
+    case "certificate-signature":
+      return "manageCourseCertificate";
+    case "course-cover":
+      return "manageCourseDetails";
+    case "dashboard-banner":
+      return "manageBanners";
+    default:
+      throw new Error("Finalidade de upload administrativo inválida.");
+  }
+};
 
 export interface StagedAdminImageReference {
   aggregateId: string;

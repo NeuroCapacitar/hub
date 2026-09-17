@@ -27,7 +27,8 @@ Responsável pelo conteúdo, experiência pedagógica e decisões de produto. No
 Operadora com todas as permissões administrativas. O termo descreve autorização, não propriedade comercial.
 
 **Suporte**  
-Operadora com subconjunto explícito de permissões administrativas; não é um Admin limitado por convenção.
+Operadora com leituras administrativas aprovadas e subconjunto individualmente
+concedido de permissões de alteração; não é um Admin limitado por convenção.
 
 ## Comércio e acesso
 

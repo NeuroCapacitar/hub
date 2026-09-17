@@ -66,21 +66,6 @@ export const getCertificateStatusPresentation = (
   }
 };
 
-export const getCourseDeliveryStatusPresentation = (
-  status: string
-): AdminStatusPresentation => {
-  switch (status) {
-    case "active":
-      return { label: "Ativo", variant: "success" };
-    case "draft":
-      return { label: "Rascunho", variant: "warning" };
-    case "archived":
-      return { label: "Arquivado", variant: "secondary" };
-    default:
-      return fallbackStatus();
-  }
-};
-
 export const getCourseContentStatusPresentation = (
   status: string
 ): AdminStatusPresentation => {

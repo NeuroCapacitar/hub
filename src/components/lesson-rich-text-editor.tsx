@@ -22,7 +22,7 @@ import {
   useEditorState,
 } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
-import { useCallback, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -51,6 +51,7 @@ import { cn } from "@/lib/utils";
 
 interface LessonRichTextEditorProps {
   initialDocument: ProseMirrorJson;
+  readOnly?: boolean;
 }
 
 interface ToolbarState {
@@ -130,12 +131,14 @@ export const getBlockFormatValue = ({
 
 export function LessonRichTextEditor({
   initialDocument,
+  readOnly = false,
 }: LessonRichTextEditorProps): React.JSX.Element {
   const [documentJson, setDocumentJson] = useState(() =>
     JSON.stringify(initialDocument)
   );
 
   const editor = useEditor({
+    editable: !readOnly,
     extensions: editorExtensions,
     content: initialDocument,
     immediatelyRender: false,
@@ -151,6 +154,10 @@ export function LessonRichTextEditor({
       queueMicrotask(() => setDocumentJson(nextDocumentJson));
     },
   });
+
+  useEffect(() => {
+    editor?.setEditable(!readOnly);
+  }, [editor, readOnly]);
 
   const toolbarState =
     useEditorState({

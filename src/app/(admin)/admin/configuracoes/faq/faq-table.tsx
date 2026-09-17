@@ -62,10 +62,12 @@ import { type FaqData, FaqDeleteDialog, FaqEditDialog } from "./faq-dialogs";
 
 interface FaqTableProps {
   faqs: FaqData[];
+  readOnly?: boolean;
 }
 
 export function FaqTable({
   faqs: initialFaqs,
+  readOnly = false,
 }: FaqTableProps): React.JSX.Element {
   const [faqs, setFaqs] = useState(initialFaqs);
   const [isPending, startTransition] = useTransition();
@@ -80,7 +82,7 @@ export function FaqTable({
   );
 
   function handleDragEnd(event: DragEndEvent) {
-    if (isPending) {
+    if (readOnly || isPending) {
       return;
     }
 
@@ -134,7 +136,9 @@ export function FaqTable({
     {
       id: "actions",
       header: "Ações",
-      cell: ({ row }) => <FaqActionsDropdown faq={row.original} />,
+      cell: ({ row }) => (
+        <FaqActionsDropdown faq={row.original} readOnly={readOnly} />
+      ),
     },
   ];
 
@@ -149,7 +153,7 @@ export function FaqTable({
       collisionDetection={closestCenter}
       id="faq-dnd"
       onDragEnd={handleDragEnd}
-      sensors={sensors}
+      sensors={readOnly ? [] : sensors}
     >
       <div
         className={cn(
@@ -192,7 +196,11 @@ export function FaqTable({
             <TableBody>
               {faqs.length > 0 ? (
                 table.getRowModel().rows.map((row) => (
-                  <SortableTableRow id={row.original.id} key={row.id}>
+                  <SortableTableRow
+                    disabled={readOnly}
+                    id={row.original.id}
+                    key={row.id}
+                  >
                     {row
                       .getVisibleCells()
                       .map((cell) =>
@@ -246,7 +254,13 @@ export function FaqTable({
   );
 }
 
-function FaqActionsDropdown({ faq }: { faq: FaqData }): React.JSX.Element {
+function FaqActionsDropdown({
+  faq,
+  readOnly = false,
+}: {
+  faq: FaqData;
+  readOnly?: boolean;
+}): React.JSX.Element {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
@@ -257,6 +271,7 @@ function FaqActionsDropdown({ faq }: { faq: FaqData }): React.JSX.Element {
           <Button
             aria-label={`Opções para ${faq.question}`}
             className="size-11 p-0 sm:size-10"
+            disabled={readOnly}
             size="icon"
             variant="ghost"
           >

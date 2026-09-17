@@ -112,6 +112,27 @@ const getFinancialPeriod = (
   return isAdminFinancialPeriod(requestedPeriod) ? requestedPeriod : "all";
 };
 
+type AdminFinancialTab = "analysis" | "orders" | "overview";
+
+const getActiveFinancialTab = (
+  requestedTab: string,
+  visibleTabs: Readonly<Record<AdminFinancialTab, boolean>>
+): AdminFinancialTab => {
+  if (requestedTab === "analysis" && visibleTabs.analysis) {
+    return "analysis";
+  }
+  if (requestedTab === "orders" && visibleTabs.orders) {
+    return "orders";
+  }
+  if (visibleTabs.overview) {
+    return "overview";
+  }
+  if (visibleTabs.orders) {
+    return "orders";
+  }
+  return "analysis";
+};
+
 export default async function AdminFinancePage({
   searchParams,
 }: {
@@ -129,18 +150,24 @@ export default async function AdminFinancePage({
   const reviewPage = getReviewPage(resolvedSearchParams);
   const financialPeriod = getFinancialPeriod(resolvedSearchParams);
   const requestedTab = readSearchParameter(resolvedSearchParams.tab).trim();
-  const activeTab =
-    requestedTab === "orders" || requestedTab === "analysis"
-      ? requestedTab
-      : "overview";
+  const canViewFinancialAnalysis = canPerform(session, "viewFinancialAnalysis");
+  const canViewFinancialOrders = canPerform(session, "viewFinancialOrders");
+  const canViewFinancialReviews = canPerform(session, "viewFinancialReviews");
+  const visibleTabs = {
+    analysis: canViewFinancialAnalysis,
+    orders: canViewFinancialOrders,
+    overview: canViewFinancialAnalysis || canViewFinancialReviews,
+  } as const;
+  const activeTab = getActiveFinancialTab(requestedTab, visibleTabs);
   const canManageFinancialOperations = canPerform(
-    session.role,
+    session,
     "manageFinancialOperations"
   );
   const canManageFinancialReviews = canPerform(
-    session.role,
+    session,
     "manageFinancialReviews"
   );
+  const canExecuteRefund = canPerform(session, "executeRefund");
 
   const [
     overviewData,
@@ -210,6 +237,7 @@ export default async function AdminFinancePage({
                 </CardHeader>
                 <CardContent>
                   <FinancialOrdersTable
+                    canExecuteRefund={canExecuteRefund}
                     canManageFinancialOperations={canManageFinancialOperations}
                     checkout={orderCheckout}
                     hasNextPage={ordersData.ordersHasNextPage}
@@ -227,15 +255,17 @@ export default async function AdminFinancePage({
           overview={
             overviewData ? (
               <FinancialOverview
+                canExecuteRefund={canExecuteRefund}
                 canManageFinancialOperations={canManageFinancialOperations}
                 canManageFinancialReviews={canManageFinancialReviews}
-                canViewGlobalAudit={canPerform(session.role, "viewGlobalAudit")}
+                canViewGlobalAudit={canPerform(session, "viewGlobalAudit")}
                 coursesRevenue={overviewData.coursesRevenue}
                 financialHealth={overviewData.financialHealth}
                 paymentReviews={overviewData.paymentReviews}
               />
             ) : null
           }
+          visibleTabs={visibleTabs}
         />
       </div>
     </PageContainer>

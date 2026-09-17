@@ -9,6 +9,7 @@ const dependencies = vi.hoisted(() => ({
   getCertificateTemplatesForCourse: vi.fn(),
   getServerEnv: vi.fn(),
   hasCertificateIssuerProfile: vi.fn(),
+  requirePermission: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -49,6 +50,10 @@ vi.mock("@/features/certificates/templates", () => ({
   hasCertificateIssuerProfile: dependencies.hasCertificateIssuerProfile,
 }));
 vi.mock("@/lib/env", () => ({ getServerEnv: dependencies.getServerEnv }));
+vi.mock("@/lib/auth-permissions", () => ({
+  requirePermission: dependencies.requirePermission,
+}));
+vi.mock("@/lib/auth-policy", () => ({ canPerform: () => true }));
 vi.mock("./certificate-template-editor", () => ({
   CertificateTemplateEditor: ({
     courseWorkloadHours,
@@ -216,6 +221,10 @@ const course = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  dependencies.requirePermission.mockResolvedValue({
+    role: "admin",
+    supportPermissionGrants: [],
+  });
   dependencies.getAdminCourseTabData.mockResolvedValue({
     tab: "overview",
     course,

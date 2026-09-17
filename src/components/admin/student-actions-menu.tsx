@@ -64,10 +64,12 @@ const courseCertificateCapabilities: StudentManagementCapabilities = {
 };
 
 function StudentActionMenuItems({
+  canManagePlatformAccess,
   isCourseContext,
   isPlatformBlocked,
   onSelect,
 }: {
+  canManagePlatformAccess: boolean;
   isCourseContext: boolean;
   isPlatformBlocked: boolean;
   onSelect: (
@@ -97,7 +99,11 @@ function StudentActionMenuItems({
   return (
     <DropdownMenuItem
       onSelect={(event) => onSelect("platform", event)}
-      variant={isPlatformBlocked ? "default" : "destructive"}
+      variant={
+        canManagePlatformAccess && !isPlatformBlocked
+          ? "destructive"
+          : "default"
+      }
     >
       <HugeiconsIcon
         aria-hidden="true"
@@ -107,6 +113,7 @@ function StudentActionMenuItems({
       {isPlatformBlocked
         ? "Restaurar acesso da plataforma"
         : "Bloquear acesso da plataforma"}
+      {canManagePlatformAccess ? null : " (somente leitura)"}
     </DropdownMenuItem>
   );
 }
@@ -120,6 +127,7 @@ function StudentActionOverlays({
   isCourseContext,
   onDetailsCloseAutoFocus,
   onOpenChange,
+  platformCapabilities,
   student,
 }: {
   activeOverlay: StudentActionOverlay;
@@ -130,6 +138,7 @@ function StudentActionOverlays({
   isCourseContext: boolean;
   onDetailsCloseAutoFocus: (event: Event) => void;
   onOpenChange: (open: boolean) => void;
+  platformCapabilities: StudentManagementCapabilities;
   student: StudentActionMenuStudent;
 }): React.JSX.Element | null {
   if (activeOverlay === "details") {
@@ -182,7 +191,7 @@ function StudentActionOverlays({
     return (
       <StudentActionDialog
         action="platform"
-        capabilities={globalPlatformCapabilities}
+        capabilities={platformCapabilities}
         onOpenChange={onOpenChange}
         open
         platformStudent={student}
@@ -202,6 +211,7 @@ export function StudentActionsMenu({
   enrollmentCapabilities = courseEnrollmentCapabilities,
   initialOverlay,
   onInitialOverlayClose,
+  platformCapabilities = globalPlatformCapabilities,
   student,
 }: {
   certificateCapabilities?: StudentManagementCapabilities;
@@ -210,6 +220,7 @@ export function StudentActionsMenu({
   enrollmentCapabilities?: StudentManagementCapabilities;
   initialOverlay?: AdminCourseStudentAction | undefined;
   onInitialOverlayClose?: (() => void) | undefined;
+  platformCapabilities?: StudentManagementCapabilities;
   student: StudentActionMenuStudent;
 }): React.JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -289,6 +300,9 @@ export function StudentActionsMenu({
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <StudentActionMenuItems
+              canManagePlatformAccess={
+                platformCapabilities.canManagePlatformAccess
+              }
               isCourseContext={isCourseContext}
               isPlatformBlocked={isPlatformBlocked}
               onSelect={openOverlay}
@@ -305,6 +319,7 @@ export function StudentActionsMenu({
         isCourseContext={isCourseContext}
         onDetailsCloseAutoFocus={restoreDetailsFocus}
         onOpenChange={handleOverlayChange}
+        platformCapabilities={platformCapabilities}
         student={student}
       />
     </>

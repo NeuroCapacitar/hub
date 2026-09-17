@@ -108,6 +108,7 @@ describe("PaymentReviewOperation", () => {
   it("hides amount mismatch decisions without mutable review access", () => {
     const markup = renderToStaticMarkup(
       <PaymentReviewOperation
+        canExecuteRefund
         canManageFinancialOperations={false}
         canManageFinancialReviews={false}
         review={paymentReview}
@@ -122,6 +123,7 @@ describe("PaymentReviewOperation", () => {
   it("shows the amount context before allowing a mismatch decision", () => {
     const markup = renderToStaticMarkup(
       <PaymentReviewOperation
+        canExecuteRefund
         canManageFinancialOperations={false}
         canManageFinancialReviews
         review={paymentReview}
@@ -147,6 +149,7 @@ describe("PaymentReviewOperation", () => {
   it("renders one refund flow when a pending buyer identity review has no order card", () => {
     const markup = renderToStaticMarkup(
       <PaymentReviewOperation
+        canExecuteRefund
         canManageFinancialOperations={false}
         canManageFinancialReviews
         review={{
@@ -172,6 +175,7 @@ describe("PaymentReviewOperation", () => {
   it("renders one refund flow for a pending buyer identity review", () => {
     const markup = renderToStaticMarkup(
       <PaymentReviewOperation
+        canExecuteRefund
         canManageFinancialOperations={false}
         canManageFinancialReviews
         review={{
@@ -367,5 +371,33 @@ describe("AdminFinancePage", () => {
     ).not.toHaveBeenCalled();
     expect(pageDependencies.getAdminFinancialOrdersData).not.toHaveBeenCalled();
     expect(markup).toContain("Análise por período");
+  });
+
+  it("shows only the Orders facet for Support with that protected view", async () => {
+    authDependencies.requirePermission.mockResolvedValue({
+      role: "support",
+      supportPermissionGrants: [],
+      supportPermissionViews: ["viewFinancialOrders"],
+    });
+    pageDependencies.getAdminFinancialOrdersData.mockResolvedValue({
+      orders: [],
+      ordersHasNextPage: false,
+      ordersTotalCount: 0,
+    });
+
+    const markup = renderToStaticMarkup(
+      await AdminFinancePage({ searchParams: Promise.resolve({}) })
+    );
+
+    expect(markup).toContain("Pedidos");
+    expect(markup).not.toContain("Análises");
+    expect(markup).not.toContain("Visão geral");
+    expect(pageDependencies.getAdminFinancialOrdersData).toHaveBeenCalledOnce();
+    expect(
+      pageDependencies.getAdminFinancialOverviewData
+    ).not.toHaveBeenCalled();
+    expect(
+      pageDependencies.getAdminFinancialAnalysisData
+    ).not.toHaveBeenCalled();
   });
 });

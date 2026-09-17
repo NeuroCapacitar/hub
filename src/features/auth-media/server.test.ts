@@ -64,9 +64,7 @@ describe("authentication media server projections", () => {
         },
       ],
     });
-    expect(dependencies.requirePermission).toHaveBeenCalledWith(
-      "manageSettings"
-    );
+    expect(dependencies.requirePermission).toHaveBeenCalledWith("viewSettings");
   });
 
   it("returns only active, namespaced slides with a cache-busting version", async () => {

@@ -1,68 +1,223 @@
 import type { AppRole } from "@/lib/session";
+import {
+  isDelegableSupportPermission,
+  isDelegableSupportView,
+  SUPPORT_PERMISSION_VIEW_REQUIREMENTS,
+  type SupportPermission,
+  type SupportViewPermission,
+} from "@/lib/support-permissions";
 
 export type AuthPermission =
+  | "createCourse"
   | "executeRefund"
+  | "exportLearningAnalytics"
+  | "manageAuthMedia"
+  | "manageBanners"
+  | "manageCertificateIssuerProfile"
   | "manageCertificates"
   | "manageContent"
+  | "manageCourseAvailability"
+  | "manageCourseCertificate"
+  | "manageCourseContent"
+  | "manageCourseDetails"
+  | "manageCourses"
   | "manageEnrollmentAccess"
   | "manageEnrollmentSupport"
   | "manageFinancialOperations"
   | "manageFinancialReviews"
   | "manageLearningAnalytics"
+  | "manageOperations"
+  | "manageFaq"
   | "manageSettings"
+  | "manageStaffAccess"
   | "reissueCertificates"
   | "retryOutbox"
   | "retryWebhook"
   | "viewAdminPanel"
+  | "viewAudit"
   | "viewCourseOperations"
+  | "viewCourses"
+  | "viewFinancialAnalysis"
+  | "viewFinancialOrders"
+  | "viewFinancialReviews"
   | "viewFinancials"
   | "viewGlobalAudit"
+  | "viewLearningAnalytics"
+  | "viewOperations"
+  | "viewSettings"
   | "viewScopedAudit"
-  | "viewStudentOperations";
+  | "viewStudentOperations"
+  | "viewStudents";
 
-const rolePermissions: Record<AppRole, AuthPermission[]> = {
-  admin: [
-    "executeRefund",
-    "manageCertificates",
-    "manageContent",
-    "manageEnrollmentAccess",
-    "manageEnrollmentSupport",
-    "manageFinancialOperations",
-    "manageFinancialReviews",
-    "manageLearningAnalytics",
-    "manageSettings",
-    "reissueCertificates",
-    "retryOutbox",
-    "retryWebhook",
-    "viewAdminPanel",
-    "viewCourseOperations",
-    "viewFinancials",
-    "viewGlobalAudit",
-    "viewScopedAudit",
-    "viewStudentOperations",
-  ],
-  student: [],
-  support: [
-    "executeRefund",
-    "manageEnrollmentSupport",
-    "reissueCertificates",
-    "viewAdminPanel",
-    "viewCourseOperations",
-    "viewFinancials",
-    "viewScopedAudit",
-    "viewStudentOperations",
-  ],
+export interface AuthorizationSubject {
+  role: AppRole;
+  supportPermissionGrants: readonly SupportPermission[];
+  supportPermissionViews: readonly SupportViewPermission[];
+}
+
+const allAdminPermissions: readonly AuthPermission[] = [
+  "createCourse",
+  "executeRefund",
+  "exportLearningAnalytics",
+  "manageAuthMedia",
+  "manageBanners",
+  "manageCertificateIssuerProfile",
+  "manageCertificates",
+  "manageContent",
+  "manageCourseAvailability",
+  "manageCourseCertificate",
+  "manageCourseContent",
+  "manageCourseDetails",
+  "manageCourses",
+  "manageEnrollmentAccess",
+  "manageEnrollmentSupport",
+  "manageFinancialOperations",
+  "manageFinancialReviews",
+  "manageLearningAnalytics",
+  "manageOperations",
+  "manageFaq",
+  "manageSettings",
+  "manageStaffAccess",
+  "reissueCertificates",
+  "retryOutbox",
+  "retryWebhook",
+  "viewAdminPanel",
+  "viewAudit",
+  "viewCourseOperations",
+  "viewCourses",
+  "viewFinancialAnalysis",
+  "viewFinancialOrders",
+  "viewFinancialReviews",
+  "viewFinancials",
+  "viewGlobalAudit",
+  "viewLearningAnalytics",
+  "viewOperations",
+  "viewSettings",
+  "viewScopedAudit",
+  "viewStudentOperations",
+  "viewStudents",
+] as const;
+
+const supportDefaultPermissions: readonly AuthPermission[] = [
+  "exportLearningAnalytics",
+  "manageAuthMedia",
+  "manageBanners",
+  "manageFaq",
+  "viewAdminPanel",
+  "viewCourseOperations",
+  "viewCourses",
+  "viewLearningAnalytics",
+  "viewOperations",
+  "viewSettings",
+  "viewStudentOperations",
+  "viewStudents",
+] as const;
+
+const supportDefaultPermissionSet = new Set<AuthPermission>(
+  supportDefaultPermissions
+);
+
+const supportPermissionRequirements: Readonly<
+  Partial<Record<SupportPermission, readonly AuthPermission[]>>
+> = {
+  createCourse: ["viewCourses"],
+  manageCourseAvailability: ["viewCourses"],
+  manageCourseCertificate: ["viewCourses"],
+  manageCourseContent: ["viewCourses"],
+  manageCourseDetails: ["viewCourses"],
+  manageCertificateIssuerProfile: ["viewSettings"],
+  manageEnrollmentAccess: ["viewCourses", "viewStudents"],
+  manageEnrollmentSupport: ["viewCourses", "viewStudents"],
+  manageFinancialOperations: ["viewFinancialOrders"],
+  manageFinancialReviews: ["viewFinancialReviews"],
+  manageOperations: ["viewOperations"],
+  reissueCertificates: ["viewCourses", "viewStudents"],
+  executeRefund: ["viewFinancialOrders"],
+};
+
+const hasSupportView = (
+  subject: AuthorizationSubject,
+  permission: SupportViewPermission
+): boolean => subject.supportPermissionViews?.includes(permission) ?? false;
+
+const hasAnySupportView = (
+  subject: AuthorizationSubject,
+  permissions: readonly SupportViewPermission[]
+): boolean =>
+  permissions.some((permission) => hasSupportView(subject, permission));
+
+const hasSupportCapability = (
+  subject: AuthorizationSubject,
+  permission: AuthPermission
+): boolean => {
+  if (supportDefaultPermissionSet.has(permission)) {
+    return true;
+  }
+
+  if (permission === "viewFinancials") {
+    return hasAnySupportView(subject, [
+      "viewFinancialAnalysis",
+      "viewFinancialOrders",
+      "viewFinancialReviews",
+    ]);
+  }
+
+  return isDelegableSupportView(permission)
+    ? hasSupportView(subject, permission)
+    : false;
 };
 
 export const canPerform = (
-  role: AppRole,
+  subject: AuthorizationSubject,
   permission: AuthPermission
-): boolean => rolePermissions[role].includes(permission);
+): boolean => {
+  if (subject.role === "admin") {
+    return allAdminPermissions.includes(permission);
+  }
 
-export const rolesForPermission = (permission: AuthPermission): AppRole[] =>
-  (Object.keys(rolePermissions) as AppRole[]).filter((role) =>
-    canPerform(role, permission)
+  if (subject.role !== "support") {
+    return false;
+  }
+
+  if (hasSupportCapability(subject, permission)) {
+    return true;
+  }
+
+  if (permission === "viewScopedAudit") {
+    return (
+      hasSupportView(subject, "viewAudit") &&
+      hasSupportCapability(subject, "viewStudents")
+    );
+  }
+
+  if (!isDelegableSupportPermission(permission)) {
+    return false;
+  }
+
+  const requiredViews = supportPermissionRequirements[permission] ?? [];
+  return (
+    subject.supportPermissionGrants.includes(permission) &&
+    requiredViews.every((requiredPermission) =>
+      hasSupportCapability(subject, requiredPermission)
+    ) &&
+    (SUPPORT_PERMISSION_VIEW_REQUIREMENTS[permission] ?? []).every((view) =>
+      hasSupportView(subject, view)
+    )
   );
+};
+
+export const hasAdminSurfaceAccess = (subject: AuthorizationSubject): boolean =>
+  subject.role === "admin" || subject.role === "support";
+
+export const getAdminLandingPath = (
+  subject: AuthorizationSubject
+): string | null => {
+  if (subject.role === "admin" || subject.role === "support") {
+    return "/admin";
+  }
+
+  return null;
+};
 
 export const isBlockedAuthEndpoint = ({
   allowPublicSignUp,

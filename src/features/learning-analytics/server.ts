@@ -546,7 +546,7 @@ const readLessonAnalyticsMetrics = async ({
 export const getLearningAnalyticsCourseOptions = async (): Promise<
   LearningAnalyticsCourseOption[]
 > => {
-  await requirePermission("manageLearningAnalytics");
+  await requirePermission("viewLearningAnalytics");
   const { rows } = await getPool().query<{
     id: string;
     lesson_count: string;
@@ -587,7 +587,25 @@ export const getLessonAnalyticsMetrics = async ({
   courseId?: string;
   period?: LearningAnalyticsPeriod;
 } = {}): Promise<LessonAnalyticsMetric[]> => {
-  await requirePermission("manageLearningAnalytics");
+  await requirePermission("viewLearningAnalytics");
+  return (
+    await readLessonAnalyticsMetrics({
+      ...(courseId ? { courseId } : {}),
+      page: null,
+      pageSize: 0,
+      period: parseLearningAnalyticsPeriod(period),
+    })
+  ).metrics;
+};
+
+export const getLessonAnalyticsExportMetrics = async ({
+  courseId,
+  period = DEFAULT_LEARNING_ANALYTICS_PERIOD,
+}: {
+  courseId?: string;
+  period?: LearningAnalyticsPeriod;
+} = {}): Promise<LessonAnalyticsMetric[]> => {
+  await requirePermission("exportLearningAnalytics");
   return (
     await readLessonAnalyticsMetrics({
       ...(courseId ? { courseId } : {}),
@@ -601,7 +619,7 @@ export const getLessonAnalyticsMetrics = async ({
 export const getLessonAnalyticsMetricsPage = async (
   options: LessonAnalyticsMetricQuery = {}
 ): Promise<LessonAnalyticsMetricPage> => {
-  await requirePermission("manageLearningAnalytics");
+  await requirePermission("viewLearningAnalytics");
   const requestedPage = Math.trunc(options.page ?? 1);
   const page = Number.isFinite(requestedPage)
     ? Math.min(1000, Math.max(1, requestedPage))

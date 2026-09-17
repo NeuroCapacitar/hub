@@ -6,6 +6,7 @@ vi.mock("server-only", () => ({}));
 const dependencies = vi.hoisted(() => ({
   getAdminOperationsData: vi.fn(),
   getJmvstreamHealthSummary: vi.fn(),
+  requirePermission: vi.fn(),
 }));
 
 vi.mock("@/features/admin/server", () => ({
@@ -18,6 +19,9 @@ vi.mock("@/features/jmvstream/portal", () => ({
   JMVSTREAM_PORTAL_URL: "https://hub.jmvtechnology.com",
 }));
 vi.mock("@/features/operations/server", () => ({}));
+vi.mock("@/lib/auth-permissions", () => ({
+  requirePermission: dependencies.requirePermission,
+}));
 vi.mock("./outbox-dead-letter-dialog", () => ({
   OutboxDeadLetterDialog: () => <button type="button">Detalhes</button>,
 }));
@@ -26,6 +30,11 @@ vi.mock("./webhook-recovery-dialog", () => ({
 }));
 
 import AdminOperationsPage from "./page";
+
+dependencies.requirePermission.mockResolvedValue({
+  role: "admin",
+  supportPermissionGrants: [],
+});
 
 const emptyBacklog = {
   alerts: [],

@@ -42,10 +42,16 @@ export const POST = async (request: Request) => {
     .insert(profiles)
     .values({
       role: "admin",
+      supportPermissionGrants: [],
+      supportPermissionViews: [],
       userId: result.user.id,
     })
     .onConflictDoUpdate({
-      set: { role: "admin" },
+      set: {
+        role: "admin",
+        supportPermissionGrants: [],
+        supportPermissionViews: [],
+      },
       target: profiles.userId,
     });
 

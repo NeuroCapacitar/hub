@@ -20,12 +20,14 @@ import { cn } from "@/lib/utils";
 interface SortableAuthMediaItemProps {
   onDelete: (slideId: string) => void;
   onToggle: (slideId: string, isActive: boolean) => void;
+  readOnly?: boolean;
   slide: AdminAuthMediaSlide;
 }
 
 export function SortableAuthMediaItem({
   onDelete,
   onToggle,
+  readOnly = false,
   slide,
 }: SortableAuthMediaItemProps): React.JSX.Element {
   const {
@@ -46,12 +48,14 @@ export function SortableAuthMediaItem({
         transition,
       }}
     >
-      <ResourceItemDragHandle
-        ariaLabel={`Reordenar imagem ${slide.sortOrder}`}
-        attributes={attributes}
-        icon={DragDropVerticalIcon}
-        listeners={listeners}
-      />
+      {readOnly ? null : (
+        <ResourceItemDragHandle
+          ariaLabel={`Reordenar imagem ${slide.sortOrder}`}
+          attributes={attributes}
+          icon={DragDropVerticalIcon}
+          listeners={listeners}
+        />
+      )}
 
       <ResourceItemVisual
         className={cn(
@@ -85,16 +89,20 @@ export function SortableAuthMediaItem({
       </ResourceItemContent>
 
       <ResourceItemActions>
-        <Switch
-          aria-label={`${slide.isActive ? "Desativar" : "Ativar"} imagem ${slide.sortOrder}`}
-          checked={slide.isActive}
-          onCheckedChange={(checked) => onToggle(slide.id, checked)}
-        />
-        <ResourceDeleteAction
-          description="Tem certeza que deseja excluir esta imagem permanentemente? A ação não pode ser desfeita."
-          onDelete={() => onDelete(slide.id)}
-          title="Excluir imagem"
-        />
+        {readOnly ? null : (
+          <>
+            <Switch
+              aria-label={`${slide.isActive ? "Desativar" : "Ativar"} imagem ${slide.sortOrder}`}
+              checked={slide.isActive}
+              onCheckedChange={(checked) => onToggle(slide.id, checked)}
+            />
+            <ResourceDeleteAction
+              description="Tem certeza que deseja excluir esta imagem permanentemente? A ação não pode ser desfeita."
+              onDelete={() => onDelete(slide.id)}
+              title="Excluir imagem"
+            />
+          </>
+        )}
       </ResourceItemActions>
     </ResourceItem>
   );

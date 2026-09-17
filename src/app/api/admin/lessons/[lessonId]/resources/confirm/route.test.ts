@@ -4,7 +4,7 @@ const dependencies = vi.hoisted(() => ({
   confirmLessonResourceUpload: vi.fn(),
   getLessonResourceUpload: vi.fn(),
   markLessonResourceUploadUploaded: vi.fn(),
-  requireRole: vi.fn(),
+  requirePermission: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -20,7 +20,9 @@ vi.mock("@/features/storage/lesson-resource-upload-observability", () => ({
   getLessonResourceUploadCorrelationId: vi.fn(() => "correlation-1"),
   logLessonResourceUploadEvent: vi.fn(),
 }));
-vi.mock("@/lib/session", () => ({ requireRole: dependencies.requireRole }));
+vi.mock("@/lib/auth-permissions", () => ({
+  requirePermission: dependencies.requirePermission,
+}));
 
 import { POST } from "./route";
 
@@ -37,7 +39,9 @@ const reference = {
 describe("POST /api/admin/lessons/:lessonId/resources/confirm", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    dependencies.requireRole.mockResolvedValue({ user: { id: "admin-1" } });
+    dependencies.requirePermission.mockResolvedValue({
+      user: { id: "admin-1" },
+    });
     dependencies.getLessonResourceUpload.mockResolvedValue({
       actorUserId: "admin-1",
       expiresAt: new Date("2026-08-30T17:00:00.000Z"),

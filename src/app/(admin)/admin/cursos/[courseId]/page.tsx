@@ -1,6 +1,7 @@
 import { ViewIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { notFound } from "next/navigation";
+import type { StudentManagementCapabilities } from "@/components/admin/student-management-types";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,8 @@ import {
 } from "@/features/certificates/templates";
 import { resolveCourseAvailability } from "@/features/courses/availability";
 import { getCoursePurchaseLink } from "@/features/payments/course-purchase-link";
+import { requirePermission } from "@/lib/auth-permissions";
+import { canPerform } from "@/lib/auth-policy";
 import { getServerEnv } from "@/lib/env";
 import { route } from "@/lib/routes";
 import { CertificateTemplateEditor } from "./certificate-template-editor";
@@ -74,6 +77,36 @@ const getCourseManagementTab = (
   COURSE_MANAGEMENT_TAB_VALUES.includes(value as AdminCourseManagementTab)
     ? (value as AdminCourseManagementTab)
     : "overview";
+
+function CourseCertificateReadOnly({
+  certificateEnabled,
+  pendingCertificateReconciliationCount,
+}: {
+  certificateEnabled: boolean;
+  pendingCertificateReconciliationCount: number;
+}): React.JSX.Element {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle as="h2">Certificados</CardTitle>
+        <CardDescription>
+          Consulta do estado do Certificado; edição de modelo permanece
+          restrita.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        <p>
+          Emissão habilitada:{" "}
+          <strong>{certificateEnabled ? "Sim" : "Não"}</strong>
+        </p>
+        <p>
+          Reconciliações pendentes:{" "}
+          <strong>{pendingCertificateReconciliationCount}</strong>
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
 
 const getCoursePageDerivedData = (data: AdminCourseTabData) => {
   const { course } = data;
@@ -144,6 +177,7 @@ const getCoursePageDerivedData = (data: AdminCourseTabData) => {
   };
 };
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: this page composes independent read-only and mutation-aware Course tabs
 export default async function AdminCourseDetailPage({
   params,
   searchParams,
@@ -154,6 +188,24 @@ export default async function AdminCourseDetailPage({
   const { courseId } = await params;
   const query = (await searchParams) ?? {};
   const activeTab = getCourseManagementTab(firstSearchParam(query.tab));
+  const session = await requirePermission("viewCourses");
+  const canManageCourseContent = canPerform(session, "manageCourseContent");
+  const canManageCourseDetails = canPerform(session, "manageCourseDetails");
+  const canManageCourseAvailability = canPerform(
+    session,
+    "manageCourseAvailability"
+  );
+  const canManageCourseCertificate = canPerform(
+    session,
+    "manageCourseCertificate"
+  );
+  const studentManagementCapabilities: StudentManagementCapabilities = {
+    canManageCertificates: canPerform(session, "manageCertificates"),
+    canManageEnrollmentAccess: canPerform(session, "manageEnrollmentAccess"),
+    canManageEnrollmentSupport: canPerform(session, "manageEnrollmentSupport"),
+    canManagePlatformAccess: canPerform(session, "manageEnrollmentAccess"),
+    canReissueCertificates: canPerform(session, "reissueCertificates"),
+  };
   const requestedEnrollmentPage = Number.parseInt(
     firstSearchParam(query.enrollmentPage) ?? "1",
     10
@@ -204,12 +256,34 @@ export default async function AdminCourseDetailPage({
     purchaseLink,
   } = getCoursePageDerivedData(data);
   const certificateData =
-    data.tab === "certificate"
+    data.tab === "certificate" && canManageCourseCertificate
       ? await Promise.all([
           getCertificateTemplatesForCourse(courseId),
           hasCertificateIssuerProfile(),
         ])
       : null;
+  let certificateContent: React.JSX.Element | null = null;
+  if (data.tab === "certificate") {
+    certificateContent = certificateData ? (
+      <CertificateTemplateEditor
+        certificateEnabled={course.certificateEnabled}
+        courseId={course.id}
+        courseWorkloadHours={getEffectiveCourseWorkloadHours(course)}
+        issuerConfigured={certificateData[1]}
+        pendingCertificateReconciliationCount={
+          course.pendingCertificateReconciliationCount
+        }
+        templates={certificateData[0]}
+      />
+    ) : (
+      <CourseCertificateReadOnly
+        certificateEnabled={course.certificateEnabled}
+        pendingCertificateReconciliationCount={
+          course.pendingCertificateReconciliationCount
+        }
+      />
+    );
+  }
 
   return (
     <PageContainer>
@@ -241,23 +315,11 @@ export default async function AdminCourseDetailPage({
         />
 
         <CourseManagementTabs
-          certificate={
-            data.tab === "certificate" && certificateData ? (
-              <CertificateTemplateEditor
-                certificateEnabled={course.certificateEnabled}
-                courseId={course.id}
-                courseWorkloadHours={getEffectiveCourseWorkloadHours(course)}
-                issuerConfigured={certificateData[1]}
-                pendingCertificateReconciliationCount={
-                  course.pendingCertificateReconciliationCount
-                }
-                templates={certificateData[0]}
-              />
-            ) : null
-          }
+          certificate={certificateContent}
           content={
             data.tab === "content" && contentData && contentSignal ? (
               <CourseContentPanel
+                canManageContent={canManageCourseContent}
                 contentSignal={contentSignal}
                 course={course}
                 lessons={contentData.lessons}
@@ -302,7 +364,10 @@ export default async function AdminCourseDetailPage({
                     </div>
                   </CardHeader>
                   <CardContent className="py-2 sm:py-4">
-                    <CourseSettingsForm course={course} />
+                    <CourseSettingsForm
+                      course={course}
+                      readOnly={!canManageCourseDetails}
+                    />
                   </CardContent>
                 </Card>
                 <Card>
@@ -316,7 +381,10 @@ export default async function AdminCourseDetailPage({
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="py-4">
-                    <CourseAvailabilityForm course={course} />
+                    <CourseAvailabilityForm
+                      course={course}
+                      readOnly={!canManageCourseAvailability}
+                    />
                   </CardContent>
                 </Card>
               </div>
@@ -339,6 +407,7 @@ export default async function AdminCourseDetailPage({
                     hasNextPage={data.enrollmentsPage.hasNextPage}
                     initialAction={enrollmentAction}
                     initialStudentId={enrollmentStudentId || undefined}
+                    managementCapabilities={studentManagementCapabilities}
                     page={data.enrollmentsPage.page}
                     search={data.enrollmentsPage.search}
                     statusFilter={enrollmentStatus}

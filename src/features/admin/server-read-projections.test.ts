@@ -109,7 +109,11 @@ beforeEach(() => {
   getJmvstreamAssetsForLesson.mockReset();
   query.mockReset();
   requirePermission.mockReset();
-  requirePermission.mockResolvedValue({});
+  requirePermission.mockResolvedValue({
+    role: "admin",
+    supportPermissionGrants: [],
+    supportPermissionViews: [],
+  });
 });
 
 describe("admin read projections", () => {
@@ -142,7 +146,7 @@ describe("admin read projections", () => {
         lastUpdatedBy: null,
       },
     });
-    expect(requirePermission).toHaveBeenCalledWith("manageSettings");
+    expect(requirePermission).toHaveBeenCalledWith("viewSettings");
     expect(query).toHaveBeenCalledOnce();
     expect(String(query.mock.calls[0]?.[0]).toLowerCase()).toContain(
       "full outer join"
@@ -207,19 +211,35 @@ describe("admin read projections", () => {
     });
 
     expect(requirePermission).toHaveBeenCalledWith("viewAdminPanel");
-    expect(requirePermission).toHaveBeenCalledWith("viewFinancials");
-    expect(requirePermission).toHaveBeenCalledWith("viewGlobalAudit");
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(requirePermission).not.toHaveBeenCalledWith("viewFinancials");
+    expect(requirePermission).not.toHaveBeenCalledWith("viewAudit");
+    expect(query).toHaveBeenCalledTimes(3);
     const aggregateSql = String(query.mock.calls[0]?.[0]).toLowerCase();
-    expect(aggregateSql).toContain(
-      "sum(coalesce(paid_amount_in_cents, amount_in_cents))"
-    );
     expect(aggregateSql).toContain("e.starts_at <= now()");
     expect(aggregateSql).toContain("e.expires_at >= now()");
     expect(aggregateSql).toContain("cp.status = 'published'");
-    expect(aggregateSql).toContain("status = 'pending'");
-    expect(aggregateSql).toContain("status = 'failed'");
     expect(aggregateSql).not.toContain("limit 8");
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).toLowerCase().includes("sum(coalesce(paid_amount_in_cents")
+      )
+    ).toBe(true);
+  });
+
+  it("does not load financial overview facets missing from Support access", async () => {
+    requirePermission.mockResolvedValue({
+      role: "support",
+      supportPermissionGrants: [],
+      supportPermissionViews: ["viewFinancialOrders"],
+    });
+    query.mockResolvedValue({ rows: [] });
+
+    await expect(getAdminFinancialOverviewData()).resolves.toEqual({
+      coursesRevenue: null,
+      financialHealth: null,
+      paymentReviews: null,
+    });
+    expect(query).not.toHaveBeenCalled();
   });
 
   it("keeps financial health global and counts retryable Asaas webhooks", async () => {
@@ -374,7 +394,7 @@ describe("admin read projections", () => {
         refundedRevenueInCents: 500,
       },
     });
-    expect(requirePermission).toHaveBeenCalledWith("viewFinancials");
+    expect(requirePermission).toHaveBeenCalledWith("viewFinancialAnalysis");
     const analyticsSql = String(
       query.mock.calls.find(([sql]) =>
         String(sql).includes("gross_received_in_cents")
@@ -508,7 +528,7 @@ describe("admin read projections", () => {
     expect(sql).not.toContain("l.content_json");
     expect(sql).not.toContain("select l.*");
     expect(sql).toContain("current_publications");
-    expect(requirePermission).toHaveBeenCalledWith("manageContent");
+    expect(requirePermission).toHaveBeenCalledWith("viewCourses");
   });
 
   it("loads only the read models needed by the selected course tab", async () => {
@@ -658,7 +678,7 @@ describe("admin read projections", () => {
       totalCount: 21,
     });
 
-    expect(requirePermission).toHaveBeenCalledWith("viewGlobalAudit");
+    expect(requirePermission).toHaveBeenCalledWith("viewOperations");
     expect(query.mock.calls[0]?.[1]).toEqual(["PAYMENT", "%PAYMENT%", 21, 20]);
     expect(String(query.mock.calls[0]?.[0])).not.toContain("payload");
   });
@@ -719,6 +739,30 @@ describe("admin read projections", () => {
     expect(String(query.mock.calls[0]?.[0])).not.toContain("student.email");
   });
 
+  it("filters financial audit events for Support without a financial view", async () => {
+    requirePermission.mockResolvedValue({
+      role: "support",
+      supportPermissionGrants: [],
+      supportPermissionViews: ["viewAudit"],
+    });
+    query.mockResolvedValue({ rows: [] });
+
+    await getAdminAuditData();
+
+    const [sql, values] = query.mock.calls[0] ?? [];
+    expect(String(sql)).toContain("source = any(");
+    expect(values?.[0]).toEqual(["administrative", "enrollment"]);
+    expect(values?.[1]).toEqual(
+      expect.arrayContaining(["course", "enrollment", "settings"])
+    );
+    expect(values?.[2]).toEqual([
+      "enrollment.payment_paid",
+      "enrollment.payment_refunded",
+      "enrollment.payment_disputed",
+    ]);
+    expect(String(sql)).toContain("target_type <> 'staff'");
+  });
+
   it("bounds the student projection and returns pagination metadata", async () => {
     query.mockImplementation((sql: string) => {
       if (sql.includes("total_students")) {
@@ -777,7 +821,7 @@ describe("admin read projections", () => {
     const accessSummarySql = String(accessSummaryCall?.[0]).toLowerCase();
     expect(accessSummarySql).toContain("min(e.expires_at)");
     expect(accessSummarySql).toContain("as next_expiration");
-    expect(requirePermission).toHaveBeenCalledWith("manageEnrollmentAccess");
+    expect(requirePermission).toHaveBeenCalledWith("viewStudents");
   });
 
   it("applies the student access filter to the bounded profile projection", async () => {
@@ -1037,7 +1081,7 @@ describe("admin read projections", () => {
 
     const data = await getAdminFinancialOverviewData();
 
-    expect(data.paymentReviews.history).toEqual([
+    expect(data.paymentReviews?.history).toEqual([
       {
         amountInCents: 12_990,
         courseTitle: "Course one",
@@ -1059,7 +1103,7 @@ describe("admin read projections", () => {
         type: "amount_mismatch",
       },
     ]);
-    expect(data.paymentReviews.historyTotalCount).toBe(1);
+    expect(data.paymentReviews?.historyTotalCount).toBe(1);
   });
 
   it("projects course revenue without a second pagination model", async () => {
@@ -1315,7 +1359,7 @@ describe("admin read projections", () => {
       hasPublished: true,
     });
 
-    expect(requirePermission).toHaveBeenCalledWith("manageContent");
+    expect(requirePermission).toHaveBeenCalledWith("viewCourses");
     expect(query).toHaveBeenCalledTimes(1);
     expect(query.mock.calls[0]?.[1]).toEqual([courseId]);
     expect(String(query.mock.calls[0]?.[0])).toContain("status = 'draft'");
@@ -1339,7 +1383,7 @@ describe("admin read projections", () => {
       validCertificateCount: 41,
     });
 
-    expect(requirePermission).toHaveBeenCalledWith("manageContent");
+    expect(requirePermission).toHaveBeenCalledWith("viewCourses");
     expect(query).toHaveBeenCalledTimes(1);
     expect(query.mock.calls[0]?.[1]).toEqual([courseId]);
     const sql = String(query.mock.calls[0]?.[0])
@@ -1366,7 +1410,6 @@ describe("admin read projections", () => {
 
     await expect(getAdminCourseOverviewSummary(courseId)).resolves.toEqual({
       activeEnrollmentCount: 0,
-      paidOrderCount: 0,
       validCertificateCount: 0,
     });
   });
@@ -1405,7 +1448,7 @@ describe("admin read projections", () => {
 
     const detail = await getAdminCourseDetailData(courseId);
 
-    expect(requirePermission).toHaveBeenCalledWith("manageContent");
+    expect(requirePermission).toHaveBeenCalledWith("viewCourses");
     expect(query).toHaveBeenCalledTimes(4);
     expect(
       query.mock.calls.find(([sql]) =>
@@ -1479,7 +1522,7 @@ describe("admin read projections", () => {
 
     const editor = await getAdminLessonEditorData({ courseId, lessonId });
 
-    expect(requirePermission).toHaveBeenCalledWith("manageContent");
+    expect(requirePermission).toHaveBeenCalledWith("viewCourses");
     expect(query).toHaveBeenCalledTimes(2);
     expect(getJmvstreamAssetsForLesson).toHaveBeenCalledWith(lessonId);
     const lessonEditorSql = String(
@@ -1557,12 +1600,6 @@ describe("admin read projections", () => {
           pendingCount: 0,
         },
         financial: {
-          disputedOrderCount: 0,
-          failedRefundCount: 0,
-          pendingPaymentReviewCount: 0,
-          pendingRefundCount: 0,
-          pendingRevenueInCents: 0,
-          refundedOrderCount: 0,
           uncertainCheckoutCount: 0,
           uncertainRefundCount: 0,
           uncorrelatedOrderCount: 0,
@@ -1624,10 +1661,8 @@ describe("admin read projections", () => {
       recentOrders: [],
     });
 
-    expect(requirePermission).toHaveBeenCalledWith("manageContent");
-    expect(requirePermission).toHaveBeenCalledWith("viewFinancials");
-    expect(requirePermission).toHaveBeenCalledWith("viewGlobalAudit");
-    expect(query).toHaveBeenCalledTimes(9);
+    expect(requirePermission).toHaveBeenCalledWith("viewAdminPanel");
+    expect(query).toHaveBeenCalledTimes(10);
     const dashboardSql = String(
       query.mock.calls.find(([sql]) =>
         String(sql).includes("course_health as")
@@ -1711,9 +1746,21 @@ describe("admin read projections", () => {
         return {
           rows: [
             {
+              pending_payment_reviews: 3,
+            },
+          ],
+        };
+      }
+      if (
+        !sql.includes("outbox_ready") &&
+        (sql.includes("from refund_requests") ||
+          sql.includes("from orders where status = 'disputed'"))
+      ) {
+        return {
+          rows: [
+            {
               disputed_orders: 2,
               failed_refunds: 1,
-              pending_payment_reviews: 3,
               pending_refunds: 4,
               pending_revenue_in_cents: "45000",
               refunded_orders: 5,
@@ -1980,6 +2027,6 @@ describe("admin read projections", () => {
 
     const sql = String(query.mock.calls[0]?.[0]).toLowerCase();
     expect(sql).toContain("left join enrollments");
-    expect(requirePermission).toHaveBeenCalledWith("manageEnrollmentAccess");
+    expect(requirePermission).toHaveBeenCalledWith("viewStudents");
   });
 });

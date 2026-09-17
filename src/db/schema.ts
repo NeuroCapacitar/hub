@@ -332,6 +332,14 @@ export const profiles = pgTable(
       .primaryKey()
       .references(() => users.id, { onDelete: "cascade" }),
     role: roleEnum("role").default("student").notNull(),
+    supportPermissionGrants: text("support_permission_grants")
+      .array()
+      .default(sql`'{}'::text[]`)
+      .notNull(),
+    supportPermissionViews: text("support_permission_views")
+      .array()
+      .default(sql`'{}'::text[]`)
+      .notNull(),
     phone: text("phone"),
     invitedAt: timestamp("invited_at", tz),
     lastAccessAt: timestamp("last_access_at", tz),
@@ -339,7 +347,77 @@ export const profiles = pgTable(
     platformBlockedReason: text("platform_blocked_reason"),
     ...timestamps,
   },
-  (table) => [index("profiles_role_idx").on(table.role)]
+  (table) => [
+    index("profiles_role_idx").on(table.role),
+    check(
+      "profiles_support_permission_grants_consistent",
+      sql`(
+        (
+          ${table.role} = 'support'
+          and ${table.supportPermissionGrants} <@ ARRAY[
+            'createCourse',
+            'manageCourseDetails',
+            'manageCourseContent',
+            'manageCourseAvailability',
+            'manageCourseCertificate',
+            'manageEnrollmentSupport',
+            'manageEnrollmentAccess',
+            'reissueCertificates',
+            'manageCertificateIssuerProfile',
+            'executeRefund',
+            'manageFinancialOperations',
+            'manageFinancialReviews',
+            'manageOperations'
+          ]::text[]
+          and array_position(${table.supportPermissionGrants}, NULL::text) is null
+          and cardinality(${table.supportPermissionGrants}) = (
+            case when array_position(${table.supportPermissionGrants}, 'createCourse') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'manageCourseDetails') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'manageCourseContent') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'manageCourseAvailability') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'manageCourseCertificate') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'manageEnrollmentSupport') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'manageEnrollmentAccess') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'reissueCertificates') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'manageCertificateIssuerProfile') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'executeRefund') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'manageFinancialOperations') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'manageFinancialReviews') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionGrants}, 'manageOperations') is not null then 1 else 0 end
+          )
+        )
+        or (
+          ${table.role} <> 'support'
+          and cardinality(${table.supportPermissionGrants}) = 0
+        )
+      )`
+    ),
+    check(
+      "profiles_support_permission_views_consistent",
+      sql`(
+        (
+          ${table.role} = 'support'
+          and ${table.supportPermissionViews} <@ ARRAY[
+            'viewFinancialAnalysis',
+            'viewFinancialOrders',
+            'viewFinancialReviews',
+            'viewAudit'
+          ]::text[]
+          and array_position(${table.supportPermissionViews}, NULL::text) is null
+          and cardinality(${table.supportPermissionViews}) = (
+            case when array_position(${table.supportPermissionViews}, 'viewFinancialAnalysis') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionViews}, 'viewFinancialOrders') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionViews}, 'viewFinancialReviews') is not null then 1 else 0 end
+            + case when array_position(${table.supportPermissionViews}, 'viewAudit') is not null then 1 else 0 end
+          )
+        )
+        or (
+          ${table.role} <> 'support'
+          and cardinality(${table.supportPermissionViews}) = 0
+        )
+      )`
+    ),
+  ]
 );
 
 export const courses = pgTable(

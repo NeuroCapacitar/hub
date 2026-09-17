@@ -95,7 +95,7 @@ describe("course cover delivery", () => {
       "https://private.example/card.webp"
     );
     expect(dependencies.requirePermission).toHaveBeenCalledWith(
-      "manageContent"
+      "manageCourseDetails"
     );
   });
 });

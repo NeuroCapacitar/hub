@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   getAdminStudentsData: vi.fn(),
+  requirePermission: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
@@ -23,6 +25,10 @@ vi.mock("@/features/certificates/actions", () => ({
 vi.mock("@/features/admin/server", () => ({
   getAdminStudentsData: dependencies.getAdminStudentsData,
 }));
+vi.mock("@/lib/auth-permissions", () => ({
+  requirePermission: dependencies.requirePermission,
+}));
+vi.mock("@/lib/auth-policy", () => ({ canPerform: () => true }));
 
 import AdminStudentsPage from "./page";
 
@@ -78,6 +84,10 @@ const studentData = {
 
 beforeEach(() => {
   dependencies.getAdminStudentsData.mockReset();
+  dependencies.requirePermission.mockResolvedValue({
+    role: "admin",
+    supportPermissionGrants: [],
+  });
   dependencies.getAdminStudentsData.mockResolvedValue(studentData);
 });
 

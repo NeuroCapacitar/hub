@@ -40,3 +40,33 @@ export const certificateMigrationStateChecks: readonly MigrationStateCheck[] = [
       "select exists (select 1 from pg_constraint where conrelid = 'public.certificates'::regclass and conname in ('certificates_revocation_state_check', 'certificates_revoked_reason_category_check', 'certificates_valid_revocation_fields_check') and contype = 'c' group by conrelid having count(*) = 3) and exists (select 1 from pg_constraint where conrelid = 'public.certificates'::regclass and conname = 'certificates_course_id_courses_id_fk' and confdeltype = 'r') as present",
   },
 ];
+
+export const supportPermissionMigrationStateChecks: readonly MigrationStateCheck[] =
+  [
+    {
+      check: "grants individuais de Suporte",
+      migration: "0083_support_permission_grants",
+      statement:
+        "select case when exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'support_permission_grants') and exists (select 1 from pg_constraint where conrelid = 'public.profiles'::regclass and conname = 'profiles_support_permission_grants_consistent' and contype = 'c' and convalidated) then not exists (select 1 from profiles where (role = 'support' and to_jsonb(profiles) -> 'support_permission_grants' is null) or (role <> 'support' and case when jsonb_typeof(to_jsonb(profiles) -> 'support_permission_grants') = 'array' then jsonb_array_length(to_jsonb(profiles) -> 'support_permission_grants') else -1 end <> 0)) else false end as present",
+    },
+  ];
+
+export const supportPermissionViewsMigrationStateChecks: readonly MigrationStateCheck[] =
+  [
+    {
+      check: "visualizações individuais de Suporte",
+      migration: "0084_support_permission_views",
+      statement:
+        "select case when exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'profiles' and column_name = 'support_permission_views') and exists (select 1 from pg_constraint where conrelid = 'public.profiles'::regclass and conname = 'profiles_support_permission_views_consistent' and contype = 'c' and convalidated) then not exists (select 1 from profiles where (role = 'support' and to_jsonb(profiles) -> 'support_permission_views' is null) or (role <> 'support' and case when jsonb_typeof(to_jsonb(profiles) -> 'support_permission_views') = 'array' then jsonb_array_length(to_jsonb(profiles) -> 'support_permission_views') else -1 end <> 0)) else false end as present",
+    },
+  ];
+
+export const supportPermissionRefinementMigrationStateChecks: readonly MigrationStateCheck[] =
+  [
+    {
+      check: "allowlist refinada e grants configuráveis limpos",
+      migration: "0085_superb_wonder_man",
+      statement:
+        "select case when exists (select 1 from pg_constraint where conrelid = 'public.profiles'::regclass and conname = 'profiles_support_permission_grants_consistent' and pg_get_constraintdef(oid) like '%createCourse%' and pg_get_constraintdef(oid) like '%manageOperations%' and convalidated) and exists (select 1 from pg_constraint where conrelid = 'public.profiles'::regclass and conname = 'profiles_support_permission_views_consistent' and pg_get_constraintdef(oid) like '%viewFinancialAnalysis%' and pg_get_constraintdef(oid) like '%viewAudit%' and convalidated) then not exists (select 1 from profiles where support_permission_grants is null or support_permission_views is null or cardinality(support_permission_grants) <> 0 or cardinality(support_permission_views) <> 0) else false end as present",
+    },
+  ];

@@ -4,6 +4,9 @@ import { withVerifiedSslMode } from "../src/db/connection-url";
 import {
   certificateMigrationStateChecks,
   courseContentMigrationStateChecks,
+  supportPermissionMigrationStateChecks,
+  supportPermissionRefinementMigrationStateChecks,
+  supportPermissionViewsMigrationStateChecks,
 } from "../src/db/migration-state-checks";
 
 config({ path: ".env.local", quiet: true });
@@ -110,6 +113,18 @@ const inspectState = async (client: PoolClient): Promise<MigrationCheck[]> => {
     ),
     ...certificateMigrationStateChecks.map(({ check, migration, statement }) =>
       scheduleExistsCheck(migration, check, statement)
+    ),
+    ...supportPermissionMigrationStateChecks.map(
+      ({ check, migration, statement }) =>
+        scheduleExistsCheck(migration, check, statement)
+    ),
+    ...supportPermissionViewsMigrationStateChecks.map(
+      ({ check, migration, statement }) =>
+        scheduleExistsCheck(migration, check, statement)
+    ),
+    ...supportPermissionRefinementMigrationStateChecks.map(
+      ({ check, migration, statement }) =>
+        scheduleExistsCheck(migration, check, statement)
     ),
   ];
 

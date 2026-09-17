@@ -920,7 +920,7 @@ test("support navigation and student Sheet preserve the role boundary @mobile", 
   const fixture = await readFixture();
   await signIn(page, fixture.support, ADMIN_URL_PATTERN);
   await expect(
-    page.getByRole("heading", { name: "Operação de suporte" })
+    page.getByRole("heading", { name: "Operação diária" })
   ).toBeVisible();
 
   if ((page.viewportSize()?.width ?? 1280) < 768) {
@@ -949,22 +949,16 @@ test("support navigation and student Sheet preserve the role boundary @mobile", 
   await expect(
     page.getByRole("link", { exact: true, name: "Financeiro" })
   ).toBeVisible();
-  for (const forbiddenLink of [
-    "Aprendizagem",
-    "Alunos",
-    "Auditoria",
-    "Configurações",
-  ]) {
+  for (const forbiddenLink of ["Equipe"]) {
     await expect(
       page.getByRole("link", { exact: true, name: forbiddenLink })
     ).toHaveCount(0);
   }
 
   await page.goto("/admin/cursos");
-  await expect(page).toHaveURL(ADMIN_URL_PATTERN);
   await expect(
     page.getByRole("heading", { exact: true, name: "Cursos" })
-  ).toHaveCount(0);
+  ).toBeVisible();
 
   await page.goto(`/admin/operacao/cursos/${fixture.course.id}/alunas`);
   const enrollmentRow = page

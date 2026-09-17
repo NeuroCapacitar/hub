@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const dependencies = vi.hoisted(() => ({
   getLearningAnalyticsCourseOptions: vi.fn(),
   getLessonAnalyticsMetrics: vi.fn(),
+  requirePermission: vi.fn(),
 }));
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/features/learning-analytics/server", () => ({
   getLearningAnalyticsCourseOptions:
     dependencies.getLearningAnalyticsCourseOptions,
@@ -17,12 +19,20 @@ vi.mock("./learning-analytics-filters", () => ({
 vi.mock("./lesson-analytics-details-sheet", () => ({
   LessonAnalyticsDetailsSheet: () => <button type="button">Detalhes</button>,
 }));
+vi.mock("@/lib/auth-permissions", () => ({
+  requirePermission: dependencies.requirePermission,
+}));
+vi.mock("@/lib/auth-policy", () => ({ canPerform: () => true }));
 
 import LearningAnalyticsPage from "./page";
 
 describe("LearningAnalyticsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dependencies.requirePermission.mockResolvedValue({
+      role: "admin",
+      supportPermissionGrants: [],
+    });
   });
 
   it("renders one ordered row per lesson and combines version metrics", async () => {

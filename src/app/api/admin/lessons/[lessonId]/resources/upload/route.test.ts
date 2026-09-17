@@ -4,7 +4,7 @@ const dependencies = vi.hoisted(() => ({
   confirmLessonResourceUpload: vi.fn(),
   getPreparedLessonResourceUpload: vi.fn(),
   markLessonResourceUploadUploaded: vi.fn(),
-  requireRole: vi.fn(),
+  requirePermission: vi.fn(),
   uploadPrivateR2Object: vi.fn(),
 }));
 
@@ -22,7 +22,9 @@ vi.mock("@/features/storage/lesson-resource-upload-observability", () => ({
   getLessonResourceUploadCorrelationId: vi.fn(() => "correlation-1"),
   logLessonResourceUploadEvent: vi.fn(),
 }));
-vi.mock("@/lib/session", () => ({ requireRole: dependencies.requireRole }));
+vi.mock("@/lib/auth-permissions", () => ({
+  requirePermission: dependencies.requirePermission,
+}));
 
 import { POST } from "./route";
 
@@ -65,7 +67,9 @@ const createRequest = ({
 describe("POST /api/admin/lessons/:lessonId/resources/upload", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    dependencies.requireRole.mockResolvedValue({ user: { id: "admin-1" } });
+    dependencies.requirePermission.mockResolvedValue({
+      user: { id: "admin-1" },
+    });
     dependencies.getPreparedLessonResourceUpload.mockResolvedValue(session);
     dependencies.uploadPrivateR2Object.mockResolvedValue(undefined);
     dependencies.confirmLessonResourceUpload.mockResolvedValue(undefined);

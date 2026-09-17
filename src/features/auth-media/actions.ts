@@ -326,7 +326,7 @@ const persistAuthMediaSlide = async ({
 export const saveAuthMediaAction = async (
   formData: FormData
 ): Promise<{ slideId: string }> => {
-  const session = await requirePermission("manageSettings");
+  const session = await requirePermission("manageAuthMedia");
   const existingSlideIdValue = readString(formData, "slideId");
   const existingSlideId = existingSlideIdValue
     ? requireSlideId(existingSlideIdValue)
@@ -370,7 +370,7 @@ export const saveAuthMediaAction = async (
 export const toggleAuthMediaActiveAction = async (
   formData: FormData
 ): Promise<void> => {
-  const session = await requirePermission("manageSettings");
+  const session = await requirePermission("manageAuthMedia");
   const slideId = requireSlideId(readString(formData, "slideId"));
   const isActive = readCheckbox(formData, "isActive");
   const previous = await readAuthMediaSlide(slideId);
@@ -428,7 +428,7 @@ export const toggleAuthMediaActiveAction = async (
 export const deleteAuthMediaAction = async (
   formData: FormData
 ): Promise<void> => {
-  const session = await requirePermission("manageSettings");
+  const session = await requirePermission("manageAuthMedia");
   const slideId = requireSlideId(readString(formData, "slideId"));
   const previous = await readAuthMediaSlide(slideId);
 
@@ -493,7 +493,7 @@ export const deleteAuthMediaAction = async (
 export const reorderAuthMediaAction = async (
   orderedSlideIds: string[]
 ): Promise<void> => {
-  const session = await requirePermission("manageSettings");
+  const session = await requirePermission("manageAuthMedia");
   const normalizedIds = orderedSlideIds.map(requireSlideId);
   if (
     normalizedIds.length === 0 ||

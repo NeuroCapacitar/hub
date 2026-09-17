@@ -5,7 +5,7 @@ import {
   createR2ObjectReadUrl,
   uploadPrivateR2Object,
 } from "@/features/storage/r2";
-import { requireRole } from "@/lib/session";
+import { requirePermission } from "@/lib/auth-permissions";
 import { parseCertificateTemplateDraft } from "./render-snapshot";
 import {
   prepareCertificateTemplateAssetReferences,
@@ -218,7 +218,7 @@ export interface CertificateTemplateSummary {
 export const getCertificateTemplatesForCourse = async (
   courseId: string
 ): Promise<CertificateTemplateSummary[]> => {
-  await requireRole(["admin"]);
+  await requirePermission("viewCourses");
   const { rows } = await getPool().query<{
     background_key: string;
     id: string;
@@ -255,7 +255,7 @@ export const getCertificateTemplatesForCourse = async (
 };
 
 export const hasCertificateIssuerProfile = async (): Promise<boolean> => {
-  await requireRole(["admin"]);
+  await requirePermission("viewSettings");
   const result = await getPool().query<{ id: string }>(
     "select id from certificate_issuer_profiles where id = 'global' limit 1"
   );

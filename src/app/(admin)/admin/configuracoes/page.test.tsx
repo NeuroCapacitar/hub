@@ -44,7 +44,10 @@ import AdminSettingsPage from "./page";
 describe("AdminSettingsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dependencies.requirePermission.mockResolvedValue({});
+    dependencies.requirePermission.mockResolvedValue({
+      role: "admin",
+      supportPermissionGrants: [],
+    });
     dependencies.getAdminSettingsData.mockResolvedValue({
       settings: {
         certificateSignerName: "Maria",
@@ -76,8 +79,6 @@ describe("AdminSettingsPage", () => {
     expect(markup).toContain("Mídias de acesso renderizadas");
     expect(markup).toContain("FAQs renderizadas");
     expect(markup).not.toContain("JMVStream");
-    expect(dependencies.requirePermission).toHaveBeenCalledWith(
-      "manageSettings"
-    );
+    expect(dependencies.requirePermission).toHaveBeenCalledWith("viewSettings");
   });
 });

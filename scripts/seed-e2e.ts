@@ -128,10 +128,14 @@ const createUser = async ({
   email,
   name,
   role,
+  supportPermissionGrants,
+  supportPermissionViews,
 }: {
   email: string;
   name: string;
   role: "admin" | "student" | "support";
+  supportPermissionGrants?: readonly string[];
+  supportPermissionViews?: readonly string[];
 }): Promise<string> => {
   const result = await getAuth().api.signUpEmail({
     body: { email, name, password: E2E_PASSWORD },
@@ -140,13 +144,15 @@ const createUser = async ({
 
   await getPool().query(
     `
-      insert into profiles (user_id, role)
-      values ($1, $2::role)
+      insert into profiles (user_id, role, support_permission_grants, support_permission_views)
+      values ($1, $2::role, $3::text[], $4::text[])
       on conflict (user_id) do update
       set role = excluded.role,
+          support_permission_grants = excluded.support_permission_grants,
+          support_permission_views = excluded.support_permission_views,
           updated_at = now()
     `,
-    [userId, role]
+    [userId, role, supportPermissionGrants ?? [], supportPermissionViews ?? []]
   );
   return userId;
 };
@@ -422,7 +428,13 @@ export const seedE2e = async (): Promise<E2eFixture> => {
       name: "Aluno para bloqueio apos login",
       role: "student",
     }),
-    createUser({ email: supportEmail, name: "Suporte E2E", role: "support" }),
+    createUser({
+      email: supportEmail,
+      name: "Suporte E2E",
+      role: "support",
+      supportPermissionGrants: ["executeRefund"],
+      supportPermissionViews: ["viewFinancialOrders", "viewAudit"],
+    }),
   ]);
   const pool = getPool();
   const client = await pool.connect();

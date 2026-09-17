@@ -5,6 +5,7 @@ import {
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { FinanceHelp } from "@/components/admin/finance-help";
+import type { StudentManagementCapabilities } from "@/components/admin/student-management-types";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -16,6 +17,8 @@ import {
 } from "@/components/ui/card";
 import { getAdminStudentsData } from "@/features/admin/server";
 import { parseAdminStudentAccessFilter } from "@/features/admin/student-filters";
+import { requirePermission } from "@/lib/auth-permissions";
+import { canPerform } from "@/lib/auth-policy";
 import { AdminMetricCard } from "../admin-metric-card";
 import { StudentsTable, type StudentTableRow } from "./students-table";
 import { createGlobalStudentsTableContext } from "./students-table-context";
@@ -35,6 +38,7 @@ const formatCount = (value: number): string => value.toLocaleString("pt-BR");
 export default async function AdminStudentsPage({
   searchParams,
 }: AdminStudentsPageProps): Promise<React.JSX.Element> {
+  const session = await requirePermission("viewStudents");
   const params = (await searchParams) ?? {};
   const page = Number.parseInt(firstSearchParam(params.page) ?? "1", 10);
   const search = firstSearchParam(params.q)?.trim() ?? "";
@@ -46,6 +50,13 @@ export default async function AdminStudentsPage({
     page: Number.isFinite(page) ? page : 1,
     ...(search ? { search } : {}),
   });
+  const managementCapabilities: StudentManagementCapabilities = {
+    canManageCertificates: canPerform(session, "manageCertificates"),
+    canManageEnrollmentAccess: canPerform(session, "manageEnrollmentAccess"),
+    canManageEnrollmentSupport: canPerform(session, "manageEnrollmentSupport"),
+    canManagePlatformAccess: canPerform(session, "manageEnrollmentAccess"),
+    canReissueCertificates: canPerform(session, "reissueCertificates"),
+  };
 
   const students: StudentTableRow[] = data.students.map((student) => ({
     email: student.email,
@@ -137,6 +148,7 @@ export default async function AdminStudentsPage({
             <StudentsTable
               context={createGlobalStudentsTableContext(accessFilter)}
               hasNextPage={data.hasNextPage}
+              managementCapabilities={managementCapabilities}
               page={data.page}
               search={data.search}
               students={students}

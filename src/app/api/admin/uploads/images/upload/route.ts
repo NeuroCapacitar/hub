@@ -1,15 +1,16 @@
 import { uploadStagedAdminImageFile } from "@/features/storage/r2";
 import {
+  getStagedAdminImagePermission,
   parseStagedAdminImageReference,
   type StagedAdminImageReference,
 } from "@/features/storage/staged-image-upload";
 import { confirmStagedAdminImageUpload } from "@/features/storage/staged-image-upload-registry";
-import { requireRole } from "@/lib/session";
+import { requirePermission } from "@/lib/auth-permissions";
 
 export const runtime = "nodejs";
 
 export const POST = async (request: Request): Promise<Response> => {
-  const session = await requireRole(["admin"]);
+  await requirePermission("viewAdminPanel");
   const formData = await request.formData();
   const file = formData.get("file");
   const referenceValue = formData.get("reference");
@@ -25,6 +26,10 @@ export const POST = async (request: Request): Promise<Response> => {
   if (!(file instanceof File && reference)) {
     return Response.json({ error: "Dados invalidos." }, { status: 400 });
   }
+
+  const session = await requirePermission(
+    getStagedAdminImagePermission(reference.purpose)
+  );
 
   try {
     await uploadStagedAdminImageFile({

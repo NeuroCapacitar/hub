@@ -8,9 +8,11 @@ import {
 } from "./financial-order-details-dialog";
 
 export function FinancialOrdersTableClient({
+  canExecuteRefund = false,
   canManageFinancialOperations,
   orders,
 }: {
+  canExecuteRefund?: boolean;
   canManageFinancialOperations: boolean;
   orders: AdminOrder[];
 }): React.JSX.Element {
@@ -39,6 +41,7 @@ export function FinancialOrdersTableClient({
       ))}
       {selectedOrder ? (
         <FinancialOrderDetailsDialog
+          canExecuteRefund={canExecuteRefund}
           canManageFinancialOperations={canManageFinancialOperations}
           hasPendingBuyerIdentityReview={Boolean(
             selectedOrder.hasPendingBuyerIdentityReview

@@ -124,17 +124,28 @@ política jurídica formal e demanda real.
 
 ## Capacidades administrativas vigentes
 
-`admin` possui todas as permissões em `rolePermissions`, de `src/lib/auth-policy.ts`.
-A fronteira granular aprovada no
-[DEC-DISC-014](docs/decisions.md#dec-disc-014) autoriza `support` a analisar Cursos,
-Alunos, Matrículas e finanças; operar validade e bloqueio de Matrícula; reemitir
-somente o Certificado mais recente; e executar reembolso integral. Autoria,
-configuração, moderação, analytics detalhado, decisão financeira, conciliação,
-retry, bloqueio de plataforma, emissão e revogação permanecem exclusivas de
-`admin`. As projeções e as mutações aplicam essa matriz no servidor. MFA
+`admin` possui todas as permissões administrativas de `src/lib/auth-policy.ts`.
+Admin e Suporte compartilham o Painel, a leitura de Cursos, Alunos, Aprendizagem
+e Operação e o conteúdo editorial padrão. Financeiro e Auditoria têm leitura
+protegida; as alterações de Cursos, Alunos, Certificados, Financeiro e Operação
+são grants individuais. FAQ, Banners e mídias da Tela de acesso podem ser
+alterados por Admin/Suporte e continuam auditados. As projeções e as mutações
+aplicam essa matriz no servidor. MFA
 administrativo não faz parte do produto atual; uma adoção futura exigirá decisão e
 especificação próprias. Não há workflow de anonimização ou solicitações de dados
 no produto atual.
+
+Como alvo aprovado em [ADR-0017](docs/adr/0017-support-granular-permissions.md),
+o Painel não possui permissão própria e acessos padrão não aparecem na Equipe.
+O Admin escolhe grants como `createCourse`, `manageCourseContent`,
+`manageCourseAvailability`, `manageCourseCertificate`,
+`manageEnrollmentSupport`, `manageEnrollmentAccess`, `reissueCertificates`,
+`manageCertificateIssuerProfile`, `executeRefund`,
+`manageFinancialOperations`, `manageFinancialReviews` e `manageOperations`.
+As views protegidas são `viewFinancialAnalysis`, `viewFinancialOrders`,
+`viewFinancialReviews` e `viewAudit`. A implementação usa autorização server-side
+por sujeito; a migration 0085 limpou os grants configuráveis antigos no
+Development. `DEC-DISC-014` permanece como histórico do comportamento anterior.
 
 A rota Financeiro organiza a operação em Visão geral, Pedidos e Análises. A visão
 operacional mantém a fila de revisões, a conciliação e a sincronização local do extrato

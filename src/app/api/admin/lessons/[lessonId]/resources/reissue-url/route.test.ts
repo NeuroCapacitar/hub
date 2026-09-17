@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const dependencies = vi.hoisted(() => ({
   createLessonResourceUploadUrlForReference: vi.fn(),
   getPreparedLessonResourceUpload: vi.fn(),
-  requireRole: vi.fn(),
+  requirePermission: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -18,7 +18,9 @@ vi.mock("@/features/storage/lesson-resource-upload-observability", () => ({
   getLessonResourceUploadCorrelationId: vi.fn(() => "correlation-1"),
   logLessonResourceUploadEvent: vi.fn(),
 }));
-vi.mock("@/lib/session", () => ({ requireRole: dependencies.requireRole }));
+vi.mock("@/lib/auth-permissions", () => ({
+  requirePermission: dependencies.requirePermission,
+}));
 
 import { POST } from "./route";
 
@@ -43,7 +45,9 @@ const session = {
 describe("POST /api/admin/lessons/:lessonId/resources/reissue-url", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    dependencies.requireRole.mockResolvedValue({ user: { id: "admin-1" } });
+    dependencies.requirePermission.mockResolvedValue({
+      user: { id: "admin-1" },
+    });
     dependencies.getPreparedLessonResourceUpload.mockResolvedValue(session);
     dependencies.createLessonResourceUploadUrlForReference.mockResolvedValue({
       expiresAt: "2026-08-30T16:10:00.000Z",

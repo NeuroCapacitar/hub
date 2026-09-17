@@ -8,7 +8,7 @@ describe("lesson editor authorization", () => {
       "utf8"
     );
 
-    expect(source).toContain('requirePermission("manageContent")');
+    expect(source).toContain('requirePermission("viewCourses")');
     expect(source).not.toContain('requireRole(["admin", "support"])');
   });
 });

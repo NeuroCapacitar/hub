@@ -21,6 +21,7 @@ import {
 } from "@/features/admin/server";
 import { getAdminAuthMediaData } from "@/features/auth-media/server";
 import { requirePermission } from "@/lib/auth-permissions";
+import { canPerform } from "@/lib/auth-policy";
 import { formatDateTime } from "@/lib/formatters";
 import { route } from "@/lib/routes";
 import { AuthMediaGallery } from "./auth-media/auth-media-gallery";
@@ -35,7 +36,15 @@ import { FaqTable } from "./faq/faq-table";
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
-  await requirePermission("manageSettings");
+  const session = await requirePermission("viewSettings");
+  const canManageCertificateIssuerProfile = canPerform(
+    session,
+    "manageCertificateIssuerProfile"
+  );
+  const canManageAuthMedia = canPerform(session, "manageAuthMedia");
+  const canManageBanners = canPerform(session, "manageBanners");
+  const canManageFaq = canPerform(session, "manageFaq");
+  const canViewAudit = canPerform(session, "viewAudit");
 
   const [data, bannersData, authMediaData, faqData] = await Promise.all([
     getAdminSettingsData(),
@@ -127,7 +136,10 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
               </div>
             </CardHeader>
             <CardContent>
-              <CertificateSettingsForm settings={certificateSettings} />
+              <CertificateSettingsForm
+                readOnly={!canManageCertificateIssuerProfile}
+                settings={certificateSettings}
+              />
             </CardContent>
             <CardFooter className="flex-col items-start gap-3 border-t text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-2">
@@ -147,19 +159,27 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
                       >
                         {formatDateTime(data.settings.lastUpdatedAt)}
                       </time>{" "}
-                      por{" "}
-                      <span className="text-foreground">{lastUpdatedBy}</span>
+                      {canManageCertificateIssuerProfile ? (
+                        <>
+                          por{" "}
+                          <span className="text-foreground">
+                            {lastUpdatedBy}
+                          </span>
+                        </>
+                      ) : null}
                     </>
                   ) : (
                     "Ainda não há alterações registradas na Auditoria."
                   )}
                 </p>
               </div>
-              <Button asChild size="sm" variant="outline">
-                <Link href={route("/admin/auditoria?target=settings")}>
-                  Ver histórico
-                </Link>
-              </Button>
+              {canViewAudit ? (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={route("/admin/auditoria?target=settings")}>
+                    Ver histórico
+                  </Link>
+                </Button>
+              ) : null}
             </CardFooter>
           </Card>
         </section>
@@ -190,7 +210,10 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <AuthMediaGallery initialSlides={sortedAuthMediaSlides} />
+              <AuthMediaGallery
+                initialSlides={sortedAuthMediaSlides}
+                readOnly={!canManageAuthMedia}
+              />
             </CardContent>
           </Card>
 
@@ -205,7 +228,10 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <BannerGallery initialBanners={sortedBanners} />
+              <BannerGallery
+                initialBanners={sortedBanners}
+                readOnly={!canManageBanners}
+              />
             </CardContent>
           </Card>
 
@@ -220,11 +246,15 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
                     Respostas publicadas na área do Aluno.
                   </CardDescription>
                 </div>
-                <FaqCreateDialog nextSortOrder={nextSortOrder} />
+                {canManageFaq ? (
+                  <FaqCreateDialog nextSortOrder={nextSortOrder} />
+                ) : (
+                  <Badge variant="outline">Somente leitura</Badge>
+                )}
               </div>
             </CardHeader>
             <CardContent>
-              <FaqTable faqs={sortedFaqs} />
+              <FaqTable faqs={sortedFaqs} readOnly={!canManageFaq} />
             </CardContent>
           </Card>
         </section>

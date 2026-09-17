@@ -9,7 +9,7 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ bannerId: string }> }
 ): Promise<NextResponse> {
-  await requirePermission("manageSettings");
+  await requirePermission("manageBanners");
   const { bannerId } = await params;
 
   const { rows } = await getPool().query<{ image_url: string }>(

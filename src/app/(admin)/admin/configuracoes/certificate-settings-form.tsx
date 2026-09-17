@@ -175,8 +175,10 @@ function CertificateSettingsFields({
 }
 
 export function CertificateSettingsForm({
+  readOnly = false,
   settings,
 }: {
+  readOnly?: boolean;
   settings: CertificateSettingsFormValues;
 }): React.JSX.Element {
   return (
@@ -184,7 +186,9 @@ export function CertificateSettingsForm({
       action={saveSettingsAction}
       getFieldErrors={getSettingsFieldErrors}
     >
-      <CertificateSettingsFields settings={settings} />
+      <fieldset disabled={readOnly}>
+        <CertificateSettingsFields settings={settings} />
+      </fieldset>
     </AdminMutationForm>
   );
 }

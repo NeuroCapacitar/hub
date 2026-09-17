@@ -49,10 +49,12 @@ import { SortableAuthMediaItem } from "./sortable-auth-media-item";
 
 interface AuthMediaGalleryProps {
   initialSlides: AdminAuthMediaSlide[];
+  readOnly?: boolean;
 }
 
 export function AuthMediaGallery({
   initialSlides,
+  readOnly = false,
 }: AuthMediaGalleryProps): React.JSX.Element {
   const router = useRouter();
   const [slides, setSlides] = useState(initialSlides);
@@ -120,6 +122,9 @@ export function AuthMediaGallery({
 
   const handleFileSelection = useCallback(
     (files: FileList | File[]) => {
+      if (readOnly) {
+        return;
+      }
       try {
         const selectedFiles = readAuthMediaFileSelection(files);
         const availableSlots = AUTH_MEDIA_MAX_SLIDES - slides.length;
@@ -146,18 +151,21 @@ export function AuthMediaGallery({
         ]);
       }
     },
-    [slides.length]
+    [readOnly, slides.length]
   );
 
   const handleFiles = useCallback(
     (files: FileList | File[]): void => {
+      if (readOnly) {
+        return;
+      }
       if (slides.length >= AUTH_MEDIA_MAX_SLIDES) {
         setErrors(["Limite de cinco imagens atingido."]);
         return;
       }
       handleFileSelection(files);
     },
-    [handleFileSelection, slides.length]
+    [handleFileSelection, readOnly, slides.length]
   );
 
   const handleCropComplete = useCallback(
@@ -169,7 +177,7 @@ export function AuthMediaGallery({
   );
 
   const handleDragEnd = (event: DragEndEvent): void => {
-    if (isPending) {
+    if (readOnly || isPending) {
       return;
     }
     const { active, over } = event;
@@ -263,7 +271,7 @@ export function AuthMediaGallery({
       >
         <ResourceListHeader
           actions={
-            slides.length < AUTH_MEDIA_MAX_SLIDES ? (
+            !readOnly && slides.length < AUTH_MEDIA_MAX_SLIDES ? (
               <div className="relative">
                 <input
                   accept={AUTH_MEDIA_ACCEPT}
@@ -306,7 +314,7 @@ export function AuthMediaGallery({
               collisionDetection={closestCenter}
               id="auth-media-gallery-dnd"
               onDragEnd={handleDragEnd}
-              sensors={sensors}
+              sensors={readOnly ? [] : sensors}
             >
               <SortableContext
                 items={slides}
@@ -317,6 +325,7 @@ export function AuthMediaGallery({
                     key={slide.id}
                     onDelete={handleDelete}
                     onToggle={handleToggle}
+                    readOnly={readOnly}
                     slide={slide}
                   />
                 ))}

@@ -12,7 +12,7 @@ const readString = (formData: FormData, key: string): string =>
 export const reprocessOutboxDeadLetterAction = async (
   formData: FormData
 ): Promise<void> => {
-  const session = await requirePermission("retryOutbox");
+  const session = await requirePermission("manageOperations");
   const messageId = readString(formData, "messageId");
 
   if (!messageId) {
@@ -29,7 +29,7 @@ export const reprocessOutboxDeadLetterAction = async (
 export const supersedeUnavailableSupportDeadLetterAction = async (
   formData: FormData
 ): Promise<void> => {
-  const session = await requirePermission("retryOutbox");
+  const session = await requirePermission("manageOperations");
   const messageId = readString(formData, "messageId");
 
   if (!messageId) {

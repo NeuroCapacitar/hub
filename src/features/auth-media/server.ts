@@ -37,7 +37,7 @@ const toAdminSlide = (row: AuthMediaRow): AdminAuthMediaSlide => ({
 export const getAdminAuthMediaData = async (): Promise<{
   slides: AdminAuthMediaSlide[];
 }> => {
-  await requirePermission("manageSettings");
+  await requirePermission("viewSettings");
   const { rows } = await getPool().query<AuthMediaRow>(
     `${AUTH_MEDIA_SELECT} order by sort_order, id`
   );
@@ -73,7 +73,7 @@ export const getActiveAuthMediaData = async (): Promise<{
 export const getAdminAuthMediaImageKey = async (
   slideId: string
 ): Promise<string | null> => {
-  await requirePermission("manageSettings");
+  await requirePermission("viewSettings");
   if (!isAuthMediaSlideId(slideId)) {
     return null;
   }

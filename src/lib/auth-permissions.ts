@@ -1,19 +1,15 @@
 import "server-only";
 import { redirect } from "next/navigation";
-import {
-  type AuthPermission,
-  canPerform,
-  rolesForPermission,
-} from "@/lib/auth-policy";
+import { type AuthPermission, canPerform } from "@/lib/auth-policy";
 import { route } from "@/lib/routes";
-import { type AppSession, requireRole } from "@/lib/session";
+import { type AppSession, requireSession } from "@/lib/session";
 
 export const requirePermission = async (
   permission: AuthPermission
 ): Promise<AppSession> => {
-  const session = await requireRole(rolesForPermission(permission));
+  const session = await requireSession();
 
-  if (!canPerform(session.role, permission)) {
+  if (!canPerform(session, permission)) {
     redirect(route("/app"));
   }
 

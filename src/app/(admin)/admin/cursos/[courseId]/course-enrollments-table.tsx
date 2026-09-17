@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import type { StudentManagementCapabilities } from "@/components/admin/student-management-types";
 import type { AdminEnrollment } from "@/features/admin/server";
 import type { AdminEnrollmentStatusFilter } from "@/features/admin/student-filters";
 import {
@@ -35,6 +36,7 @@ export function CourseEnrollmentsTable({
   hasNextPage = false,
   initialAction = "details",
   initialStudentId,
+  managementCapabilities,
   page = 1,
   search = "",
   statusFilter = "all",
@@ -45,6 +47,7 @@ export function CourseEnrollmentsTable({
   hasNextPage?: boolean;
   initialAction?: AdminCourseStudentAction | undefined;
   initialStudentId?: string | undefined;
+  managementCapabilities?: StudentManagementCapabilities;
   page?: number;
   search?: string;
   statusFilter?: AdminEnrollmentStatusFilter;
@@ -68,6 +71,7 @@ export function CourseEnrollmentsTable({
       hasNextPage={hasNextPage}
       initialAction={initialAction}
       initialStudentId={initialStudentId}
+      {...(managementCapabilities ? { managementCapabilities } : {})}
       onInitialOverlayClose={
         initialStudentId ? clearInitialStudentAction : undefined
       }

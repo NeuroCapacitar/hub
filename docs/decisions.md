@@ -288,6 +288,43 @@ desabilitado por padrão e, quando explicitamente habilitado, cria apenas a Cont
 cria Concessão nem Matrícula. A habilitação do cadastro em cada ambiente permanece uma
 configuração de release separada.
 
+## DEC-DISC-018
+
+**Tema:** superfície compartilhada e permissões individuais refinadas para `support`.
+**Estado:** aprovado e implementado no Development em 2026-09-17, conforme
+[ADR-0017](adr/0017-support-granular-permissions.md).
+
+Esta decisão emenda a matriz operacional fixa de `DEC-DISC-014`. Admin e Suporte
+compartilham o Painel, a leitura de Cursos, Alunos, Aprendizagem e Operação e o
+conteúdo editorial padrão. O Painel não possui permissão própria. Financeiro e
+Auditoria têm views protegidas; alterações de Cursos, Alunos, Certificados,
+Financeiro e Operação são grants individuais por Conta.
+
+As alterações delegáveis são `createCourse`, `manageCourseDetails`,
+`manageCourseContent`, `manageCourseAvailability`, `manageCourseCertificate`,
+`manageEnrollmentSupport`, `manageEnrollmentAccess`, `reissueCertificates`,
+`manageCertificateIssuerProfile`, `executeRefund`,
+`manageFinancialOperations`, `manageFinancialReviews` e `manageOperations`.
+As views protegidas são `viewFinancialAnalysis`, `viewFinancialOrders`,
+`viewFinancialReviews` e `viewAudit`.
+
+FAQ, Banners e mídias da Tela de acesso podem ser lidos e alterados por Admin e
+Suporte e continuam auditados; não aparecem no modal como grants. Segurança,
+Equipe, bootstrap, credenciais, manutenção de banco, moderação de comentários,
+emissão/revogação/reconciliação histórica de Certificados e operações não
+separadas permanecem Admin-only. `DEC-DISC-014` permanece como histórico.
+
+Views e grants são arrays allowlisted em `profiles`, com validação TypeScript e
+constraints PostgreSQL. A migration `0085_superb_wonder_man` limpou views/grants
+configuráveis de Supports existentes no Development; contas novas começam da
+mesma forma. A alteração de views/grants é transacional, auditada e efetiva na
+próxima leitura server-side; mudança de papel revoga sessões. A Equipe continua
+Admin-only, impede autoalteração e protege o último Admin.
+
+`DEC-DISC-014` permanece recuperável como histórico do comportamento anterior.
+Qualquer necessidade futura de expiração, aprovação, escopo ou lifecycle por grant
+exige nova decisão.
+
 ## Outras ratificações necessárias
 
 - tratamento de compra pública com e-mail já pertencente a Admin/Suporte;

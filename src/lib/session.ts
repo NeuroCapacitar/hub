@@ -8,6 +8,12 @@ import { profiles, users } from "@/db/schema";
 import { getAuth } from "@/lib/auth";
 import { createCorrelationId, logOperationalEvent } from "@/lib/observability";
 import { route } from "@/lib/routes";
+import {
+  normalizeSupportPermissionGrants,
+  normalizeSupportPermissionViews,
+  type SupportPermission,
+  type SupportViewPermission,
+} from "@/lib/support-permissions";
 
 export type AppRole = "admin" | "support" | "student";
 
@@ -15,6 +21,8 @@ export interface AppSession {
   platformBlockedAt: Date | null;
   platformBlockedReason: string | null;
   role: AppRole;
+  supportPermissionGrants: readonly SupportPermission[];
+  supportPermissionViews: readonly SupportViewPermission[];
   user: {
     id: string;
     name: string;
@@ -38,6 +46,8 @@ export const getCurrentSession = cache(async (): Promise<AppSession | null> => {
       platformBlockedAt: profiles.platformBlockedAt,
       platformBlockedReason: profiles.platformBlockedReason,
       role: profiles.role,
+      supportPermissionGrants: profiles.supportPermissionGrants,
+      supportPermissionViews: profiles.supportPermissionViews,
     })
     .from(users)
     .leftJoin(profiles, eq(profiles.userId, users.id))
@@ -53,6 +63,12 @@ export const getCurrentSession = cache(async (): Promise<AppSession | null> => {
       email: session.user.email,
     },
     role: profile?.role ?? "student",
+    supportPermissionGrants: normalizeSupportPermissionGrants(
+      profile?.supportPermissionGrants
+    ),
+    supportPermissionViews: normalizeSupportPermissionViews(
+      profile?.supportPermissionViews
+    ),
   };
 });
 

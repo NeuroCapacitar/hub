@@ -41,6 +41,7 @@ import type {
   OperationalAlert,
   OperationalBacklogSnapshot,
 } from "@/features/operations/server";
+import { requirePermission } from "@/lib/auth-permissions";
 import { formatDateTime } from "@/lib/formatters";
 import { route } from "@/lib/routes";
 import { OutboxDeadLetterDialog } from "./outbox-dead-letter-dialog";
@@ -306,6 +307,7 @@ export default async function AdminOperationsPage({
 }: {
   searchParams?: Promise<OperationsSearchParams>;
 } = {}): Promise<React.JSX.Element> {
+  await requirePermission("viewOperations");
   const params = (await searchParams) ?? {};
   const webhookSearch = firstSearchParameter(params.webhookQ).trim();
   const webhookPage = parsePage(firstSearchParameter(params.webhookPage));
@@ -1106,46 +1108,50 @@ export default async function AdminOperationsPage({
                 </p>
               </CardContent>
             </Card>
-            <Card className="min-w-0">
-              <CardHeader className="pb-4">
-                <CardTitle as="h3" className="text-base">
-                  Pendências financeiras
-                </CardTitle>
-                <CardDescription>
-                  Exceções que pertencem ao Financeiro.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-2 text-sm">
-                <p className="text-muted-foreground">
-                  Checkouts incertos:{" "}
-                  <strong className="text-foreground tabular-nums">
-                    {backlog.payments.uncertainCheckouts.toLocaleString(
-                      "pt-BR"
-                    )}
-                  </strong>
-                </p>
-                <p className="text-muted-foreground">
-                  Reembolsos incertos:{" "}
-                  <strong className="text-foreground tabular-nums">
-                    {backlog.payments.uncertainRefunds.toLocaleString("pt-BR")}
-                  </strong>
-                </p>
-                <p className="text-muted-foreground">
-                  Pedidos sem correlação:{" "}
-                  <strong className="text-foreground tabular-nums">
-                    {backlog.payments.uncorrelatedOrders.toLocaleString(
-                      "pt-BR"
-                    )}
-                  </strong>
-                </p>
-                <Link
-                  className="mt-1 text-sm underline underline-offset-4"
-                  href={route("/admin/financeiro")}
-                >
-                  Abrir Financeiro
-                </Link>
-              </CardContent>
-            </Card>
+            {backlog.payments ? (
+              <Card className="min-w-0">
+                <CardHeader className="pb-4">
+                  <CardTitle as="h3" className="text-base">
+                    Pendências financeiras
+                  </CardTitle>
+                  <CardDescription>
+                    Exceções que pertencem ao Financeiro.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-2 text-sm">
+                  <p className="text-muted-foreground">
+                    Checkouts incertos:{" "}
+                    <strong className="text-foreground tabular-nums">
+                      {backlog.payments.uncertainCheckouts.toLocaleString(
+                        "pt-BR"
+                      )}
+                    </strong>
+                  </p>
+                  <p className="text-muted-foreground">
+                    Reembolsos incertos:{" "}
+                    <strong className="text-foreground tabular-nums">
+                      {backlog.payments.uncertainRefunds.toLocaleString(
+                        "pt-BR"
+                      )}
+                    </strong>
+                  </p>
+                  <p className="text-muted-foreground">
+                    Pedidos sem correlação:{" "}
+                    <strong className="text-foreground tabular-nums">
+                      {backlog.payments.uncorrelatedOrders.toLocaleString(
+                        "pt-BR"
+                      )}
+                    </strong>
+                  </p>
+                  <Link
+                    className="mt-1 text-sm underline underline-offset-4"
+                    href={route("/admin/financeiro")}
+                  >
+                    Abrir Financeiro
+                  </Link>
+                </CardContent>
+              </Card>
+            ) : null}
             <Card className="min-w-0">
               <CardHeader className="pb-4">
                 <CardTitle as="h3" className="text-base">

@@ -137,7 +137,7 @@ export const seedStagingAdminAccount = async ({
     }
 
     await client.query(
-      "insert into profiles (user_id, role) values ($1, 'admin') on conflict (user_id) do update set role = 'admin', updated_at = now()",
+      "insert into profiles (user_id, role, support_permission_grants, support_permission_views) values ($1, 'admin', '{}'::text[], '{}'::text[]) on conflict (user_id) do update set role = 'admin', support_permission_grants = '{}'::text[], support_permission_views = '{}'::text[], updated_at = now()",
       [userId]
     );
     await client.query("delete from sessions where user_id = $1", [userId]);

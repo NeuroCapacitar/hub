@@ -68,8 +68,12 @@ const formatLessonPosition = (position: number): string =>
 function LearningAnalyticsMoreActions({
   exportHref,
 }: {
-  exportHref: string;
-}): React.JSX.Element {
+  exportHref: string | null;
+}): React.JSX.Element | null {
+  if (!exportHref) {
+    return null;
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -329,7 +333,7 @@ export function LearningAnalyticsReport({
 }: {
   course: LearningAnalyticsCourseOption;
   courses: LearningAnalyticsCourseOption[];
-  exportHref: string;
+  exportHref: string | null;
   kpis: LearningAnalyticsKpis;
   lessons: LessonAnalyticsLessonReport[];
   page: number;
