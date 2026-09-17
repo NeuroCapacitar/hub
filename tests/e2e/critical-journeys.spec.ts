@@ -949,7 +949,7 @@ test("support navigation and student Sheet preserve the role boundary @mobile", 
   await expect(
     page.getByRole("link", { exact: true, name: "Financeiro" })
   ).toBeVisible();
-  for (const forbiddenLink of ["Auditoria", "Equipe"]) {
+  for (const forbiddenLink of ["Equipe"]) {
     await expect(
       page.getByRole("link", { exact: true, name: forbiddenLink })
     ).toHaveCount(0);

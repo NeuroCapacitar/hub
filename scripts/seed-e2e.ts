@@ -433,7 +433,7 @@ export const seedE2e = async (): Promise<E2eFixture> => {
       name: "Suporte E2E",
       role: "support",
       supportPermissionGrants: ["executeRefund"],
-      supportPermissionViews: ["viewFinancialOrders"],
+      supportPermissionViews: ["viewFinancialOrders", "viewAudit"],
     }),
   ]);
   const pool = getPool();
