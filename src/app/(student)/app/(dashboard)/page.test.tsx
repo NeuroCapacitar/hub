@@ -51,7 +51,6 @@ const course = {
   progressPercent: 0,
   revokedReason: null,
   slug: "curso-futuro",
-  subtitle: null,
   thumbnailUrl: null,
   title: "Curso futuro",
   totalCount: 0,

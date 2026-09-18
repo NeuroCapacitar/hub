@@ -126,7 +126,6 @@ const course: AdminCourse = {
   salesStatus: "open",
   slug: "course-1",
   status: "active",
-  subtitle: null,
   thumbnailUrl: null,
   title: "Curso",
   workloadHours: 2,

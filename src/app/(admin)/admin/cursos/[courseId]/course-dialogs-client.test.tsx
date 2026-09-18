@@ -44,7 +44,6 @@ const course: CourseData = {
   priceInCents: 1990,
   slug: "curso-teste",
   status: "active",
-  subtitle: null,
   thumbnailUrl: null,
   title: "Curso de teste",
   workloadHours: 10,

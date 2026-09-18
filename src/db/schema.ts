@@ -426,7 +426,6 @@ export const courses = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     slug: text("slug").notNull().unique(),
     title: text("title").notNull(),
-    subtitle: text("subtitle"),
     description: text("description"),
     workloadHours: integer("workload_hours").default(0).notNull(),
     workloadHoursOverride: integer("workload_hours_override"),

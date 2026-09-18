@@ -585,7 +585,6 @@ describe("admin authoring", () => {
     });
     const formData = new FormData();
     formData.set("title", " Curso novo ");
-    formData.set("subtitle", " Subtitulo ");
     formData.set("description", " Descricao ");
     formData.set("price", "R$ 129,90");
     formData.set("accessDurationMonths", "6");
@@ -602,7 +601,6 @@ describe("admin authoring", () => {
       result.courseId,
       "curso-novo",
       "Curso novo",
-      "Subtitulo",
       "Descricao",
       18,
       18,
@@ -682,7 +680,6 @@ describe("admin authoring", () => {
       result.courseId,
       "curso-gratuito",
       "Curso gratuito",
-      null,
       null,
       0,
       null,
@@ -802,12 +799,11 @@ describe("admin authoring", () => {
     const updateCourseCall = query.mock.calls.find(([sql]) =>
       String(sql).includes("update courses")
     );
-    expect(updateCourseCall?.[0]).toContain("price_in_cents = $5");
+    expect(updateCourseCall?.[0]).toContain("price_in_cents = $4");
     expect(updateCourseCall?.[0]).not.toContain("status =");
-    expect(updateCourseCall?.[0]).toContain("where id = $12");
+    expect(updateCourseCall?.[0]).toContain("where id = $11");
     expect(updateCourseCall?.[1]).toEqual([
       "Curso existente",
-      null,
       null,
       null,
       1000,
@@ -1288,7 +1284,7 @@ describe("admin authoring", () => {
     const formData = new FormData();
     formData.set("moduleId", "module-1");
     formData.set("title", "Aula inicial");
-    formData.set("description", "Subtitulo");
+    formData.set("description", "Descricao da aula");
     formData.set("sortOrder", "1");
 
     await expect(

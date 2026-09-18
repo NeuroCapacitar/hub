@@ -97,7 +97,6 @@ interface CourseFormValues {
   paymentAllowPix: boolean;
   paymentMaxInstallmentCount: number;
   priceInCents: number;
-  subtitle: string | null;
   title: string;
   workloadHoursOverride: number | null;
 }
@@ -395,7 +394,6 @@ const readCourseFormValues = (formData: FormData): CourseFormValues => {
     paymentAllowPix: paymentOffer.allowPix,
     paymentMaxInstallmentCount: paymentOffer.maxInstallmentCount,
     priceInCents,
-    subtitle: readString(formData, "subtitle") || null,
     title,
   };
 };
@@ -1657,14 +1655,12 @@ const runCourseUpdateTransaction = async ({
       price_in_cents: number;
       sales_status: "closed" | "open";
       should_publish: boolean;
-      subtitle: string | null;
       title: string;
       workload_hours_override: number | null;
     }>(
       `
         select (c.status = 'active' or c.catalog_visibility = 'listed') as should_publish,
                c.title,
-               c.subtitle,
                c.description,
                c.workload_hours_override,
                c.price_in_cents,
@@ -1732,22 +1728,20 @@ const runCourseUpdateTransaction = async ({
       `
          update courses
          set title = $1,
-             subtitle = $2,
-             description = $3,
-             workload_hours_override = $4,
-             price_in_cents = $5,
-             payment_allow_pix = $6,
-             payment_allow_credit_card = $7,
-             payment_max_installment_count = $8,
-             thumbnail_url = $9,
-             cover_image_json = $10::jsonb,
-             access_duration_months = $11,
+             description = $2,
+             workload_hours_override = $3,
+             price_in_cents = $4,
+             payment_allow_pix = $5,
+             payment_allow_credit_card = $6,
+             payment_max_installment_count = $7,
+             thumbnail_url = $8,
+             cover_image_json = $9::jsonb,
+             access_duration_months = $10,
              updated_at = now()
-         where id = $12
+         where id = $11
       `,
       [
         values.title,
-        values.subtitle,
         values.description,
         values.workloadHoursOverride,
         values.priceInCents,
@@ -1793,10 +1787,6 @@ const runCourseUpdateTransaction = async ({
       priceInCents: {
         after: values.priceInCents,
         before: currentCourse.price_in_cents,
-      },
-      subtitle: {
-        after: truncateAuditText(values.subtitle),
-        before: truncateAuditText(currentCourse.subtitle),
       },
       title: { after: values.title, before: currentCourse.title },
       workloadHoursOverride: {
@@ -1927,7 +1917,6 @@ const createNewCourse = async ({
             id,
             slug,
             title,
-            subtitle,
             description,
             workload_hours,
             workload_hours_override,
@@ -1940,14 +1929,13 @@ const createNewCourse = async ({
             access_duration_months,
             status
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14)
           returning id
         `,
         [
           courseId,
           slug,
           values.title,
-          values.subtitle,
           values.description,
           values.workloadHoursOverride ?? 0,
           values.workloadHoursOverride,
@@ -2002,10 +1990,6 @@ const createNewCourse = async ({
               before: null,
             },
             priceInCents: { after: values.priceInCents, before: null },
-            subtitle: {
-              after: truncateAuditText(values.subtitle),
-              before: null,
-            },
             title: { after: values.title, before: null },
             workloadHoursOverride: {
               after: values.workloadHoursOverride,

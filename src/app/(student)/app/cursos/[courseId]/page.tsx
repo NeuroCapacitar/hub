@@ -153,8 +153,7 @@ export default async function StudentCourseOverviewPage({
               <div className="flex-1 space-y-1">
                 <h1 className="type-page-title">{data.course.title}</h1>
                 <p className="max-w-2xl text-pretty text-muted-foreground text-sm">
-                  {data.course.subtitle ??
-                    data.course.description ??
+                  {data.course.description ??
                     (data.certificateEnabled
                       ? "Avance pelas aulas na ordem da trilha, acompanhe seu progresso e conclua o curso para liberar o certificado."
                       : "Avance pelas aulas na ordem da trilha, acompanhe seu progresso e conclua sua trilha.")}

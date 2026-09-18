@@ -59,7 +59,6 @@ export interface CourseData {
   priceInCents: number;
   slug: string;
   status: string;
-  subtitle: string | null;
   thumbnailUrl: string | null;
   title: string;
   workloadHours: number;
@@ -214,16 +213,6 @@ export function CourseSettingsForm({
                       id="course-settings-title"
                       name="title"
                       required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="course-settings-subtitle">
-                      Subtítulo
-                    </FieldLabel>
-                    <Input
-                      defaultValue={course.subtitle ?? ""}
-                      id="course-settings-subtitle"
-                      name="subtitle"
                     />
                   </Field>
                   <Field>

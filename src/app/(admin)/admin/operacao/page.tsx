@@ -993,7 +993,10 @@ export default async function AdminOperationsPage({
               >
                 {getResultSummary({
                   count: data.outboxDeadLetters.messages.length,
-                  label: `mensagem${data.outboxDeadLetters.totalCount === 1 ? "" : "s"} em dead letter`,
+                  label:
+                    data.outboxDeadLetters.totalCount === 1
+                      ? "mensagem em dead letter"
+                      : "mensagens em dead letter",
                   page: data.outboxDeadLetters.page,
                   pageSize: data.outboxDeadLetters.pageSize,
                   totalCount: data.outboxDeadLetters.totalCount,

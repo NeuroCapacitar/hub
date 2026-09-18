@@ -1,24 +1,13 @@
 import { randomUUID } from "node:crypto";
-import {
-  Add01Icon,
-  Book01Icon,
-  FloppyDiskIcon,
-} from "@hugeicons/core-free-icons";
+import { Add01Icon, Book01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
-import { AdminMutationSubmitButton } from "@/components/admin-mutation-form";
-import { AutoCloseDialogForm } from "@/components/auto-close-dialog-form";
-import { CourseCoverUploadField } from "@/components/course-cover-upload-field";
 import { DiscardAwareDialog } from "@/components/discard-aware-dialog";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DialogBody,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { DialogTrigger } from "@/components/ui/dialog";
 import {
   Empty,
   EmptyDescription,
@@ -26,11 +15,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { saveCourseAction } from "@/features/admin/actions";
-import type { AdminCourse } from "@/features/admin/server";
 import { getAdminCourseCatalogData } from "@/features/admin/server";
 import { getCourseAvailabilityStatusPresentation } from "@/features/admin/status-presentation";
 import { resolveCourseAvailability } from "@/features/courses/availability";
@@ -41,11 +25,11 @@ import { canPerform } from "@/lib/auth-policy";
 import { formatCurrencyInCents } from "@/lib/formatters";
 import { route } from "@/lib/routes";
 
+import { CourseCreationForm } from "./course-creation-form";
+
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;
-
-type CourseData = AdminCourse;
 
 const WHITESPACE_RE = /\s+/;
 
@@ -57,57 +41,10 @@ const getInitials = (title: string): string =>
     .map((word) => word[0]?.toUpperCase() ?? "")
     .join("");
 
-const getCourseResultSummary = ({
-  courseCount,
-  page,
-  pageSize,
-  totalCount,
-}: {
-  courseCount: number;
-  page: number;
-  pageSize: number;
-  totalCount: number;
-}): string => {
-  if (totalCount === 0) {
-    return "Nenhum Curso";
-  }
-  if (courseCount === 0) {
-    return `Nenhum Curso nesta página · ${totalCount} no total`;
-  }
-  const firstResult = (page - 1) * pageSize + 1;
-  const lastResult = Math.min(firstResult + courseCount - 1, totalCount);
-  return `${firstResult}–${lastResult} de ${totalCount} Curso${totalCount === 1 ? "" : "s"}`;
-};
-
-interface AdminCoursesPageProps {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}
-
-const firstSearchParam = (
-  value: string | string[] | undefined
-): string | undefined => (Array.isArray(value) ? value[0] : value);
-
-export default async function AdminCoursesPage({
-  searchParams,
-}: AdminCoursesPageProps): Promise<React.JSX.Element> {
+export default async function AdminCoursesPage(): Promise<React.JSX.Element> {
   const session = await requirePermission("viewCourses");
   const canCreateCourse = canPerform(session, "createCourse");
-  const params = (await searchParams) ?? {};
-  const rawPage = Number.parseInt(firstSearchParam(params.page) ?? "1", 10);
-  const data = await getAdminCourseCatalogData({
-    page: Number.isFinite(rawPage) ? rawPage : 1,
-  });
-  const resultSummary = getCourseResultSummary({
-    courseCount: data.courses.length,
-    page: data.page,
-    pageSize: data.pageSize,
-    totalCount: data.totalCount,
-  });
-  const pageHref = (targetPage: number): string => {
-    const query = new URLSearchParams();
-    query.set("page", String(targetPage));
-    return `/admin/cursos?${query.toString()}`;
-  };
+  const data = await getAdminCourseCatalogData();
 
   return (
     <PageContainer>
@@ -188,14 +125,7 @@ export default async function AdminCoursesPage({
                         <h3 className="line-clamp-2 font-bold text-lg">
                           {course.title}
                         </h3>
-                        <div className="mt-2 flex items-start gap-4">
-                          <div className="flex-1">
-                            {course.subtitle ? (
-                              <p className="line-clamp-2 text-card-foreground/70 text-sm leading-5">
-                                {course.subtitle}
-                              </p>
-                            ) : null}
-                          </div>
+                        <div className="mt-2 flex items-start justify-end">
                           <div className="shrink-0 pt-0.5 text-right font-medium text-card-foreground/60 text-xs">
                             {course.moduleCount} módulos • {course.lessonCount}{" "}
                             aulas
@@ -230,26 +160,6 @@ export default async function AdminCoursesPage({
               })
             : null}
         </section>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-          <span aria-live="polite" className="text-muted-foreground text-sm">
-            {resultSummary}
-          </span>
-          {data.page > 1 || data.hasNextPage ? (
-            <nav aria-label="Paginação de Cursos" className="flex gap-2">
-              {data.page > 1 ? (
-                <Button asChild variant="outline">
-                  <Link href={pageHref(data.page - 1)}>Anterior</Link>
-                </Button>
-              ) : null}
-              {data.hasNextPage ? (
-                <Button asChild variant="outline">
-                  <Link href={pageHref(data.page + 1)}>Próxima</Link>
-                </Button>
-              ) : null}
-            </nav>
-          ) : null}
-        </div>
       </div>
     </PageContainer>
   );
@@ -262,8 +172,8 @@ function NewCourseCard({
 }): React.JSX.Element {
   return (
     <DiscardAwareDialog
-      description="Crie o curso antes de cadastrar seus módulos e aulas."
-      title="Novo curso"
+      description="O curso será criado como rascunho."
+      title="Criar curso"
       trigger={
         <DialogTrigger asChild>
           <button
@@ -286,105 +196,10 @@ function NewCourseCard({
         </DialogTrigger>
       }
     >
-      <CourseForm priceFieldId={priceFieldId} />
+      <CourseCreationForm
+        aggregateId={randomUUID()}
+        priceFieldId={priceFieldId}
+      />
     </DiscardAwareDialog>
-  );
-}
-
-function CourseForm({
-  course,
-  priceFieldId,
-}: {
-  course?: CourseData;
-  priceFieldId: string;
-}): React.JSX.Element {
-  const aggregateId = course?.id ?? randomUUID();
-  const titleFieldId = `${priceFieldId}-title`;
-  const subtitleFieldId = `${priceFieldId}-subtitle`;
-  const descriptionFieldId = `${priceFieldId}-description`;
-  const durationFieldId = `${priceFieldId}-access-duration`;
-
-  return (
-    <AutoCloseDialogForm
-      action={saveCourseAction}
-      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
-    >
-      <DialogBody>
-        <FieldGroup>
-          <input name="courseId" type="hidden" value={course?.id ?? ""} />
-          <div className="grid gap-x-8 gap-y-5 sm:grid-cols-[auto_1fr]">
-            <Field className="row-span-2 justify-center">
-              <CourseCoverUploadField
-                aggregateId={aggregateId}
-                className="sm:w-[240px]"
-                defaultCoverImage={course?.coverImage}
-                defaultThumbnailUrl={course?.thumbnailUrl}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor={titleFieldId}>Título</FieldLabel>
-              <Input
-                defaultValue={course?.title ?? ""}
-                id={titleFieldId}
-                name="title"
-                required
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor={subtitleFieldId}>Subtítulo</FieldLabel>
-              <Input
-                defaultValue={course?.subtitle ?? ""}
-                id={subtitleFieldId}
-                name="subtitle"
-              />
-            </Field>
-          </div>
-          <Field>
-            <FieldLabel htmlFor={descriptionFieldId}>Descrição</FieldLabel>
-            <Textarea
-              defaultValue={course?.description ?? ""}
-              id={descriptionFieldId}
-              name="description"
-            />
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor={durationFieldId}>Meses de acesso</FieldLabel>
-              <Input
-                defaultValue={course?.accessDurationMonths ?? 12}
-                id={durationFieldId}
-                min={1}
-                name="accessDurationMonths"
-                type="number"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor={priceFieldId}>Preço do curso</FieldLabel>
-              <Input
-                defaultValue={
-                  course ? formatCurrencyInCents(course.priceInCents) : ""
-                }
-                id={priceFieldId}
-                name="price"
-                placeholder="497,00"
-                required
-              />
-            </Field>
-          </div>
-        </FieldGroup>
-      </DialogBody>
-      <DialogFooter>
-        <AdminMutationSubmitButton className="w-fit" type="submit">
-          <HugeiconsIcon
-            aria-hidden="true"
-            data-icon="inline-start"
-            icon={course ? FloppyDiskIcon : Add01Icon}
-            size={18}
-            strokeWidth={2}
-          />
-          {course ? "Salvar curso" : "Criar curso"}
-        </AdminMutationSubmitButton>
-      </DialogFooter>
-    </AutoCloseDialogForm>
   );
 }

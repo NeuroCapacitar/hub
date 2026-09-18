@@ -53,7 +53,6 @@ const courseOverview = (
   course: {
     description: "Descrição",
     id: "course-1",
-    subtitle: "Subtítulo",
     title: "Curso de teste",
     workloadHours: 1,
   },
@@ -186,7 +185,6 @@ describe("StudentCourseOverviewPage certificate feedback", () => {
         course: {
           description: null,
           id: "course-1",
-          subtitle: null,
           title: "Curso sem certificado",
           workloadHours: 1,
         },

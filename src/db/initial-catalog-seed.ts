@@ -126,17 +126,15 @@ export const runInitialCatalogSeed = async (
       insert into courses (
         slug,
         title,
-        subtitle,
         description,
         workload_hours,
         price_in_cents,
         access_duration_months,
         status
       )
-      values ($1, $2, $3, $4, $5, $6, $7, 'active')
+      values ($1, $2, $3, $4, $5, $6, 'active')
       on conflict (slug) do update set
         title = excluded.title,
-        subtitle = excluded.subtitle,
         description = excluded.description,
         workload_hours = excluded.workload_hours,
         price_in_cents = excluded.price_in_cents,
@@ -147,7 +145,6 @@ export const runInitialCatalogSeed = async (
     [
       "protea-r",
       "Sistema PROTEA-R",
-      "Avaliacao de suspeita de TEA",
       "Curso para psicologas e neuropsicologas com progressao por modulos.",
       workloadHours,
       0,

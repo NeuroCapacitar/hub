@@ -46,7 +46,6 @@ navegação compartilhada pode ser ajustada porque também serve essas abas.
 O cabeçalho mantém:
 
 - título do Curso;
-- subtítulo, quando existir;
 - status localizado do Curso;
 - ação `Ver como aluno` quando a visualização estiver disponível.
 

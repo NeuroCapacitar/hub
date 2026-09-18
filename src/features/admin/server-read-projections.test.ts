@@ -60,7 +60,6 @@ const courseRow = {
   sales_status: "closed",
   slug: "course-one",
   status: "active",
-  subtitle: "Course subtitle",
   thumbnail_url: "https://example.test/thumb.jpg",
   title: "Course one",
   workload_hours: 24,
@@ -505,26 +504,25 @@ describe("admin read projections", () => {
     expect(requirePermission).toHaveBeenCalledWith("manageFinancialOperations");
   });
 
-  it("keeps the course catalog projection bounded without loading lesson content", async () => {
+  it("keeps the course catalog projection narrow without pagination or lesson content", async () => {
     query.mockResolvedValue({
       rows: [
         {
           ...courseRow,
           lesson_count: 8,
           module_count: 2,
-          total_count: 1,
         },
       ],
     });
 
     await expect(getAdminCourseCatalogData()).resolves.toMatchObject({
       courses: [expect.objectContaining({ id: courseId })],
-      totalCount: 1,
     });
 
     expect(query).toHaveBeenCalledTimes(1);
     const sql = String(query.mock.calls[0]?.[0]).toLowerCase();
-    expect(sql).toContain("limit $1 offset $2");
+    expect(sql).not.toContain("limit");
+    expect(sql).not.toContain("offset");
     expect(sql).not.toContain("l.content_json");
     expect(sql).not.toContain("select l.*");
     expect(sql).toContain("current_publications");

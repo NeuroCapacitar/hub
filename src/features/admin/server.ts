@@ -334,7 +334,6 @@ export interface AdminCourse {
   salesStatus: "closed" | "open";
   slug: string;
   status: string;
-  subtitle: string | null;
   thumbnailUrl: string | null;
   title: string;
   workloadHours: number;
@@ -395,7 +394,6 @@ export interface AdminCourseCatalogCard {
   priceInCents: number;
   salesStatus: "closed" | "open";
   status: string;
-  subtitle: string | null;
   thumbnailUrl: string | null;
   title: string;
 }
@@ -1284,7 +1282,6 @@ const readCourses = async (
     sales_status: "closed" | "open";
     slug: string;
     status: string;
-    subtitle: string | null;
     cover_image_json: unknown;
     thumbnail_url: string | null;
     title: string;
@@ -1397,7 +1394,6 @@ const readCourses = async (
       salesStatus: row.sales_status,
       slug: row.slug,
       status: row.status,
-      subtitle: row.subtitle,
       coverImage: row.cover_image_json,
       thumbnailUrl: row.thumbnail_url,
       title: row.title,
@@ -1407,17 +1403,7 @@ const readCourses = async (
   });
 };
 
-const readCourseCatalogCards = async ({
-  page,
-  pageSize,
-}: {
-  page: number;
-  pageSize: number;
-}): Promise<{
-  cards: AdminCourseCatalogCard[];
-  hasNextPage: boolean;
-  totalCount: number;
-}> => {
+const readCourseCatalogCards = async (): Promise<AdminCourseCatalogCard[]> => {
   const { rows } = await getPool().query<{
     access_duration_months: number;
     catalog_visibility: "hidden" | "listed";
@@ -1428,10 +1414,8 @@ const readCourseCatalogCards = async ({
     price_in_cents: number;
     sales_status: "closed" | "open";
     status: string;
-    subtitle: string | null;
     thumbnail_url: string | null;
     title: string;
-    total_count: number;
   }>(
     `
       with current_publications as (
@@ -1449,7 +1433,6 @@ const readCourseCatalogCards = async ({
       select
         c.id,
         c.title,
-        c.subtitle,
         c.status,
         c.catalog_visibility,
         c.sales_status,
@@ -1458,8 +1441,7 @@ const readCourseCatalogCards = async ({
         c.thumbnail_url,
         c.cover_image_json,
         count(distinct m.id)::int as module_count,
-        count(l.id)::int as lesson_count,
-        count(*) over()::int as total_count
+        count(l.id)::int as lesson_count
       from courses c
       left join current_publications current_publication
         on current_publication.course_id = c.id
@@ -1471,7 +1453,6 @@ const readCourseCatalogCards = async ({
       group by
         c.id,
         c.title,
-        c.subtitle,
         c.status,
         c.catalog_visibility,
         c.sales_status,
@@ -1481,37 +1462,22 @@ const readCourseCatalogCards = async ({
         c.cover_image_json,
         c.created_at
       order by c.created_at desc, c.id desc
-      limit $1 offset $2
-    `,
-    [pageSize + 1, (page - 1) * pageSize]
+    `
   );
 
-  let totalCount = rows[0]?.total_count ?? 0;
-  if (rows.length === 0 && page > 1) {
-    const countResult = await getPool().query<{ total_count: number }>(
-      "select count(*)::int as total_count from courses"
-    );
-    totalCount = countResult.rows[0]?.total_count ?? 0;
-  }
-
-  return {
-    cards: rows.slice(0, pageSize).map((row) => ({
-      accessDurationMonths: row.access_duration_months,
-      catalogVisibility: row.catalog_visibility,
-      coverImage: row.cover_image_json,
-      id: row.id,
-      lessonCount: row.lesson_count,
-      moduleCount: row.module_count,
-      priceInCents: row.price_in_cents,
-      salesStatus: row.sales_status,
-      status: row.status,
-      subtitle: row.subtitle,
-      thumbnailUrl: row.thumbnail_url,
-      title: row.title,
-    })),
-    hasNextPage: rows.length > pageSize,
-    totalCount,
-  };
+  return rows.map((row) => ({
+    accessDurationMonths: row.access_duration_months,
+    catalogVisibility: row.catalog_visibility,
+    coverImage: row.cover_image_json,
+    id: row.id,
+    lessonCount: row.lesson_count,
+    moduleCount: row.module_count,
+    priceInCents: row.price_in_cents,
+    salesStatus: row.sales_status,
+    status: row.status,
+    thumbnailUrl: row.thumbnail_url,
+    title: row.title,
+  }));
 };
 
 const readModules = async (courseId?: string): Promise<AdminModule[]> => {
@@ -3646,37 +3612,11 @@ export const getAdminSettingsData = async (): Promise<{
   return { settings: await readSettings() };
 };
 
-export const getAdminCourseCatalogData = async (
-  options: AdminCourseCatalogQuery = {}
-): Promise<{
+export const getAdminCourseCatalogData = async (): Promise<{
   courses: AdminCourseCatalogCard[];
-  hasNextPage: boolean;
-  page: number;
-  pageSize: number;
-  totalCount: number;
 }> => {
   await requirePermission("viewCourses");
-  const requestedPage = Math.trunc(options.page ?? 1);
-  const page = Number.isFinite(requestedPage)
-    ? Math.min(MAX_ADMIN_COURSE_PAGE, Math.max(1, requestedPage))
-    : 1;
-  const requestedPageSize = Math.trunc(
-    options.pageSize ?? DEFAULT_ADMIN_COURSE_PAGE_SIZE
-  );
-  const pageSize = Number.isFinite(requestedPageSize)
-    ? Math.min(MAX_ADMIN_COURSE_PAGE_SIZE, Math.max(1, requestedPageSize))
-    : DEFAULT_ADMIN_COURSE_PAGE_SIZE;
-  const { cards, hasNextPage, totalCount } = await readCourseCatalogCards({
-    page,
-    pageSize,
-  });
-  return {
-    courses: cards,
-    hasNextPage,
-    page,
-    pageSize,
-    totalCount,
-  };
+  return { courses: await readCourseCatalogCards() };
 };
 
 export const getAdminFaqData = async (): Promise<{ faqs: AdminFaq[] }> => {

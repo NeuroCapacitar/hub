@@ -33,7 +33,6 @@ export const AUDIT_FIELD_LABELS: Record<string, string> = {
   salesStatus: "Status de vendas",
   sortOrder: "Ordem",
   status: "Status",
-  subtitle: "Subtítulo",
   title: "Título",
   titleSnapshot: "Título da versão",
   textDurationSeconds: "Tempo de leitura",

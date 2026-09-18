@@ -2,8 +2,8 @@
 status: canonical
 owner: engineering
 last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
-current_migration_tag: 0085_superb_wonder_man
-migration_entry_count: 86
+current_migration_tag: 0086_remove_course_subtitle
+migration_entry_count: 87
 schema_table_count: 50
 ---
 
@@ -160,6 +160,10 @@ Certificados, Financeiro e Operação. Antes de recriar as constraints, ela limp
 os arrays configuráveis de todos os Supports existentes, conforme a decisão de
 reconfiguração manual. Acesso padrão a Painel, Aprendizagem, Cursos, Alunos,
 Operação, FAQ, Banners e mídias de acesso não é persistido como grant.
+
+A migration `0086_remove_course_subtitle` remove o campo opcional de subtítulo
+de `courses`. O valor deixou de fazer parte do modelo e da experiência do
+Curso; valores existentes nessa coluna são descartados pela migration forward-only.
 
 O runner de Development aplicou `0085` em 2026-09-17. A auditoria read-only
 confirmou o check `allowlist refinada e grants configuráveis limpos` e nenhum

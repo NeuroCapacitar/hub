@@ -220,7 +220,6 @@ const course = {
   salesStatus: "open",
   slug: "curso-publico",
   status: "active",
-  subtitle: "Subtitulo",
   thumbnailUrl: null,
   title: "Curso publico",
   workloadHours: 2,

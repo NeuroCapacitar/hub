@@ -76,7 +76,6 @@ export interface StudentCourseCard {
   nextLessonId: string | null;
   progressPercent: number;
   slug: string;
-  subtitle: string | null;
   thumbnailUrl: string | null;
   title: string;
   totalCount: number;
@@ -102,7 +101,6 @@ export interface StudentCatalogCourseCard {
   progressPercent: number;
   revokedReason: string | null;
   slug: string;
-  subtitle: string | null;
   thumbnailUrl: string | null;
   title: string;
   totalCount: number;
@@ -153,7 +151,6 @@ export interface StudentCourseOverviewData {
     expiresAt: Date;
     id: string;
     slug: string;
-    subtitle: string | null;
     thumbnailUrl: string | null;
     title: string;
     workloadHours: number;
@@ -391,7 +388,6 @@ interface CourseOverviewRow {
   course_description: string | null;
   course_id: string;
   course_slug: string;
-  course_subtitle: string | null;
   course_title: string;
   decision_now: Date;
   duration_seconds: number | null;
@@ -418,7 +414,6 @@ interface CoursePreviewOverviewRow {
   course_description: string | null;
   course_id: string;
   course_slug: string;
-  course_subtitle: string | null;
   course_title: string;
   duration_seconds: number | null;
   is_required: boolean | null;
@@ -493,7 +488,6 @@ export const getStudentCourses = async (
     module_sort_order: number | null;
     module_title: string | null;
     slug: string;
-    subtitle: string | null;
     thumbnail_url: string | null;
     title: string;
     workload_hours: number;
@@ -504,7 +498,6 @@ export const getStudentCourses = async (
         now() as decision_now,
         c.slug,
         c.title as title,
-        c.subtitle,
         c.description as course_description,
         coalesce(c.workload_hours_override, cp.workload_hours_snapshot) as workload_hours,
         c.thumbnail_url,
@@ -548,7 +541,6 @@ export const getStudentCourses = async (
       courseId: row.course_id,
       slug: row.slug,
       title: row.title,
-      subtitle: row.subtitle,
       description: row.course_description,
       workloadHours: row.workload_hours,
       thumbnailUrl: row.thumbnail_url,
@@ -626,7 +618,6 @@ export const getStudentCourses = async (
       courseId: course.courseId,
       slug: course.slug,
       title: course.title,
-      subtitle: course.subtitle,
       description: course.description,
       workloadHours: course.workloadHours,
       thumbnailUrl: course.thumbnailUrl,
@@ -737,7 +728,6 @@ export const getStudentCourseCatalog = async (
     revoked_reason: string | null;
     sales_status: CourseSalesStatus;
     slug: string;
-    subtitle: string | null;
     thumbnail_url: string | null;
     title: string;
     workload_hours: number;
@@ -748,7 +738,6 @@ export const getStudentCourseCatalog = async (
         now() as decision_now,
         c.slug,
         c.title,
-        c.subtitle,
         c.description as course_description,
         c.status as course_status,
         c.catalog_visibility,
@@ -839,7 +828,6 @@ export const getStudentCourseCatalog = async (
       courseId: row.course_id,
       slug: row.slug,
       title: row.title,
-      subtitle: row.subtitle,
       description: row.course_description,
       workloadHours: row.workload_hours,
       priceInCents: row.price_in_cents,
@@ -917,7 +905,6 @@ export const getStudentCourseCatalog = async (
       courseId: course.courseId,
       slug: course.slug,
       title: course.title,
-      subtitle: course.subtitle,
       description: course.description,
       workloadHours: course.workloadHours,
       priceInCents: course.priceInCents,
@@ -1294,7 +1281,6 @@ const getEnrolledCourseOverview = async ({
         c.slug as course_slug,
         c.title as course_title,
         now() as decision_now,
-        c.subtitle as course_subtitle,
         c.description as course_description,
         coalesce(c.workload_hours_override, cp.workload_hours_snapshot) as workload_hours,
         c.thumbnail_url,
@@ -1406,7 +1392,6 @@ const getEnrolledCourseOverview = async ({
       id: firstRow.course_id,
       slug: firstRow.course_slug,
       title: firstRow.course_title,
-      subtitle: firstRow.course_subtitle,
       description: firstRow.course_description,
       workloadHours: firstRow.workload_hours,
       thumbnailUrl: firstRow.thumbnail_url,
@@ -1434,7 +1419,6 @@ const getPreviewCourseOverview = async ({
         c.id as course_id,
         c.slug as course_slug,
         c.title as course_title,
-        c.subtitle as course_subtitle,
         c.description as course_description,
         coalesce(c.workload_hours_override, cv.workload_hours_snapshot) as workload_hours,
         c.thumbnail_url,
@@ -1542,7 +1526,6 @@ const getPreviewCourseOverview = async ({
       id: firstRow.course_id,
       slug: firstRow.course_slug,
       title: firstRow.course_title,
-      subtitle: firstRow.course_subtitle,
       description: firstRow.course_description,
       workloadHours: firstRow.workload_hours,
       thumbnailUrl: firstRow.thumbnail_url,

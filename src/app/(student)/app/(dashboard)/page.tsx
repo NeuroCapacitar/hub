@@ -324,9 +324,9 @@ function CourseCard({
           </h3>
           <div className="mt-2 flex items-start gap-4">
             <div className="flex-1">
-              {course.subtitle || course.description ? (
+              {course.description ? (
                 <p className="line-clamp-2 text-card-foreground/70 text-sm leading-5">
-                  {course.description ?? course.subtitle}
+                  {course.description}
                 </p>
               ) : null}
             </div>
@@ -460,7 +460,7 @@ function CoursePurchaseForm({
       <FreeCourseEnrollmentDialog
         accessStatus={course.accessStatus === "expired" ? "expired" : "none"}
         courseId={course.courseId}
-        description={course.description ?? course.subtitle}
+        description={course.description}
         lessonCount={course.lessonCount}
         title={course.title}
         workloadHours={course.workloadHours}
