@@ -70,10 +70,7 @@ export default async function StudentDashboardPage(): Promise<React.JSX.Element>
       <div className="flex flex-col gap-8">
         {banners.length > 0 && <StudentBannersCarousel banners={banners} />}
 
-        <PageHeader
-          description="Continue seus cursos, descubra novas possibilidades e acompanhe o que está chegando."
-          title="Seu espaço de aprendizagem"
-        />
+        <PageHeader title="Seu espaço de aprendizagem" />
 
         <div className="flex flex-col gap-12 pt-4">
           {courses.length === 0 ? (

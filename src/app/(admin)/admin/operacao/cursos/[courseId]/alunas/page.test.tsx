@@ -54,7 +54,6 @@ describe("SupportCourseStudentsPage", () => {
       })
     );
 
-    expect(markup).toContain("Curso operacional");
     expect(markup).toContain("student@example.test");
     expect(markup).toContain("Consultar");
     expect(markup).not.toContain("Gerenciar Curso");

@@ -77,13 +77,12 @@ export default async function SupportCourseStudentsPage({
     <PageContainer>
       <div className="flex flex-col gap-8">
         <PageHeader
-          actions={
-            <Button asChild variant="outline">
-              <Link href={route("/admin")}>Voltar ao painel</Link>
-            </Button>
-          }
-          description="Consulte matrículas e abra o contexto operacional de cado aluno. Conteúdo e configurações do curso não estão disponíveis."
-          title={course.title}
+          breadcrumbs={[
+            { href: route("/admin/operacao"), label: "Operação" },
+            { href: route("/admin/operacao/cursos"), label: "Cursos" },
+            { label: course.title },
+          ]}
+          title="Alunos"
         />
 
         <Card>

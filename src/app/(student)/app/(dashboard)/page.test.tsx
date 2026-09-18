@@ -113,8 +113,8 @@ describe("Student dashboard availability", () => {
 
     const markup = renderToStaticMarkup(await StudentDashboardPage());
 
-    expect(markup).toContain("Seu espaço de aprendizagem");
-    expect(markup).toContain(
+    expect(markup).not.toContain("Seu espaço de aprendizagem");
+    expect(markup).not.toContain(
       "Continue seus cursos, descubra novas possibilidades e acompanhe o que está chegando."
     );
     expect(markup).toContain("Chegando em breve");

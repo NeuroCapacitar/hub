@@ -110,19 +110,27 @@ vi.mock("./course-enrollments-table", () => ({
 }));
 vi.mock("./course-management-tabs", () => ({
   CourseManagementTabs: ({
+    actions,
     certificate,
     content,
     overview,
     settings,
     students,
+    status,
   }: {
+    actions?: ReactNode;
     certificate?: ReactNode;
     content?: ReactNode;
     overview?: ReactNode;
     settings?: ReactNode;
     students?: ReactNode;
+    status?: ReactNode;
   }) => (
     <div data-course-management-tabs="true">
+      <header>
+        {status}
+        {actions}
+      </header>
       {overview ? <div data-course-panel="overview">{overview}</div> : null}
       {content ? <div data-course-panel="content">{content}</div> : null}
       {students ? <div data-course-panel="students">{students}</div> : null}
@@ -433,22 +441,17 @@ describe("AdminCourseDetailPage header", () => {
     expect(markup).toContain(`>${label}<`);
   });
 
-  it("keeps preview and removes curricular actions from the shared header", async () => {
+  it("keeps preview with the course tab navigation", async () => {
     const markup = renderToStaticMarkup(
       await AdminCourseDetailPage({
         params: Promise.resolve({ courseId: course.id }),
       })
     );
-    const headerMarkup = markup.slice(
-      markup.indexOf("<header"),
-      markup.indexOf("</header>") + "</header>".length
-    );
-
-    expect(headerMarkup).toContain("Ver como aluno");
-    expect(headerMarkup).toContain(`/app/cursos/${course.id}?preview=student`);
-    expect(headerMarkup).not.toContain("Preparar alterações");
-    expect(headerMarkup).not.toContain("Publicar alterações");
-    expect(headerMarkup).not.toContain(">Conteúdo pronto<");
+    expect(markup).toContain("Ver como aluno");
+    expect(markup).toContain(`/app/cursos/${course.id}?preview=student`);
+    expect(markup).not.toContain("Preparar alterações");
+    expect(markup).not.toContain("Publicar alterações");
+    expect(markup).not.toContain(">Conteúdo pronto<");
   });
 });
 

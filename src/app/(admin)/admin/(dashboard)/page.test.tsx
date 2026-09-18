@@ -146,9 +146,7 @@ describe("AdminPage", () => {
       supportPermissionGrants: [],
     });
 
-    const markup = renderToStaticMarkup(await AdminPage());
-
-    expect(markup).toContain("Operação diária");
+    await AdminPage();
     expect(dependencies.getAdminOverview).toHaveBeenCalledOnce();
     expect(dependencies.getAdminDashboardProjection).toHaveBeenCalledOnce();
     expect(dependencies.getSupportCourseOperations).not.toHaveBeenCalled();
@@ -198,7 +196,6 @@ describe("AdminPage", () => {
 
     const markup = renderToStaticMarkup(await AdminPage());
 
-    expect(markup).toContain("Operação diária");
     expect(markup).toContain("Resumo do dia");
     expect(markup).toContain("Contexto de acompanhamento");
     expect(markup).not.toContain("Pendências para resolver");

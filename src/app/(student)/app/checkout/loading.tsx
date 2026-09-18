@@ -5,13 +5,6 @@ export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
       <div className="flex max-w-4xl flex-col gap-8">
-        <header className="border-b pb-6">
-          <div className="space-y-3">
-            <Skeleton className="h-9 w-64" />
-            <Skeleton className="h-5 w-full max-w-[400px]" />
-          </div>
-        </header>
-
         <section className="max-w-2xl rounded-lg border bg-card p-6">
           <Skeleton className="h-5 w-32" />
           <Skeleton className="mt-4 h-8 w-[300px]" />

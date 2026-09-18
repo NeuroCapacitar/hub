@@ -92,10 +92,7 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader
-          description="Gerencie a identidade dos Certificados e o conteúdo compartilhado no Hub."
-          title="Configurações globais"
-        />
+        <PageHeader title="Configurações globais" />
 
         <section aria-labelledby="settings-certificates" className="grid gap-4">
           <div className="flex items-center gap-2">

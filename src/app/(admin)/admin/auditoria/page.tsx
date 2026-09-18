@@ -172,10 +172,7 @@ export default async function AuditoriaPage({
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader
-          description="Consulte alterações administrativas e eventos relevantes de matrícula e acesso."
-          title="Auditoria administrativa"
-        />
+        <PageHeader title="Auditoria administrativa" />
 
         <Card className="min-w-0">
           <CardHeader className="pb-4">

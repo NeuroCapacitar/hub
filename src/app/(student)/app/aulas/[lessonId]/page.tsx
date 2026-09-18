@@ -30,6 +30,7 @@ import { LessonVideoPlayer } from "@/components/lesson-video-player";
 import { LessonVideoProcessing } from "@/components/lesson-video-processing";
 import { LockedNavigationCard } from "@/components/locked-lesson-tooltip";
 import { RegisterPreviewCourseId } from "@/components/panel-layout";
+import { PanelPageTitle } from "@/components/panel-page-title";
 import {
   Accordion,
   AccordionContent,
@@ -150,6 +151,16 @@ export default async function LessonPage({
     <LessonFocusLayout
       main={
         <>
+          <PanelPageTitle
+            ancestors={[
+              { href: route("/app"), label: "Início" },
+              {
+                href: route(`/app/cursos/${data.course.id}`),
+                label: data.course.title,
+              },
+            ]}
+            title={data.lesson.title}
+          />
           {previewMode ? (
             <RegisterPreviewCourseId courseId={data.course.id} />
           ) : null}

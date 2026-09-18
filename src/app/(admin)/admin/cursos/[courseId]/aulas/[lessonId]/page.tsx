@@ -5,6 +5,7 @@ import {
   LessonVideoControls,
 } from "@/components/lesson-kind-controls";
 import { LessonRichTextEditor } from "@/components/lesson-rich-text-editor";
+import { PanelPageTitle } from "@/components/panel-page-title";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toUploadAsset } from "@/features/admin/jmvstream-assets";
 import { getAdminLessonEditorData } from "@/features/admin/server";
@@ -16,6 +17,7 @@ import {
 } from "@/features/courses/lesson-content";
 import { requirePermission } from "@/lib/auth-permissions";
 import { canPerform } from "@/lib/auth-policy";
+import { route } from "@/lib/routes";
 import { LessonEditorSidebarFields } from "../../course-builder-components";
 import { LessonSidebarActions } from "./lesson-sidebar-actions";
 import { LessonSidebarDuration } from "./lesson-sidebar-duration";
@@ -59,6 +61,16 @@ export default async function AdminLessonEditPage({
 
   return (
     <div className="flex w-full min-w-0 max-w-full flex-col lg:grid lg:h-[calc(100svh-4rem)] lg:grid-cols-[minmax(0,1fr)_380px] lg:[grid-template-areas:'main_sidebar']">
+      <PanelPageTitle
+        ancestors={[
+          { href: route("/admin/cursos"), label: "Cursos" },
+          {
+            href: route(`/admin/cursos/${courseId}`),
+            label: course.title,
+          },
+        ]}
+        title={lesson.title}
+      />
       {/* Sidebar de materiais e ações */}
       <aside className="min-h-0 min-w-0 bg-background lg:flex lg:flex-col lg:border-l lg:[grid-area:sidebar]">
         {/* Header da Aula no Sidebar com Duração */}

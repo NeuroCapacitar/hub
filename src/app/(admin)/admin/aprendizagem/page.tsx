@@ -87,10 +87,7 @@ export default async function LearningAnalyticsPage({
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader
-          description="Entenda rapidamente o desempenho das Aulas e encontre pontos que merecem revisão."
-          title="Aprendizagem"
-        />
+        <PageHeader title="Aprendizagem" />
 
         {selectedCourse ? (
           <LearningAnalyticsReport

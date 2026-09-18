@@ -51,7 +51,6 @@ describe("AuditoriaPage", () => {
       })
     );
 
-    expect(markup).toContain("Auditoria administrativa");
     expect(markup).toContain("Eventos registrados");
     expect(markup).toContain("Curso atualizado");
     expect(markup).toContain("Curso de exemplo");

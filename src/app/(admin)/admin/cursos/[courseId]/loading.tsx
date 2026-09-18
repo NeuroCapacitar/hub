@@ -5,15 +5,10 @@ export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <header className="border-b pb-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex-1 space-y-3">
-              <Skeleton className="h-9 w-80 max-w-full" />
-              <Skeleton className="h-5 w-full max-w-[480px]" />
-            </div>
-            <Skeleton className="h-9 w-36" />
-          </div>
-        </header>
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-9 w-36" />
+        </div>
 
         <div className="max-w-full overflow-x-auto border-b">
           <div className="flex min-w-max gap-1 py-1">

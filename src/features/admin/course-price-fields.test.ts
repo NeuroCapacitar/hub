@@ -7,10 +7,7 @@ describe("admin course price fields", () => {
       new URL("../../app/(admin)/admin/cursos/page.tsx", import.meta.url),
       "utf8"
     );
-    const priceFieldIds = [
-      "header-course-price",
-      "empty-course-price",
-    ] as const;
+    const priceFieldIds = ["new-course-price", "empty-course-price"] as const;
 
     for (const priceFieldId of priceFieldIds) {
       expect(source).toContain(`priceFieldId="${priceFieldId}"`);

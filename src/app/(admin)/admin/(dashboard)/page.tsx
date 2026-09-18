@@ -390,10 +390,7 @@ export default async function AdminPage(): Promise<React.JSX.Element> {
   return (
     <PageContainer>
       <div className="flex flex-col gap-6">
-        <PageHeader
-          description="Resolva o que pode afetar acesso, vendas ou publicação."
-          title="Operação diária"
-        />
+        <PageHeader title="Operação diária" />
 
         <DashboardSummary operations={data.operations} overview={overview} />
 

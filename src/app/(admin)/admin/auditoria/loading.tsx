@@ -24,10 +24,6 @@ export default function Loading(): React.JSX.Element {
     <PageContainer>
       <div aria-busy="true" className="flex flex-col gap-8" role="status">
         <span className="sr-only">Carregando a auditoria administrativa…</span>
-        <header className="border-b pb-6">
-          <Skeleton className="h-9 w-72" />
-          <Skeleton className="mt-3 h-5 w-full max-w-[520px]" />
-        </header>
         <section className="overflow-hidden rounded-xl border bg-card">
           <div className="border-b p-5">
             <Skeleton className="h-6 w-48" />

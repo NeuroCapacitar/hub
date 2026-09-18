@@ -42,10 +42,7 @@ export default async function StudentSettingsPage(): Promise<React.JSX.Element> 
   return (
     <PageContainer className="min-h-screen bg-background text-foreground">
       <div className="flex flex-col gap-8">
-        <PageHeader
-          description="Ajuste preferências da sua experiência na plataforma."
-          title="Configurações"
-        />
+        <PageHeader title="Configurações" />
 
         <div className="grid grid-cols-1 gap-14 md:grid-cols-[220px_1fr] lg:grid-cols-[240px_1fr]">
           <aside className="hidden md:block">

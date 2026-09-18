@@ -69,7 +69,6 @@ describe("MyCertificatesPage", () => {
   it("renders the certificate library without decorative metrics", async () => {
     const markup = await renderPage([readyCertificate]);
 
-    expect(markup).toContain("Seus certificados");
     expect(markup).toContain("Curso de teste");
     expect(markup).toContain(
       'data-public-url="https://certificates.example/certificados/CERT-001"'

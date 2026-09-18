@@ -6,11 +6,6 @@ export default function Loading(): React.JSX.Element {
     <PageContainer>
       <div aria-busy="true" className="flex flex-col gap-8" role="status">
         <span className="sr-only">Carregando configurações globais…</span>
-        <header className="border-b pb-6">
-          <Skeleton className="h-9 w-72" />
-          <Skeleton className="mt-3 h-5 w-full max-w-[560px]" />
-        </header>
-
         <section className="grid gap-4">
           <Skeleton className="h-6 w-56" />
           <div className="rounded-xl border bg-card p-6">

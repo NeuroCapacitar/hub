@@ -20,10 +20,7 @@ export default async function StaffPage(): Promise<React.JSX.Element> {
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader
-          description="Administre o papel e as permissões de alteração das Contas existentes. Esta área não cria credenciais nem redefine senhas."
-          title="Equipe"
-        />
+        <PageHeader title="Equipe" />
         <Card className="min-w-0">
           <CardHeader>
             <CardTitle as="h2">Contas administráveis</CardTitle>

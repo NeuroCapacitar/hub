@@ -7,13 +7,6 @@ export default function Loading(): React.JSX.Element {
       <div aria-busy="true" className="flex flex-col gap-6" role="status">
         <span className="sr-only">Carregando a lista de Alunos…</span>
 
-        <header className="border-b pb-6">
-          <div className="grid gap-3">
-            <Skeleton className="h-9 w-64" />
-            <Skeleton className="h-5 w-full max-w-[420px]" />
-          </div>
-        </header>
-
         <section>
           <Skeleton className="mb-3 h-5 w-36" />
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

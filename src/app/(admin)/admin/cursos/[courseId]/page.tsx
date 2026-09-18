@@ -288,7 +288,9 @@ export default async function AdminCourseDetailPage({
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader
+        <PageHeader title={course.title} />
+
+        <CourseManagementTabs
           actions={
             <Button asChild size="sm" variant="outline">
               <a href={route(`/app/cursos/${course.id}?preview=student`)}>
@@ -303,18 +305,6 @@ export default async function AdminCourseDetailPage({
               </a>
             </Button>
           }
-          description={
-            course.subtitle || "Nenhum subtítulo cadastrado para este curso."
-          }
-          status={
-            <Badge variant={courseStatusPresentation.variant}>
-              {courseStatusPresentation.label}
-            </Badge>
-          }
-          title={course.title}
-        />
-
-        <CourseManagementTabs
           certificate={certificateContent}
           content={
             data.tab === "content" && contentData && contentSignal ? (
@@ -389,6 +379,11 @@ export default async function AdminCourseDetailPage({
                 </Card>
               </div>
             ) : null
+          }
+          status={
+            <Badge variant={courseStatusPresentation.variant}>
+              {courseStatusPresentation.label}
+            </Badge>
           }
           students={
             data.tab === "students" ? (

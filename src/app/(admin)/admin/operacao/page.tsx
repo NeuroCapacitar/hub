@@ -328,10 +328,7 @@ export default async function AdminOperationsPage({
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader
-          description="Acompanhe filas, alertas e recuperações que precisam de atenção operacional."
-          title="Operações e recuperação"
-        />
+        <PageHeader title="Operações e recuperação" />
 
         <Card className="min-w-0">
           <CardHeader className="border-b pb-4">

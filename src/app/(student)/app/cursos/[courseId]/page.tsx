@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageContainer } from "@/components/page-container";
 import { RegisterPreviewCourseId } from "@/components/panel-layout";
+import { PanelPageTitle } from "@/components/panel-page-title";
 import { SupportRequestDialog } from "@/components/support-request-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,10 @@ export default async function StudentCourseOverviewPage({
 
   return (
     <PageContainer className="min-h-screen bg-background text-foreground">
+      <PanelPageTitle
+        ancestors={[{ href: route("/app"), label: "Início" }]}
+        title={data.course.title}
+      />
       <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-8">
           {previewMode ? (

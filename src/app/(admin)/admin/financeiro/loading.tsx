@@ -13,21 +13,15 @@ export default function Loading(): React.JSX.Element {
         <span className="sr-only" role="status">
           Carregando Financeiro…
         </span>
-        <header className="flex flex-col gap-4 border-b pb-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-1 flex-col gap-3">
-              <Skeleton className="h-9 w-48" />
-              <Skeleton className="h-5 w-full max-w-[460px]" />
+        <div className="flex min-w-0 items-center justify-between gap-3 border-b">
+          <div className="min-w-0 flex-1 overflow-x-auto">
+            <div className="flex min-w-max gap-1">
+              {["overview", "orders", "analysis"].map((key) => (
+                <Skeleton className="h-9 w-28 rounded-md" key={key} />
+              ))}
             </div>
           </div>
-        </header>
-
-        <div className="max-w-full overflow-x-auto border-b">
-          <div className="flex min-w-max gap-1">
-            {["overview", "orders", "analysis"].map((key) => (
-              <Skeleton className="h-9 w-28 rounded-md" key={key} />
-            ))}
-          </div>
+          <Skeleton className="h-9 w-10 shrink-0" />
         </div>
 
         {getFinancialTabLoading(activeTab)}
