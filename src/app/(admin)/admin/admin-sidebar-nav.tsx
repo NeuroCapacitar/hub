@@ -1,13 +1,15 @@
 "use client";
 
 import {
-  AccountSetting01Icon,
   Activity03Icon,
   Analytics01Icon,
+  Audit01Icon,
   Book01Icon,
-  HistoryIcon,
+  DashboardSquare01Icon,
   Invoice01Icon,
-  UserGroupIcon,
+  Settings01Icon,
+  StudentIcon,
+  TeamWorkIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -22,7 +24,7 @@ import type { AuthPermission } from "@/lib/auth-policy";
 import { route } from "@/lib/routes";
 
 const adminNavItems = [
-  ["Painel", "/admin", Analytics01Icon, "viewAdminPanel"],
+  ["Painel", "/admin", DashboardSquare01Icon, "viewAdminPanel"],
   [
     "Aprendizagem",
     "/admin/aprendizagem",
@@ -30,17 +32,12 @@ const adminNavItems = [
     "viewLearningAnalytics",
   ],
   ["Cursos", "/admin/cursos", Book01Icon, "viewCourses"],
-  ["Equipe", "/admin/equipe", UserGroupIcon, "manageStaffAccess"],
-  ["Alunos", "/admin/alunos", UserGroupIcon, "viewStudents"],
+  ["Equipe", "/admin/equipe", TeamWorkIcon, "manageStaffAccess"],
+  ["Alunos", "/admin/alunos", StudentIcon, "viewStudents"],
   ["Financeiro", "/admin/financeiro", Invoice01Icon, "viewFinancials"],
   ["Operação", "/admin/operacao", Activity03Icon, "viewOperations"],
-  ["Auditoria", "/admin/auditoria", HistoryIcon, "viewAudit"],
-  [
-    "Configurações",
-    "/admin/configuracoes",
-    AccountSetting01Icon,
-    "viewSettings",
-  ],
+  ["Auditoria", "/admin/auditoria", Audit01Icon, "viewAudit"],
+  ["Configurações", "/admin/configuracoes", Settings01Icon, "viewSettings"],
 ] as const;
 
 export function AdminSidebarNav({

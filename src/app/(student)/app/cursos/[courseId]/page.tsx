@@ -34,27 +34,6 @@ import { CourseOverviewClient } from "./course-overview-client";
 
 export const dynamic = "force-dynamic";
 
-function getIncompleteCertificateDescription({
-  completedCount,
-  studentName,
-  totalCount,
-}: {
-  completedCount: number;
-  studentName: string | null;
-  totalCount: number;
-}): string {
-  const remainingLessons = Math.max(0, totalCount - completedCount);
-  const lessonLabel =
-    remainingLessons === 1
-      ? "Falta 1 aula obrigatória."
-      : `Faltam ${remainingLessons} aulas obrigatórias.`;
-  const expectedName = studentName
-    ? ` O nome previsto é ${studentName}.`
-    : " O certificado usará o nome do perfil do Aluno.";
-
-  return `${lessonLabel}${expectedName}`;
-}
-
 export default async function StudentCourseOverviewPage({
   params,
   searchParams,
@@ -193,15 +172,12 @@ export default async function StudentCourseOverviewPage({
               </div>
             </div>
           </header>
-          {data.certificateEnabled ? (
+          {data.certificateEnabled && data.certificateCode ? (
             <CourseCertificatePanel
               certificateCode={data.certificateCode}
               certificateRenderStatus={data.certificateRenderStatus}
               certificateStatus={data.certificateStatus}
-              completedCount={data.completedCount}
               courseTitle={data.course.title}
-              studentName={data.studentName}
-              totalCount={data.totalCount}
             />
           ) : null}
         </div>
@@ -221,48 +197,14 @@ function CourseCertificatePanel({
   certificateCode,
   certificateRenderStatus,
   certificateStatus,
-  completedCount,
   courseTitle,
-  studentName,
-  totalCount,
 }: {
-  certificateCode: string | null;
+  certificateCode: string;
   certificateRenderStatus: "failed" | "pending" | "ready" | null;
   certificateStatus: "revoked" | "valid" | null;
-  completedCount: number;
   courseTitle: string;
-  studentName: string | null;
-  totalCount: number;
 }): React.JSX.Element {
   const titleId = "course-certificate-title";
-
-  if (!certificateCode) {
-    return (
-      <Card aria-labelledby={titleId} role="region">
-        <CardHeader>
-          <CardTitle as="h2" id={titleId}>
-            Certificado de conclusão
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="max-w-2xl text-muted-foreground leading-6">
-            {getIncompleteCertificateDescription({
-              completedCount,
-              studentName,
-              totalCount,
-            })}
-          </p>
-        </CardContent>
-        <CardFooter>
-          <Button asChild size="sm" variant="outline">
-            <Link href={route("/app/configuracoes")}>
-              Conferir nome no perfil
-            </Link>
-          </Button>
-        </CardFooter>
-      </Card>
-    );
-  }
 
   if (certificateStatus === "revoked") {
     return (

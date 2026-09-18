@@ -81,6 +81,7 @@ export default async function StudentDashboardPage(): Promise<React.JSX.Element>
                 <CourseSection
                   courses={groups.active}
                   description="Retome sua jornada no ponto em que parou."
+                  sectionId="student-courses-active"
                   title="Continue aprendendo"
                 />
               ) : null}
@@ -89,27 +90,24 @@ export default async function StudentDashboardPage(): Promise<React.JSX.Element>
                 <CourseSection
                   courses={groups.completed}
                   description="Suas conquistas seguem disponíveis para revisar quando quiser."
+                  sectionId="student-courses-completed"
                   title="Cursos concluídos"
                 />
               ) : null}
 
-              <CourseSection
-                courses={groups.locked}
-                description="Escolha sua próxima experiência de aprendizagem."
-                title="Encontre seu próximo curso"
+              <CourseCatalogSection
+                availableCourses={groups.available}
+                upcomingCourses={groups.upcoming}
               />
 
-              <CourseSection
-                courses={groups.comingSoon}
-                description="Novas experiências estão sendo preparadas para você."
-                title="Chegando em breve"
-              />
-
-              <CourseSection
-                courses={groups.salesPaused}
-                description="Este Curso pode voltar em breve. Ative o aviso e fique por perto."
-                title="Inscrições em pausa"
-              />
+              {groups.revoked.length > 0 ? (
+                <CourseSection
+                  courses={groups.revoked}
+                  description="Fale com o suporte para regularizar estes acessos."
+                  sectionId="student-courses-revoked"
+                  title="Acesso requer suporte"
+                />
+              ) : null}
             </>
           )}
         </div>
@@ -167,10 +165,12 @@ function getShortCourseButtonLabel(
 function CourseSection({
   courses,
   description,
+  sectionId,
   title,
 }: {
   courses: StudentCatalogCourseCard[];
   description: string;
+  sectionId: string;
   title: string;
 }): React.JSX.Element | null {
   if (courses.length === 0) {
@@ -178,17 +178,61 @@ function CourseSection({
   }
 
   return (
-    <section>
+    <section aria-labelledby={sectionId}>
       <div className="mb-5">
-        <h2 className="font-bold text-xl">{title}</h2>
+        <h2 className="font-bold text-xl" id={sectionId}>
+          {title}
+        </h2>
         <p className="mt-1 text-muted-foreground text-sm">{description}</p>
       </div>
-      <div className="flex flex-wrap gap-5">
-        {courses.map((course) => (
-          <CourseCard course={course} key={course.courseId} />
-        ))}
-      </div>
+      <CourseGrid courses={courses} />
     </section>
+  );
+}
+
+function CourseCatalogSection({
+  availableCourses,
+  upcomingCourses,
+}: {
+  availableCourses: StudentCatalogCourseCard[];
+  upcomingCourses: StudentCatalogCourseCard[];
+}): React.JSX.Element | null {
+  const hasCatalogCourses =
+    availableCourses.length > 0 || upcomingCourses.length > 0;
+
+  if (!hasCatalogCourses) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-12">
+      <CourseSection
+        courses={availableCourses}
+        description="Cursos que você pode começar agora."
+        sectionId="student-courses-available"
+        title="Disponíveis agora"
+      />
+      <CourseSection
+        courses={upcomingCourses}
+        description="Acompanhe cursos novos e inscrições que podem reabrir. A etiqueta indica o estado de cada curso."
+        sectionId="student-courses-upcoming"
+        title="Em breve"
+      />
+    </div>
+  );
+}
+
+function CourseGrid({
+  courses,
+}: {
+  courses: StudentCatalogCourseCard[];
+}): React.JSX.Element {
+  return (
+    <div className="flex flex-wrap gap-5">
+      {courses.map((course) => (
+        <CourseCard course={course} key={course.courseId} />
+      ))}
+    </div>
   );
 }
 
@@ -217,13 +261,18 @@ const CATALOG_ACCESS_BADGE_VARIANTS = {
 
 const getCatalogCardBadge = (course: StudentCatalogCourseCard) => {
   const hasActiveAccess = course.accessStatus === "active";
+  const canShowAvailabilityBadge =
+    course.accessStatus === "none" || course.accessStatus === "expired";
 
-  if (course.availabilityPreset === "coming_soon" && !hasActiveAccess) {
-    return { label: "Em breve", variant: "outline" as const };
+  if (course.availabilityPreset === "coming_soon" && canShowAvailabilityBadge) {
+    return { label: "Novo curso", variant: "outline" as const };
   }
 
-  if (course.availabilityPreset === "sales_paused" && !hasActiveAccess) {
-    return { label: "Inscrições fechadas", variant: "outline" as const };
+  if (
+    course.availabilityPreset === "sales_paused" &&
+    canShowAvailabilityBadge
+  ) {
+    return { label: "Inscrições pausadas", variant: "outline" as const };
   }
 
   const presentation = getStudentCatalogAccessPresentation({

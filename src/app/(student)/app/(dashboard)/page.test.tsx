@@ -96,7 +96,7 @@ describe("Student dashboard availability", () => {
     expect(markup).not.toContain(">Adquirir acesso<");
   });
 
-  it("renders separate coming-soon and closed-enrollment sections with interest actions", async () => {
+  it("combines upcoming courses with paused enrollments", async () => {
     dependencies.getStudentCourseCatalog.mockResolvedValue([
       course,
       {
@@ -116,14 +116,11 @@ describe("Student dashboard availability", () => {
     expect(markup).not.toContain(
       "Continue seus cursos, descubra novas possibilidades e acompanhe o que está chegando."
     );
-    expect(markup).toContain("Chegando em breve");
     expect(markup).toContain(
-      "Novas experiências estão sendo preparadas para você."
+      "Acompanhe cursos novos e inscrições que podem reabrir. A etiqueta indica o estado de cada curso."
     );
-    expect(markup).toContain("Inscrições em pausa");
-    expect(markup).toContain(
-      "Este Curso pode voltar em breve. Ative o aviso e fique por perto."
-    );
+    expect(markup).toContain("Novo curso");
+    expect(markup).toContain("Inscrições pausadas");
     expect(markup).toContain("Quero ser avisada");
     expect(markup).toContain("Cancelar aviso");
     expect(markup).not.toContain("Ver detalhes");
@@ -131,6 +128,49 @@ describe("Student dashboard availability", () => {
       "Peça um aviso para saber quando as inscrições reabrirem."
     );
     expect(markup).not.toContain("Adquirir acesso");
+  });
+
+  it("places expired access in the available catalog with a renewal action", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "expired",
+        availabilityPreset: "available",
+        courseId: "course-expired",
+        slug: "curso-expirado",
+        title: "Curso expirado",
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+    const cardMarkup = getCardMarkup(markup, "Curso expirado");
+
+    expect(markup).toContain("Disponíveis agora");
+    expect(markup).not.toContain("Acesso requer suporte");
+    expect(cardMarkup).toContain("Acesso expirado");
+    expect(cardMarkup).toContain("Renovar acesso");
+  });
+
+  it("keeps revoked access in a support-only section", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "revoked",
+        availabilityPreset: "sales_paused",
+        courseId: "course-revoked",
+        slug: "curso-revogado",
+        title: "Curso revogado",
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+    const cardMarkup = getCardMarkup(markup, "Curso revogado");
+
+    expect(markup).toContain("Acesso requer suporte");
+    expect(markup).not.toContain("Em breve");
+    expect(cardMarkup).toContain("Acesso encerrado");
+    expect(cardMarkup).toContain("Falar com suporte");
+    expect(cardMarkup).not.toContain("Inscrições pausadas");
   });
 
   it("keeps normal active access neutral instead of using the default orange badge", async () => {

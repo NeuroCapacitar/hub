@@ -101,7 +101,7 @@ describe("course presentation helpers", () => {
     ).toBe("Rever trilha");
   });
 
-  it("groups catalog courses by learning state", () => {
+  it("groups catalog courses by learning, availability, and access state", () => {
     const courses = [
       {
         accessStatus: "none",
@@ -133,14 +133,19 @@ describe("course presentation helpers", () => {
         availabilityPreset: "sales_paused",
         progressPercent: 0,
       },
+      {
+        accessStatus: "revoked",
+        availabilityPreset: "sales_paused",
+        progressPercent: 0,
+      },
     ] as const;
 
     expect(groupStudentCatalogCourses(courses)).toEqual({
       active: [courses[2]],
+      available: [courses[0], courses[3]],
       completed: [courses[1]],
-      comingSoon: [courses[4]],
-      locked: [courses[0], courses[3]],
-      salesPaused: [courses[5]],
+      revoked: [courses[6]],
+      upcoming: [courses[4], courses[5]],
     });
   });
 

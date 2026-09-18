@@ -142,7 +142,7 @@ describe("StudentCourseOverviewPage certificate feedback", () => {
     expect(markup).not.toContain("/app/certificados");
   });
 
-  it("shows incomplete progress without a certificate destination", async () => {
+  it("does not show a certificate panel before a certificate exists", async () => {
     const markup = await renderPage({
       certificate: "",
       overview: courseOverview({
@@ -155,8 +155,8 @@ describe("StudentCourseOverviewPage certificate feedback", () => {
       }),
     });
 
-    expect(markup).toContain("Falta 1 aula obrigatória");
-    expect(markup).toContain("Conferir nome no perfil");
+    expect(markup).not.toContain("Falta 1 aula obrigatória");
+    expect(markup).not.toContain("Conferir nome no perfil");
     expect(markup).not.toContain("/certificados/");
     expect(markup).not.toContain("Atualizar status");
   });

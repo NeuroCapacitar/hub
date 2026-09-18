@@ -165,7 +165,7 @@ function CourseCreationFields({
     <>
       <input name="courseId" type="hidden" value="" />
       <FieldSet aria-label="Identidade do curso" className="gap-5">
-        <div className="grid min-w-0 gap-6 md:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] md:items-start">
+        <div className="grid min-w-0 gap-5 md:grid-cols-[minmax(0,11rem)_minmax(0,1fr)] md:items-stretch">
           <Field className="min-w-0">
             <FieldTitle className="items-center">
               <span>Capa do curso</span>
@@ -176,7 +176,7 @@ function CourseCreationFields({
             </FieldTitle>
             <CourseCoverUploadField
               aggregateId={aggregateId}
-              className="mx-auto max-w-[240px] md:mx-0 md:w-[240px]"
+              className="mx-auto max-w-[176px] md:mx-0 md:w-[176px]"
               onUploadingChange={onCoverUploadingChange}
             />
             {isCoverUploading ? (
