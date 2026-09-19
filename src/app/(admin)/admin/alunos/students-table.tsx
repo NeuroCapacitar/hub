@@ -73,6 +73,25 @@ const FULL_STUDENT_MANAGEMENT_CAPABILITIES: StudentManagementCapabilities = {
 const formatNullableDateTime = (value: string | null): string =>
   value ? formatDateTime(value) : "Sem registro";
 
+const formatResultRange = (
+  page: number,
+  pageSize: number,
+  totalCount: number,
+  rowCount: number
+): string => {
+  if (totalCount === 0) {
+    return "0 resultados";
+  }
+
+  const start = (page - 1) * pageSize + 1;
+  if (start > totalCount || rowCount === 0) {
+    return `0 de ${totalCount.toLocaleString("pt-BR")}`;
+  }
+
+  const end = Math.min(page * pageSize, totalCount);
+  return `${start.toLocaleString("pt-BR")}–${end.toLocaleString("pt-BR")} de ${totalCount.toLocaleString("pt-BR")}`;
+};
+
 const buildStudentsTableHref = (
   context: StudentsTableContext,
   page: number,
@@ -189,7 +208,8 @@ function StudentsTableFilterMenu({
         <DropdownMenuTrigger asChild>
           <Button
             aria-label={`Abrir filtros: ${context.filterLabel}`}
-            size="sm"
+            className="min-h-10"
+            size="default"
             type="button"
             variant="outline"
           >
@@ -258,6 +278,7 @@ export function StudentsTable({
   hasNextPage = false,
   onInitialOverlayClose,
   page = 1,
+  pageSize = 50,
   managementCapabilities = FULL_STUDENT_MANAGEMENT_CAPABILITIES,
   search = "",
   totalCount = students.length,
@@ -270,6 +291,7 @@ export function StudentsTable({
   onInitialOverlayClose?: (() => void) | undefined;
   students: StudentTableRow[];
   page?: number;
+  pageSize?: number;
   search?: string;
   totalCount?: number;
 }): React.JSX.Element {
@@ -403,6 +425,14 @@ export function StudentsTable({
           </TableBody>
         </Table>
       </div>
+
+      <p
+        aria-live="polite"
+        className="mt-3 text-muted-foreground text-xs tabular-nums"
+      >
+        {context.statusMode === "access" ? "Alunos" : "Matrículas"}{" "}
+        {formatResultRange(page, pageSize, totalCount, students.length)}
+      </p>
 
       {isPaginated ? (
         <div className="mt-4">

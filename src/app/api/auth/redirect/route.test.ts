@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   getCurrentSession: vi.fn(),
-  recordStudentLastAccess: vi.fn(),
+  recordLastAccess: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/session", () => ({
   getCurrentSession: dependencies.getCurrentSession,
-  recordStudentLastAccess: dependencies.recordStudentLastAccess,
+  recordLastAccess: dependencies.recordLastAccess,
 }));
 
 import { GET } from "./route";
@@ -87,9 +87,7 @@ describe("GET /api/auth/redirect", () => {
     await expect(response.json()).resolves.toEqual({
       redirectTo: "/comprar/curso-gratis",
     });
-    expect(dependencies.recordStudentLastAccess).toHaveBeenCalledWith(
-      "student-1"
-    );
+    expect(dependencies.recordLastAccess).toHaveBeenCalledWith("student-1");
   });
 
   it("falls back to the student surface for an invalid return path", async () => {

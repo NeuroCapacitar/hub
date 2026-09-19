@@ -38,6 +38,7 @@ export function CourseEnrollmentsTable({
   initialStudentId,
   managementCapabilities,
   page = 1,
+  pageSize = 50,
   search = "",
   statusFilter = "all",
   totalCount = enrollments.length,
@@ -49,6 +50,7 @@ export function CourseEnrollmentsTable({
   initialStudentId?: string | undefined;
   managementCapabilities?: StudentManagementCapabilities;
   page?: number;
+  pageSize?: number;
   search?: string;
   statusFilter?: AdminEnrollmentStatusFilter;
   totalCount?: number;
@@ -76,6 +78,7 @@ export function CourseEnrollmentsTable({
         initialStudentId ? clearInitialStudentAction : undefined
       }
       page={page}
+      pageSize={pageSize}
       search={search}
       students={enrollments.map(toStudentTableRow)}
       totalCount={totalCount}

@@ -70,6 +70,14 @@ A área `/admin/equipe` continua Admin-only, não cria Contas ou credenciais e
 protege autoalteração e remoção do último Admin. Alterações de acesso registram
 before/after, ator, alvo, motivo e correlação.
 
+A projeção da Equipe lista somente Contas com papel `admin` ou `support`. A
+promoção de uma Conta `student` começa por uma busca explícita na Equipe e
+reutiliza a mesma mutação auditada; não existe convite separado nesta
+superfície. Como o papel é global e único, promover remove a experiência do
+Aluno, preservando Matrículas, Pedidos, Progresso e Certificados. Uma futura
+Conta com acesso de aprendizagem e administrativo simultâneos exigirá nova
+decisão de modelo.
+
 ## Consequências
 
 - `requirePermission` avalia o sujeito completo, não apenas a role.

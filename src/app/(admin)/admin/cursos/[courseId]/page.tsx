@@ -404,6 +404,7 @@ export default async function AdminCourseDetailPage({
                     initialStudentId={enrollmentStudentId || undefined}
                     managementCapabilities={studentManagementCapabilities}
                     page={data.enrollmentsPage.page}
+                    pageSize={data.enrollmentsPage.pageSize}
                     search={data.enrollmentsPage.search}
                     statusFilter={enrollmentStatus}
                     totalCount={data.enrollmentsPage.totalCount}

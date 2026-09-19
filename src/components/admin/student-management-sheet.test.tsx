@@ -1,12 +1,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 vi.mock("@/features/admin/actions", () => ({
   adjustEnrollmentExpirationAction: vi.fn(),
   blockEnrollmentAccessAction: vi.fn(),
   blockStudentPlatformAccessAction: vi.fn(),
   restoreEnrollmentAccessAction: vi.fn(),
   restoreStudentPlatformAccessAction: vi.fn(),
+}));
+vi.mock("@/features/admin/staff-actions", () => ({
+  changeStaffAccessAction: vi.fn(),
 }));
 vi.mock("@/features/certificates/actions", () => ({
   issueManualCertificateAction: vi.fn(),
@@ -105,7 +112,8 @@ describe("StudentManagementSheetContent", () => {
     expect(markup).toContain("Certificados");
     expect(markup).toContain("Curso 1");
     expect(markup).toContain("Curso 2");
-    expect(markup).not.toContain("Bloquear acesso");
+    expect(markup).toContain("Gerenciar acesso");
+    expect(markup).not.toContain("Motivo do bloqueio");
     expect(markup).not.toContain('data-slot="tabs"');
     expect(markup).not.toContain('data-slot="accordion"');
     expect(markup).toContain("Abrir no Curso");
@@ -131,12 +139,15 @@ describe("StudentManagementSheetContent", () => {
         capabilities={adminCapabilities}
         data={data}
         onRefresh={vi.fn()}
-        showActions={false}
+        showActions
       />
     );
 
     expect(markup).toContain("Curso em contexto");
     expect(markup).toContain("Curso 1");
+    expect(markup).toContain("Gerenciar este Curso");
+    expect(markup).toContain("Gerenciar matrícula");
+    expect(markup).toContain("Gerenciar certificados");
     expect(markup).not.toContain("Curso 2");
     expect(markup).not.toContain("Acesso na plataforma");
     expect(markup).not.toContain("Bloquear acesso na plataforma");
@@ -144,7 +155,9 @@ describe("StudentManagementSheetContent", () => {
     expect(markup).not.toContain("Ajustar validade");
     expect(markup).not.toContain('data-slot="tabs"');
     expect(markup).not.toContain('data-slot="accordion"');
-    expect(markup).not.toContain('data-slot="dialog-trigger"');
+    expect(markup).toContain('data-slot="dialog-trigger"');
+    expect(markup).not.toContain("Ações da Matrícula");
+    expect(markup).not.toContain("Nova emissão");
     expect(markup).not.toContain("aria-pressed=");
     expect(markup).not.toContain('aria-controls="enrollment-');
   });
@@ -250,12 +263,17 @@ describe("StudentManagementSheetContent", () => {
         capabilities={supportCapabilities}
         data={supportData}
         onRefresh={vi.fn()}
+        showActions
       />
     );
 
     expect(markup).not.toContain("Acesso na plataforma");
     expect(markup).not.toContain("Bloquear acesso na plataforma");
     expect(markup).toContain("Detalhes da matrícula");
+    expect(markup).toContain("Gerenciar este Curso");
+    expect(markup).toContain("Gerenciar matrícula");
+    expect(markup).toContain("Gerenciar certificados");
+    expect(markup).not.toContain("Ações da Matrícula");
     expect(markup).not.toContain("Nova emissão");
     expect(markup).toContain("Operação");
   });

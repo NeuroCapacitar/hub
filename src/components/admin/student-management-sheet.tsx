@@ -22,6 +22,7 @@ import {
   getRefundRequestStatusPresentation,
 } from "@/features/admin/status-presentation";
 import { formatCurrencyInCents, formatDateTime } from "@/lib/formatters";
+import { StudentActionDialog } from "./student-action-dialog";
 import { StudentCertificateOperations } from "./student-certificate-operations";
 import {
   StudentEnrollmentDetails,
@@ -32,7 +33,7 @@ import type {
   StudentManagementCapabilities,
   StudentSheetPayload,
 } from "./student-management-types";
-import { StudentPlatformAccessControls } from "./student-platform-access-controls";
+import { StudentPlatformAccessSummary } from "./student-platform-access-controls";
 
 export type { StudentSheetPayload } from "./student-management-types";
 
@@ -172,67 +173,53 @@ export const SupportContextPanel = ({
 
 const getHeaderBadge = ({
   courseId,
-  platformBlockedAt,
 }: {
   courseId: string | null;
-  platformBlockedAt: string | null;
-}): { label: string; variant: "destructive" | "secondary" | "success" } => {
+}): { label: string; variant: "secondary" } | null => {
   if (courseId) {
     return { label: "Curso selecionado", variant: "secondary" };
   }
-  if (platformBlockedAt) {
-    return { label: "Plataforma bloqueada", variant: "destructive" };
-  }
-  return { label: "Plataforma ativa", variant: "success" };
+  return null;
 };
 
-export function StudentManagementSheet({
-  capabilities,
+const getStudentManagementRequestInit = (
+  signal?: AbortSignal
+): RequestInit => ({
+  cache: "no-store",
+  ...(signal ? { signal } : {}),
+});
+
+function useStudentManagementData({
   courseId,
   dataUrl,
-  onCloseAutoFocus,
-  onOpenChange,
-  open: controlledOpen,
-  showActions = false,
-  trigger,
+  open,
   userId,
 }: {
-  capabilities: StudentManagementCapabilities;
   courseId?: string;
   dataUrl?: string;
-  onCloseAutoFocus?: ComponentProps<typeof SheetContent>["onCloseAutoFocus"];
-  onOpenChange?: (open: boolean) => void;
-  open?: boolean;
-  showActions?: boolean;
-  trigger?: ReactNode;
+  open: boolean;
   userId: string;
-}): React.JSX.Element {
+}): {
+  clear: () => void;
+  data: StudentSheetPayload | null;
+  error: string | null;
+  isLoading: boolean;
+  load: (signal?: AbortSignal) => Promise<void>;
+  refresh: () => Promise<void>;
+} {
   const router = useRouter();
-  const [internalOpen, setInternalOpen] = useState(false);
   const [data, setData] = useState<StudentSheetPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const open = controlledOpen ?? internalOpen;
-  const headerBadge = data
-    ? getHeaderBadge({
-        courseId: data.context.courseId,
-        platformBlockedAt: data.student.platformBlockedAt,
-      })
-    : null;
-
   const load = useCallback(
     async (signal?: AbortSignal): Promise<void> => {
       setIsLoading(true);
       setError(null);
 
       try {
-        const requestInit: RequestInit = { cache: "no-store" };
-        if (signal) {
-          requestInit.signal = signal;
-        }
         const response = await fetch(
           dataUrl ?? getStudentManagementDataUrl(userId, courseId),
-          requestInit
+          getStudentManagementRequestInit(signal)
         );
         if (!response.ok) {
           throw new Error(
@@ -267,6 +254,10 @@ export function StudentManagementSheet({
     await load();
     router.refresh();
   }, [load, router]);
+  const clear = useCallback((): void => {
+    setData(null);
+    setError(null);
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -278,14 +269,149 @@ export function StudentManagementSheet({
     return () => controller.abort();
   }, [load, open]);
 
+  return { clear, data, error, isLoading, load, refresh };
+}
+
+function StudentManagementSheetHeader({
+  canOperate,
+  data,
+}: {
+  canOperate: boolean;
+  data: StudentSheetPayload | null;
+}): React.JSX.Element {
+  const headerBadge = data
+    ? getHeaderBadge({
+        courseId: data.context.courseId,
+      })
+    : null;
+
+  return (
+    <SheetHeader className="border-b pr-14">
+      {data ? (
+        <div className="flex min-w-0 items-start justify-between gap-4">
+          <div className="min-w-0">
+            <SheetTitle className="truncate text-lg">
+              {data.student.name}
+            </SheetTitle>
+            <SheetDescription className="mt-1 truncate">
+              {data.student.email}
+              {data.context.courseTitle ? ` · ${data.context.courseTitle}` : ""}
+            </SheetDescription>
+          </div>
+          {headerBadge ? (
+            <Badge className="shrink-0" variant={headerBadge.variant}>
+              {headerBadge.label}
+            </Badge>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <SheetTitle>
+            {canOperate ? "Gerenciar aluno" : "Detalhes do aluno"}
+          </SheetTitle>
+          <SheetDescription>
+            {canOperate
+              ? "Consulte acessos, matrículas e certificados sem sair da lista."
+              : "Consulte cursos, matrículas e certificados deste aluno."}
+          </SheetDescription>
+        </>
+      )}
+    </SheetHeader>
+  );
+}
+
+function StudentManagementSheetBody({
+  capabilities,
+  data,
+  dataUrl,
+  error,
+  isLoading,
+  load,
+  refresh,
+  showActions,
+}: {
+  capabilities: StudentManagementCapabilities;
+  data: StudentSheetPayload | null;
+  dataUrl?: string;
+  error: string | null;
+  isLoading: boolean;
+  load: (signal?: AbortSignal) => Promise<void>;
+  refresh: () => Promise<void>;
+  showActions: boolean;
+}): React.JSX.Element {
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      {isLoading ? <StudentManagementSheetSkeleton /> : null}
+      {!isLoading && error ? (
+        <div className="p-6" data-student-sheet-error>
+          <Alert variant="destructive">
+            <AlertTitle>Não foi possível carregar a ficha</AlertTitle>
+            <AlertDescription className="flex flex-col items-start gap-3">
+              <span>{error}</span>
+              <Button
+                onClick={() => load().catch(() => undefined)}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Tentar novamente
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
+      {!(isLoading || error) && data ? (
+        <StudentManagementSheetContent
+          capabilities={capabilities}
+          data={data}
+          {...(dataUrl ? { dataUrl } : {})}
+          onRefresh={refresh}
+          showActions={showActions}
+        />
+      ) : null}
+    </ScrollArea>
+  );
+}
+
+export function StudentManagementSheet({
+  capabilities,
+  courseId,
+  dataUrl,
+  onCloseAutoFocus,
+  onOpenChange,
+  open: controlledOpen,
+  showActions = false,
+  trigger,
+  userId,
+}: {
+  capabilities: StudentManagementCapabilities;
+  courseId?: string;
+  dataUrl?: string;
+  onCloseAutoFocus?: ComponentProps<typeof SheetContent>["onCloseAutoFocus"];
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+  showActions?: boolean;
+  trigger?: ReactNode;
+  userId: string;
+}): React.JSX.Element {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const { clear, data, error, isLoading, load, refresh } =
+    useStudentManagementData({
+      ...(courseId ? { courseId } : {}),
+      ...(dataUrl ? { dataUrl } : {}),
+      open,
+      userId,
+    });
+  const canOperate = showActions || capabilities.canManagePlatformAccess;
+
   const handleOpenChange = (nextOpen: boolean): void => {
     if (controlledOpen === undefined) {
       setInternalOpen(nextOpen);
     }
     onOpenChange?.(nextOpen);
     if (!nextOpen) {
-      setData(null);
-      setError(null);
+      clear();
     }
   };
 
@@ -298,68 +424,17 @@ export function StudentManagementSheet({
         onCloseAutoFocus={onCloseAutoFocus}
         side="right"
       >
-        <SheetHeader className="border-b pr-14">
-          {data ? (
-            <div className="flex min-w-0 items-start justify-between gap-4">
-              <div className="min-w-0">
-                <SheetTitle className="truncate text-lg">
-                  {data.student.name}
-                </SheetTitle>
-                <SheetDescription className="mt-1 truncate">
-                  {data.student.email}
-                  {data.context.courseTitle
-                    ? ` · ${data.context.courseTitle}`
-                    : ""}
-                </SheetDescription>
-              </div>
-              {headerBadge ? (
-                <Badge className="shrink-0" variant={headerBadge.variant}>
-                  {headerBadge.label}
-                </Badge>
-              ) : null}
-            </div>
-          ) : (
-            <>
-              <SheetTitle>
-                {showActions ? "Gerenciar aluno" : "Detalhes do aluno"}
-              </SheetTitle>
-              <SheetDescription>
-                {showActions
-                  ? "Consulte acessos, matrículas e certificados sem sair da lista."
-                  : "Consulte cursos, matrículas e certificados deste aluno."}
-              </SheetDescription>
-            </>
-          )}
-        </SheetHeader>
-        <ScrollArea className="min-h-0 flex-1">
-          {isLoading ? <StudentManagementSheetSkeleton /> : null}
-          {!isLoading && error ? (
-            <div className="p-6" data-student-sheet-error>
-              <Alert variant="destructive">
-                <AlertTitle>Não foi possível carregar a ficha</AlertTitle>
-                <AlertDescription className="flex flex-col items-start gap-3">
-                  <span>{error}</span>
-                  <Button
-                    onClick={() => load().catch(() => undefined)}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    Tentar novamente
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            </div>
-          ) : null}
-          {!(isLoading || error) && data ? (
-            <StudentManagementSheetContent
-              capabilities={capabilities}
-              data={data}
-              onRefresh={refresh}
-              showActions={showActions}
-            />
-          ) : null}
-        </ScrollArea>
+        <StudentManagementSheetHeader canOperate={canOperate} data={data} />
+        <StudentManagementSheetBody
+          capabilities={capabilities}
+          data={data}
+          {...(dataUrl ? { dataUrl } : {})}
+          error={error}
+          isLoading={isLoading}
+          load={load}
+          refresh={refresh}
+          showActions={showActions}
+        />
       </SheetContent>
     </Sheet>
   );
@@ -368,11 +443,13 @@ export function StudentManagementSheet({
 export function StudentManagementSheetContent({
   capabilities,
   data,
+  dataUrl,
   onRefresh,
   showActions = false,
 }: {
   capabilities: StudentManagementCapabilities;
   data: StudentSheetPayload;
+  dataUrl?: string;
   onRefresh: () => void | Promise<void>;
   showActions?: boolean;
 }): React.JSX.Element {
@@ -385,28 +462,34 @@ export function StudentManagementSheetContent({
         context={data.context}
         isCourseContext={isCourseContext}
         onRefresh={onRefresh}
-        showActions={showActions}
         student={data.student}
       />
+
+      {isCourseContext ? (
+        <StudentCourseOperations
+          capabilities={capabilities}
+          {...(data.context.courseId
+            ? { courseId: data.context.courseId }
+            : {})}
+          {...(dataUrl ? { dataUrl } : {})}
+          onRefresh={onRefresh}
+          showActions={showActions}
+          userId={data.student.userId}
+        />
+      ) : null}
 
       <StudentManagementEnrollmentSection
         capabilities={capabilities}
         enrollments={data.student.enrollments}
         isCourseContext={isCourseContext}
         onRefresh={onRefresh}
-        showActions={showActions}
+        showActions={isCourseContext ? false : showActions}
       />
 
       <StudentCertificateOperations
-        canIssue={
-          isCourseContext && showActions && capabilities.canManageCertificates
-        }
-        canReissue={
-          isCourseContext && showActions && capabilities.canReissueCertificates
-        }
-        canRevoke={
-          isCourseContext && showActions && capabilities.canManageCertificates
-        }
+        canIssue={false}
+        canReissue={false}
+        canRevoke={false}
         certificates={data.certificates}
         courseScoped={isCourseContext}
         courses={data.student.enrollments}
@@ -424,28 +507,114 @@ export function StudentManagementSheetContent({
   );
 }
 
+function StudentCourseOperations({
+  capabilities,
+  courseId,
+  dataUrl,
+  onRefresh,
+  showActions,
+  userId,
+}: {
+  capabilities: StudentManagementCapabilities;
+  courseId?: string;
+  dataUrl?: string;
+  onRefresh: () => void | Promise<void>;
+  showActions: boolean;
+  userId: string;
+}): React.JSX.Element | null {
+  const canManageEnrollment =
+    showActions &&
+    (capabilities.canManageEnrollmentSupport ||
+      (capabilities.canManageEnrollmentAccess ?? false));
+  const canManageCertificates =
+    showActions &&
+    (capabilities.canManageCertificates || capabilities.canReissueCertificates);
+
+  if (!(canManageEnrollment || canManageCertificates)) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-lg border bg-muted/10 p-4">
+      <div>
+        <h2 className="font-semibold text-base">Gerenciar este Curso</h2>
+        <p className="mt-1 text-muted-foreground text-sm">
+          Abra uma operação separada para revisar e alterar a Matrícula ou os
+          Certificados deste Curso.
+        </p>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {canManageEnrollment ? (
+          <StudentActionDialog
+            action="enrollment"
+            capabilities={capabilities}
+            {...(courseId ? { courseId } : {})}
+            {...(dataUrl ? { dataUrl } : {})}
+            onSuccess={onRefresh}
+            trigger={
+              <Button type="button" variant="default">
+                Gerenciar matrícula
+              </Button>
+            }
+            userId={userId}
+          />
+        ) : null}
+        {canManageCertificates ? (
+          <StudentActionDialog
+            action="certificate"
+            capabilities={capabilities}
+            {...(courseId ? { courseId } : {})}
+            {...(dataUrl ? { dataUrl } : {})}
+            onSuccess={onRefresh}
+            trigger={
+              <Button type="button" variant="outline">
+                Gerenciar certificados
+              </Button>
+            }
+            userId={userId}
+          />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function StudentManagementContextSection({
   capabilities,
   context,
   isCourseContext,
   onRefresh,
-  showActions,
   student,
 }: {
   capabilities: StudentManagementCapabilities;
   context: StudentSheetPayload["context"];
   isCourseContext: boolean;
   onRefresh: () => void | Promise<void>;
-  showActions: boolean;
   student: StudentSheetPayload["student"];
 }): React.JSX.Element {
   if (!isCourseContext) {
     return (
-      <StudentPlatformAccessControls
-        onSuccess={onRefresh}
-        readOnly={!(showActions && capabilities.canManagePlatformAccess)}
-        student={student}
-      />
+      <div className="flex flex-col gap-5">
+        <StudentPlatformAccessSummary
+          action={
+            capabilities.canManagePlatformAccess ? (
+              <StudentActionDialog
+                action="platform"
+                capabilities={capabilities}
+                onSuccess={onRefresh}
+                platformStudent={student}
+                trigger={
+                  <Button type="button" variant="outline">
+                    Gerenciar acesso
+                  </Button>
+                }
+                userId={student.userId}
+              />
+            ) : null
+          }
+          student={student}
+        />
+      </div>
     );
   }
 

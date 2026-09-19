@@ -624,6 +624,13 @@
       "when": 1789845025153,
       "tag": "0088_archive_lesson_comment_source",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1789854066801,
+      "tag": "0089_reconcile_legacy_profile_support_mode",
+      "breakpoints": true
     }
   ]
 }

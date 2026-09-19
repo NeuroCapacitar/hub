@@ -56,11 +56,10 @@ export function DiscardAwareDialog({
       return;
     }
 
-    if (externalOnOpenChange) {
-      externalOnOpenChange(newOpen);
-    } else {
+    if (externalOpen === undefined) {
       setInternalOpen(newOpen);
     }
+    externalOnOpenChange?.(newOpen);
 
     if (!newOpen) {
       isDirtyRef.current = false;
@@ -69,11 +68,10 @@ export function DiscardAwareDialog({
 
   const handleConfirmDiscard = () => {
     isDirtyRef.current = false;
-    if (externalOnOpenChange) {
-      externalOnOpenChange(false);
-    } else {
+    if (externalOpen === undefined) {
       setInternalOpen(false);
     }
+    externalOnOpenChange?.(false);
   };
 
   const setDirty = useCallback((dirty: boolean) => {

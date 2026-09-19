@@ -210,6 +210,7 @@ export function StudentActionDialog({
   capabilities,
   courseId,
   dataUrl,
+  onSuccess,
   onOpenChange,
   open: controlledOpen,
   platformStudent,
@@ -220,6 +221,7 @@ export function StudentActionDialog({
   capabilities: StudentManagementCapabilities;
   courseId?: string;
   dataUrl?: string;
+  onSuccess?: (() => void | Promise<void>) | undefined;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   platformStudent?: StudentPlatformAccessStudent | undefined;
@@ -285,7 +287,8 @@ export function StudentActionDialog({
       await load();
     }
     router.refresh();
-  }, [hasImmediatePlatformStudent, load, router]);
+    await onSuccess?.();
+  }, [hasImmediatePlatformStudent, load, onSuccess, router]);
 
   useEffect(() => {
     if (!open) {

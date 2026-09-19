@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminLandingPath } from "@/lib/auth-policy";
 import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
 import { createCorrelationId, logOperationalEvent } from "@/lib/observability";
-import { getCurrentSession, recordStudentLastAccess } from "@/lib/session";
+import { getCurrentSession, recordLastAccess } from "@/lib/session";
 
 export const GET = async (request: Request): Promise<NextResponse> => {
   const searchParams = new URL(request.url).searchParams;
@@ -19,18 +19,16 @@ export const GET = async (request: Request): Promise<NextResponse> => {
     return NextResponse.json({ error: "blocked" }, { status: 403 });
   }
 
-  if (session.role === "student") {
-    try {
-      await recordStudentLastAccess(session.user.id);
-    } catch {
-      logOperationalEvent({
-        correlationId: createCorrelationId(null),
-        errorCode: "student_last_access_update_failed",
-        operation: "auth.last_access",
-        outcome: "failure",
-        provider: "database",
-      });
-    }
+  try {
+    await recordLastAccess(session.user.id);
+  } catch {
+    logOperationalEvent({
+      correlationId: createCorrelationId(null),
+      errorCode: "last_access_update_failed",
+      operation: "auth.last_access",
+      outcome: "failure",
+      provider: "database",
+    });
   }
 
   return NextResponse.json({

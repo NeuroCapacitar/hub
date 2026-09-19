@@ -147,6 +147,7 @@ export default async function AdminStudentsPage({
               hasNextPage={data.hasNextPage}
               managementCapabilities={managementCapabilities}
               page={data.page}
+              pageSize={data.pageSize}
               search={data.search}
               students={students}
               totalCount={data.totalCount}

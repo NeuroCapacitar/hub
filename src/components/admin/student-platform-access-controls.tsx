@@ -101,22 +101,27 @@ function StudentPlatformAccessHeading(): React.JSX.Element {
 }
 
 function PlatformAccessStatusCard({
+  action,
   isBlocked,
   student,
 }: {
+  action?: React.ReactNode;
   isBlocked: boolean;
   student: StudentPlatformAccessStudent;
 }): React.JSX.Element {
   return (
-    <div className="rounded-lg border bg-muted/10 p-4">
-      <p className="font-medium text-sm">
-        {isBlocked ? "Acesso bloqueado" : "Acesso ativo"}
-      </p>
-      <p className="mt-1 text-muted-foreground text-xs">
-        {isBlocked
-          ? (student.platformBlockedReason ?? "Bloqueio administrativo")
-          : "O aluno pode acessar a plataforma e seus Cursos liberados."}
-      </p>
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-muted/10 p-4">
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-sm">
+          {isBlocked ? "Acesso bloqueado" : "Acesso ativo"}
+        </p>
+        <p className="mt-1 text-muted-foreground text-xs">
+          {isBlocked
+            ? (student.platformBlockedReason ?? "Bloqueio administrativo")
+            : "O aluno pode acessar a plataforma e seus Cursos liberados."}
+        </p>
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   );
 }
@@ -259,8 +264,10 @@ function RestorePlatformAccessForm({
 }
 
 export function StudentPlatformAccessSummary({
+  action,
   student,
 }: {
+  action?: React.ReactNode;
   student: StudentPlatformAccessStudent;
 }): React.JSX.Element {
   const isBlocked = Boolean(student.platformBlockedAt);
@@ -271,7 +278,11 @@ export function StudentPlatformAccessSummary({
       data-student-platform-access-readonly
     >
       <StudentPlatformAccessHeading />
-      <PlatformAccessStatusCard isBlocked={isBlocked} student={student} />
+      <PlatformAccessStatusCard
+        action={action}
+        isBlocked={isBlocked}
+        student={student}
+      />
       {isBlocked ? (
         <Alert variant="destructive">
           <AlertTitle>Acesso bloqueado</AlertTitle>

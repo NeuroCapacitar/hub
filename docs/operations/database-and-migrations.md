@@ -2,8 +2,8 @@
 status: canonical
 owner: engineering
 last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
-current_migration_tag: 0088_archive_lesson_comment_source
-migration_entry_count: 89
+current_migration_tag: 0089_reconcile_legacy_profile_support_mode
+migration_entry_count: 90
 schema_table_count: 50
 ---
 
@@ -180,6 +180,16 @@ discussão continua identificada por Curso + `curriculum_key` quando a Aula fís
 é removida. A migration foi aplicada em Development em 2026-09-19; o banco
 confirmou a FK com `SET NULL`, as identidades materializadas preservadas e o
 índice de origem renomeado.
+
+A migration `0089_reconcile_legacy_profile_support_mode` remove a coluna e a
+constraint legadas de `support_mode`, que não pertencem ao modelo atual de
+permissões de Suporte, e recria o trigger de revogação de sessões para observar
+somente mudanças de `role`. Ela também reconcilia de forma idempotente as
+colunas, FKs e índices da identidade materializada de `lesson_comments`,
+protegendo ambientes cujo ledger registrou `0087`/`0088` sem refletir todo o
+schema. Foi aplicada em Development em 2026-09-19; a transição Support → Student
+passou em transação com rollback, o campo legado não existe mais e os comentários
+mantêm `course_id`, `curriculum_key` e `source_lesson_id` sem identidades nulas.
 
 O runner de Development aplicou `0085` em 2026-09-17. A auditoria read-only
 confirmou o check `allowlist refinada e grants configuráveis limpos` e nenhum
