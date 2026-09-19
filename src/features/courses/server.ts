@@ -14,11 +14,13 @@ import {
   type CourseSalesStatus,
   resolveCourseAvailability,
 } from "@/features/courses/availability";
+import type { StudentCheckoutCourseContext } from "@/features/courses/checkout-course-context";
 import { lockCourseContentRelease } from "@/features/courses/content-release-lock";
 import {
   classifyContentReleaseError,
   createContentReleaseDiagnostics,
 } from "@/features/courses/content-release-observability";
+import type { CourseOfferSummaryData } from "@/features/courses/course-offer-summary";
 import {
   type LessonContent,
   parseLessonContent,
@@ -82,27 +84,21 @@ export interface StudentCourseCard {
   workloadHours: number;
 }
 
-export interface StudentCatalogCourseCard {
+export interface StudentCatalogCourseCard extends CourseOfferSummaryData {
   accessStatus: "active" | "expired" | "none" | "revoked";
   availabilityPreset: CourseAvailabilityPreset;
   completedCount: number;
   courseId: string;
-  coverBlurDataUrl: string | null;
-  description: string | null;
   expiresAt: Date | null;
   isEnrolled: boolean;
   isInterested: boolean;
   launchDate: string | null;
   launchLandingUrl: string | null;
-  lessonCount: number;
   nextLessonId: string | null;
   nextReleaseAt: Date | null;
-  priceInCents: number;
   progressPercent: number;
   revokedReason: string | null;
   slug: string;
-  thumbnailUrl: string | null;
-  title: string;
   totalCount: number;
   totalDurationSeconds: number;
   workloadHours: number;
@@ -367,6 +363,7 @@ type StudentCatalogCourseAggregate = StudentCatalogCourseCard & {
   decisionNow: Date;
   durationSecondsPerLesson: Map<string, number>;
   lessonIds: string[];
+  moduleIds: Set<string>;
   requiredLessonIds: string[];
   lessons: Array<{
     id: string;
@@ -375,6 +372,15 @@ type StudentCatalogCourseAggregate = StudentCatalogCourseCard & {
     moduleSortOrder: number;
     sortOrder: number;
   }>;
+};
+
+const addCatalogModuleId = (
+  moduleIds: Set<string>,
+  moduleId: string | null
+): void => {
+  if (moduleId) {
+    moduleIds.add(moduleId);
+  }
 };
 
 interface CourseOverviewRow {
@@ -703,7 +709,9 @@ export const getStudentCourseCatalog = async (
 ): Promise<StudentCatalogCourseCard[]> => {
   const { rows } = await getPool().query<{
     access_status: "active" | "expired" | "none" | "revoked";
+    access_duration_months: number;
     catalog_visibility: CourseCatalogVisibility;
+    certificate_enabled: boolean;
     completed_at: Date | null;
     content_release_mode: ContentReleaseMode | null;
     content_release_started_at: Date | null;
@@ -724,6 +732,9 @@ export const getStudentCourseCatalog = async (
     module_release_delay_days: number | null;
     module_id: string | null;
     module_sort_order: number | null;
+    payment_allow_credit_card: boolean;
+    payment_allow_pix: boolean;
+    payment_max_installment_count: number;
     price_in_cents: number;
     revoked_reason: string | null;
     sales_status: CourseSalesStatus;
@@ -739,9 +750,14 @@ export const getStudentCourseCatalog = async (
         c.slug,
         c.title,
         c.description as course_description,
+        c.access_duration_months,
         c.status as course_status,
         c.catalog_visibility,
         c.sales_status,
+        c.certificate_enabled,
+        c.payment_allow_credit_card,
+        c.payment_allow_pix,
+        c.payment_max_installment_count,
         c.launch_date,
         c.launch_landing_url,
         coalesce(
@@ -824,7 +840,9 @@ export const getStudentCourseCatalog = async (
       continue;
     }
     const course = byCourse.get(row.course_id) ?? {
+      accessDurationMonths: row.access_duration_months,
       availabilityPreset: availability.preset,
+      certificateEnabled: row.certificate_enabled,
       courseId: row.course_id,
       slug: row.slug,
       title: row.title,
@@ -839,6 +857,7 @@ export const getStudentCourseCatalog = async (
       launchDate: row.launch_date,
       launchLandingUrl: row.launch_landing_url,
       lessonCount: 0,
+      moduleCount: 0,
       accessStatus: row.access_status,
       contentReleaseMode: row.content_release_mode ?? "full_access",
       contentReleaseStartedAt: row.content_release_started_at,
@@ -850,12 +869,18 @@ export const getStudentCourseCatalog = async (
       totalDurationSeconds: 0,
       nextLessonId: null,
       nextReleaseAt: null,
+      paymentAllowCreditCard: row.payment_allow_credit_card,
+      paymentAllowPix: row.payment_allow_pix,
+      paymentMaxInstallmentCount: row.payment_max_installment_count,
       lessonIds: [],
+      moduleIds: new Set<string>(),
       requiredLessonIds: [],
       completedLessonIds: [],
       durationSecondsPerLesson: new Map<string, number>(),
       lessons: [],
     };
+
+    addCatalogModuleId(course.moduleIds, row.module_id);
 
     if (row.lesson_id) {
       course.lessonIds.push(row.lesson_id);
@@ -902,6 +927,7 @@ export const getStudentCourseCatalog = async (
       : { nextLessonId: null, nextReleaseAt: null };
 
     return {
+      accessDurationMonths: course.accessDurationMonths,
       courseId: course.courseId,
       slug: course.slug,
       title: course.title,
@@ -916,8 +942,14 @@ export const getStudentCourseCatalog = async (
       launchDate: course.launchDate,
       launchLandingUrl: course.launchLandingUrl,
       lessonCount: course.lessonIds.length,
+      moduleCount: course.moduleIds.size,
       availabilityPreset: course.availabilityPreset,
       accessStatus: course.accessStatus,
+      certificateEnabled:
+        course.certificateEnabled && course.requiredLessonIds.length > 0,
+      paymentAllowCreditCard: course.paymentAllowCreditCard,
+      paymentAllowPix: course.paymentAllowPix,
+      paymentMaxInstallmentCount: course.paymentMaxInstallmentCount,
       revokedReason: course.revokedReason,
       progressPercent: progress.percent,
       completedCount: progress.completedCount,
@@ -943,6 +975,53 @@ export const getStudentCourseAccessStatus = async ({
   return {
     canAccess,
     redirectTo: `/app/cursos/${courseId}`,
+  };
+};
+
+export const getStudentCheckoutCourseContext = async ({
+  courseId,
+  userId,
+}: {
+  courseId: string;
+  userId: string;
+}): Promise<StudentCheckoutCourseContext | null> => {
+  const { rows } = await getPool().query<{
+    catalog_visibility: CourseCatalogVisibility;
+    cover_image_json: unknown;
+    enrollment_id: string | null;
+    status: CourseDeliveryStatus;
+    thumbnail_url: string | null;
+    title: string;
+  }>(
+    `
+      select
+        c.catalog_visibility,
+        c.cover_image_json,
+        c.status,
+        c.thumbnail_url,
+        c.title,
+        e.id as enrollment_id
+      from courses c
+      left join enrollments e
+        on e.course_id = c.id
+       and e.user_id = $2
+      where c.id = $1
+        and c.status <> 'archived'
+        and (c.catalog_visibility = 'listed' or e.id is not null)
+      limit 1
+    `,
+    [courseId, userId]
+  );
+  const course = rows[0];
+
+  if (!course) {
+    return null;
+  }
+
+  return {
+    coverBlurDataUrl: getCourseCoverBlurDataUrl(course.cover_image_json),
+    title: course.title,
+    thumbnailUrl: course.thumbnail_url,
   };
 };
 

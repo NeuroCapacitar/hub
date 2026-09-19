@@ -34,8 +34,10 @@ vi.mock("./student-banners-carousel", () => ({
 import StudentDashboardPage from "./page";
 
 const course = {
+  accessDurationMonths: 12,
   accessStatus: "none",
   availabilityPreset: "coming_soon",
+  certificateEnabled: false,
   completedCount: 0,
   courseId: "course-1",
   coverBlurDataUrl: null,
@@ -46,8 +48,12 @@ const course = {
   launchDate: "2026-10-01",
   launchLandingUrl: null,
   lessonCount: 0,
+  moduleCount: 0,
   nextLessonId: null,
   priceInCents: 10_000,
+  paymentAllowCreditCard: true,
+  paymentAllowPix: true,
+  paymentMaxInstallmentCount: 3,
   progressPercent: 0,
   revokedReason: null,
   slug: "curso-futuro",
@@ -94,6 +100,27 @@ describe("Student dashboard availability", () => {
     expect(markup).toContain("Inscrever-se grátis");
     expect(markup).toContain('aria-haspopup="dialog"');
     expect(markup).not.toContain(">Adquirir acesso<");
+  });
+
+  it("opens the purchase summary from the purchasable card surface", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        availabilityPreset: "available",
+        courseId: "course-paid",
+        priceInCents: 15_000,
+        slug: "curso-pago",
+        title: "Curso pago",
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+    const cardMarkup = getCardMarkup(markup, "Curso pago");
+
+    expect(cardMarkup).toContain(
+      'aria-label="Abrir resumo do Curso Curso pago"'
+    );
+    expect(cardMarkup).not.toContain('href="/comprar/curso-pago"');
   });
 
   it("combines upcoming courses with paused enrollments", async () => {

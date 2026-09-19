@@ -61,6 +61,21 @@ describe("PurchasePage", () => {
       courseSlug: "curso-publico",
       courseTitle: "Curso publico",
       kind: "checkout",
+      offer: {
+        accessDurationMonths: 12,
+        certificateEnabled: true,
+        coverBlurDataUrl: null,
+        description: "Description",
+        lessonCount: 8,
+        moduleCount: 3,
+        paymentAllowCreditCard: true,
+        paymentAllowPix: true,
+        paymentMaxInstallmentCount: 3,
+        priceInCents: 15_000,
+        thumbnailUrl: null,
+        title: "Curso publico",
+        workloadHours: 2,
+      },
     });
 
     const markup = renderToStaticMarkup(

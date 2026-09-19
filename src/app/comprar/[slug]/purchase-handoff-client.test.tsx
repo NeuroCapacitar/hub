@@ -22,6 +22,21 @@ const SECOND_ATTEMPT = "22222222-2222-4222-8222-222222222222";
 const STORAGE_KEY = "hub:checkout-attempt:v3:curso-publico";
 const LEGACY_STORAGE_KEY = "hub:checkout-attempt:curso-publico";
 const RELEASE_DIGEST = "a".repeat(64);
+const OFFER = {
+  accessDurationMonths: 12,
+  certificateEnabled: true,
+  coverBlurDataUrl: null,
+  description: "Uma introdução prática ao tema.",
+  lessonCount: 8,
+  moduleCount: 3,
+  paymentAllowCreditCard: true,
+  paymentAllowPix: true,
+  paymentMaxInstallmentCount: 3,
+  priceInCents: 15_000,
+  thumbnailUrl: null,
+  title: "Curso publico",
+  workloadHours: 2,
+} as const;
 
 let container: HTMLDivElement;
 let root: Root;
@@ -47,6 +62,7 @@ const renderHandoff = ({
           <PurchaseHandoffClient
             courseSlug="curso-publico"
             courseTitle="Curso publico"
+            offer={OFFER}
             releaseScheduleDigest={releaseScheduleDigest}
           />
         </StrictMode>
@@ -54,6 +70,7 @@ const renderHandoff = ({
         <PurchaseHandoffClient
           courseSlug="curso-publico"
           courseTitle="Curso publico"
+          offer={OFFER}
           releaseScheduleDigest={releaseScheduleDigest}
         />
       )
@@ -277,6 +294,9 @@ describe("PurchaseHandoffClient", () => {
     );
     expect(container.textContent).toContain("order-1");
     expect(container.textContent).toContain("Não inicie outra tentativa");
+    expect(container.textContent).toContain("8 aulas");
+    expect(container.textContent).toContain("3 módulos");
+    expect(container.textContent).toContain("150,00");
   });
 
   it("consulta a mesma tentativa ate o checkout em processamento ficar pronto", async () => {
