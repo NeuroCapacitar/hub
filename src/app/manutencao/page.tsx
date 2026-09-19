@@ -1,18 +1,21 @@
-import { BrandLogo } from "@/components/brand-logo";
+import {
+  SystemStateRetryButton,
+  SystemStateShell,
+} from "@/components/system-state-shell";
+import { Badge } from "@/components/ui/badge";
 
-export default function MaintenancePage() {
+export default function MaintenancePage(): React.JSX.Element {
   return (
-    <main className="grid min-h-screen place-items-center bg-background px-6">
-      <section className="max-w-xl text-center">
-        <BrandLogo
-          className="mx-auto h-10 w-auto max-w-full object-contain"
-          preload
-        />
-        <h1 className="type-page-title mt-3">Ambiente em manutenção</h1>
-        <p className="mt-4 text-muted-foreground">
-          Estamos preparando a plataforma. Tente novamente mais tarde.
-        </p>
-      </section>
-    </main>
+    <SystemStateShell>
+      <Badge variant="warning">Manutenção em andamento</Badge>
+      <h1 className="type-page-title mt-4">Ambiente em manutenção</h1>
+      <p className="type-body-sm mt-4 max-w-xl text-muted-foreground">
+        Estamos realizando uma manutenção temporária para preparar a plataforma.
+        Tente novamente em alguns minutos.
+      </p>
+      <div className="mt-6 flex flex-wrap gap-3">
+        <SystemStateRetryButton />
+      </div>
+    </SystemStateShell>
   );
 }

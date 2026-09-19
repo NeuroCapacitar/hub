@@ -1,9 +1,17 @@
 "use client";
 
 import { captureException } from "@sentry/nextjs";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import "./globals.css";
+import {
+  SystemStateShell,
+  SystemStateSupportReference,
+} from "@/components/system-state-shell";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { createCorrelationId } from "@/lib/observability";
+import { route } from "@/lib/routes";
 import { isSentryRuntimeEnabled } from "@/lib/sentry-deployment";
 
 export default function GlobalError({
@@ -30,25 +38,30 @@ export default function GlobalError({
   return (
     <html lang="pt-BR">
       <body className="bg-background font-sans text-foreground antialiased">
-        <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col items-start justify-center gap-4 px-6">
-          <h1 className="type-page-title" ref={headingRef} tabIndex={-1}>
-            Ocorreu uma falha inesperada.
+        <SystemStateShell>
+          <Badge variant="destructive">Erro inesperado</Badge>
+          <h1 className="type-page-title mt-4" ref={headingRef} tabIndex={-1}>
+            O Hub encontrou um problema.
           </h1>
-          <p className="type-body-sm text-muted-foreground">
-            Tente novamente. Se persistir, contate a equipe responsável.
+          <p className="type-body-sm mt-4 max-w-xl text-muted-foreground">
+            Tente novamente. Se persistir, informe o código de suporte abaixo à
+            equipe responsável.
           </p>
-          <p className="type-code text-muted-foreground">
-            Identificador de correlação: {correlationId}
-          </p>
-          {error.digest ? (
-            <p className="type-code text-muted-foreground">
-              Referência do servidor: {error.digest}
-            </p>
-          ) : null}
-          <Button onClick={unstable_retry} type="button">
-            Tentar novamente
-          </Button>
-        </main>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button onClick={unstable_retry} type="button">
+              Tentar novamente
+            </Button>
+            <Button asChild variant="outline">
+              <Link href={route("/")}>Ir para o início</Link>
+            </Button>
+          </div>
+          <div className="mt-6">
+            <SystemStateSupportReference
+              correlationId={correlationId}
+              {...(error.digest ? { digest: error.digest } : {})}
+            />
+          </div>
+        </SystemStateShell>
       </body>
     </html>
   );

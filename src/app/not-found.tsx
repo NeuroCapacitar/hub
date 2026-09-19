@@ -1,18 +1,23 @@
 import Link from "next/link";
+import { SystemStateShell } from "@/components/system-state-shell";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { route } from "@/lib/routes";
 
 export default function NotFound(): React.JSX.Element {
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col items-start justify-center gap-4 px-6">
-      <h1 className="type-page-title">Página indisponível</h1>
-      <p className="type-body-sm text-muted-foreground">
-        Este conteúdo não existe, não está disponível ou seu acesso não permite
-        abri-lo agora.
+    <SystemStateShell>
+      <Badge variant="outline">Página indisponível</Badge>
+      <h1 className="type-page-title mt-4">Não encontramos essa página</h1>
+      <p className="type-body-sm mt-4 max-w-xl text-muted-foreground">
+        A página ou conteúdo que você tentou abrir não está disponível. Volte ao
+        início para continuar.
       </p>
-      <Button asChild>
-        <Link href={route("/app")}>Voltar aos meus cursos</Link>
-      </Button>
-    </main>
+      <div className="mt-6 flex flex-wrap gap-3">
+        <Button asChild>
+          <Link href={route("/")}>Ir para o início</Link>
+        </Button>
+      </div>
+    </SystemStateShell>
   );
 }
