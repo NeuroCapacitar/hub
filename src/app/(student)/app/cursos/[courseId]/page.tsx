@@ -77,7 +77,11 @@ export default async function StudentCourseOverviewPage({
   if (data.certificateCode) {
     primaryAction = (
       <Button asChild className="h-full w-full px-6 sm:w-auto" size="sm">
-        <Link href={route(`/certificados/${data.certificateCode}`)}>
+        <Link
+          href={route(`/certificados/${data.certificateCode}`)}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
           Ver certificado
         </Link>
       </Button>
@@ -225,7 +229,11 @@ function CourseCertificatePanel({
         </CardContent>
         <CardFooter>
           <Button asChild variant="outline">
-            <Link href={route(`/certificados/${certificateCode}`)}>
+            <Link
+              href={route(`/certificados/${certificateCode}`)}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
               Ver certificado
             </Link>
           </Button>
@@ -252,7 +260,11 @@ function CourseCertificatePanel({
         </CardContent>
         <CardFooter>
           <Button asChild>
-            <Link href={route(`/certificados/${certificateCode}`)}>
+            <Link
+              href={route(`/certificados/${certificateCode}`)}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
               Ver certificado
             </Link>
           </Button>

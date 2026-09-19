@@ -1407,8 +1407,12 @@ function RecentCertificatesTable({
                 </TableCell>
                 <TableCell className="text-right">
                   <Button asChild size="sm" variant="ghost">
-                    <Link href={route(`/certificados/${certificate.code}`)}>
-                      Ver apenas
+                    <Link
+                      href={route(`/certificados/${certificate.code}`)}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      Ver
                       <HugeiconsIcon
                         aria-hidden="true"
                         data-icon="inline-end"

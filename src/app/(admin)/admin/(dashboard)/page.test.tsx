@@ -250,7 +250,10 @@ describe("AdminPage", () => {
     expect(markup).toContain("Aluno exemplo");
     expect(markup).toContain("/admin/financeiro?tab=orders&amp;q=order-1");
     expect(markup).toContain("/certificados/CERT-1");
-    expect(markup).toContain("Ver apenas");
+    expect(markup).toContain("Ver");
+    expect(markup).not.toContain("Ver apenas");
+    expect(markup).toContain('target="_blank"');
+    expect(markup).toContain('rel="noopener noreferrer"');
     expect(markup).not.toContain(">Arquivo<");
   });
 

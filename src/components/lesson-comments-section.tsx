@@ -8,7 +8,6 @@ import {
 } from "@/features/comments/actions";
 import type { LessonCommentView } from "@/features/comments/rules";
 import { formatDateTime } from "@/lib/formatters";
-import type { AppRole } from "@/lib/session";
 import { LessonCommentsSubmitButton } from "./lesson-comments-submit-button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
@@ -168,7 +167,6 @@ function CommentBody({
             />
           )}
         </span>
-        <RoleBadge role={comment.author.role} />
         <span className="text-muted-foreground text-xs">
           {formatDateTime(comment.createdAt)}
         </span>
@@ -260,18 +258,6 @@ function CommentAvatar({
     <Avatar size={size}>
       <AvatarFallback>{getInitials(authorName)}</AvatarFallback>
     </Avatar>
-  );
-}
-
-function RoleBadge({ role }: { role: AppRole }): React.JSX.Element | null {
-  if (role === "student") {
-    return null;
-  }
-
-  return (
-    <Badge variant={role === "admin" ? "default" : "secondary"}>
-      {role === "admin" ? "Admin" : "Suporte"}
-    </Badge>
   );
 }
 

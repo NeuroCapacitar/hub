@@ -11,5 +11,9 @@ describe("lesson comments section moderation UI", () => {
     expect(source).toContain("restoreLessonCommentAction");
     expect(source).toContain("Desocultar");
     expect(source).toContain("Comentário ocultado da área do aluno.");
+    expect(source).toContain("VerifiedBadge");
+    expect(source).toContain('comment.author.role === "admin"');
+    expect(source).toContain('comment.author.role === "support"');
+    expect(source).not.toContain("RoleBadge");
   });
 });

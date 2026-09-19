@@ -73,7 +73,8 @@ describe("AdminSettingsPage", () => {
     expect(markup).toContain("Instituição emissora");
     expect(markup).toContain("Assinatura padrão");
     expect(markup).toContain("Perfil pronto");
-    expect(markup).toContain("Ver histórico");
+    expect(markup).not.toContain("Ver histórico");
+    expect(markup).not.toContain("Última alteração em");
     expect(markup).toContain("Conteúdo editorial");
     expect(markup).toContain("Banners renderizados");
     expect(markup).toContain("Mídias de acesso renderizadas");
