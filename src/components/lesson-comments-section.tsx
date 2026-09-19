@@ -101,7 +101,7 @@ function CommentThread({
   lessonId: string;
 }): React.JSX.Element {
   return (
-    <article className="flex gap-3">
+    <article className="flex gap-3" id={`comment-${comment.id}`}>
       <CommentAvatar authorName={comment.author.name} />
       <div className="min-w-0 flex-1 space-y-3">
         <CommentBody canModerate={canModerate} comment={comment} />
@@ -109,7 +109,11 @@ function CommentThread({
         {comment.replies.length > 0 ? (
           <div className="space-y-3 border-border/60 border-l pl-4">
             {comment.replies.map((reply) => (
-              <div className="flex gap-3" key={reply.id}>
+              <div
+                className="flex gap-3"
+                id={`comment-${reply.id}`}
+                key={reply.id}
+              >
                 <CommentAvatar authorName={reply.author.name} size="sm" />
                 <div className="min-w-0 flex-1">
                   <CommentBody canModerate={canModerate} comment={reply} />

@@ -2,8 +2,8 @@
 status: canonical
 owner: engineering
 last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
-current_migration_tag: 0086_remove_course_subtitle
-migration_entry_count: 87
+current_migration_tag: 0088_archive_lesson_comment_source
+migration_entry_count: 89
 schema_table_count: 50
 ---
 
@@ -164,6 +164,22 @@ Operação, FAQ, Banners e mídias de acesso não é persistido como grant.
 A migration `0086_remove_course_subtitle` remove o campo opcional de subtítulo
 de `courses`. O valor deixou de fazer parte do modelo e da experiência do
 Curso; valores existentes nessa coluna são descartados pela migration forward-only.
+
+A migration `0087_stable_lesson_discussion_fields` materializa `course_id` e
+`curriculum_key` em `lesson_comments`, backfilling os comentários existentes a
+partir da Aula de origem antes de aplicar `NOT NULL`. Ela cria um índice composto
+para leitura por discussão e mantém `lesson_id` como contexto físico nesta
+primeira fase. A identidade da discussão é Curso + `curriculum_key`; comentários
+não são copiados entre publicações. A migration foi aplicada em Development em
+2026-09-19 e o preflight pós-migration confirmou 4 comentários, zero identidades
+nulas e zero divergências com a Aula de origem.
+
+A migration `0088_archive_lesson_comment_source` renomeia o vínculo físico para
+`source_lesson_id`, permite que ele seja nulo e usa `ON DELETE SET NULL`. A
+discussão continua identificada por Curso + `curriculum_key` quando a Aula física
+é removida. A migration foi aplicada em Development em 2026-09-19; o banco
+confirmou a FK com `SET NULL`, as identidades materializadas preservadas e o
+índice de origem renomeado.
 
 O runner de Development aplicou `0085` em 2026-09-17. A auditoria read-only
 confirmou o check `allowlist refinada e grants configuráveis limpos` e nenhum

@@ -48,6 +48,7 @@ import type {
   AdminDashboardOperations,
   AdminDashboardPendingCertificate,
   AdminDashboardRecentCertificate,
+  AdminDashboardRecentComment,
   AdminDashboardRecentOrder,
   AdminDashboardSupportDeliveryState,
   AdminDashboardSupportRequest,
@@ -404,6 +405,7 @@ export default async function AdminPage(): Promise<React.JSX.Element> {
 
         <RecentActivity
           recentCertificates={data.recentCertificates}
+          recentComments={data.recentComments}
           recentOrders={data.recentOrders}
         />
 
@@ -534,14 +536,14 @@ function OperationsOverview({
   }
 
   const attentionSignalCount = issues.attention.length;
-  const signalCount = attentionSignalCount + issues.watch.length;
-  let operationBadgeLabel = "Operação estável";
-  if (signalCount > 0) {
-    operationBadgeLabel = "Sem ação imediata";
-  }
-  if (attentionSignalCount > 0) {
-    operationBadgeLabel = `${formatCount(attentionSignalCount)} pontos para agir`;
-  }
+  const operationBadgeLabel =
+    attentionSignalCount > 0
+      ? `${formatCount(attentionSignalCount)} ${getPluralLabel(
+          attentionSignalCount,
+          "ponto para agir",
+          "pontos para agir"
+        )}`
+      : "Sem ação imediata";
   const operationBadgeVariant =
     attentionSignalCount > 0 ? "destructive" : "success";
 
@@ -1142,13 +1144,19 @@ function ContextMetric({
 }
 
 function RecentActivity({
+  recentComments,
   recentCertificates,
   recentOrders,
 }: {
+  recentComments: AdminDashboardRecentComment[];
   recentCertificates: AdminDashboardRecentCertificate[];
   recentOrders: AdminDashboardRecentOrder[];
 }): React.JSX.Element | null {
-  if (recentCertificates.length === 0 && recentOrders.length === 0) {
+  if (
+    recentComments.length === 0 &&
+    recentCertificates.length === 0 &&
+    recentOrders.length === 0
+  ) {
     return null;
   }
 
@@ -1159,7 +1167,8 @@ function RecentActivity({
           Atividade recente
         </h2>
         <p className="type-body-sm mt-1 text-muted-foreground">
-          Consulte as compras e emissões mais recentes sem sair do fluxo.
+          Consulte as compras, emissões e comentários mais recentes sem sair do
+          fluxo.
         </p>
       </div>
       <div className="flex flex-col gap-4">
@@ -1169,8 +1178,35 @@ function RecentActivity({
         {recentCertificates.length > 0 ? (
           <RecentCertificatesCard certificates={recentCertificates} />
         ) : null}
+        {recentComments.length > 0 ? (
+          <RecentCommentsCard comments={recentComments} />
+        ) : null}
       </div>
     </section>
+  );
+}
+
+function RecentCommentsCard({
+  comments,
+}: {
+  comments: AdminDashboardRecentComment[];
+}): React.JSX.Element {
+  return (
+    <Card className="min-w-0">
+      <CardHeader className="border-b pb-4">
+        <CardTitle as="h3" className="text-base">
+          Últimos comentários
+        </CardTitle>
+        <CardDescription className="mt-1">
+          Os 5 comentários mais recentes nas aulas.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-lg border">
+          <RecentCommentsTable comments={comments} />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1259,93 +1295,72 @@ function RecentOrdersTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {orders.length > 0 ? (
-          orders.map((order) => {
-            const status = getOrderStatusPresentation(order.status);
-            const checkoutStatus = getCheckoutStatusPresentation(
-              order.checkoutStatus
-            );
-            return (
-              <TableRow key={order.id}>
-                <TableRowHeader className="max-w-[220px]">
-                  <span className="block truncate">
-                    {order.customerName ?? "Compradora não identificada"}
+        {orders.map((order) => {
+          const status = getOrderStatusPresentation(order.status);
+          const checkoutStatus = getCheckoutStatusPresentation(
+            order.checkoutStatus
+          );
+          return (
+            <TableRow key={order.id}>
+              <TableRowHeader className="max-w-[220px]">
+                <span className="block truncate">
+                  {order.customerName ?? "Compradora não identificada"}
+                </span>
+                {order.customerEmail ? (
+                  <span className="mt-0.5 block truncate font-normal text-muted-foreground text-xs">
+                    {order.customerEmail}
                   </span>
-                  {order.customerEmail ? (
-                    <span className="mt-0.5 block truncate font-normal text-muted-foreground text-xs">
-                      {order.customerEmail}
-                    </span>
-                  ) : null}
-                </TableRowHeader>
-                <TableCell className="max-w-[240px]">
-                  <span className="block truncate">{order.courseTitle}</span>
-                </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  <Badge variant={status.variant}>{status.label}</Badge>
-                  {order.status === "pending" ? (
-                    <span className="mt-1 block text-muted-foreground text-xs">
-                      Checkout: {checkoutStatus.label}
-                    </span>
-                  ) : null}
-                </TableCell>
-                <TableCell className="text-right">
-                  <span className="block whitespace-nowrap font-medium tabular-nums">
-                    {formatCurrencyInCents(
-                      order.paidAmountInCents ?? order.amountInCents
-                    )}
+                ) : null}
+              </TableRowHeader>
+              <TableCell className="max-w-[240px]">
+                <span className="block truncate">{order.courseTitle}</span>
+              </TableCell>
+              <TableCell className="whitespace-nowrap">
+                <Badge variant={status.variant}>{status.label}</Badge>
+                {order.status === "pending" ? (
+                  <span className="mt-1 block text-muted-foreground text-xs">
+                    Checkout: {checkoutStatus.label}
                   </span>
-                  <span className="mt-0.5 block whitespace-nowrap text-muted-foreground text-xs">
-                    {order.paidAmountInCents === null
-                      ? "Valor do pedido"
-                      : "Valor pago"}
-                  </span>
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-muted-foreground">
-                  {formatDateTime(order.createdAt)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button asChild size="sm" variant="ghost">
-                    <Link
-                      aria-label={
-                        "Abrir detalhes do pedido de " +
-                        (order.customerName ?? "compradora não identificada")
-                      }
-                      href={route(`/admin/financeiro?tab=orders&q=${order.id}`)}
-                    >
-                      Detalhes
-                      <HugeiconsIcon
-                        aria-hidden="true"
-                        data-icon="inline-end"
-                        icon={ArrowRight01Icon}
-                        size={16}
-                        strokeWidth={2}
-                      />
-                    </Link>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            );
-          })
-        ) : (
-          <TableRow>
-            <TableCell className="h-40 p-0" colSpan={6}>
-              <Empty className="rounded-none border-0">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
+                ) : null}
+              </TableCell>
+              <TableCell className="text-right">
+                <span className="block whitespace-nowrap font-medium tabular-nums">
+                  {formatCurrencyInCents(
+                    order.paidAmountInCents ?? order.amountInCents
+                  )}
+                </span>
+                <span className="mt-0.5 block whitespace-nowrap text-muted-foreground text-xs">
+                  {order.paidAmountInCents === null
+                    ? "Valor do pedido"
+                    : "Valor pago"}
+                </span>
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-muted-foreground">
+                {formatDateTime(order.createdAt)}
+              </TableCell>
+              <TableCell className="text-right">
+                <Button asChild size="sm" variant="ghost">
+                  <Link
+                    aria-label={
+                      "Abrir detalhes do pedido de " +
+                      (order.customerName ?? "compradora não identificada")
+                    }
+                    href={route(`/admin/financeiro?tab=orders&q=${order.id}`)}
+                  >
+                    Detalhes
                     <HugeiconsIcon
                       aria-hidden="true"
-                      icon={ShoppingCart01Icon}
+                      data-icon="inline-end"
+                      icon={ArrowRight01Icon}
+                      size={16}
+                      strokeWidth={2}
                     />
-                  </EmptyMedia>
-                  <EmptyTitle as="h3">Nenhuma compra recente</EmptyTitle>
-                  <EmptyDescription>
-                    Ainda não há pedidos registrados no checkout.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            </TableCell>
-          </TableRow>
-        )}
+                  </Link>
+                </Button>
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
@@ -1372,80 +1387,153 @@ function RecentCertificatesTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {certificates.length > 0 ? (
-          certificates.map((certificate) => {
-            const certificateStatus = getCertificateStatusPresentation(
-              certificate.status
-            );
-            return (
-              <TableRow key={certificate.code}>
-                <TableRowHeader className="max-w-[200px]">
-                  <span className="block truncate">
-                    {certificate.studentName}
-                  </span>
-                </TableRowHeader>
-                <TableCell className="max-w-[240px]">
-                  <span className="block truncate">
-                    {certificate.courseTitle}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <span
-                    className="type-code break-all text-muted-foreground"
-                    translate="no"
+        {certificates.map((certificate) => {
+          const certificateStatus = getCertificateStatusPresentation(
+            certificate.status
+          );
+          return (
+            <TableRow key={certificate.code}>
+              <TableRowHeader className="max-w-[200px]">
+                <span className="block truncate">
+                  {certificate.studentName}
+                </span>
+              </TableRowHeader>
+              <TableCell className="max-w-[240px]">
+                <span className="block truncate">
+                  {certificate.courseTitle}
+                </span>
+              </TableCell>
+              <TableCell>
+                <span
+                  className="type-code break-all text-muted-foreground"
+                  translate="no"
+                >
+                  {certificate.code}
+                </span>
+              </TableCell>
+              <TableCell>
+                <Badge variant={certificateStatus.variant}>
+                  {certificateStatus.label}
+                </Badge>
+              </TableCell>
+              <TableCell className="whitespace-nowrap text-muted-foreground">
+                {formatDate(certificate.issuedAt)}
+              </TableCell>
+              <TableCell className="text-right">
+                <Button asChild size="sm" variant="ghost">
+                  <Link
+                    href={route(`/certificados/${certificate.code}`)}
+                    rel="noopener noreferrer"
+                    target="_blank"
                   >
-                    {certificate.code}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={certificateStatus.variant}>
-                    {certificateStatus.label}
-                  </Badge>
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-muted-foreground">
-                  {formatDate(certificate.issuedAt)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button asChild size="sm" variant="ghost">
-                    <Link
-                      href={route(`/certificados/${certificate.code}`)}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      Ver
-                      <HugeiconsIcon
-                        aria-hidden="true"
-                        data-icon="inline-end"
-                        icon={ArrowRight01Icon}
-                        size={16}
-                        strokeWidth={2}
-                      />
-                    </Link>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            );
-          })
-        ) : (
-          <TableRow>
-            <TableCell className="h-40 p-0" colSpan={6}>
-              <Empty className="rounded-none border-0">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
+                    Ver
                     <HugeiconsIcon
                       aria-hidden="true"
-                      icon={Certificate01Icon}
+                      data-icon="inline-end"
+                      icon={ArrowRight01Icon}
+                      size={16}
+                      strokeWidth={2}
                     />
-                  </EmptyMedia>
-                  <EmptyTitle as="h3">Nenhum certificado emitido</EmptyTitle>
-                  <EmptyDescription>
-                    As emissões recentes aparecerão aqui.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
+                  </Link>
+                </Button>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
+  );
+}
+
+function RecentCommentsTable({
+  comments,
+}: {
+  comments: AdminDashboardRecentComment[];
+}): React.JSX.Element {
+  return (
+    <Table className="min-w-[920px] table-fixed">
+      <TableCaption className="sr-only">
+        Últimos comentários de alunos nas aulas
+      </TableCaption>
+      <colgroup>
+        <col className="w-[180px]" />
+        <col className="w-[240px]" />
+        <col />
+        <col className="w-[150px]" />
+        <col className="w-[132px]" />
+      </colgroup>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Aluno</TableHead>
+          <TableHead>Curso e aula</TableHead>
+          <TableHead>Comentário</TableHead>
+          <TableHead className="whitespace-nowrap">Registrado em</TableHead>
+          <TableHead className="text-right">Detalhes</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {comments.map((comment) => (
+          <TableRow key={comment.commentId}>
+            <TableRowHeader className="w-[180px] max-w-[180px]">
+              <div className="flex min-h-10 flex-col justify-center gap-1">
+                <span className="block truncate">{comment.authorName}</span>
+                <div className="flex flex-wrap items-center gap-1">
+                  {comment.isReply ? (
+                    <Badge variant="outline">Resposta</Badge>
+                  ) : null}
+                  {comment.isHidden ? (
+                    <Badge variant="warning">Oculto</Badge>
+                  ) : null}
+                </div>
+              </div>
+            </TableRowHeader>
+            <TableCell className="w-[240px] max-w-[240px]">
+              <div className="flex min-h-10 flex-col justify-center gap-0.5">
+                <span className="block truncate font-medium">
+                  {comment.courseTitle}
+                </span>
+                <span className="block truncate text-muted-foreground text-xs">
+                  {comment.lessonTitle}
+                </span>
+              </div>
+            </TableCell>
+            <TableCell className="min-w-0">
+              <div className="flex min-h-10 items-center">
+                <span className="line-clamp-2 break-words text-sm leading-5">
+                  {comment.bodyPreview}
+                </span>
+              </div>
+            </TableCell>
+            <TableCell className="whitespace-nowrap text-muted-foreground">
+              <div className="flex min-h-10 items-center">
+                {formatDateTime(comment.createdAt)}
+              </div>
+            </TableCell>
+            <TableCell className="whitespace-nowrap text-right">
+              {comment.lessonId ? (
+                <Button asChild size="sm" variant="ghost">
+                  <Link
+                    aria-label={`Abrir comentários da aula ${comment.lessonTitle}`}
+                    href={route(
+                      `/admin/cursos/${comment.courseId}/aulas/${comment.lessonId}?tab=comments#comment-${comment.commentId}`
+                    )}
+                  >
+                    Abrir aula
+                    <HugeiconsIcon
+                      aria-hidden="true"
+                      data-icon="inline-end"
+                      icon={ArrowRight01Icon}
+                      size={16}
+                      strokeWidth={2}
+                    />
+                  </Link>
+                </Button>
+              ) : (
+                <span className="text-muted-foreground text-xs">Histórico</span>
+              )}
             </TableCell>
           </TableRow>
-        )}
+        ))}
       </TableBody>
     </Table>
   );

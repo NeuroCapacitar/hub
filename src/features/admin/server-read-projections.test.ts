@@ -1656,11 +1656,12 @@ describe("admin read projections", () => {
         },
       },
       recentCertificates: [],
+      recentComments: [],
       recentOrders: [],
     });
 
     expect(requirePermission).toHaveBeenCalledWith("viewAdminPanel");
-    expect(query).toHaveBeenCalledTimes(10);
+    expect(query).toHaveBeenCalledTimes(11);
     const dashboardSql = String(
       query.mock.calls.find(([sql]) =>
         String(sql).includes("course_health as")
@@ -1672,6 +1673,58 @@ describe("admin read projections", () => {
     expect(dashboardSql).not.toContain("from orders");
     expect(dashboardSql).not.toContain("revenue");
     expect(dashboardSql).toContain("has_published_publication");
+  });
+
+  it("projects recent student comments for Support through the shared dashboard", async () => {
+    requirePermission.mockResolvedValue({
+      role: "support",
+      supportPermissionGrants: [],
+      supportPermissionViews: [],
+    });
+    query.mockImplementation((sql: string) => {
+      if (sql.includes("from lesson_comments")) {
+        return {
+          rows: [
+            {
+              author_name: "Student",
+              author_role: "student",
+              body: "Uma dúvida recente",
+              comment_id: "comment-support-1",
+              course_id: courseId,
+              course_title: "Course one",
+              created_at: new Date("2026-09-19T12:00:00.000Z"),
+              lesson_id: lessonId,
+              lesson_title: "Lesson one",
+              navigation_lesson_id: "lesson-draft",
+              navigation_lesson_title: "Lesson current",
+              parent_id: "comment-parent",
+              status: "visible",
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+
+    const data = await getAdminDashboardProjection();
+
+    expect(data.recentComments).toEqual([
+      expect.objectContaining({
+        authorName: "Student",
+        commentId: "comment-support-1",
+        isReply: true,
+        lessonId: "lesson-draft",
+        lessonTitle: "Lesson current",
+      }),
+    ]);
+    const commentsSql = String(
+      query.mock.calls.find(([sql]) =>
+        String(sql).includes("from lesson_comments")
+      )?.[0]
+    ).toLowerCase();
+    expect(commentsSql).toContain("coalesce(p.role, 'student') = 'student'");
+    expect(commentsSql).toContain("draft_lesson");
+    expect(commentsSql).toContain("limit 5");
   });
 
   it("projects daily operational queues with source-specific semantics", async () => {
@@ -1775,6 +1828,42 @@ describe("admin read projections", () => {
               course_title: "Course one",
               student_name: "Student",
               total_count: 7,
+            },
+          ],
+        };
+      }
+      if (sql.includes("from lesson_comments")) {
+        return {
+          rows: [
+            {
+              author_name: "Student",
+              author_role: "student",
+              body: "Tenho uma dúvida sobre a aula.",
+              comment_id: "comment-1",
+              course_id: courseId,
+              course_title: "Course one",
+              created_at: completedAt,
+              lesson_id: lessonId,
+              lesson_title: "Lesson one",
+              navigation_lesson_id: lessonId,
+              navigation_lesson_title: "Lesson one",
+              parent_id: null,
+              status: "visible",
+            },
+            {
+              author_name: "Student two",
+              author_role: "student",
+              body: "Comentário oculto",
+              comment_id: "comment-2",
+              course_id: courseId,
+              course_title: "Course one",
+              created_at: issuedAt,
+              lesson_id: lessonId,
+              lesson_title: "Lesson one",
+              navigation_lesson_id: lessonId,
+              navigation_lesson_title: "Lesson one",
+              parent_id: "comment-1",
+              status: "hidden",
             },
           ],
         };
@@ -1906,6 +1995,34 @@ describe("admin read projections", () => {
         issuedAt,
         status: "valid",
         studentName: "Student",
+      },
+    ]);
+    expect(data.recentComments).toEqual([
+      {
+        authorName: "Student",
+        authorRole: "student",
+        bodyPreview: "Tenho uma dúvida sobre a aula.",
+        commentId: "comment-1",
+        courseId,
+        courseTitle: "Course one",
+        createdAt: completedAt,
+        isHidden: false,
+        isReply: false,
+        lessonId,
+        lessonTitle: "Lesson one",
+      },
+      {
+        authorName: "Student two",
+        authorRole: "student",
+        bodyPreview: "Comentário oculto",
+        commentId: "comment-2",
+        courseId,
+        courseTitle: "Course one",
+        createdAt: issuedAt,
+        isHidden: true,
+        isReply: true,
+        lessonId,
+        lessonTitle: "Lesson one",
       },
     ]);
     expect(

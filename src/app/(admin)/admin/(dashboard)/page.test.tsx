@@ -123,6 +123,7 @@ beforeEach(() => {
     courseHealth: emptyCourseHealth,
     operations: emptyOperations,
     recentCertificates: [],
+    recentComments: [],
     recentOrders: [],
   });
   dependencies.getSupportCourseOperations.mockResolvedValue({
@@ -179,6 +180,7 @@ describe("AdminPage", () => {
         },
       },
       recentCertificates: [],
+      recentComments: [],
       recentOrders: [],
     });
 
@@ -210,7 +212,7 @@ describe("AdminPage", () => {
     expect(dependencies.getAdminDashboardProjection).toHaveBeenCalledOnce();
   });
 
-  it("keeps recent purchases and certificates as compact tables", async () => {
+  it("keeps recent activity as compact tables", async () => {
     dependencies.requirePermission.mockResolvedValue({ role: "admin" });
     dependencies.getAdminDashboardProjection.mockResolvedValue({
       courseHealth: emptyCourseHealth,
@@ -222,6 +224,21 @@ describe("AdminPage", () => {
           issuedAt: new Date("2026-09-08T12:00:00.000Z"),
           status: "valid",
           studentName: "Aluno exemplo",
+        },
+      ],
+      recentComments: [
+        {
+          authorName: "Aluna exemplo",
+          authorRole: "student",
+          bodyPreview: "Tenho uma dúvida recente.",
+          commentId: "comment-1",
+          courseId: "course-1",
+          courseTitle: "Curso de exemplo",
+          createdAt: new Date("2026-09-08T10:00:00.000Z"),
+          isHidden: false,
+          isReply: true,
+          lessonId: "lesson-1",
+          lessonTitle: "Aula de exemplo",
         },
       ],
       recentOrders: [
@@ -241,10 +258,20 @@ describe("AdminPage", () => {
 
     const markup = renderToStaticMarkup(await AdminPage());
 
+    expect(markup).toContain("Atividade recente");
     expect(markup).toContain("Últimas compras");
     expect(markup).toContain("Últimos certificados emitidos");
+    expect(markup).toContain("Últimos comentários");
+    expect(markup).toContain(
+      "/admin/cursos/course-1/aulas/lesson-1?tab=comments#comment-comment-1"
+    );
+    expect(markup).toContain("Curso e aula");
+    expect(markup).toContain("Resposta");
+    expect(markup).toContain("Abrir aula");
+    expect(markup).toContain("table-fixed");
     expect(markup).toContain("Os 5 pedidos mais recentes do checkout.");
     expect(markup).toContain("Os 5 certificados emitidos mais recentemente.");
+    expect(markup).toContain("Os 5 comentários mais recentes nas aulas.");
     expect(markup).toContain("<table");
     expect(markup).toContain("CERT-1");
     expect(markup).toContain("Aluno exemplo");
@@ -276,6 +303,7 @@ describe("AdminPage", () => {
         },
       },
       recentCertificates: [],
+      recentComments: [],
       recentOrders: [],
     });
 
@@ -287,6 +315,36 @@ describe("AdminPage", () => {
     expect(markup).toContain("Pendências para resolver");
     expect(markup).not.toContain("xl:grid-cols-2");
     expect(markup).not.toContain("Atividade recente");
+  });
+
+  it("keeps archived comments visible without creating a broken lesson link", async () => {
+    dependencies.requirePermission.mockResolvedValue({ role: "admin" });
+    dependencies.getAdminDashboardProjection.mockResolvedValue({
+      courseHealth: emptyCourseHealth,
+      operations: emptyOperations,
+      recentCertificates: [],
+      recentComments: [
+        {
+          authorName: "Aluno arquivado",
+          authorRole: "student",
+          bodyPreview: "Comentário histórico",
+          commentId: "comment-archived",
+          courseId: "course-1",
+          courseTitle: "Curso de exemplo",
+          createdAt: new Date("2026-09-08T10:00:00.000Z"),
+          isHidden: false,
+          isReply: false,
+          lessonId: null,
+          lessonTitle: "Aula arquivada",
+        },
+      ],
+      recentOrders: [],
+    });
+
+    const markup = renderToStaticMarkup(await AdminPage());
+
+    expect(markup).toContain("Histórico");
+    expect(markup).not.toContain("comment-archived");
   });
 
   it("shows concurrent queues instead of collapsing everything into one alert", async () => {
@@ -386,6 +444,7 @@ describe("AdminPage", () => {
         },
       },
       recentCertificates: [],
+      recentComments: [],
       recentOrders: [],
     });
 

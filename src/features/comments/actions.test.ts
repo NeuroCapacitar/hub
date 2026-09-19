@@ -11,6 +11,7 @@ describe("lesson comments actions", () => {
     expect(source).toContain('"use server"');
     expect(source).toContain("requireSession()");
     expect(source).toContain("canMutateStudentExperience(session.role)");
+    expect(source).toContain('context !== "admin" && context !== "student"');
     expect(source).toContain("createLessonComment");
     // biome-ignore lint/suspicious/noTemplateCurlyInString: matching literal source text
     expect(source).toContain("revalidatePath(`/app/aulas/${lessonId}`)");
@@ -20,14 +21,14 @@ describe("lesson comments actions", () => {
     );
   });
 
-  it("restricts comment hiding to content managers", async () => {
+  it("allows Admin and Support to manage comments without a new permission", async () => {
     const source = await readFile(
       new URL("./actions.ts", import.meta.url),
       "utf8"
     );
 
-    expect(source).toContain('requirePermission("manageContent")');
-    expect(source).not.toContain('requireRole(["admin", "support"])');
+    expect(source).toContain("isLessonCommentManager");
+    expect(source).not.toContain('requirePermission("manageContent")');
     expect(source).toContain("hideLessonComment");
     expect(source).toContain(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: matching literal source text
@@ -35,15 +36,15 @@ describe("lesson comments actions", () => {
     );
   });
 
-  it("restricts comment restoring to content managers", async () => {
+  it("audits and revalidates comment restoration for staff roles", async () => {
     const source = await readFile(
       new URL("./actions.ts", import.meta.url),
       "utf8"
     );
 
     expect(source).toContain("restoreLessonCommentAction");
-    expect(source).toContain('requirePermission("manageContent")');
-    expect(source).not.toContain('requireRole(["admin", "support"])');
+    expect(source).toContain("isLessonCommentManager");
+    expect(source).not.toContain('requirePermission("manageContent")');
     expect(source).toContain("restoreLessonComment");
     // biome-ignore lint/suspicious/noTemplateCurlyInString: matching literal source text
     expect(source).toContain("revalidatePath(`/app/aulas/${result.lessonId}`)");

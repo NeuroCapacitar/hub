@@ -15,5 +15,9 @@ describe("lesson comments section moderation UI", () => {
     expect(source).toContain('comment.author.role === "admin"');
     expect(source).toContain('comment.author.role === "support"');
     expect(source).not.toContain("RoleBadge");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: matching literal source text
+    expect(source).toContain("id={`comment-${comment.id}`}");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: matching literal source text
+    expect(source).toContain("id={`comment-${reply.id}`}");
   });
 });

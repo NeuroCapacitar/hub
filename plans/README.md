@@ -338,6 +338,8 @@ Cada executor deve ler o plano inteiro. Estados permitidos: `TODO`, `IN PROGRESS
 | 009 | UX resiliente e acessível | P2 | L | 003, 006 | TODO |
 | 010 | versão de conteúdo/coorte | P1 decisão | L | 003 | TODO |
 | 012 | analytics/reengajamento | P2 | L | 005, 010 | TODO |
+| 013 | feed administrativo de últimos comentários | P1 | L | — | DONE |
+| 014 | identidade estável de discussões de Aula | P1 | L/XL | 013 | DONE |
 
 ### Fase 0: restaurar confiança no estado atual
 
@@ -358,6 +360,8 @@ Cada executor deve ler o plano inteiro. Estados permitidos: `TODO`, `IN PROGRESS
 
 10. [Ratificar conclusão, versões de conteúdo e coortes](./010-learning-policy-content-versions-and-cohorts.md)
 12. [Modelar analytics de aprendizagem e reengajamento](./012-learning-analytics-and-reengagement.md)
+13. [Adicionar feed administrativo de últimos comentários](./013-admin-latest-comments-feed.md)
+14. [Materializar a identidade estável da discussão nos comentários](./014-stable-lesson-discussion-fields.md)
 
 ## Dependências
 

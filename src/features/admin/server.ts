@@ -119,6 +119,20 @@ export interface AdminDashboardRecentCertificate {
   studentName: string;
 }
 
+export interface AdminDashboardRecentComment {
+  authorName: string;
+  authorRole: "admin" | "student" | "support";
+  bodyPreview: string;
+  commentId: string;
+  courseId: string;
+  courseTitle: string;
+  createdAt: Date;
+  isHidden: boolean;
+  isReply: boolean;
+  lessonId: string | null;
+  lessonTitle: string;
+}
+
 export type AdminDashboardSupportDeliveryState =
   | "delayed"
   | "delivered"
@@ -1229,6 +1243,94 @@ const readDashboardRecentCertificates = async (): Promise<
     status: row.status,
     studentName: row.student_name_snapshot,
   }));
+};
+
+const COMMENT_PREVIEW_MAX_LENGTH = 180;
+
+const getCommentPreview = (body: string, isHidden: boolean): string => {
+  if (isHidden) {
+    return "Comentário oculto";
+  }
+
+  const normalized = body.replace(/\s+/g, " ").trim();
+  if (normalized.length <= COMMENT_PREVIEW_MAX_LENGTH) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, COMMENT_PREVIEW_MAX_LENGTH - 1)}…`;
+};
+
+const readDashboardRecentComments = async (): Promise<
+  AdminDashboardRecentComment[]
+> => {
+  const { rows } = await getPool().query<{
+    author_name: string | null;
+    author_role: "admin" | "student" | "support" | null;
+    body: string;
+    comment_id: string;
+    course_id: string;
+    course_title: string;
+    created_at: Date;
+    lesson_id: string | null;
+    lesson_title: string | null;
+    navigation_lesson_id: string | null;
+    navigation_lesson_title: string | null;
+    parent_id: string | null;
+    status: "hidden" | "visible";
+  }>(`
+    select
+      lc.id as comment_id,
+      lc.parent_id,
+      lc.body,
+      lc.status,
+      lc.created_at,
+      l.id as lesson_id,
+      l.title as lesson_title,
+      draft_lesson.id as navigation_lesson_id,
+      draft_lesson.title as navigation_lesson_title,
+      lc.course_id,
+      c.title as course_title,
+      u.name as author_name,
+      coalesce(p.role, 'student') as author_role
+    from lesson_comments lc
+    left join lessons l on l.id = lc.source_lesson_id
+    left join modules m on m.id = l.module_id and m.course_id = lc.course_id
+    join courses c on c.id = lc.course_id
+    left join lateral (
+      select candidate_lesson.id, candidate_lesson.title
+      from lessons candidate_lesson
+      join modules candidate_module on candidate_module.id = candidate_lesson.module_id
+      join course_publications candidate_publication
+        on candidate_publication.id = candidate_lesson.course_publication_id
+      where candidate_module.course_id = lc.course_id
+        and candidate_lesson.curriculum_key = lc.curriculum_key
+        and candidate_publication.status = 'draft'
+      limit 1
+    ) as draft_lesson on true
+    left join users u on u.id = lc.author_user_id
+    left join profiles p on p.user_id = lc.author_user_id
+    where coalesce(p.role, 'student') = 'student'
+    order by lc.created_at desc, lc.id desc
+    limit 5
+  `);
+
+  return rows.map((row) => {
+    const isHidden = row.status === "hidden";
+    return {
+      authorName: row.author_name ?? "Usuário removido",
+      authorRole: row.author_role ?? "student",
+      bodyPreview: getCommentPreview(row.body, isHidden),
+      commentId: row.comment_id,
+      courseId: row.course_id,
+      courseTitle: row.course_title,
+      createdAt: row.created_at,
+      isHidden,
+      isReply: row.parent_id !== null,
+      lessonId: row.navigation_lesson_id ?? null,
+      lessonTitle:
+        row.navigation_lesson_title ?? row.lesson_title ?? "Aula arquivada",
+    };
+  });
 };
 
 const readCourses = async (
@@ -3344,21 +3446,38 @@ const readAdminStudentAccessSummary =
 export const getAdminDashboardProjection = async (): Promise<{
   courseHealth: AdminDashboardCourseHealthProjection;
   operations: AdminDashboardOperations;
+  recentComments: AdminDashboardRecentComment[];
   recentCertificates: AdminDashboardRecentCertificate[];
   recentOrders: AdminDashboardRecentOrder[];
 }> => {
   const session = await requirePermission("viewAdminPanel");
   const accessScope = getAdminDashboardAccessScope(session);
-  const [courseHealth, recentOrders, recentCertificates, operations] =
-    await Promise.all([
-      readDashboardCourseHealth(),
-      accessScope.canViewFinancialOrders
-        ? readDashboardRecentOrders()
-        : Promise.resolve([]),
-      readDashboardRecentCertificates(),
-      readDashboardOperations(accessScope),
-    ]);
-  return { courseHealth, operations, recentCertificates, recentOrders };
+  const recentCommentsPromise =
+    session.role === "admin" || session.role === "support"
+      ? readDashboardRecentComments()
+      : Promise.resolve([] as AdminDashboardRecentComment[]);
+  const [
+    courseHealth,
+    recentOrders,
+    recentCertificates,
+    dashboardComments,
+    operations,
+  ] = await Promise.all([
+    readDashboardCourseHealth(),
+    accessScope.canViewFinancialOrders
+      ? readDashboardRecentOrders()
+      : Promise.resolve([]),
+    readDashboardRecentCertificates(),
+    recentCommentsPromise,
+    readDashboardOperations(accessScope),
+  ]);
+  return {
+    courseHealth,
+    operations,
+    recentComments: dashboardComments,
+    recentCertificates,
+    recentOrders,
+  };
 };
 
 export const getAdminStudentsData = async (
