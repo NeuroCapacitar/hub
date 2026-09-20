@@ -70,12 +70,17 @@ describe("AdminSettingsPage", () => {
     const markup = renderToStaticMarkup(await AdminSettingsPage());
 
     expect(markup).toContain("Emissão de certificados");
+    expect(markup).not.toContain("Perfil e assinatura");
     expect(markup).toContain("Instituição emissora");
     expect(markup).toContain("Assinatura padrão");
     expect(markup).toContain("Perfil pronto");
     expect(markup).not.toContain("Ver histórico");
     expect(markup).not.toContain("Última alteração em");
-    expect(markup).toContain("Conteúdo editorial");
+    expect(markup).not.toContain("Conteúdo editorial");
+    expect(markup).toContain('data-scrollspy-anchor="certificados"');
+    expect(markup).toContain('data-scrollspy-anchor="tela-acesso"');
+    expect(markup).toContain('data-scrollspy-anchor="banners-dashboard"');
+    expect(markup).toContain('data-scrollspy-anchor="perguntas-frequentes"');
     expect(markup).toContain("Banners renderizados");
     expect(markup).toContain("Mídias de acesso renderizadas");
     expect(markup).toContain("FAQs renderizadas");

@@ -1,6 +1,9 @@
 "use client";
 
-import { FloppyDiskIcon } from "@hugeicons/core-free-icons";
+import {
+  FloppyDiskIcon,
+  InformationCircleIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 import {
@@ -15,10 +18,15 @@ import {
   FieldGroup,
   FieldLabel,
   FieldLegend,
-  FieldSeparator,
   FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { saveSettingsAction } from "@/features/admin/actions";
 import { formatCnpjInput } from "@/lib/cnpj";
 
@@ -47,9 +55,45 @@ const getSettingsFieldErrors = (error: unknown): Record<string, string> => {
   return {};
 };
 
+function FieldHelp({
+  children,
+  label,
+}: {
+  children: React.ReactNode;
+  label: string;
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          aria-label={label}
+          className="inline-flex size-6 shrink-0 cursor-help items-center justify-center rounded-xs text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          type="button"
+        >
+          <HugeiconsIcon
+            aria-hidden="true"
+            icon={InformationCircleIcon}
+            size={15}
+            strokeWidth={2}
+          />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent
+        className="max-w-xs p-3 text-xs leading-normal"
+        side="top"
+        sideOffset={6}
+      >
+        {children}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function CertificateSettingsFields({
+  readOnly,
   settings,
 }: {
+  readOnly: boolean;
   settings: CertificateSettingsFormValues;
 }): React.JSX.Element {
   const { fieldErrors } = useAdminMutationFormState();
@@ -60,117 +104,130 @@ function CertificateSettingsFields({
   const cnpjError = fieldErrors.issuerCnpj;
 
   return (
-    <FieldGroup>
-      <FieldSet className="gap-4">
-        <FieldLegend variant="label">Instituição emissora</FieldLegend>
-        <FieldDescription>
-          Razão social e CNPJ são obrigatórios juntos para manter o perfil
-          pronto para novas emissões.
-        </FieldDescription>
-        <div className="grid gap-5 md:grid-cols-2">
-          <Field data-invalid={Boolean(legalNameError)}>
-            <FieldLabel htmlFor="issuer-legal-name">
-              Razão social emissora
-            </FieldLabel>
-            <Input
-              aria-describedby={
-                legalNameError ? "issuer-legal-name-error" : undefined
-              }
-              aria-invalid={legalNameError ? true : undefined}
-              autoComplete="organization"
-              defaultValue={settings.issuerLegalName ?? ""}
-              id="issuer-legal-name"
-              name="issuerLegalName"
-              required
-            />
-            {legalNameError ? (
-              <FieldError id="issuer-legal-name-error">
-                {legalNameError}
-              </FieldError>
-            ) : null}
-          </Field>
-          <Field data-invalid={Boolean(cnpjError)}>
-            <FieldLabel htmlFor="issuer-cnpj">CNPJ emissor</FieldLabel>
-            <Input
-              aria-describedby={
-                cnpjError
-                  ? "issuer-cnpj-description issuer-cnpj-error"
-                  : "issuer-cnpj-description"
-              }
-              aria-invalid={cnpjError ? true : undefined}
-              autoComplete="organization"
-              id="issuer-cnpj"
-              inputMode="numeric"
-              maxLength={18}
-              name="issuerCnpj"
-              onChange={(event) => setCnpj(formatCnpjInput(event.target.value))}
-              placeholder="00.000.000/0000-00"
-              required
-              value={cnpj}
-            />
-            <FieldDescription id="issuer-cnpj-description">
-              Informe os 14 dígitos; a máscara é aplicada automaticamente.
-            </FieldDescription>
-            {cnpjError ? (
-              <FieldError id="issuer-cnpj-error">{cnpjError}</FieldError>
-            ) : null}
-          </Field>
-          <Field className="md:col-span-2">
-            <FieldLabel htmlFor="issuer-display-name">Marca exibida</FieldLabel>
-            <Input
-              autoComplete="organization"
-              defaultValue={settings.issuerDisplayName ?? ""}
-              id="issuer-display-name"
-              name="issuerDisplayName"
-            />
-          </Field>
-        </div>
-      </FieldSet>
+    <TooltipProvider delayDuration={250}>
+      <FieldGroup>
+        <FieldSet className="gap-4">
+          <FieldLegend variant="label">Instituição emissora</FieldLegend>
+          <FieldDescription>
+            Razão social e CNPJ são obrigatórios juntos para manter o perfil
+            pronto para novas emissões.
+          </FieldDescription>
+          <div className="grid gap-5 md:grid-cols-2">
+            <Field data-invalid={Boolean(legalNameError)}>
+              <div className="flex min-h-6 items-center gap-1.5">
+                <FieldLabel htmlFor="issuer-legal-name">
+                  Razão social
+                </FieldLabel>
+              </div>
+              <Input
+                aria-describedby={
+                  legalNameError ? "issuer-legal-name-error" : undefined
+                }
+                aria-invalid={legalNameError ? true : undefined}
+                autoComplete="organization"
+                defaultValue={settings.issuerLegalName ?? ""}
+                disabled={readOnly}
+                id="issuer-legal-name"
+                name="issuerLegalName"
+                required
+              />
+              {legalNameError ? (
+                <FieldError id="issuer-legal-name-error">
+                  {legalNameError}
+                </FieldError>
+              ) : null}
+            </Field>
+            <Field data-invalid={Boolean(cnpjError)}>
+              <div className="flex min-h-6 items-center gap-1.5">
+                <FieldLabel htmlFor="issuer-cnpj">CNPJ</FieldLabel>
+                <FieldHelp label="Ajuda sobre o CNPJ">
+                  Informe os 14 dígitos em pontuação.
+                </FieldHelp>
+              </div>
+              <Input
+                aria-describedby={cnpjError ? "issuer-cnpj-error" : undefined}
+                aria-invalid={cnpjError ? true : undefined}
+                autoComplete="organization"
+                disabled={readOnly}
+                id="issuer-cnpj"
+                inputMode="numeric"
+                maxLength={18}
+                name="issuerCnpj"
+                onChange={(event) =>
+                  setCnpj(formatCnpjInput(event.target.value))
+                }
+                placeholder="00.000.000/0000-00"
+                required
+                value={cnpj}
+              />
+              {cnpjError ? (
+                <FieldError id="issuer-cnpj-error">{cnpjError}</FieldError>
+              ) : null}
+            </Field>
+            <Field className="md:col-span-2">
+              <FieldLabel htmlFor="issuer-display-name">
+                Marca exibida
+              </FieldLabel>
+              <Input
+                autoComplete="organization"
+                defaultValue={settings.issuerDisplayName ?? ""}
+                disabled={readOnly}
+                id="issuer-display-name"
+                name="issuerDisplayName"
+              />
+            </Field>
+          </div>
+        </FieldSet>
 
-      <FieldSeparator />
+        <FieldSet className="gap-4">
+          <FieldLegend variant="label">Assinatura padrão</FieldLegend>
+          <FieldDescription>
+            Usada quando o Curso não define uma assinatura própria.
+          </FieldDescription>
+          <div className="grid gap-5 md:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="certificate-signer-name">
+                Nome da assinatura
+              </FieldLabel>
+              <Input
+                autoComplete="name"
+                defaultValue={settings.certificateSignerName ?? ""}
+                disabled={readOnly}
+                id="certificate-signer-name"
+                name="certificateSignerName"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="certificate-signer-role">
+                Cargo da assinatura
+              </FieldLabel>
+              <Input
+                autoComplete="organization-title"
+                defaultValue={settings.certificateSignerRole ?? ""}
+                disabled={readOnly}
+                id="certificate-signer-role"
+                name="certificateSignerRole"
+              />
+            </Field>
+          </div>
+        </FieldSet>
 
-      <FieldSet className="gap-4">
-        <FieldLegend variant="label">Assinatura padrão</FieldLegend>
-        <FieldDescription>
-          Usada quando o Curso não define uma assinatura própria.
-        </FieldDescription>
-        <div className="grid gap-5 md:grid-cols-2">
-          <Field>
-            <FieldLabel htmlFor="certificate-signer-name">
-              Nome da assinatura
-            </FieldLabel>
-            <Input
-              autoComplete="name"
-              defaultValue={settings.certificateSignerName ?? ""}
-              id="certificate-signer-name"
-              name="certificateSignerName"
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="certificate-signer-role">
-              Cargo da assinatura
-            </FieldLabel>
-            <Input
-              autoComplete="organization-title"
-              defaultValue={settings.certificateSignerRole ?? ""}
-              id="certificate-signer-role"
-              name="certificateSignerRole"
-            />
-          </Field>
-        </div>
-      </FieldSet>
-
-      <AdminMutationSubmitButton className="w-full sm:w-fit" type="submit">
-        <HugeiconsIcon
-          aria-hidden="true"
-          data-icon="inline-start"
-          icon={FloppyDiskIcon}
-          size={18}
-          strokeWidth={2}
-        />
-        Salvar configurações
-      </AdminMutationSubmitButton>
-    </FieldGroup>
+        <AdminMutationSubmitButton
+          className="w-full sm:w-fit"
+          disabled={readOnly}
+          type="submit"
+        >
+          <HugeiconsIcon
+            aria-hidden="true"
+            data-icon="inline-start"
+            icon={FloppyDiskIcon}
+            size={18}
+            strokeWidth={2}
+          />
+          Salvar configurações
+        </AdminMutationSubmitButton>
+      </FieldGroup>
+    </TooltipProvider>
   );
 }
 
@@ -186,8 +243,8 @@ export function CertificateSettingsForm({
       action={saveSettingsAction}
       getFieldErrors={getSettingsFieldErrors}
     >
-      <fieldset disabled={readOnly}>
-        <CertificateSettingsFields settings={settings} />
+      <fieldset>
+        <CertificateSettingsFields readOnly={readOnly} settings={settings} />
       </fieldset>
     </AdminMutationForm>
   );

@@ -13,6 +13,7 @@ const ScrollArea = ({
 }) => (
   <div
     className={cn("custom-scrollbar relative overflow-auto", className)}
+    data-slot="scroll-area-viewport"
     ref={ref}
     {...props}
   >

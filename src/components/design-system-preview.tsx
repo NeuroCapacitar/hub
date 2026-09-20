@@ -481,7 +481,7 @@ function PreviewColumn(): React.JSX.Element {
         </div>
 
         <Tabs defaultValue="learning">
-          <TabsList variant="line">
+          <TabsList>
             <TabsTrigger value="learning">Aprendizagem</TabsTrigger>
             <TabsTrigger value="operation">Operação</TabsTrigger>
           </TabsList>

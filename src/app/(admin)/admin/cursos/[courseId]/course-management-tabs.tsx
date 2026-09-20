@@ -274,11 +274,11 @@ export function CourseManagementTabs({
     <CourseTabDirtyContext.Provider value={dirtyContextValue}>
       <Tabs onValueChange={changeTab} value={activeTab}>
         <div
-          className="max-w-full overflow-x-auto border-b"
+          className="max-w-full overflow-x-auto pb-1"
           data-course-tabs-scroll="true"
           ref={tabStripRef}
         >
-          <TabsList className="min-w-max flex-nowrap" variant="line">
+          <TabsList className="min-w-max flex-nowrap">
             {COURSE_MANAGEMENT_TABS.map((tab) => (
               <TabsTrigger
                 data-course-tab={tab.value}

@@ -32,6 +32,8 @@ describe("StudentSettingsPage", () => {
     const markup = renderToStaticMarkup(await StudentSettingsPage());
 
     expect(markup).toContain("Privacidade e Dados");
+    expect(markup).toContain('data-scrollspy-anchor="certificado"');
+    expect(markup).toContain('data-scrollspy-anchor="privacidade"');
     expect(markup).toContain("Melhoria das aulas");
     expect(markup).not.toContain("consentimento");
     expect(markup).not.toContain("autorizar");
