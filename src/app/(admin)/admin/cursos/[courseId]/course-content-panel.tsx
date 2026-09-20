@@ -1,3 +1,4 @@
+import { FinanceHelp } from "@/components/admin/finance-help";
 import { Badge } from "@/components/ui/badge";
 import {
   Empty,
@@ -16,7 +17,10 @@ import {
   CourseBuilderWrapper,
   CreateModuleDialog,
 } from "./course-builder-components";
-import { CoursePublicationAction } from "./course-publication-action";
+import {
+  CoursePublicationAction,
+  CoursePublicationDiscardAction,
+} from "./course-publication-action";
 
 interface CoursePublicationState {
   hasDraft: boolean;
@@ -94,6 +98,148 @@ function EmptyCourseContent({
   );
 }
 
+function CourseContentHelp({
+  canManageContent,
+  hasDraft,
+}: {
+  canManageContent: boolean;
+  hasDraft: boolean;
+}): React.JSX.Element | null {
+  if (!canManageContent) {
+    return (
+      <FinanceHelp
+        description="Você pode consultar a estrutura do Curso, mas não possui permissão para alterá-la."
+        title="Permissão de conteúdo"
+      />
+    );
+  }
+
+  if (hasDraft) {
+    return null;
+  }
+
+  return (
+    <FinanceHelp
+      description="Prepare uma alteração para editar a estrutura atual."
+      details={[
+        "O conteúdo publicado continua disponível aos alunos até a próxima publicação.",
+        "Publicar aplica o conjunto de alterações preparado para o Curso.",
+      ]}
+      title="Preparação e publicação"
+    />
+  );
+}
+
+function CoursePublicationStatus({
+  contentSignal,
+  publicationState,
+}: Pick<
+  CourseContentPanelProps,
+  "contentSignal" | "publicationState"
+>): React.JSX.Element | null {
+  const showContentSignal = contentSignal.tone !== "healthy";
+  const publicationLabel = publicationState.hasDraft
+    ? null
+    : getPublicationLabel(publicationState);
+
+  if (!(publicationLabel || showContentSignal)) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+      {publicationLabel ? (
+        <span className="font-medium text-foreground">{publicationLabel}</span>
+      ) : null}
+      {publicationLabel && showContentSignal ? (
+        <span aria-hidden="true" className="text-muted-foreground/60">
+          ·
+        </span>
+      ) : null}
+      {showContentSignal ? (
+        <Badge variant={CONTENT_SIGNAL_VARIANTS[contentSignal.tone]}>
+          {contentSignal.label}
+        </Badge>
+      ) : null}
+    </div>
+  );
+}
+
+function CourseContentActions({
+  canManageContent,
+  course,
+  hasModules,
+  publicationState,
+}: Pick<
+  CourseContentPanelProps,
+  "canManageContent" | "course" | "publicationState"
+> & { hasModules: boolean }): React.JSX.Element | null {
+  if (!(canManageContent && (hasModules || publicationState.hasDraft))) {
+    return null;
+  }
+
+  if (!publicationState.hasDraft) {
+    return <CoursePublicationAction action="prepare" courseId={course.id} />;
+  }
+
+  return (
+    <div className="flex w-full shrink-0 flex-wrap gap-2 lg:w-auto lg:justify-end">
+      <CoursePublicationDiscardAction courseId={course.id} />
+      {hasModules ? (
+        <CoursePublicationAction action="publish" courseId={course.id} />
+      ) : null}
+    </div>
+  );
+}
+
+function CourseContentHeader({
+  canManageContent,
+  contentSignal,
+  course,
+  hasModules,
+  publicationState,
+}: Pick<
+  CourseContentPanelProps,
+  "canManageContent" | "contentSignal" | "course" | "publicationState"
+> & { hasModules: boolean }): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-start lg:justify-between">
+      <div className="min-w-0 space-y-3">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h2 className="font-semibold text-xl">Conteúdo do curso</h2>
+            {publicationState.hasDraft ? (
+              <Badge variant="warning">Alterações em preparo</Badge>
+            ) : null}
+            <CourseContentHelp
+              canManageContent={canManageContent}
+              hasDraft={publicationState.hasDraft}
+            />
+          </div>
+          <p className="text-muted-foreground text-sm">
+            Organize módulos e aulas e publique todas as alterações em conjunto.
+          </p>
+        </div>
+        <CoursePublicationStatus
+          contentSignal={contentSignal}
+          publicationState={publicationState}
+        />
+        {contentSignal.tone === "healthy" ? null : (
+          <p className="text-muted-foreground text-sm">
+            {contentSignal.helper}
+          </p>
+        )}
+      </div>
+      <CourseContentActions
+        canManageContent={canManageContent}
+        course={course}
+        hasModules={hasModules}
+        publicationState={publicationState}
+      />
+    </div>
+  );
+}
+
 export function CourseContentPanel({
   canManageContent,
   contentSignal,
@@ -104,81 +250,16 @@ export function CourseContentPanel({
   publicationState,
 }: CourseContentPanelProps): React.JSX.Element {
   const hasModules = modules.length > 0;
-  let contentNotice: React.JSX.Element | null = null;
-  if (!canManageContent) {
-    contentNotice = (
-      <p className="rounded-lg border bg-muted/30 px-4 py-3 text-muted-foreground text-sm">
-        Conteúdo disponível para consulta. Permissão de alteração não concedida
-        para esta Conta.
-      </p>
-    );
-  } else if (!publicationState.hasDraft) {
-    contentNotice = (
-      <p className="rounded-lg border bg-muted/30 px-4 py-3 text-muted-foreground text-sm">
-        Prepare alterações para editar a estrutura atual. O conteúdo publicado
-        permanece disponível aos alunos até a próxima publicação.
-      </p>
-    );
-  }
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-4 border-b pb-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 space-y-3">
-          <div className="space-y-1">
-            <h2 className="font-semibold text-xl">Conteúdo do curso</h2>
-            <p className="text-muted-foreground text-sm">
-              Organize módulos e aulas e publique todas as alterações em
-              conjunto.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {contentSignal.tone === "healthy" ? (
-              <span className="text-muted-foreground text-sm">
-                {contentSignal.label}
-              </span>
-            ) : (
-              <Badge variant={CONTENT_SIGNAL_VARIANTS[contentSignal.tone]}>
-                {contentSignal.label}
-              </Badge>
-            )}
-            <span
-              className={
-                publicationState.hasDraft
-                  ? "font-medium text-foreground text-sm"
-                  : "text-muted-foreground text-sm"
-              }
-            >
-              {getPublicationLabel(publicationState)}
-            </span>
-            <span className="text-muted-foreground text-sm">
-              {contentSignal.helper}
-            </span>
-          </div>
-        </div>
-
-        {hasModules && canManageContent ? (
-          <div className="flex w-full shrink-0 flex-wrap gap-2 lg:w-auto lg:justify-end">
-            {publicationState.hasDraft ? (
-              <>
-                <CreateModuleDialog
-                  course={course}
-                  nextModuleSortOrder={nextModuleSortOrder}
-                  triggerVariant="outline"
-                />
-                <CoursePublicationAction
-                  action="publish"
-                  courseId={course.id}
-                />
-              </>
-            ) : (
-              <CoursePublicationAction action="prepare" courseId={course.id} />
-            )}
-          </div>
-        ) : null}
-      </div>
-
-      {contentNotice}
+      <CourseContentHeader
+        canManageContent={canManageContent}
+        contentSignal={contentSignal}
+        course={course}
+        hasModules={hasModules}
+        publicationState={publicationState}
+      />
 
       {hasModules ? (
         <CourseBuilderWrapper
@@ -186,6 +267,15 @@ export function CourseContentPanel({
           editable={canManageContent && publicationState.hasDraft}
           lessons={lessons}
           modules={modules}
+          toolbar={
+            canManageContent && publicationState.hasDraft ? (
+              <CreateModuleDialog
+                course={course}
+                nextModuleSortOrder={nextModuleSortOrder}
+                triggerVariant="outline"
+              />
+            ) : null
+          }
         />
       ) : (
         <EmptyCourseContent

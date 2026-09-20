@@ -110,27 +110,19 @@ vi.mock("./course-enrollments-table", () => ({
 }));
 vi.mock("./course-management-tabs", () => ({
   CourseManagementTabs: ({
-    actions,
     certificate,
     content,
     overview,
     settings,
     students,
-    status,
   }: {
-    actions?: ReactNode;
     certificate?: ReactNode;
     content?: ReactNode;
     overview?: ReactNode;
     settings?: ReactNode;
     students?: ReactNode;
-    status?: ReactNode;
   }) => (
     <div data-course-management-tabs="true">
-      <header>
-        {status}
-        {actions}
-      </header>
       {overview ? <div data-course-panel="overview">{overview}</div> : null}
       {content ? <div data-course-panel="content">{content}</div> : null}
       {students ? <div data-course-panel="students">{students}</div> : null}
@@ -143,6 +135,7 @@ vi.mock("./course-management-tabs", () => ({
 }));
 vi.mock("./course-overview", () => ({
   CourseOverview: ({
+    courseAvailability,
     contentSummary,
     courseId,
     durationSeconds,
@@ -150,7 +143,9 @@ vi.mock("./course-overview", () => ({
     operationalState,
     overviewSummary,
     publicationState,
+    previewHref,
   }: {
+    courseAvailability: { label: string; variant: string };
     contentSummary: { totalLessons: number };
     courseId: string;
     durationSeconds: number;
@@ -162,9 +157,11 @@ vi.mock("./course-overview", () => ({
       validCertificateCount: number;
     };
     publicationState: { hasDraft: boolean; hasPublished: boolean };
+    previewHref: string;
   }) => (
     <div
       data-active-enrollments={overviewSummary.activeEnrollmentCount}
+      data-course-availability={courseAvailability.label}
       data-course-id={courseId}
       data-course-overview="true"
       data-duration-seconds={durationSeconds}
@@ -175,7 +172,10 @@ vi.mock("./course-overview", () => ({
       data-paid-orders={overviewSummary.paidOrderCount}
       data-total-lessons={contentSummary.totalLessons}
       data-valid-certificates={overviewSummary.validCertificateCount}
-    />
+    >
+      <span>{courseAvailability.label}</span>
+      <a href={previewHref}>Ver como aluno</a>
+    </div>
   ),
 }));
 vi.mock("./course-purchase-link", () => ({

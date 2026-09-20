@@ -1526,7 +1526,7 @@ describe("admin read projections", () => {
     const lessonEditorSql = String(
       query.mock.calls.find(([, values]) => values?.length === 2)?.[0]
     );
-    expect(lessonEditorSql).toContain("cp.status = 'draft'");
+    expect(lessonEditorSql).toContain("cp.status in ('draft', 'published')");
     expect(editor).toMatchObject({
       asset: { id: "asset-1" },
       course: { id: courseId },

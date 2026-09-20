@@ -14,6 +14,7 @@ interface SortableItemProps {
   className?: string;
   data?: Record<string, unknown>;
   disabled?: boolean;
+  handleAlignment?: "center" | "start";
   handleClassName?: string;
   handleHidden?: boolean;
   id: string;
@@ -25,6 +26,7 @@ export function SortableItem({
   children,
   className,
   handleClassName,
+  handleAlignment = "center",
   data,
   disabled = false,
   handleHidden = false,
@@ -58,7 +60,8 @@ export function SortableItem({
         <Button
           aria-label={ariaLabel}
           className={cn(
-            "size-11 touch-manipulation self-center text-muted-foreground/50 hover:text-foreground active:cursor-grabbing md:size-10",
+            "size-11 touch-manipulation text-muted-foreground/50 hover:text-foreground active:cursor-grabbing md:size-10",
+            handleAlignment === "start" ? "mt-4 self-start" : "self-center",
             !disabled && "cursor-grab",
             handleClassName
           )}

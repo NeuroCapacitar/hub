@@ -325,8 +325,10 @@ describe("course payment settings", () => {
     const markup = renderToStaticMarkup(<CourseSettingsForm course={course} />);
 
     expect(markup).toContain("Identidade do curso");
-    expect(markup).toContain("Acesso e publicação");
+    expect(markup).toContain("Acesso e carga horária");
     expect(markup).toContain("Oferta de pagamento");
+    expect(markup).toContain("lg:grid-cols-[208px_minmax(0,1fr)]");
+    expect(markup).toContain("sm:w-[208px]");
     expect(markup).toContain("Editar carga horária");
     expect(markup).toContain('name="workloadHoursOverride"');
     expect(markup.indexOf("Carga horária")).toBeLessThan(

@@ -143,7 +143,7 @@ function CourseSettingsReadOnly({
       <Separator />
 
       <section className="space-y-5">
-        <h3 className="font-medium text-base">Acesso e publicação</h3>
+        <h3 className="font-medium text-base">Acesso e carga horária</h3>
         <dl className="grid max-w-2xl gap-5 md:grid-cols-2">
           <ReadOnlyValue
             label="Carga horária"
@@ -326,10 +326,11 @@ function CourseSettingsEditor({
           <div className="flex flex-col gap-8">
             <section className="space-y-5">
               <h3 className="font-medium text-base">Identidade do curso</h3>
-              <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start">
+              <div className="grid gap-6 lg:grid-cols-[208px_minmax(0,1fr)] lg:items-start">
                 <Field>
                   <CourseCoverUploadField
                     aggregateId={course.id}
+                    className="sm:w-[208px]"
                     defaultCoverImage={course.coverImage}
                     defaultThumbnailUrl={course.thumbnailUrl}
                   />
@@ -364,7 +365,7 @@ function CourseSettingsEditor({
             <Separator />
 
             <section className="space-y-5">
-              <h3 className="font-medium text-base">Acesso e publicação</h3>
+              <h3 className="font-medium text-base">Acesso e carga horária</h3>
               <div className="grid max-w-2xl gap-5 md:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="course-settings-workload">

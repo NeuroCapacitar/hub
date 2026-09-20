@@ -57,11 +57,13 @@ export function CourseBuilderWrapper({
   editable,
   modules,
   lessons,
+  toolbar,
 }: {
   course: CourseData;
   editable: boolean;
   modules: ModuleData[];
   lessons: LessonData[];
+  toolbar?: React.ReactNode;
 }) {
   return (
     <CourseBuilderClient
@@ -70,12 +72,7 @@ export function CourseBuilderWrapper({
       initialLessons={lessons}
       initialModules={modules}
       renderLesson={(lesson, _moduleData, index) => (
-        <LessonRow
-          courseId={course.id}
-          editable={editable}
-          index={index}
-          lesson={lesson}
-        />
+        <LessonRow courseId={course.id} index={index} lesson={lesson} />
       )}
       renderModule={(moduleData, moduleLessons, index, disclosure) => (
         <ModuleSection
@@ -89,6 +86,7 @@ export function CourseBuilderWrapper({
           onToggle={disclosure.onToggle}
         />
       )}
+      toolbar={toolbar}
     />
   );
 }
@@ -130,7 +128,7 @@ export function ModuleSection({
       : `Liberação em D+${moduleData.releaseDelayDays}`;
 
   return (
-    <div className="flex min-w-0 flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-5">
+    <div className="flex min-w-0 flex-col gap-4 bg-background/35 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-5">
       <div className="flex min-w-0 items-start gap-2.5">
         <Button
           aria-controls={contentId}
@@ -140,7 +138,7 @@ export function ModuleSection({
           onClick={onToggle}
           size="icon-sm"
           type="button"
-          variant="ghost"
+          variant="outline"
         >
           <HugeiconsIcon
             aria-hidden="true"
@@ -170,6 +168,24 @@ export function ModuleSection({
       {editable ? (
         <div className="flex shrink-0 items-center gap-2 pl-10 md:pl-0">
           <DiscardAwareDialog
+            description="Atualize os dados deste módulo."
+            title="Editar módulo"
+            trigger={
+              <DialogTriggerButton size="sm" variant="outline">
+                <HugeiconsIcon
+                  aria-hidden="true"
+                  data-icon="inline-start"
+                  icon={Edit01Icon}
+                  size={16}
+                  strokeWidth={2}
+                />
+                Editar
+              </DialogTriggerButton>
+            }
+          >
+            <ModuleForm course={course} moduleData={moduleData} />
+          </DiscardAwareDialog>
+          <DiscardAwareDialog
             className="sm:max-w-lg"
             description="Defina o básico da aula. Depois você será levado para a edição completa."
             title="Nova aula"
@@ -191,24 +207,6 @@ export function ModuleSection({
               nextSortOrder={nextLessonSortOrder}
             />
           </DiscardAwareDialog>
-          <DiscardAwareDialog
-            description="Atualize os dados deste módulo."
-            title="Editar módulo"
-            trigger={
-              <DialogTriggerButton size="sm" variant="ghost">
-                <HugeiconsIcon
-                  aria-hidden="true"
-                  data-icon="inline-start"
-                  icon={Edit01Icon}
-                  size={16}
-                  strokeWidth={2}
-                />
-                Editar
-              </DialogTriggerButton>
-            }
-          >
-            <ModuleForm course={course} moduleData={moduleData} />
-          </DiscardAwareDialog>
         </div>
       ) : null}
     </div>
@@ -217,12 +215,10 @@ export function ModuleSection({
 
 export function LessonRow({
   courseId,
-  editable,
   lesson,
   index,
 }: {
   courseId: string;
-  editable: boolean;
   lesson: LessonData;
   index: number;
 }): React.JSX.Element {
@@ -245,18 +241,12 @@ export function LessonRow({
         <p className="text-muted-foreground text-xs tabular-nums">
           Aula {index + 1}
         </p>
-        {editable ? (
-          <Link
-            className="mt-0.5 line-clamp-2 block break-words font-medium leading-snug underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
-            href={lessonHref}
-          >
-            {lesson.title}
-          </Link>
-        ) : (
-          <p className="mt-0.5 line-clamp-2 break-words font-medium leading-snug">
-            {lesson.title}
-          </p>
-        )}
+        <Link
+          className="mt-0.5 line-clamp-2 block break-words font-medium leading-snug underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+          href={lessonHref}
+        >
+          {lesson.title}
+        </Link>
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs md:justify-end">
         {hasAnyContent ? <span>{contentLabel}</span> : null}

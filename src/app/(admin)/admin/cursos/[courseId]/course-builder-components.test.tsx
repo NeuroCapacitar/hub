@@ -335,7 +335,7 @@ describe("module content release controls", () => {
       />
     );
     const lessonMarkup = renderToStaticMarkup(
-      <LessonRow courseId={course.id} editable index={0} lesson={lesson} />
+      <LessonRow courseId={course.id} index={0} lesson={lesson} />
     );
 
     expect(moduleMarkup).toContain("Liberação em D+8");
@@ -371,13 +371,8 @@ describe("course builder copy", () => {
     };
     const lessonMarkup = renderToStaticMarkup(
       <div>
-        <LessonRow
-          courseId={course.id}
-          editable
-          index={0}
-          lesson={videoLesson}
-        />
-        <LessonRow courseId={course.id} editable index={1} lesson={lesson} />
+        <LessonRow courseId={course.id} index={0} lesson={videoLesson} />
+        <LessonRow courseId={course.id} index={1} lesson={lesson} />
       </div>
     );
     const formMarkup = [
@@ -467,7 +462,7 @@ describe("course builder responsive presentation", () => {
       videoExternalId: "video-1",
     };
     const markup = renderToStaticMarkup(
-      <LessonRow courseId={course.id} editable index={0} lesson={richLesson} />
+      <LessonRow courseId={course.id} index={0} lesson={richLesson} />
     );
     const document = new DOMParser().parseFromString(markup, "text/html");
 

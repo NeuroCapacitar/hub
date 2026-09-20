@@ -24,7 +24,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Menu01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type React from "react";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,6 +65,7 @@ interface CourseBuilderClientProps {
     index: number,
     disclosure: CourseBuilderModuleRenderState
   ) => React.ReactNode;
+  toolbar?: React.ReactNode;
 }
 
 function SortableLesson({
@@ -133,6 +134,7 @@ export function CourseBuilderClient({
   initialLessons,
   renderModule,
   renderLesson,
+  toolbar,
 }: CourseBuilderClientProps) {
   const [modules, setModules] = useState(initialModules);
   const [lessons, setLessons] = useState(initialLessons);
@@ -143,7 +145,11 @@ export function CourseBuilderClient({
   const [expandedModuleIds, setExpandedModuleIds] = useState<Set<string>>(
     () => new Set(initialModules[0] ? [initialModules[0].id] : [])
   );
+  const hasInitializedModuleExpansion = useRef(initialModules.length > 0);
   const [isPending, startTransition] = useTransition();
+  const areAllModulesExpanded =
+    modules.length > 0 &&
+    modules.every((moduleData) => expandedModuleIds.has(moduleData.id));
 
   useEffect(() => {
     setModules(initialModules);
@@ -155,15 +161,24 @@ export function CourseBuilderClient({
 
   useEffect(() => {
     const availableModuleIds = new Set(initialModules.map((item) => item.id));
+    const firstModule = initialModules[0];
+    const wasExpansionInitialized = hasInitializedModuleExpansion.current;
     setExpandedModuleIds((current) => {
       const next = new Set(
         [...current].filter((moduleId) => availableModuleIds.has(moduleId))
       );
-      if (next.size === 0 && initialModules[0]) {
-        next.add(initialModules[0].id);
+      const shouldOpenFirstModule =
+        firstModule &&
+        next.size === 0 &&
+        (!wasExpansionInitialized || current.size > 0);
+      if (shouldOpenFirstModule) {
+        next.add(firstModule.id);
       }
       return next;
     });
+    if (initialModules.length > 0) {
+      hasInitializedModuleExpansion.current = true;
+    }
   }, [initialModules]);
 
   const sensors = useSensors(
@@ -399,32 +414,32 @@ export function CourseBuilderClient({
             Salvando ordem…
           </p>
         ) : null}
-        {modules.length > 1 ? (
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              aria-label="Expandir todos os módulos"
-              onClick={() => {
-                setExpandedModuleIds(
-                  new Set(modules.map((module) => module.id))
-                );
-              }}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              Expandir tudo
-            </Button>
-            <Button
-              aria-label="Recolher todos os módulos"
-              onClick={() => {
-                setExpandedModuleIds(new Set());
-              }}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              Recolher tudo
-            </Button>
+        {toolbar || modules.length > 1 ? (
+          <div className="flex flex-wrap items-center justify-end gap-2 border-border/60 border-b pb-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {modules.length > 1 ? (
+                <Button
+                  aria-label={
+                    areAllModulesExpanded
+                      ? "Recolher todos os módulos"
+                      : "Expandir todos os módulos"
+                  }
+                  onClick={() => {
+                    setExpandedModuleIds(
+                      areAllModulesExpanded
+                        ? new Set()
+                        : new Set(modules.map((module) => module.id))
+                    );
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {areAllModulesExpanded ? "Recolher tudo" : "Expandir tudo"}
+                </Button>
+              ) : null}
+              {toolbar}
+            </div>
           </div>
         ) : null}
         <SortableContext
@@ -439,9 +454,10 @@ export function CourseBuilderClient({
               return (
                 <SortableItem
                   ariaLabel={`Reordenar módulo ${moduleData.title}`}
-                  className="rounded-lg border bg-card shadow-sm"
+                  className="overflow-hidden rounded-lg border bg-background/35 shadow-sm"
                   data={{ type: "module" }}
                   disabled={!editable || isPending}
+                  handleAlignment="start"
                   handleClassName="ml-1"
                   handleHidden={!editable}
                   id={moduleData.id}
@@ -463,7 +479,10 @@ export function CourseBuilderClient({
                     },
                   })}
                   {expandedModuleIds.has(moduleData.id) ? (
-                    <div id={`course-module-${moduleData.id}-lessons`}>
+                    <div
+                      className="bg-muted/30"
+                      id={`course-module-${moduleData.id}-lessons`}
+                    >
                       <SortableContext
                         items={moduleLessons.map((l) => l.id)}
                         strategy={verticalListSortingStrategy}

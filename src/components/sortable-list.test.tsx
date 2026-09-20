@@ -39,4 +39,24 @@ describe("SortableItem", () => {
     expect(handle?.className).toContain("md:size-10");
     expect(handle?.className).toContain("touch-manipulation");
   });
+
+  it("can align the drag handle with the start of a tall item", () => {
+    const markup = renderToStaticMarkup(
+      <SortableItem
+        ariaLabel="Reordenar módulo Fundamentos"
+        handleAlignment="start"
+        id="module-1"
+      >
+        <p>Fundamentos</p>
+      </SortableItem>
+    );
+
+    const document = new DOMParser().parseFromString(markup, "text/html");
+    const handle = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Reordenar módulo Fundamentos"]'
+    );
+
+    expect(handle?.className).toContain("self-start");
+    expect(handle?.className).toContain("mt-4");
+  });
 });

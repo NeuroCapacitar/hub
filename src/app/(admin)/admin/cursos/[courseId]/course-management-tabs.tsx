@@ -37,12 +37,10 @@ export type CourseManagementTab =
   (typeof COURSE_MANAGEMENT_TABS)[number]["value"];
 
 interface CourseManagementTabsProps {
-  actions?: ReactNode;
   certificate?: ReactNode;
   content?: ReactNode;
   overview?: ReactNode;
   settings?: ReactNode;
-  status?: ReactNode;
   students?: ReactNode;
 }
 
@@ -98,13 +96,11 @@ const getActiveTab = (value: string | null): CourseManagementTab =>
   isCourseManagementTab(value) ? value : "overview";
 
 export function CourseManagementTabs({
-  actions,
   certificate,
   content,
   overview,
   settings,
   students,
-  status,
 }: CourseManagementTabsProps): React.JSX.Element {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -276,14 +272,6 @@ export function CourseManagementTabs({
 
   return (
     <CourseTabDirtyContext.Provider value={dirtyContextValue}>
-      {actions || status ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
-          <div className="flex min-w-0 items-center gap-2">{status}</div>
-          {actions ? (
-            <div className="flex shrink-0 items-center gap-2">{actions}</div>
-          ) : null}
-        </div>
-      ) : null}
       <Tabs onValueChange={changeTab} value={activeTab}>
         <div
           className="max-w-full overflow-x-auto border-b"

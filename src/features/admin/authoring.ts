@@ -1150,6 +1150,78 @@ export const createCoursePublicationDraft = async ({
   }
 };
 
+export const discardCoursePublicationDraft = async ({
+  actorUserId,
+  courseId,
+}: {
+  actorUserId: string;
+  courseId: string;
+}): Promise<"no_draft" | "discarded"> => {
+  const client = await getPool().connect();
+
+  try {
+    await client.query("begin");
+    await lockCourseContentRelease(client, courseId);
+    const draft = await client.query<{
+      course_title: string;
+      id: string;
+      publication_number: number;
+      title_snapshot: string;
+    }>(
+      `
+        select cp.id, cp.publication_number, cp.title_snapshot, c.title as course_title
+        from course_publications cp
+        join courses c on c.id = cp.course_id
+        where cp.course_id = $1 and cp.status = 'draft'
+        order by cp.publication_number desc
+        limit 1
+        for update
+      `,
+      [courseId]
+    );
+    const currentDraft = draft.rows[0];
+
+    if (!currentDraft) {
+      await client.query("rollback");
+      return "no_draft";
+    }
+
+    await client.query(
+      "delete from course_publications where id = $1 and status = 'draft'",
+      [currentDraft.id]
+    );
+    await audit({
+      action: "course_publication.draft_discarded",
+      actorUserId,
+      client,
+      metadata: {
+        changes: {
+          publicationNumber: {
+            after: null,
+            before: currentDraft.publication_number,
+          },
+          status: { after: "discarded", before: "draft" },
+          titleSnapshot: {
+            after: null,
+            before: currentDraft.title_snapshot,
+          },
+        },
+        courseId,
+        targetLabelBefore: currentDraft.course_title,
+      },
+      targetId: currentDraft.id,
+      targetType: "course_publication",
+    });
+    await client.query("commit");
+    return "discarded";
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 const getCourseIdForLesson = async (
   lessonId: string
 ): Promise<string | null> => {

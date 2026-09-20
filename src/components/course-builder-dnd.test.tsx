@@ -332,6 +332,77 @@ describe("CourseBuilderClient editability", () => {
     ).toBe("true");
   });
 
+  it("expands and collapses all modules without reopening after a refresh", () => {
+    const renderModules = (modules: AdminModule[]) => (
+      <CourseBuilderClient
+        course={course}
+        editable
+        initialLessons={[]}
+        initialModules={modules}
+        renderLesson={() => null}
+        renderModule={(currentModule, _lessons, _index, disclosure) => (
+          <button
+            aria-expanded={disclosure.expanded}
+            data-module-toggle={currentModule.id}
+            onClick={disclosure.onToggle}
+            type="button"
+          >
+            {currentModule.title}
+          </button>
+        )}
+      />
+    );
+
+    act(() => {
+      root.render(renderModules([moduleData, secondModule]));
+    });
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Expandir todos os módulos"]'
+        )
+        ?.click();
+    });
+    expect(
+      container
+        .querySelector('[data-module-toggle="module-2"]')
+        ?.getAttribute("aria-expanded")
+    ).toBe("true");
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Recolher todos os módulos"]'
+        )
+        ?.click();
+    });
+    expect(
+      container
+        .querySelector('[data-module-toggle="module-1"]')
+        ?.getAttribute("aria-expanded")
+    ).toBe("false");
+    expect(
+      container
+        .querySelector('[data-module-toggle="module-2"]')
+        ?.getAttribute("aria-expanded")
+    ).toBe("false");
+
+    act(() => {
+      root.render(renderModules([{ ...moduleData }, { ...secondModule }]));
+    });
+    expect(
+      container
+        .querySelector('[data-module-toggle="module-1"]')
+        ?.getAttribute("aria-expanded")
+    ).toBe("false");
+    expect(
+      container
+        .querySelector('[data-module-toggle="module-2"]')
+        ?.getAttribute("aria-expanded")
+    ).toBe("false");
+  });
+
   it("opens the destination module while moving a lesson into it", () => {
     act(() => {
       root.render(
@@ -374,5 +445,40 @@ describe("CourseBuilderClient editability", () => {
     expect(
       container.querySelector('[data-module="module-2"]')?.textContent
     ).toBe(lesson.id);
+  });
+
+  it("opens the first module when content arrives after an empty state", () => {
+    const renderModules = (modules: AdminModule[]) => (
+      <CourseBuilderClient
+        course={course}
+        editable
+        initialLessons={[]}
+        initialModules={modules}
+        renderLesson={() => null}
+        renderModule={(currentModule, _lessons, _index, disclosure) => (
+          <button
+            aria-expanded={disclosure.expanded}
+            data-module-toggle={currentModule.id}
+            onClick={disclosure.onToggle}
+            type="button"
+          >
+            {currentModule.title}
+          </button>
+        )}
+      />
+    );
+
+    act(() => {
+      root.render(renderModules([]));
+    });
+    act(() => {
+      root.render(renderModules([moduleData, secondModule]));
+    });
+
+    expect(
+      container
+        .querySelector('[data-module-toggle="module-1"]')
+        ?.getAttribute("aria-expanded")
+    ).toBe("true");
   });
 });

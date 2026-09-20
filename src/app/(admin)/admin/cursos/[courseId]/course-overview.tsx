@@ -1,3 +1,5 @@
+import { ViewIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,16 +15,19 @@ import type {
   AdminCourseOperationalState,
 } from "@/features/admin/presentation";
 import type { AdminCourseOverviewSummary } from "@/features/admin/server";
+import type { AdminStatusPresentation } from "@/features/admin/status-presentation";
 import { formatLessonDuration } from "@/features/videos/jmvstream";
 import { route } from "@/lib/routes";
 
 interface CourseOverviewProps {
   contentSummary: AdminCourseContentSummary;
+  courseAvailability: Pick<AdminStatusPresentation, "label" | "variant">;
   courseId: string;
   durationSeconds: number;
   moduleCount: number;
   operationalState: AdminCourseOperationalState;
   overviewSummary: AdminCourseOverviewSummary;
+  previewHref: string;
   publicationState: {
     hasDraft: boolean;
     hasPublished: boolean;
@@ -95,6 +100,7 @@ function CurriculumValue({
 }
 
 export function CourseOverview({
+  courseAvailability,
   contentSummary,
   courseId,
   durationSeconds,
@@ -102,33 +108,53 @@ export function CourseOverview({
   operationalState,
   overviewSummary,
   publicationState,
+  previewHref,
 }: CourseOverviewProps): React.JSX.Element {
   const tone = OPERATIONAL_TONE[operationalState.tone];
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <div className="min-w-0 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <CardTitle as="h2" className="text-xl">
-                {operationalState.label}
-              </CardTitle>
-              <Badge variant={tone.variant}>{tone.label}</Badge>
+        <CardHeader className="gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle as="h2" className="text-xl">
+                  {operationalState.label}
+                </CardTitle>
+                <Badge variant={tone.variant}>{tone.label}</Badge>
+              </div>
+              <CardDescription>{operationalState.description}</CardDescription>
+              {operationalState.actionLabel && operationalState.actionTab ? (
+                <Button asChild className="w-full sm:w-auto" size="sm">
+                  <Link
+                    href={route(
+                      `/admin/cursos/${courseId}?tab=${operationalState.actionTab}`
+                    )}
+                  >
+                    {operationalState.actionLabel}
+                  </Link>
+                </Button>
+              ) : null}
             </div>
-            <CardDescription>{operationalState.description}</CardDescription>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Badge variant={courseAvailability.variant}>
+                {courseAvailability.label}
+              </Badge>
+              <Button asChild size="sm" variant="outline">
+                <a href={previewHref}>
+                  <HugeiconsIcon
+                    aria-hidden="true"
+                    data-icon="inline-start"
+                    icon={ViewIcon}
+                    size={16}
+                    strokeWidth={2}
+                  />
+                  Ver como aluno
+                </a>
+              </Button>
+            </div>
           </div>
-          {operationalState.actionLabel && operationalState.actionTab ? (
-            <Button asChild className="w-full sm:w-auto" size="sm">
-              <Link
-                href={route(
-                  `/admin/cursos/${courseId}?tab=${operationalState.actionTab}`
-                )}
-              >
-                {operationalState.actionLabel}
-              </Link>
-            </Button>
-          ) : null}
         </CardHeader>
       </Card>
 

@@ -20,6 +20,10 @@ import { requirePermission } from "@/lib/auth-permissions";
 import { canPerform } from "@/lib/auth-policy";
 import { route } from "@/lib/routes";
 import { LessonEditorSidebarFields } from "../../course-builder-components";
+import {
+  LessonReadOnlyContent,
+  LessonReadOnlySidebar,
+} from "./lesson-read-only";
 import { LessonSidebarActions } from "./lesson-sidebar-actions";
 import { LessonSidebarDuration } from "./lesson-sidebar-duration";
 
@@ -98,26 +102,26 @@ export default async function AdminLessonEditPage({
           />
         </div>
 
-        {/* Formulário de Metadados (Título e Descrição) */}
-        <div className="custom-scrollbar px-4 py-6 lg:flex-1 lg:overflow-y-auto lg:px-5 lg:pb-20">
-          <fieldset className="contents" disabled={!canManageCourseContent}>
-            <LessonEditorSidebarFields
-              formId={LESSON_EDITOR_FORM_ID}
-              lesson={lesson}
-            />
-          </fieldset>
-        </div>
+        {canManageCourseContent ? (
+          <>
+            <div className="custom-scrollbar px-4 py-6 lg:flex-1 lg:overflow-y-auto lg:px-5 lg:pb-20">
+              <LessonEditorSidebarFields
+                formId={LESSON_EDITOR_FORM_ID}
+                lesson={lesson}
+              />
+            </div>
 
-        {/* Rodapé Fixo de Ações */}
-        <div className="sticky top-0 z-10 shrink-0 border-b bg-background px-4 pt-2 pb-5 lg:static lg:mt-auto lg:border-t lg:border-b-0 lg:px-5 lg:py-5">
-          <fieldset className="contents" disabled={!canManageCourseContent}>
-            <LessonSidebarActions
-              coursePublicationStatus={lesson.coursePublicationStatus}
-              formId={LESSON_EDITOR_FORM_ID}
-              initialStatus={lesson.status ?? "draft"}
-            />
-          </fieldset>
-        </div>
+            <div className="sticky top-0 z-10 shrink-0 border-b bg-background px-4 pt-2 pb-5 lg:static lg:mt-auto lg:border-t lg:border-b-0 lg:px-5 lg:py-5">
+              <LessonSidebarActions
+                coursePublicationStatus={lesson.coursePublicationStatus}
+                formId={LESSON_EDITOR_FORM_ID}
+                initialStatus={lesson.status ?? "draft"}
+              />
+            </div>
+          </>
+        ) : (
+          <LessonReadOnlySidebar lesson={lesson} />
+        )}
       </aside>
 
       {/* Coluna principal com Abas */}
@@ -154,51 +158,58 @@ export default async function AdminLessonEditPage({
               </TabsList>
             </div>
 
-            <fieldset className="contents" disabled={!canManageCourseContent}>
-              <form id={LESSON_EDITOR_FORM_ID}>
-                <TabsContent
-                  className="m-0 border-none p-0 focus-visible:ring-0 data-[state=inactive]:hidden"
-                  forceMount
-                  value="video"
-                >
-                  <LessonVideoControls
-                    asset={asset ? toUploadAsset(asset) : undefined}
-                    defaultEmbedUrl={lesson.videoEmbedUrl ?? ""}
-                    defaultOrder={lesson.sortOrder}
-                    defaultTitle={lesson.title}
-                    defaultVideoDurationSeconds={lesson.videoDurationSeconds}
-                    defaultVideoExternalId={lesson.videoExternalId}
-                    lessonId={lesson.id}
-                  />
-                </TabsContent>
+            {canManageCourseContent ? (
+              <fieldset className="contents">
+                <form id={LESSON_EDITOR_FORM_ID}>
+                  <TabsContent
+                    className="m-0 border-none p-0 focus-visible:ring-0 data-[state=inactive]:hidden"
+                    forceMount
+                    value="video"
+                  >
+                    <LessonVideoControls
+                      asset={asset ? toUploadAsset(asset) : undefined}
+                      defaultEmbedUrl={lesson.videoEmbedUrl ?? ""}
+                      defaultOrder={lesson.sortOrder}
+                      defaultTitle={lesson.title}
+                      defaultVideoDurationSeconds={lesson.videoDurationSeconds}
+                      defaultVideoExternalId={lesson.videoExternalId}
+                      lessonId={lesson.id}
+                    />
+                  </TabsContent>
 
-                <TabsContent
-                  className="m-0 border-none p-0 focus-visible:ring-0 data-[state=inactive]:hidden"
-                  forceMount
-                  value="text"
-                >
-                  <LessonRichTextEditor
-                    initialDocument={
-                      parsedContent?.type === "text"
-                        ? parsedContent.document
-                        : EMPTY_TEXT_DOCUMENT
-                    }
-                    readOnly={!canManageCourseContent}
-                  />
-                </TabsContent>
+                  <TabsContent
+                    className="m-0 border-none p-0 focus-visible:ring-0 data-[state=inactive]:hidden"
+                    forceMount
+                    value="text"
+                  >
+                    <LessonRichTextEditor
+                      initialDocument={
+                        parsedContent?.type === "text"
+                          ? parsedContent.document
+                          : EMPTY_TEXT_DOCUMENT
+                      }
+                    />
+                  </TabsContent>
 
-                <TabsContent
-                  className="m-0 border-none p-0 focus-visible:ring-0"
-                  value="attachments"
-                >
-                  <LessonResourcesFields
-                    defaultResources={defaultResources}
-                    formId={LESSON_EDITOR_FORM_ID}
-                    lessonId={lesson.id}
-                  />
-                </TabsContent>
-              </form>
-            </fieldset>
+                  <TabsContent
+                    className="m-0 border-none p-0 focus-visible:ring-0"
+                    value="attachments"
+                  >
+                    <LessonResourcesFields
+                      defaultResources={defaultResources}
+                      formId={LESSON_EDITOR_FORM_ID}
+                      lessonId={lesson.id}
+                    />
+                  </TabsContent>
+                </form>
+              </fieldset>
+            ) : (
+              <LessonReadOnlyContent
+                asset={asset ? toUploadAsset(asset) : undefined}
+                lesson={lesson}
+                resources={defaultResources}
+              />
+            )}
 
             <TabsContent
               className="m-0 border-none p-0 focus-visible:ring-0"
