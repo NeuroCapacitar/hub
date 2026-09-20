@@ -338,6 +338,18 @@ describe("course payment settings", () => {
     );
   });
 
+  it("renders settings as a consultation view without mutation controls", () => {
+    const markup = renderToStaticMarkup(
+      <CourseSettingsForm course={course} readOnly />
+    );
+
+    expect(markup).toContain('data-course-settings-readonly="true"');
+    expect(markup).toContain("Você pode consultar estas informações");
+    expect(markup).toContain(formatCurrencyInCents(course.priceInCents));
+    expect(markup).not.toContain("Salvar configurações");
+    expect(markup).not.toContain("<form");
+  });
+
   it("updates the available installment options as the price changes", () => {
     renderCourseSettingsForm({ ...course, priceInCents: 12_000 });
     setPrice("99,00");

@@ -124,6 +124,10 @@ export function ModuleSection({
   const statusPresentation = getCourseContentStatusPresentation(
     moduleData.status
   );
+  const releaseLabel =
+    moduleData.releaseDelayDays === 0
+      ? "Liberação imediata"
+      : `Liberação em D+${moduleData.releaseDelayDays}`;
 
   return (
     <div className="flex min-w-0 flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-5">
@@ -151,18 +155,15 @@ export function ModuleSection({
             <h3 className="min-w-0 break-words font-semibold leading-snug">
               {moduleData.title}
             </h3>
-            <Badge variant={statusPresentation.variant}>
-              {statusPresentation.label}
-            </Badge>
-            <Badge variant="outline">
-              {moduleData.releaseDelayDays === 0
-                ? "Liberação imediata"
-                : `Liberação em D+${moduleData.releaseDelayDays}`}
-            </Badge>
+            {moduleData.status === "active" ? null : (
+              <Badge variant={statusPresentation.variant}>
+                {statusPresentation.label}
+              </Badge>
+            )}
           </div>
           <p className="mt-1 text-muted-foreground text-sm">
             {lessonCount} {lessonCount === 1 ? "aula" : "aulas"} ·{" "}
-            {formatLessonDuration(totalDuration)}
+            {formatLessonDuration(totalDuration)} · {releaseLabel}
           </p>
         </div>
       </div>
@@ -236,55 +237,50 @@ export function LessonRow({
     contentLabel = "Vídeo";
   }
 
+  const lessonHref = route(`/admin/cursos/${courseId}/aulas/${lesson.id}`);
+
   return (
-    <div className="grid min-w-0 gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center md:px-5">
+    <div className="grid min-w-0 gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:px-5">
       <div className="min-w-0">
-        <p className="font-mono text-muted-foreground text-xs">
+        <p className="text-muted-foreground text-xs tabular-nums">
           Aula {index + 1}
         </p>
-        <p className="mt-0.5 line-clamp-2 break-words font-medium leading-snug">
-          {lesson.title}
-        </p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs md:hidden">
-          <span>{formatLessonDuration(lesson.durationSeconds)}</span>
-          <span aria-hidden="true">·</span>
-          <span>{lesson.isRequired ? "Obrigatória" : "Opcional"}</span>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-2 md:justify-end">
-        {hasAnyContent ? (
-          <Badge variant="secondary">{contentLabel}</Badge>
-        ) : (
-          <Badge variant="destructive">Sem conteúdo</Badge>
-        )}
-        <Badge variant={statusPresentation.variant}>
-          {statusPresentation.label}
-        </Badge>
-        <div className="hidden items-center gap-2 text-muted-foreground text-xs md:flex">
-          <span>{formatLessonDuration(lesson.durationSeconds)}</span>
-          <span aria-hidden="true">·</span>
-          <span>{lesson.isRequired ? "Obrigatória" : "Opcional"}</span>
-        </div>
-      </div>
-      {editable ? (
-        <Button
-          asChild
-          className="w-fit md:justify-self-end"
-          size="sm"
-          variant="ghost"
-        >
-          <Link href={route(`/admin/cursos/${courseId}/aulas/${lesson.id}`)}>
-            <HugeiconsIcon
-              aria-hidden="true"
-              data-icon="inline-start"
-              icon={Edit01Icon}
-              size={16}
-              strokeWidth={2}
-            />
-            Editar
+        {editable ? (
+          <Link
+            className="mt-0.5 line-clamp-2 block break-words font-medium leading-snug underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+            href={lessonHref}
+          >
+            {lesson.title}
           </Link>
-        </Button>
-      ) : null}
+        ) : (
+          <p className="mt-0.5 line-clamp-2 break-words font-medium leading-snug">
+            {lesson.title}
+          </p>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-xs md:justify-end">
+        {hasAnyContent ? <span>{contentLabel}</span> : null}
+        {hasAnyContent ? <span aria-hidden="true">·</span> : null}
+        <span>{formatLessonDuration(lesson.durationSeconds)}</span>
+        <span aria-hidden="true">·</span>
+        <span>{lesson.isRequired ? "Obrigatória" : "Opcional"}</span>
+        {hasAnyContent ? null : (
+          <Badge
+            variant={
+              lesson.coursePublicationStatus === "published"
+                ? "destructive"
+                : "warning"
+            }
+          >
+            Sem conteúdo
+          </Badge>
+        )}
+        {lesson.status === "active" ? null : (
+          <Badge variant={statusPresentation.variant}>
+            {statusPresentation.label}
+          </Badge>
+        )}
+      </div>
     </div>
   );
 }

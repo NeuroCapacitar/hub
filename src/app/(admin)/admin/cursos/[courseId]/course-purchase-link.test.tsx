@@ -133,7 +133,7 @@ describe("CoursePurchaseLink", () => {
     });
 
     expect(container.textContent).toContain("Checkout pago indisponível");
-    expect(container.textContent).toContain("course_unpublished");
+    expect(container.textContent).not.toContain("course_unpublished");
     expect(container.textContent).toContain("publicação publicada");
     expect(container.querySelector("input")?.getAttribute("value")).toBe(
       publicUrl

@@ -387,29 +387,35 @@ export default async function AdminCourseDetailPage({
           }
           students={
             data.tab === "students" ? (
-              <section className="rounded-lg border bg-card">
-                <div className="border-b px-5 py-4">
-                  <h2 className="font-semibold text-xl">Alunos deste Curso</h2>
-                  <p className="mt-1 text-muted-foreground text-sm">
-                    Matrículas deste Curso, situação de acesso e ações
-                    específicas do Curso.
+              <section className="space-y-4">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <h2 className="font-semibold text-xl">Alunos</h2>
+                    <p className="mt-1 text-muted-foreground text-sm">
+                      Matrículas deste Curso, situação de acesso e ações
+                      específicas do Curso.
+                    </p>
+                  </div>
+                  <p className="text-muted-foreground text-sm tabular-nums">
+                    {data.enrollmentsPage.totalCount}{" "}
+                    {data.enrollmentsPage.totalCount === 1
+                      ? "matrícula"
+                      : "matrículas"}
                   </p>
                 </div>
-                <div className="p-4 sm:p-5">
-                  <CourseEnrollmentsTable
-                    courseId={course.id}
-                    enrollments={data.enrollmentsPage.enrollments}
-                    hasNextPage={data.enrollmentsPage.hasNextPage}
-                    initialAction={enrollmentAction}
-                    initialStudentId={enrollmentStudentId || undefined}
-                    managementCapabilities={studentManagementCapabilities}
-                    page={data.enrollmentsPage.page}
-                    pageSize={data.enrollmentsPage.pageSize}
-                    search={data.enrollmentsPage.search}
-                    statusFilter={enrollmentStatus}
-                    totalCount={data.enrollmentsPage.totalCount}
-                  />
-                </div>
+                <CourseEnrollmentsTable
+                  courseId={course.id}
+                  enrollments={data.enrollmentsPage.enrollments}
+                  hasNextPage={data.enrollmentsPage.hasNextPage}
+                  initialAction={enrollmentAction}
+                  initialStudentId={enrollmentStudentId || undefined}
+                  managementCapabilities={studentManagementCapabilities}
+                  page={data.enrollmentsPage.page}
+                  pageSize={data.enrollmentsPage.pageSize}
+                  search={data.enrollmentsPage.search}
+                  statusFilter={enrollmentStatus}
+                  totalCount={data.enrollmentsPage.totalCount}
+                />
               </section>
             ) : null
           }

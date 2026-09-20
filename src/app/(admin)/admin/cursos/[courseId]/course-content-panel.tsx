@@ -133,12 +133,24 @@ export function CourseContentPanel({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={CONTENT_SIGNAL_VARIANTS[contentSignal.tone]}>
-              {contentSignal.label}
-            </Badge>
-            <Badge variant="outline">
+            {contentSignal.tone === "healthy" ? (
+              <span className="text-muted-foreground text-sm">
+                {contentSignal.label}
+              </span>
+            ) : (
+              <Badge variant={CONTENT_SIGNAL_VARIANTS[contentSignal.tone]}>
+                {contentSignal.label}
+              </Badge>
+            )}
+            <span
+              className={
+                publicationState.hasDraft
+                  ? "font-medium text-foreground text-sm"
+                  : "text-muted-foreground text-sm"
+              }
+            >
               {getPublicationLabel(publicationState)}
-            </Badge>
+            </span>
             <span className="text-muted-foreground text-sm">
               {contentSignal.helper}
             </span>
