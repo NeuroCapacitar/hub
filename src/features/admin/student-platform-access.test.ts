@@ -38,8 +38,7 @@ describe("student platform access management", () => {
     expect(studentsTableSource).toContain("StudentActionsMenu");
     expect(actionMenuSource).toContain("StudentManagementSheet");
     expect(actionMenuSource).toContain("StudentActionDialog");
-    expect(actionMenuSource).toContain("Bloquear acesso da plataforma");
-    expect(sheetSource).toContain("StudentPlatformAccessControls");
+    expect(sheetSource).toContain("StudentPlatformAccessSummary");
     expect(platformSource).toContain("Bloquear acesso");
     expect(platformSource).toContain("Restaurar acesso");
     expect(platformSource).toContain("blockStudentPlatformAccessAction");

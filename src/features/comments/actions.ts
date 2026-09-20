@@ -7,8 +7,8 @@ import {
   restoreLessonComment,
 } from "@/features/comments/server";
 import { canMutateStudentExperience } from "@/features/courses/preview";
-import { requirePermission } from "@/lib/auth-permissions";
 import { requireSession } from "@/lib/session";
+import { isLessonCommentManager } from "./rules";
 
 const readString = (formData: FormData, key: string): string =>
   String(formData.get(key) ?? "").trim();
@@ -26,12 +26,16 @@ export const createLessonCommentAction = async (
     throw new Error("Aula invalida.");
   }
 
+  if (context !== "admin" && context !== "student") {
+    throw new Error("Contexto de comentário inválido.");
+  }
+
   if (context === "student" && !canMutateStudentExperience(session.role)) {
     throw new Error("Preview de aluno nao permite comentar.");
   }
 
-  if (context === "admin") {
-    await requirePermission("manageContent");
+  if (context === "admin" && !isLessonCommentManager(session.role)) {
+    throw new Error("Apenas Admin e Suporte podem gerenciar comentários.");
   }
 
   const result = await createLessonComment({
@@ -49,7 +53,10 @@ export const createLessonCommentAction = async (
 export const hideLessonCommentAction = async (
   formData: FormData
 ): Promise<void> => {
-  const session = await requirePermission("manageContent");
+  const session = await requireSession();
+  if (!isLessonCommentManager(session.role)) {
+    throw new Error("Apenas Admin e Suporte podem gerenciar comentários.");
+  }
   const commentId = readString(formData, "commentId");
 
   if (!commentId) {
@@ -61,22 +68,36 @@ export const hideLessonCommentAction = async (
     commentId,
   });
 
-  revalidatePath(`/app/aulas/${result.lessonId}`);
-  revalidatePath(`/admin/cursos/${result.courseId}/aulas/${result.lessonId}`);
+  if (result.lessonId) {
+    revalidatePath(`/app/aulas/${result.lessonId}`);
+    revalidatePath(`/admin/cursos/${result.courseId}/aulas/${result.lessonId}`);
+  } else {
+    revalidatePath("/admin");
+  }
 };
 
 export const restoreLessonCommentAction = async (
   formData: FormData
 ): Promise<void> => {
-  await requirePermission("manageContent");
+  const session = await requireSession();
+  if (!isLessonCommentManager(session.role)) {
+    throw new Error("Apenas Admin e Suporte podem gerenciar comentários.");
+  }
   const commentId = readString(formData, "commentId");
 
   if (!commentId) {
     throw new Error("Comentario invalido.");
   }
 
-  const result = await restoreLessonComment({ commentId });
+  const result = await restoreLessonComment({
+    actorUserId: session.user.id,
+    commentId,
+  });
 
-  revalidatePath(`/app/aulas/${result.lessonId}`);
-  revalidatePath(`/admin/cursos/${result.courseId}/aulas/${result.lessonId}`);
+  if (result.lessonId) {
+    revalidatePath(`/app/aulas/${result.lessonId}`);
+    revalidatePath(`/admin/cursos/${result.courseId}/aulas/${result.lessonId}`);
+  } else {
+    revalidatePath("/admin");
+  }
 };

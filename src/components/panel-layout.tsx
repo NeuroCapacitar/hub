@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeftIcon, Logout01Icon } from "@hugeicons/core-free-icons";
+import { Logout01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   createContext,
   type JSX,
@@ -15,6 +15,8 @@ import {
   useState,
 } from "react";
 import { BrandLogo } from "@/components/brand-logo";
+import { PanelBreadcrumb } from "@/components/panel-breadcrumb";
+import { PanelPageTitleContext } from "@/components/panel-page-title";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +44,10 @@ import {
 } from "@/components/ui/sidebar";
 import { authClient } from "@/lib/auth-client";
 import { getInitials } from "@/lib/get-initials";
+import {
+  getPanelRouteMeta,
+  type PanelBreadcrumb as PanelBreadcrumbItem,
+} from "@/lib/panel-page-titles";
 import { route } from "@/lib/routes";
 import type { AppRole } from "@/lib/session";
 
@@ -164,7 +170,44 @@ function PanelLayoutInner({
   const [isMainSidebarOpen, setMainSidebarOpen] = useState(true);
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const router = useRouter();
+  const fallbackPageMeta = useMemo(
+    () => getPanelRouteMeta(pathname),
+    [pathname]
+  );
+  const [pageMeta, setPageMeta] = useState(fallbackPageMeta);
+  const [hasVisiblePageHeading, setHasVisiblePageHeading] = useState(false);
+  useEffect(() => {
+    setPageMeta(fallbackPageMeta);
+    setHasVisiblePageHeading(false);
+  }, [fallbackPageMeta]);
+  const setPanelTitle = useCallback(
+    (title: string, ancestors?: readonly PanelBreadcrumbItem[]) => {
+      setPageMeta((current) => {
+        const nextAncestors = ancestors ?? fallbackPageMeta.ancestors;
+        const sameAncestors =
+          current.ancestors.length === nextAncestors.length &&
+          current.ancestors.every(
+            (ancestor, index) =>
+              ancestor.label === nextAncestors[index]?.label &&
+              ancestor.href === nextAncestors[index]?.href
+          );
+
+        if (current.title === title && sameAncestors) {
+          return current;
+        }
+
+        return { ancestors: nextAncestors, title };
+      });
+    },
+    [fallbackPageMeta]
+  );
+  const pageTitleContext = useMemo(
+    () => ({
+      setTitle: setPanelTitle,
+      setVisibleHeading: setHasVisiblePageHeading,
+    }),
+    [setPanelTitle]
+  );
   const focusModeContext = useMemo(
     () => ({ isFocusMode, setFocusMode }),
     [isFocusMode]
@@ -176,39 +219,6 @@ function PanelLayoutInner({
   const isPreviewActive =
     (userRole === "admin" || userRole === "support") &&
     (previewParam === "student" || previewParam === "aluno");
-
-  const showBackButton = ![
-    "/app",
-    "/app/certificados",
-    "/app/perguntas-frequentes",
-    "/admin",
-    "/admin/cursos",
-    "/admin/alunos",
-    "/admin/financeiro",
-    "/admin/aprendizagem",
-    "/admin/faq",
-    "/admin/configuracoes",
-    "/admin/operacao",
-    "/admin/auditoria",
-  ].includes(pathname);
-
-  const handleBack = useCallback(() => {
-    const hasHistory =
-      typeof window !== "undefined" &&
-      window.history.length > 1 &&
-      document.referrer?.startsWith(window.location.origin);
-
-    if (hasHistory) {
-      router.back();
-      return;
-    }
-
-    if (pathname.startsWith("/admin")) {
-      router.push(route(userRole === "support" ? "/admin" : "/admin/cursos"));
-    } else {
-      router.push(route("/app"));
-    }
-  }, [pathname, router, userRole]);
 
   const handleSignOut = async () => {
     setIsPending(true);
@@ -336,50 +346,58 @@ function PanelLayoutInner({
             <SidebarRail />
           </nav>
         </Sidebar>
-        <SidebarInset className="overflow-hidden">
-          <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-border/40 border-b bg-background px-4">
-            <div className="flex flex-1 items-center justify-start gap-2">
-              <SidebarTrigger
-                className="shrink-0 md:hidden"
-                onClick={() => setFocusMode(false)}
-              />
-              {showBackButton && (
-                <Button
-                  className="hidden shrink-0 gap-1.5 text-muted-foreground hover:text-foreground md:inline-flex"
-                  onClick={handleBack}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <HugeiconsIcon
-                    aria-hidden="true"
-                    className="size-4"
-                    icon={ArrowLeftIcon}
-                    strokeWidth={2.5}
-                  />
-                  <span>Voltar</span>
-                </Button>
-              )}
-            </div>
+        <PanelPageTitleContext.Provider value={pageTitleContext}>
+          <SidebarInset className="overflow-hidden">
+            <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-border/40 border-b bg-background px-4">
+              <div className="flex min-w-0 flex-1 items-center justify-start gap-2">
+                <SidebarTrigger
+                  className="shrink-0 md:hidden"
+                  onClick={() => setFocusMode(false)}
+                />
+                {!hasVisiblePageHeading && (
+                  <h1 className="sr-only">{pageMeta.title}</h1>
+                )}
+                <PanelBreadcrumb
+                  ancestors={pageMeta.ancestors}
+                  currentTitle={pageMeta.title}
+                />
+              </div>
 
-            <div className="flex flex-1 items-center justify-center md:hidden">
-              <BrandLogo className="h-8 w-auto max-w-full object-contain" />
-            </div>
+              <div className="flex flex-1 items-center justify-center md:hidden">
+                <BrandLogo className="h-8 w-auto max-w-full object-contain" />
+              </div>
 
-            {isPreviewActive && (
-              <div className="hidden items-center gap-3 text-sm md:flex">
-                <div className="flex items-center gap-1.5 rounded-md border border-warning/20 bg-warning/10 px-2.5 py-1 text-warning">
-                  <span className="font-semibold text-xs">
-                    Preview de aluno
-                  </span>
-                  <span className="hidden text-muted-foreground text-xs lg:inline">
-                    · Progresso, duração detectada e certificado não serão
-                    gravados
-                  </span>
+              {isPreviewActive && (
+                <div className="hidden items-center gap-3 text-sm md:flex">
+                  <div className="flex items-center gap-1.5 rounded-md border border-warning/20 bg-warning/10 px-2.5 py-1 text-warning">
+                    <span className="font-semibold text-xs">
+                      Preview de aluno
+                    </span>
+                    <span className="hidden text-muted-foreground text-xs lg:inline">
+                      · Progresso, duração detectada e certificado não serão
+                      gravados
+                    </span>
+                  </div>
+                  {courseId && (
+                    <Button
+                      asChild
+                      className="border-warning/30 text-warning hover:bg-warning/10"
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Link href={route(`/admin/cursos/${courseId}`)}>
+                        Voltar ao Admin
+                      </Link>
+                    </Button>
+                  )}
                 </div>
-                {courseId && (
+              )}
+
+              <div className="flex flex-1 items-center justify-end gap-3">
+                {isPreviewActive && courseId && (
                   <Button
                     asChild
-                    className="border-warning/30 text-warning hover:bg-warning/10"
+                    className="border-warning/30 text-warning hover:bg-warning/10 md:hidden"
                     size="sm"
                     variant="outline"
                   >
@@ -389,29 +407,14 @@ function PanelLayoutInner({
                   </Button>
                 )}
               </div>
-            )}
-
-            <div className="flex flex-1 items-center justify-end gap-3">
-              {isPreviewActive && courseId && (
-                <Button
-                  asChild
-                  className="border-warning/30 text-warning hover:bg-warning/10 md:hidden"
-                  size="sm"
-                  variant="outline"
-                >
-                  <Link href={route(`/admin/cursos/${courseId}`)}>
-                    Voltar ao Admin
-                  </Link>
-                </Button>
-              )}
-            </div>
-          </header>
-          <ScrollArea className="h-[calc(100svh-4rem)] w-full">
-            <main className="flex-1" id="main-content" tabIndex={-1}>
-              {children}
-            </main>
-          </ScrollArea>
-        </SidebarInset>
+            </header>
+            <ScrollArea className="h-[calc(100svh-4rem)] w-full">
+              <main className="flex-1" id="main-content" tabIndex={-1}>
+                {children}
+              </main>
+            </ScrollArea>
+          </SidebarInset>
+        </PanelPageTitleContext.Provider>
       </SidebarProvider>
     </PanelFocusModeContext.Provider>
   );

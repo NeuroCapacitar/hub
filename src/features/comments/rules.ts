@@ -4,6 +4,9 @@ export const COMMENT_BODY_MAX_LENGTH = 2000;
 
 export type LessonCommentStatus = "hidden" | "visible";
 
+export const isLessonCommentManager = (role: AppRole): boolean =>
+  role === "admin" || role === "support";
+
 export interface LessonCommentAuthor {
   id: string;
   name: string;
@@ -15,7 +18,7 @@ export interface LessonCommentRecord {
   body: string;
   createdAt: Date;
   id: string;
-  lessonId: string;
+  lessonId: string | null;
   parentId: string | null;
   status: LessonCommentStatus;
   updatedAt: Date;

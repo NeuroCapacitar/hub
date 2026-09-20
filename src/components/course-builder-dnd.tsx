@@ -399,11 +399,39 @@ export function CourseBuilderClient({
             Salvando ordem…
           </p>
         ) : null}
+        {modules.length > 1 ? (
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              aria-label="Expandir todos os módulos"
+              onClick={() => {
+                setExpandedModuleIds(
+                  new Set(modules.map((module) => module.id))
+                );
+              }}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Expandir tudo
+            </Button>
+            <Button
+              aria-label="Recolher todos os módulos"
+              onClick={() => {
+                setExpandedModuleIds(new Set());
+              }}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Recolher tudo
+            </Button>
+          </div>
+        ) : null}
         <SortableContext
           items={modules.map((m) => m.id)}
           strategy={verticalListSortingStrategy}
         >
-          <div className="mt-4 flex flex-col gap-8">
+          <div className="flex flex-col gap-4">
             {modules.map((moduleData, moduleIndex) => {
               const moduleLessons = lessons.filter(
                 (l) => l.moduleId === moduleData.id

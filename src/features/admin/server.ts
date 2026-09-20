@@ -119,6 +119,20 @@ export interface AdminDashboardRecentCertificate {
   studentName: string;
 }
 
+export interface AdminDashboardRecentComment {
+  authorName: string;
+  authorRole: "admin" | "student" | "support";
+  bodyPreview: string;
+  commentId: string;
+  courseId: string;
+  courseTitle: string;
+  createdAt: Date;
+  isHidden: boolean;
+  isReply: boolean;
+  lessonId: string | null;
+  lessonTitle: string;
+}
+
 export type AdminDashboardSupportDeliveryState =
   | "delayed"
   | "delivered"
@@ -334,7 +348,6 @@ export interface AdminCourse {
   salesStatus: "closed" | "open";
   slug: string;
   status: string;
-  subtitle: string | null;
   thumbnailUrl: string | null;
   title: string;
   workloadHours: number;
@@ -395,7 +408,6 @@ export interface AdminCourseCatalogCard {
   priceInCents: number;
   salesStatus: "closed" | "open";
   status: string;
-  subtitle: string | null;
   thumbnailUrl: string | null;
   title: string;
 }
@@ -1233,6 +1245,94 @@ const readDashboardRecentCertificates = async (): Promise<
   }));
 };
 
+const COMMENT_PREVIEW_MAX_LENGTH = 180;
+
+const getCommentPreview = (body: string, isHidden: boolean): string => {
+  if (isHidden) {
+    return "Comentário oculto";
+  }
+
+  const normalized = body.replace(/\s+/g, " ").trim();
+  if (normalized.length <= COMMENT_PREVIEW_MAX_LENGTH) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, COMMENT_PREVIEW_MAX_LENGTH - 1)}…`;
+};
+
+const readDashboardRecentComments = async (): Promise<
+  AdminDashboardRecentComment[]
+> => {
+  const { rows } = await getPool().query<{
+    author_name: string | null;
+    author_role: "admin" | "student" | "support" | null;
+    body: string;
+    comment_id: string;
+    course_id: string;
+    course_title: string;
+    created_at: Date;
+    lesson_id: string | null;
+    lesson_title: string | null;
+    navigation_lesson_id: string | null;
+    navigation_lesson_title: string | null;
+    parent_id: string | null;
+    status: "hidden" | "visible";
+  }>(`
+    select
+      lc.id as comment_id,
+      lc.parent_id,
+      lc.body,
+      lc.status,
+      lc.created_at,
+      l.id as lesson_id,
+      l.title as lesson_title,
+      draft_lesson.id as navigation_lesson_id,
+      draft_lesson.title as navigation_lesson_title,
+      lc.course_id,
+      c.title as course_title,
+      u.name as author_name,
+      coalesce(p.role, 'student') as author_role
+    from lesson_comments lc
+    left join lessons l on l.id = lc.source_lesson_id
+    left join modules m on m.id = l.module_id and m.course_id = lc.course_id
+    join courses c on c.id = lc.course_id
+    left join lateral (
+      select candidate_lesson.id, candidate_lesson.title
+      from lessons candidate_lesson
+      join modules candidate_module on candidate_module.id = candidate_lesson.module_id
+      join course_publications candidate_publication
+        on candidate_publication.id = candidate_lesson.course_publication_id
+      where candidate_module.course_id = lc.course_id
+        and candidate_lesson.curriculum_key = lc.curriculum_key
+        and candidate_publication.status = 'draft'
+      limit 1
+    ) as draft_lesson on true
+    left join users u on u.id = lc.author_user_id
+    left join profiles p on p.user_id = lc.author_user_id
+    where coalesce(p.role, 'student') = 'student'
+    order by lc.created_at desc, lc.id desc
+    limit 5
+  `);
+
+  return rows.map((row) => {
+    const isHidden = row.status === "hidden";
+    return {
+      authorName: row.author_name ?? "Usuário removido",
+      authorRole: row.author_role ?? "student",
+      bodyPreview: getCommentPreview(row.body, isHidden),
+      commentId: row.comment_id,
+      courseId: row.course_id,
+      courseTitle: row.course_title,
+      createdAt: row.created_at,
+      isHidden,
+      isReply: row.parent_id !== null,
+      lessonId: row.navigation_lesson_id ?? null,
+      lessonTitle:
+        row.navigation_lesson_title ?? row.lesson_title ?? "Aula arquivada",
+    };
+  });
+};
+
 const readCourses = async (
   courseId?: string,
   options: AdminCourseCatalogQuery = {}
@@ -1284,7 +1384,6 @@ const readCourses = async (
     sales_status: "closed" | "open";
     slug: string;
     status: string;
-    subtitle: string | null;
     cover_image_json: unknown;
     thumbnail_url: string | null;
     title: string;
@@ -1397,7 +1496,6 @@ const readCourses = async (
       salesStatus: row.sales_status,
       slug: row.slug,
       status: row.status,
-      subtitle: row.subtitle,
       coverImage: row.cover_image_json,
       thumbnailUrl: row.thumbnail_url,
       title: row.title,
@@ -1407,17 +1505,7 @@ const readCourses = async (
   });
 };
 
-const readCourseCatalogCards = async ({
-  page,
-  pageSize,
-}: {
-  page: number;
-  pageSize: number;
-}): Promise<{
-  cards: AdminCourseCatalogCard[];
-  hasNextPage: boolean;
-  totalCount: number;
-}> => {
+const readCourseCatalogCards = async (): Promise<AdminCourseCatalogCard[]> => {
   const { rows } = await getPool().query<{
     access_duration_months: number;
     catalog_visibility: "hidden" | "listed";
@@ -1428,10 +1516,8 @@ const readCourseCatalogCards = async ({
     price_in_cents: number;
     sales_status: "closed" | "open";
     status: string;
-    subtitle: string | null;
     thumbnail_url: string | null;
     title: string;
-    total_count: number;
   }>(
     `
       with current_publications as (
@@ -1449,7 +1535,6 @@ const readCourseCatalogCards = async ({
       select
         c.id,
         c.title,
-        c.subtitle,
         c.status,
         c.catalog_visibility,
         c.sales_status,
@@ -1458,8 +1543,7 @@ const readCourseCatalogCards = async ({
         c.thumbnail_url,
         c.cover_image_json,
         count(distinct m.id)::int as module_count,
-        count(l.id)::int as lesson_count,
-        count(*) over()::int as total_count
+        count(l.id)::int as lesson_count
       from courses c
       left join current_publications current_publication
         on current_publication.course_id = c.id
@@ -1471,7 +1555,6 @@ const readCourseCatalogCards = async ({
       group by
         c.id,
         c.title,
-        c.subtitle,
         c.status,
         c.catalog_visibility,
         c.sales_status,
@@ -1481,37 +1564,22 @@ const readCourseCatalogCards = async ({
         c.cover_image_json,
         c.created_at
       order by c.created_at desc, c.id desc
-      limit $1 offset $2
-    `,
-    [pageSize + 1, (page - 1) * pageSize]
+    `
   );
 
-  let totalCount = rows[0]?.total_count ?? 0;
-  if (rows.length === 0 && page > 1) {
-    const countResult = await getPool().query<{ total_count: number }>(
-      "select count(*)::int as total_count from courses"
-    );
-    totalCount = countResult.rows[0]?.total_count ?? 0;
-  }
-
-  return {
-    cards: rows.slice(0, pageSize).map((row) => ({
-      accessDurationMonths: row.access_duration_months,
-      catalogVisibility: row.catalog_visibility,
-      coverImage: row.cover_image_json,
-      id: row.id,
-      lessonCount: row.lesson_count,
-      moduleCount: row.module_count,
-      priceInCents: row.price_in_cents,
-      salesStatus: row.sales_status,
-      status: row.status,
-      subtitle: row.subtitle,
-      thumbnailUrl: row.thumbnail_url,
-      title: row.title,
-    })),
-    hasNextPage: rows.length > pageSize,
-    totalCount,
-  };
+  return rows.map((row) => ({
+    accessDurationMonths: row.access_duration_months,
+    catalogVisibility: row.catalog_visibility,
+    coverImage: row.cover_image_json,
+    id: row.id,
+    lessonCount: row.lesson_count,
+    moduleCount: row.module_count,
+    priceInCents: row.price_in_cents,
+    salesStatus: row.sales_status,
+    status: row.status,
+    thumbnailUrl: row.thumbnail_url,
+    title: row.title,
+  }));
 };
 
 const readModules = async (courseId?: string): Promise<AdminModule[]> => {
@@ -3378,21 +3446,38 @@ const readAdminStudentAccessSummary =
 export const getAdminDashboardProjection = async (): Promise<{
   courseHealth: AdminDashboardCourseHealthProjection;
   operations: AdminDashboardOperations;
+  recentComments: AdminDashboardRecentComment[];
   recentCertificates: AdminDashboardRecentCertificate[];
   recentOrders: AdminDashboardRecentOrder[];
 }> => {
   const session = await requirePermission("viewAdminPanel");
   const accessScope = getAdminDashboardAccessScope(session);
-  const [courseHealth, recentOrders, recentCertificates, operations] =
-    await Promise.all([
-      readDashboardCourseHealth(),
-      accessScope.canViewFinancialOrders
-        ? readDashboardRecentOrders()
-        : Promise.resolve([]),
-      readDashboardRecentCertificates(),
-      readDashboardOperations(accessScope),
-    ]);
-  return { courseHealth, operations, recentCertificates, recentOrders };
+  const recentCommentsPromise =
+    session.role === "admin" || session.role === "support"
+      ? readDashboardRecentComments()
+      : Promise.resolve([] as AdminDashboardRecentComment[]);
+  const [
+    courseHealth,
+    recentOrders,
+    recentCertificates,
+    dashboardComments,
+    operations,
+  ] = await Promise.all([
+    readDashboardCourseHealth(),
+    accessScope.canViewFinancialOrders
+      ? readDashboardRecentOrders()
+      : Promise.resolve([]),
+    readDashboardRecentCertificates(),
+    recentCommentsPromise,
+    readDashboardOperations(accessScope),
+  ]);
+  return {
+    courseHealth,
+    operations,
+    recentComments: dashboardComments,
+    recentCertificates,
+    recentOrders,
+  };
 };
 
 export const getAdminStudentsData = async (
@@ -3646,37 +3731,11 @@ export const getAdminSettingsData = async (): Promise<{
   return { settings: await readSettings() };
 };
 
-export const getAdminCourseCatalogData = async (
-  options: AdminCourseCatalogQuery = {}
-): Promise<{
+export const getAdminCourseCatalogData = async (): Promise<{
   courses: AdminCourseCatalogCard[];
-  hasNextPage: boolean;
-  page: number;
-  pageSize: number;
-  totalCount: number;
 }> => {
   await requirePermission("viewCourses");
-  const requestedPage = Math.trunc(options.page ?? 1);
-  const page = Number.isFinite(requestedPage)
-    ? Math.min(MAX_ADMIN_COURSE_PAGE, Math.max(1, requestedPage))
-    : 1;
-  const requestedPageSize = Math.trunc(
-    options.pageSize ?? DEFAULT_ADMIN_COURSE_PAGE_SIZE
-  );
-  const pageSize = Number.isFinite(requestedPageSize)
-    ? Math.min(MAX_ADMIN_COURSE_PAGE_SIZE, Math.max(1, requestedPageSize))
-    : DEFAULT_ADMIN_COURSE_PAGE_SIZE;
-  const { cards, hasNextPage, totalCount } = await readCourseCatalogCards({
-    page,
-    pageSize,
-  });
-  return {
-    courses: cards,
-    hasNextPage,
-    page,
-    pageSize,
-    totalCount,
-  };
+  return { courses: await readCourseCatalogCards() };
 };
 
 export const getAdminFaqData = async (): Promise<{ faqs: AdminFaq[] }> => {

@@ -59,6 +59,8 @@ describe("CertificateCard", () => {
     expect(markup).toContain('aria-label="Status: Disponível"');
     expect(markup).toContain('aria-label="Baixar PDF de Curso de teste"');
     expect(markup).toContain('href="/certificados/CERT-001"');
+    expect(markup).toContain('target="_blank"');
+    expect(markup).toContain('rel="noopener noreferrer"');
     expect(markup).toContain(">Curso de teste</a>");
     expect(markup).toContain("Copiar link");
     expect(markup).not.toContain(">Validar</a>");

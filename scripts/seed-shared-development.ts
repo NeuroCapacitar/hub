@@ -138,18 +138,16 @@ const seedCatalog = async (
   const { rows: courseRows } = await client.query<{ id: string }>(
     `
       insert into courses (
-        slug, title, subtitle, description, workload_hours, price_in_cents,
+        slug, title, description, workload_hours, price_in_cents,
         access_duration_months, status, certificate_enabled
       )
       values (
         'development-course', 'Curso de Desenvolvimento',
-        'Fixture compartilhada e sem dados pessoais',
         'Curso persistente para validar as jornadas do ambiente Development.',
         2, 9900, 12, 'active', false
       )
       on conflict (slug) do update set
         title = excluded.title,
-        subtitle = excluded.subtitle,
         description = excluded.description,
         workload_hours = excluded.workload_hours,
         price_in_cents = excluded.price_in_cents,

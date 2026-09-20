@@ -8,7 +8,6 @@ import {
 } from "@/features/comments/actions";
 import type { LessonCommentView } from "@/features/comments/rules";
 import { formatDateTime } from "@/lib/formatters";
-import type { AppRole } from "@/lib/session";
 import { LessonCommentsSubmitButton } from "./lesson-comments-submit-button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
@@ -102,7 +101,7 @@ function CommentThread({
   lessonId: string;
 }): React.JSX.Element {
   return (
-    <article className="flex gap-3">
+    <article className="flex gap-3" id={`comment-${comment.id}`}>
       <CommentAvatar authorName={comment.author.name} />
       <div className="min-w-0 flex-1 space-y-3">
         <CommentBody canModerate={canModerate} comment={comment} />
@@ -110,7 +109,11 @@ function CommentThread({
         {comment.replies.length > 0 ? (
           <div className="space-y-3 border-border/60 border-l pl-4">
             {comment.replies.map((reply) => (
-              <div className="flex gap-3" key={reply.id}>
+              <div
+                className="flex gap-3"
+                id={`comment-${reply.id}`}
+                key={reply.id}
+              >
                 <CommentAvatar authorName={reply.author.name} size="sm" />
                 <div className="min-w-0 flex-1">
                   <CommentBody canModerate={canModerate} comment={reply} />
@@ -168,7 +171,6 @@ function CommentBody({
             />
           )}
         </span>
-        <RoleBadge role={comment.author.role} />
         <span className="text-muted-foreground text-xs">
           {formatDateTime(comment.createdAt)}
         </span>
@@ -260,18 +262,6 @@ function CommentAvatar({
     <Avatar size={size}>
       <AvatarFallback>{getInitials(authorName)}</AvatarFallback>
     </Avatar>
-  );
-}
-
-function RoleBadge({ role }: { role: AppRole }): React.JSX.Element | null {
-  if (role === "student") {
-    return null;
-  }
-
-  return (
-    <Badge variant={role === "admin" ? "default" : "secondary"}>
-      {role === "admin" ? "Admin" : "Suporte"}
-    </Badge>
   );
 }
 

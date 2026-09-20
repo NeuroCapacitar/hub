@@ -44,11 +44,14 @@ describe("FreeCourseEnrollmentDialog", () => {
       root.render(
         <FreeCourseEnrollmentDialog
           accessStatus="none"
+          certificateEnabled={true}
           courseId={COURSE_ID}
+          coverBlurDataUrl={null}
           description="Uma introdução prática ao tema."
           lessonCount={4}
+          moduleCount={2}
+          thumbnailUrl={null}
           title="Curso gratuito de fundamentos"
-          workloadHours={2}
         />
       );
     });
@@ -64,14 +67,19 @@ describe("FreeCourseEnrollmentDialog", () => {
     });
 
     expect(document.body.textContent).toContain(
-      "Comece este Curso gratuitamente"
-    );
-    expect(document.body.textContent).toContain(
       "Curso gratuito de fundamentos"
     );
     expect(document.body.textContent).toContain("4 aulas");
-    expect(document.body.textContent).toContain("2h");
+    expect(document.body.textContent).toContain("2 módulos");
+    expect(document.body.textContent).toContain("Conteúdo");
+    expect(
+      Array.from(document.body.querySelectorAll("dt")).map(
+        (element) => element.textContent
+      )
+    ).not.toContain("Módulos");
+    expect(document.body.textContent).toContain("Certificado");
     expect(document.body.textContent).toContain("sem cobrança");
+    expect(document.body.textContent).toContain("O que você recebe");
     expect(document.body.textContent).toContain("Agora não");
   });
 
@@ -80,11 +88,14 @@ describe("FreeCourseEnrollmentDialog", () => {
       root.render(
         <FreeCourseEnrollmentDialog
           accessStatus="expired"
+          certificateEnabled={false}
           courseId={COURSE_ID}
+          coverBlurDataUrl={null}
           description={null}
           lessonCount={1}
+          moduleCount={1}
+          thumbnailUrl={null}
           title="Curso expirado"
-          workloadHours={1}
         />
       );
     });
@@ -98,7 +109,8 @@ describe("FreeCourseEnrollmentDialog", () => {
       );
     });
 
-    expect(document.body.textContent).toContain("Retome seu acesso gratuito");
+    expect(document.body.textContent).toContain("Reativação imediata");
     expect(document.body.textContent).toContain("Seu acesso anterior expirou");
+    expect(document.body.textContent).not.toContain("Certificado");
   });
 });

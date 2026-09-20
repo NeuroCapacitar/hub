@@ -9,6 +9,8 @@ const fixturePath = resolve(
 );
 const ADMIN_URL_PATTERN = /\/admin$/;
 const APP_URL_PATTERN = /\/app$/;
+const CHECKOUT_PREPARING_PATTERN =
+  /Preparando seu checkout|Ainda estamos preparando seu checkout/;
 
 const readFixture = async (): Promise<E2eFixture> =>
   JSON.parse(await readFile(fixturePath, "utf8")) as E2eFixture;
@@ -76,9 +78,7 @@ test("public surfaces have no moderate or higher accessibility violations", asyn
     });
   });
   await page.goto(`/comprar/${fixture.course.slug}`);
-  await expect(
-    page.getByText("O checkout está sendo preparado.", { exact: false })
-  ).toBeVisible();
+  await expect(page.getByText(CHECKOUT_PREPARING_PATTERN)).toBeVisible();
   await assertNoBlockingAccessibilityViolations(
     page,
     "public purchase processing"
@@ -139,7 +139,9 @@ test("support surfaces have no moderate or higher accessibility violations", asy
   await assertNoBlockingAccessibilityViolations(page, "support courses");
 
   await page.goto(`/admin/operacao/cursos/${fixture.course.id}/alunas`);
-  await expect(page.getByRole("heading", { name: "Curso E2E" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Alunos" })
+  ).toBeVisible();
   await assertNoBlockingAccessibilityViolations(
     page,
     "support course students"

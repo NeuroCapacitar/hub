@@ -14,6 +14,9 @@ vi.mock("@/features/admin/actions", () => ({
   restoreEnrollmentAccessAction: vi.fn(),
   restoreStudentPlatformAccessAction: vi.fn(),
 }));
+vi.mock("@/features/admin/staff-actions", () => ({
+  changeStaffAccessAction: vi.fn(),
+}));
 vi.mock("@/features/certificates/actions", () => ({
   issueManualCertificateAction: vi.fn(),
   reissueCertificateAction: vi.fn(),
@@ -76,11 +79,8 @@ let container: HTMLDivElement;
 const clickActionMenu = async (): Promise<void> => {
   await act(async () => {
     const trigger = document.querySelector(
-      'button[aria-label="Ações de Student"]'
+      'button[aria-label="Abrir ficha de Student"]'
     ) as HTMLButtonElement | null;
-    trigger?.dispatchEvent(
-      new PointerEvent("pointerdown", { bubbles: true, button: 0 })
-    );
     trigger?.click();
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
@@ -99,7 +99,7 @@ afterEach(() => {
 });
 
 describe("StudentsTable action scope", () => {
-  it("keeps the global menu limited to platform access", async () => {
+  it("opens the global student sheet with a direct action", async () => {
     root = createRoot(container);
     act(() => {
       root?.render(
@@ -110,13 +110,6 @@ describe("StudentsTable action scope", () => {
       );
     });
 
-    await clickActionMenu();
-
-    expect(document.body.textContent).toContain("Ver detalhes");
-    expect(document.body.textContent).toContain("Bloquear acesso");
-    expect(document.body.textContent).not.toContain("Gerenciar matrícula");
-    expect(document.body.textContent).not.toContain("Gerenciar certificados");
-
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(createStudentPayload(null)), {
         headers: { "Content-Type": "application/json" },
@@ -124,32 +117,17 @@ describe("StudentsTable action scope", () => {
       })
     );
     vi.stubGlobal("fetch", fetchMock);
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    await act(async () => {
-      const platformAction = [
-        ...document.querySelectorAll('[role="menuitem"]'),
-      ].find((item) => item.textContent?.includes("Bloquear acesso"));
-      (platformAction as HTMLElement | undefined)?.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("Acesso na plataforma");
-    expect(document.body.textContent).toContain(
-      "Bloquear acesso da plataforma"
+    await clickActionMenu();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/admin/students/student-1",
+      expect.objectContaining({ cache: "no-store" })
     );
-    expect(document.body.textContent).toContain("Motivo do bloqueio");
-    expect(document.querySelector("[data-platform-access-form]")).toBeNull();
-    expect(
-      consoleError.mock.calls.some(([message]) =>
-        String(message).includes("value prop on input should not be null")
-      )
-    ).toBe(false);
-    consoleError.mockRestore();
+    expect(document.body.textContent).toContain("Acesso na plataforma");
+    expect(document.body.textContent).toContain("Gerenciar acesso");
+    expect(document.body.textContent).not.toContain("Motivo do bloqueio");
   });
 
-  it("opens global details separately from platform actions", async () => {
+  it("keeps platform actions inside a separate dialog trigger", async () => {
     root = createRoot(container);
     act(() => {
       root?.render(
@@ -160,7 +138,6 @@ describe("StudentsTable action scope", () => {
       );
     });
 
-    await clickActionMenu();
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(createStudentPayload(null)), {
         headers: { "Content-Type": "application/json" },
@@ -168,27 +145,19 @@ describe("StudentsTable action scope", () => {
       })
     );
     vi.stubGlobal("fetch", fetchMock);
-
-    await act(async () => {
-      const detailsAction = [
-        ...document.querySelectorAll('[role="menuitem"]'),
-      ].find((item) => item.textContent?.includes("Ver detalhes"));
-      (detailsAction as HTMLElement | undefined)?.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await clickActionMenu();
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/admin/students/student-1",
       expect.objectContaining({ cache: "no-store" })
     );
     expect(document.body.textContent).toContain("Cursos do Aluno");
-    expect(document.body.textContent).not.toContain(
-      "Bloquear acesso da plataforma"
-    );
+    expect(document.body.textContent).toContain("Gerenciar acesso");
+    expect(document.body.textContent).not.toContain("Motivo do bloqueio");
     expect(document.body.textContent).not.toContain("Ações da Matrícula");
   });
 
-  it("keeps the course menu limited to enrollment and certificate actions", async () => {
+  it("opens course operations inside the student sheet", async () => {
     root = createRoot(container);
     act(() => {
       root?.render(
@@ -199,13 +168,6 @@ describe("StudentsTable action scope", () => {
       );
     });
 
-    await clickActionMenu();
-
-    expect(document.body.textContent).toContain("Ver detalhes");
-    expect(document.body.textContent).toContain("Gerenciar matrícula");
-    expect(document.body.textContent).toContain("Gerenciar certificados");
-    expect(document.body.textContent).not.toContain("Bloquear acesso");
-
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(createStudentPayload("course-1")), {
         headers: { "Content-Type": "application/json" },
@@ -213,24 +175,88 @@ describe("StudentsTable action scope", () => {
       })
     );
     vi.stubGlobal("fetch", fetchMock);
-    await act(async () => {
-      const enrollmentAction = [
-        ...document.querySelectorAll('[role="menuitem"]'),
-      ].find((item) => item.textContent?.includes("Gerenciar matrícula"));
-      (enrollmentAction as HTMLElement | undefined)?.click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await clickActionMenu();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/admin/students/student-1?courseId=course-1",
       expect.objectContaining({ cache: "no-store" })
     );
-    expect(document.body.textContent).toContain("Ações da Matrícula");
-    expect(document.body.textContent).toContain("Ajustar validade");
-    expect(document.body.textContent).toContain("Bloquear acesso ao Curso");
+    expect(document.body.textContent).toContain("Gerenciar este Curso");
+    expect(document.body.textContent).toContain("Gerenciar matrícula");
+    expect(document.body.textContent).toContain("Gerenciar certificados");
+    expect(document.body.textContent).not.toContain("Ações da Matrícula");
+    expect(document.body.textContent).not.toContain("Ajustar validade");
+    expect(document.body.textContent).not.toContain("Bloquear acesso ao Curso");
     expect(
       document.body.textContent?.match(/Expiração original/g)
     ).toHaveLength(1);
     expect(document.body.textContent).not.toContain("Acesso na plataforma");
+  });
+
+  it("does not advertise platform mutations to read-only operators", async () => {
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <StudentsTable
+          context={createGlobalStudentsTableContext()}
+          managementCapabilities={{
+            canManageCertificates: false,
+            canManageEnrollmentAccess: false,
+            canManageEnrollmentSupport: false,
+            canManagePlatformAccess: false,
+            canReissueCertificates: false,
+          }}
+          students={[student]}
+        />
+      );
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(createStudentPayload(null)), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        })
+      )
+    );
+    await clickActionMenu();
+
+    expect(document.body.textContent).toContain("Acesso na plataforma");
+    expect(document.body.textContent).not.toContain(
+      "Bloquear acesso da plataforma"
+    );
+  });
+
+  it("does not expose staff promotion from the student sheet", async () => {
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <StudentsTable
+          context={createGlobalStudentsTableContext()}
+          managementCapabilities={{
+            canManageCertificates: false,
+            canManageEnrollmentAccess: false,
+            canManageEnrollmentSupport: false,
+            canManagePlatformAccess: false,
+            canReissueCertificates: false,
+          }}
+          students={[student]}
+        />
+      );
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(createStudentPayload(null)), {
+          headers: { "Content-Type": "application/json" },
+          status: 200,
+        })
+      )
+    );
+    await clickActionMenu();
+
+    expect(document.body.textContent).not.toContain("Promover para equipe");
   });
 
   it("opens the selected course enrollment after contextual navigation", async () => {
@@ -262,6 +288,8 @@ describe("StudentsTable action scope", () => {
       expect.objectContaining({ cache: "no-store" })
     );
     expect(document.body.textContent).toContain("Detalhes da matrícula");
+    expect(document.body.textContent).toContain("Gerenciar este Curso");
+    expect(document.body.textContent).toContain("Gerenciar matrícula");
     expect(document.body.textContent).not.toContain("Ações da Matrícula");
   });
 });

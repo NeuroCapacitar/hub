@@ -1,7 +1,6 @@
 import "server-only";
 import { getPool } from "@/db";
 import { requirePermission } from "@/lib/auth-permissions";
-import type { AppRole } from "@/lib/session";
 import type {
   SupportPermission,
   SupportViewPermission,
@@ -10,16 +9,31 @@ import {
   normalizeSupportPermissionGrants,
   normalizeSupportPermissionViews,
 } from "@/lib/support-permissions";
+import type { StaffRole } from "./staff-command-input";
 
 export interface StaffMemberSummary {
   email: string;
   lastAccessAt: Date | null;
   name: string;
-  role: AppRole;
+  role: StaffRole;
   supportPermissionGrants: SupportPermission[];
   supportPermissionViews: SupportViewPermission[];
   userId: string;
 }
+
+export interface StaffPromotionCandidate {
+  email: string;
+  name: string;
+  userId: string;
+}
+
+export interface StaffPromotionCandidatesResult {
+  candidates: StaffPromotionCandidate[];
+  hasMore: boolean;
+  search: string;
+}
+
+const STAFF_PROMOTION_CANDIDATE_LIMIT = 10;
 
 export const getStaffMembers = async (): Promise<StaffMemberSummary[]> => {
   await requirePermission("manageStaffAccess");
@@ -28,7 +42,7 @@ export const getStaffMembers = async (): Promise<StaffMemberSummary[]> => {
     email: string;
     last_access_at: Date | null;
     name: string;
-    role: AppRole;
+    role: StaffRole;
     support_permission_grants: string[];
     support_permission_views: string[];
     user_id: string;
@@ -41,20 +55,12 @@ export const getStaffMembers = async (): Promise<StaffMemberSummary[]> => {
         p.role,
         p.support_permission_grants,
         p.support_permission_views,
-        coalesce(p.last_access_at, max(s.created_at)) as last_access_at
+        p.last_access_at
       from users u
       join profiles p on p.user_id = u.id
-      left join sessions s on s.user_id = u.id
-      group by
-        u.id,
-        u.name,
-        u.email,
-        p.role,
-        p.support_permission_grants,
-        p.support_permission_views,
-        p.last_access_at
+      where p.role in ('admin', 'support')
       order by
-        case p.role when 'admin' then 0 when 'support' then 1 else 2 end,
+        case p.role when 'admin' then 0 else 1 end,
         lower(u.name),
         u.id
     `
@@ -73,4 +79,42 @@ export const getStaffMembers = async (): Promise<StaffMemberSummary[]> => {
     ),
     userId: row.user_id,
   }));
+};
+
+export const getStaffPromotionCandidates = async (
+  value: string
+): Promise<StaffPromotionCandidatesResult> => {
+  await requirePermission("manageStaffAccess");
+
+  const search = value.trim().slice(0, 200);
+  if (!search) {
+    return { candidates: [], hasMore: false, search };
+  }
+
+  const { rows } = await getPool().query<{
+    email: string;
+    name: string;
+    user_id: string;
+  }>(
+    `
+      select u.id as user_id, u.name, u.email
+      from users u
+      join profiles p on p.user_id = u.id
+      where p.role = 'student'
+        and (u.name ilike $1 or u.email ilike $1)
+      order by lower(u.name), u.id
+      limit $2
+    `,
+    [`%${search}%`, STAFF_PROMOTION_CANDIDATE_LIMIT + 1]
+  );
+
+  return {
+    candidates: rows.slice(0, STAFF_PROMOTION_CANDIDATE_LIMIT).map((row) => ({
+      email: row.email,
+      name: row.name,
+      userId: row.user_id,
+    })),
+    hasMore: rows.length > STAFF_PROMOTION_CANDIDATE_LIMIT,
+    search,
+  };
 };

@@ -77,4 +77,55 @@ describe("course publication migration", () => {
       'FOREIGN KEY ("module_id","course_publication_id") REFERENCES "public"."modules"("id","course_publication_id")'
     );
   });
+
+  it("backfills stable discussion identity before enforcing comment columns", async () => {
+    const migration = await readFile(
+      new URL(
+        "./migrations/0087_stable_lesson_discussion_fields.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain(
+      'ALTER TABLE "lesson_comments" ADD COLUMN "course_id" uuid;'
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "lesson_comments" ADD COLUMN "curriculum_key" uuid;'
+    );
+    expect(migration).toContain('UPDATE "lesson_comments" AS lc');
+    expect(migration).toContain('"course_id" = m."course_id"');
+    expect(migration).toContain('"curriculum_key" = l."curriculum_key"');
+    expect(migration).toContain(
+      "lesson_comments identity backfill left null values"
+    );
+    expect(migration.indexOf('UPDATE "lesson_comments" AS lc')).toBeLessThan(
+      migration.indexOf(
+        'ALTER TABLE "lesson_comments" ALTER COLUMN "course_id" SET NOT NULL'
+      )
+    );
+    expect(migration).toContain("lesson_comments_discussion_created_idx");
+  });
+
+  it("preserves comments when their physical lesson is removed", async () => {
+    const migration = await readFile(
+      new URL(
+        "./migrations/0088_archive_lesson_comment_source.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    expect(migration).toContain(
+      'ALTER TABLE "lesson_comments" RENAME COLUMN "lesson_id" TO "source_lesson_id"'
+    );
+    expect(migration).toContain(
+      'ALTER TABLE "lesson_comments" ALTER COLUMN "source_lesson_id" DROP NOT NULL'
+    );
+    expect(migration).toContain(
+      'FOREIGN KEY ("source_lesson_id") REFERENCES "public"."lessons"("id") ON DELETE set null'
+    );
+    expect(migration).toContain("lesson_comments_source_lesson_created_idx");
+    expect(migration).not.toContain("lesson_progress");
+  });
 });

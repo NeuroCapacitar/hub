@@ -8,7 +8,7 @@
 
 The current identity grid reserves `240px` for a cover uploader that renders at
 `280px` from the `sm` breakpoint onward. At desktop widths the uploader crosses
-into the title and subtitle column. The description is outside that grid, so it
+into the title column. The description is outside that grid, so it
 is visually detached from the rest of the course identity.
 
 The current payment ordering exposes the installment ceiling before the Admin
@@ -26,7 +26,7 @@ which an Admin makes decisions.
    surface. Use the project's Sonner toast for copy success and manual Ctrl+C
    fallback feedback.
 2. **Identidade do curso:** use a `280px` cover column at `lg`, matching the
-   uploader's existing width. Title, subtitle, and description stay together
+   uploader's existing width. Title and description stay together
    in the adjacent column. Below `lg`, cover and fields stack.
 3. **Acesso e publicação:** render workload first and access duration second as
    equivalent fields. Move status to the save footer, beside the save action.

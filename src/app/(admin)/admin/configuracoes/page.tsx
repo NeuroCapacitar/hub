@@ -1,16 +1,11 @@
-import { HistoryIcon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import Link from "next/link";
 import { FinanceHelp } from "@/components/admin/finance-help";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -22,8 +17,6 @@ import {
 import { getAdminAuthMediaData } from "@/features/auth-media/server";
 import { requirePermission } from "@/lib/auth-permissions";
 import { canPerform } from "@/lib/auth-policy";
-import { formatDateTime } from "@/lib/formatters";
-import { route } from "@/lib/routes";
 import { AuthMediaGallery } from "./auth-media/auth-media-gallery";
 import { BannerGallery } from "./banners/banner-gallery";
 import {
@@ -44,7 +37,6 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
   const canManageAuthMedia = canPerform(session, "manageAuthMedia");
   const canManageBanners = canPerform(session, "manageBanners");
   const canManageFaq = canPerform(session, "manageFaq");
-  const canViewAudit = canPerform(session, "viewAudit");
 
   const [data, bannersData, authMediaData, faqData] = await Promise.all([
     getAdminSettingsData(),
@@ -77,10 +69,6 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
   const issuerProfileIssues = data.settings.issuerProfileIssues.map(
     (issue) => issuerProfileIssueLabels[issue]
   );
-  const lastUpdatedBy =
-    data.settings.lastUpdatedBy?.name ??
-    data.settings.lastUpdatedBy?.email ??
-    "Sistema";
   const certificateSettings: CertificateSettingsFormValues = {
     certificateSignerName: data.settings.certificateSignerName,
     certificateSignerRole: data.settings.certificateSignerRole,
@@ -92,10 +80,7 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader
-          description="Gerencie a identidade dos Certificados e o conteúdo compartilhado no Hub."
-          title="Configurações globais"
-        />
+        <PageHeader title="Configurações globais" />
 
         <section aria-labelledby="settings-certificates" className="grid gap-4">
           <div className="flex items-center gap-2">
@@ -141,46 +126,6 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
                 settings={certificateSettings}
               />
             </CardContent>
-            <CardFooter className="flex-col items-start gap-3 border-t text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-start gap-2">
-                <HugeiconsIcon
-                  aria-hidden="true"
-                  className="mt-0.5 shrink-0"
-                  icon={HistoryIcon}
-                  size={16}
-                  strokeWidth={2}
-                />
-                <p className="type-meta min-w-0">
-                  {data.settings.lastUpdatedAt ? (
-                    <>
-                      Última alteração em{" "}
-                      <time
-                        dateTime={data.settings.lastUpdatedAt.toISOString()}
-                      >
-                        {formatDateTime(data.settings.lastUpdatedAt)}
-                      </time>{" "}
-                      {canManageCertificateIssuerProfile ? (
-                        <>
-                          por{" "}
-                          <span className="text-foreground">
-                            {lastUpdatedBy}
-                          </span>
-                        </>
-                      ) : null}
-                    </>
-                  ) : (
-                    "Ainda não há alterações registradas na Auditoria."
-                  )}
-                </p>
-              </div>
-              {canViewAudit ? (
-                <Button asChild size="sm" variant="outline">
-                  <Link href={route("/admin/auditoria?target=settings")}>
-                    Ver histórico
-                  </Link>
-                </Button>
-              ) : null}
-            </CardFooter>
           </Card>
         </section>
 

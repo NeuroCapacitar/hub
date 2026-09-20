@@ -30,6 +30,7 @@ import { LessonVideoPlayer } from "@/components/lesson-video-player";
 import { LessonVideoProcessing } from "@/components/lesson-video-processing";
 import { LockedNavigationCard } from "@/components/locked-lesson-tooltip";
 import { RegisterPreviewCourseId } from "@/components/panel-layout";
+import { PanelPageTitle } from "@/components/panel-page-title";
 import {
   Accordion,
   AccordionContent,
@@ -38,6 +39,7 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
   Sidebar,
@@ -150,6 +152,17 @@ export default async function LessonPage({
     <LessonFocusLayout
       main={
         <>
+          <PanelPageTitle
+            ancestors={[
+              { href: route("/app"), label: "Início" },
+              {
+                href: route(`/app/cursos/${data.course.id}`),
+                label: data.course.title,
+              },
+            ]}
+            title={data.lesson.title}
+            visibleHeading
+          />
           {previewMode ? (
             <RegisterPreviewCourseId courseId={data.course.id} />
           ) : null}
@@ -308,7 +321,7 @@ function LessonMainContent({
               previewMode={previewMode}
             />
           ) : null}
-          <div className="mx-auto w-full max-w-5xl px-5 py-7 sm:px-8 lg:px-0">
+          <div className="mx-auto w-full max-w-5xl px-5 py-9 sm:px-8 lg:px-0">
             {footer}
           </div>
         </LessonVideoPlayer>
@@ -323,14 +336,14 @@ function LessonMainContent({
         {header}
         {materialUnavailableAlert}
         {mobileCourseNavigation}
-        <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-0">
+        <div className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8 lg:px-0">
           <LessonVideoProcessing
             courseTitle={data.course.title}
             state={data.lesson.videoProcessingState ?? "processing"}
           />
         </div>
         <LessonContentFrame lesson={data.lesson} previewMode={previewMode} />
-        <div className="mx-auto w-full max-w-5xl px-5 py-7 sm:px-8 lg:px-0">
+        <div className="mx-auto w-full max-w-5xl px-5 py-9 sm:px-8 lg:px-0">
           {footer}
         </div>
         {commentsSection}
@@ -344,7 +357,7 @@ function LessonMainContent({
       {materialUnavailableAlert}
       {mobileCourseNavigation}
       <LessonContentFrame lesson={data.lesson} previewMode={previewMode} />
-      <div className="mx-auto w-full max-w-5xl px-5 py-7 sm:px-8 lg:px-0">
+      <div className="mx-auto w-full max-w-5xl px-5 py-9 sm:px-8 lg:px-0">
         {footer}
       </div>
       {commentsSection}
@@ -374,7 +387,7 @@ function LessonHeader({
   previewMode: StudentPreviewMode | null;
 }): React.JSX.Element {
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-5 sm:px-8 lg:px-0">
+    <div className="mx-auto w-full max-w-5xl px-5 py-7 sm:px-8 lg:px-0">
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3 sm:gap-4">
           <h1 className="type-section-title min-w-0 flex-1 break-words text-foreground">
@@ -437,15 +450,12 @@ function LessonFooter({
   const hasContent = Boolean(data.lesson.contentJson);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       {hasContent || data.lesson.isCompleted ? (
         <LessonNextStepCard
           courseHref={lessonView.courseHref}
           isCompleted={data.lesson.isCompleted}
-          isPreview={Boolean(previewMode)}
-          lessonId={data.lesson.id}
           nextLessonId={data.nextLessonId}
-          previewMode={previewMode}
         />
       ) : null}
 
@@ -478,8 +488,8 @@ function LessonContentFrame({
     const { document } = lesson.contentJson;
 
     return (
-      <article className="px-5 py-8 sm:px-8 lg:px-0">
-        <div className="mx-auto flex max-w-5xl flex-col gap-8">
+      <article className="px-5 py-10 sm:px-8 lg:px-0">
+        <div className="mx-auto flex max-w-5xl flex-col gap-10">
           <div className="max-w-[68ch] text-base leading-8">
             <LessonRichTextRenderer document={document} />
           </div>
@@ -514,7 +524,7 @@ function LessonResources({
   }
 
   return (
-    <section className="mt-8">
+    <section className="mt-10">
       <div className="mb-6 flex items-center justify-between gap-3">
         <div>
           <h2 className="type-card-title text-foreground">
@@ -551,62 +561,64 @@ function LessonResourceItem({
   previewMode: StudentPreviewMode | null;
   resource: LessonResource;
 }): React.JSX.Element {
-  const extension = getResourceExtension(resource);
   const displayName = getResourceDisplayName(resource);
   const metadata = getResourceMetadata(resource);
   const href = getLessonResourceHref({ lessonId, previewMode, resource });
   const isExternal = resource.storage !== "r2";
-  const badgeText = isExternal ? "LINK" : extension;
 
   return (
-    <div className="group/resource grid min-w-0 grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 border-border/30 border-b py-3 transition-colors last:border-0 hover:bg-muted/10">
-      <ResourceVisual
-        lessonId={lessonId}
-        previewMode={previewMode}
-        resource={resource}
-      />
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          <p className="min-w-0 flex-1 truncate font-normal text-sm">
-            {displayName.base}
-            {displayName.extension ? (
-              <span className="font-light text-muted-foreground">
-                .{displayName.extension}
-              </span>
-            ) : null}
-          </p>
-          {badgeText ? (
-            <span className="type-meta shrink-0 font-medium text-muted-foreground">
-              {badgeText}
-            </span>
-          ) : null}
-        </div>
-        <p className="mt-1 truncate font-light text-muted-foreground text-xs">
-          {metadata}
-        </p>
-      </div>
-      <Button
-        asChild
-        className="opacity-70 hover:opacity-100"
-        size="icon-sm"
-        variant="ghost"
-      >
-        <a
-          aria-label={isExternal ? "Abrir material" : "Baixar material"}
-          href={href}
-          rel="noopener"
-          target="_blank"
-          title={isExternal ? "Abrir material" : "Baixar material"}
-        >
-          <HugeiconsIcon
-            aria-hidden="true"
-            icon={isExternal ? ExternalLinkIcon : Download01Icon}
-            size={16}
-            strokeWidth={1.5}
+    <Card
+      className="bg-card/50 transition-colors hover:bg-muted/40"
+      density="compact"
+    >
+      <CardContent className="px-4 py-1 sm:px-5">
+        <div className="grid min-w-0 grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 py-3">
+          <ResourceVisual
+            lessonId={lessonId}
+            previewMode={previewMode}
+            resource={resource}
           />
-        </a>
-      </Button>
-    </div>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="min-w-0 flex-1 truncate font-normal text-sm">
+                {displayName.base}
+                {displayName.extension ? (
+                  <span className="font-light text-muted-foreground">
+                    .{displayName.extension}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+            <p className="mt-1 truncate font-light text-muted-foreground text-xs">
+              {metadata}
+            </p>
+          </div>
+          <Button
+            asChild
+            className="shrink-0 px-2.5"
+            size="sm"
+            variant="outline"
+          >
+            <a
+              aria-label={isExternal ? "Abrir material" : "Baixar material"}
+              href={href}
+              rel="noopener"
+              target="_blank"
+              title={isExternal ? "Abrir material" : "Baixar material"}
+            >
+              <HugeiconsIcon
+                aria-hidden="true"
+                data-icon="inline-start"
+                icon={isExternal ? ExternalLinkIcon : Download01Icon}
+                size={16}
+                strokeWidth={1.5}
+              />
+              {isExternal ? "Abrir" : "Baixar"}
+            </a>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -768,27 +780,14 @@ function getResourceTone(_resource: LessonResource): string {
 function LessonNextStepCard({
   courseHref,
   isCompleted,
-  isPreview,
-  lessonId,
   nextLessonId,
 }: {
   courseHref: Route;
   isCompleted: boolean;
-  isPreview: boolean;
-  lessonId: string;
   nextLessonId: string | null;
-  previewMode: StudentPreviewMode | null;
 }): React.JSX.Element | null {
   if (!isCompleted) {
-    return (
-      <div className="flex justify-end">
-        <CompleteLessonButton
-          accessibleLabel="Concluir aula e avançar"
-          isPreview={isPreview}
-          lessonId={lessonId}
-        />
-      </div>
-    );
+    return null;
   }
 
   if (!nextLessonId && isCompleted) {

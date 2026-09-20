@@ -14,6 +14,9 @@ vi.mock("@/features/admin/actions", () => ({
   restoreEnrollmentAccessAction: vi.fn(),
   restoreStudentPlatformAccessAction: vi.fn(),
 }));
+vi.mock("@/features/admin/staff-actions", () => ({
+  changeStaffAccessAction: vi.fn(),
+}));
 vi.mock("@/features/certificates/actions", () => ({
   issueManualCertificateAction: vi.fn(),
   reissueCertificateAction: vi.fn(),

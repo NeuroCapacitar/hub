@@ -24,6 +24,10 @@ vi.mock("sonner", () => ({
   },
 }));
 
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
 describe("staff access dialog layout", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -57,7 +61,7 @@ describe("staff access dialog layout", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps the permissions body scrollable inside the mutation form", () => {
+  it("keeps the permissions body scrollable inside the mutation form", async () => {
     act(() => {
       root.render(
         <StaffAccessTable
@@ -81,10 +85,12 @@ describe("staff access dialog layout", () => {
       (button) => button.textContent?.trim() === "Alterar acesso"
     );
 
-    act(() => {
+    await act(async () => {
       trigger?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true })
+        new PointerEvent("pointerdown", { bubbles: true, button: 0 })
       );
+      trigger?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     const form = document.querySelector("form");
@@ -97,6 +103,10 @@ describe("staff access dialog layout", () => {
     expect(dialogBody?.className).toContain("flex-1");
     expect(dialogBody?.className).toContain("overscroll-contain");
     expect(document.body.textContent).toContain("Permissões configuráveis");
+    expect(document.body.textContent).toContain(
+      "Criar Cursos no catálogo administrativo."
+    );
+    expect(document.querySelector('input[name="role"]')).not.toBeNull();
     expect(
       document.querySelector(
         'button[aria-label="Ajuda: Como funcionam as permissões"]'

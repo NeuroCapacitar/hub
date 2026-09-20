@@ -39,10 +39,7 @@ export default async function MyCertificatesPage(): Promise<React.JSX.Element> {
     <PageContainer className="min-h-screen bg-background text-foreground">
       {hasPendingCertificate ? <PendingCertificateRefresh enabled /> : null}
       <div className="flex flex-col gap-8">
-        <PageHeader
-          description="Acompanhe o preparo, baixe documentos disponíveis e valide cada conclusão pelo código público."
-          title="Seus certificados"
-        />
+        <PageHeader title="Seus certificados" />
 
         <section className="grid gap-4">
           {certificates.length === 0 ? (

@@ -45,7 +45,7 @@ describe("SupportCourseStudentsTable", () => {
       />
     );
 
-    expect(markup).toContain("Ações de Student");
+    expect(markup).toContain("Abrir ficha de Student");
     expect(markup).toContain("Nome");
     expect(markup).toContain("E-mail");
     expect(markup).toContain('scope="col"');

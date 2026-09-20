@@ -4,8 +4,12 @@ import { BrandLogo } from "@/components/brand-logo";
 import { PageContainer } from "@/components/page-container";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { StudentCheckoutCourseContext } from "@/features/courses/checkout-course-context";
 import { canMutateStudentExperience } from "@/features/courses/preview";
-import { getStudentCourseAccessStatus } from "@/features/courses/server";
+import {
+  getStudentCheckoutCourseContext,
+  getStudentCourseAccessStatus,
+} from "@/features/courses/server";
 import { route } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 import { CheckoutAccessWaiter } from "./checkout-access-waiter";
@@ -26,6 +30,7 @@ export default async function CheckoutSuccessPage({
   }
 
   const { courseId = null } = await searchParams;
+  let courseContext: StudentCheckoutCourseContext | null = null;
 
   if (courseId) {
     const access = await getStudentCourseAccessStatus({
@@ -36,28 +41,32 @@ export default async function CheckoutSuccessPage({
     if (access.canAccess) {
       redirect(route(access.redirectTo));
     }
+
+    courseContext = await getStudentCheckoutCourseContext({
+      courseId,
+      userId: session.user.id,
+    });
   }
 
   return (
     <PageContainer className="min-h-screen bg-background text-foreground">
-      <BrandLogo className="mb-8 h-9 w-auto" preload />
-      <section className="max-w-2xl rounded-2xl border border-border/70 bg-card/90 p-6 shadow-sm sm:p-8">
+      <BrandLogo className="mx-auto mb-8 h-9 w-auto" preload />
+      <section className="mx-auto w-full max-w-2xl rounded-2xl border border-border/70 bg-card/90 p-6 shadow-sm sm:p-8">
         <Badge variant="outline">Pagamento em verificação</Badge>
         <h1 className="type-section-title mt-4">
           Seu acesso está sendo liberado
         </h1>
-        <p className="mt-3 text-muted-foreground text-sm leading-6">
-          O Asaas ainda pode estar processando o pagamento. Esta página vai
-          abrir seu curso automaticamente somente quando o acesso estiver
-          confirmado.
+        <p className="mt-3 max-w-xl text-muted-foreground text-sm leading-6">
+          Recebemos o retorno do checkout e estamos confirmando sua matrícula.
+          Não é necessário iniciar outra compra.
         </p>
-        <CheckoutAccessWaiter courseId={courseId} />
+        <CheckoutAccessWaiter
+          courseContext={courseContext}
+          courseId={courseId}
+        />
         <div className="mt-6 flex flex-wrap gap-3">
           <Button asChild>
             <Link href={route("/app")}>Voltar para cursos</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href={route("/app/certificados")}>Ver certificados</Link>
           </Button>
         </div>
       </section>

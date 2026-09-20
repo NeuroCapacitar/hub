@@ -134,7 +134,6 @@ describe("AdminOperationsPage", () => {
       })
     );
 
-    expect(markup).toContain("Operações e recuperação");
     expect(markup).toContain("Alertas operacionais");
     expect(markup).toContain("Mensagens em dead letter");
     expect(markup).toContain("Detalhes");

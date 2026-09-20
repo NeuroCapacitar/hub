@@ -426,7 +426,6 @@ export const courses = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     slug: text("slug").notNull().unique(),
     title: text("title").notNull(),
-    subtitle: text("subtitle"),
     description: text("description"),
     workloadHours: integer("workload_hours").default(0).notNull(),
     workloadHoursOverride: integer("workload_hours_override"),
@@ -1136,9 +1135,13 @@ export const lessonComments = pgTable(
   "lesson_comments",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    lessonId: uuid("lesson_id")
+    sourceLessonId: uuid("source_lesson_id").references(() => lessons.id, {
+      onDelete: "set null",
+    }),
+    courseId: uuid("course_id")
       .notNull()
-      .references(() => lessons.id, { onDelete: "cascade" }),
+      .references(() => courses.id, { onDelete: "cascade" }),
+    curriculumKey: uuid("curriculum_key").notNull(),
     authorUserId: text("author_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -1155,9 +1158,15 @@ export const lessonComments = pgTable(
     ...timestamps,
   },
   (table) => [
-    index("lesson_comments_lesson_created_idx").on(
-      table.lessonId,
+    index("lesson_comments_source_lesson_created_idx").on(
+      table.sourceLessonId,
       table.createdAt
+    ),
+    index("lesson_comments_discussion_created_idx").on(
+      table.courseId,
+      table.curriculumKey,
+      table.createdAt,
+      table.id
     ),
     index("lesson_comments_parent_created_idx").on(
       table.parentId,

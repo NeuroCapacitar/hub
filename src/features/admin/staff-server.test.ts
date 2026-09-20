@@ -11,7 +11,7 @@ vi.mock("@/lib/auth-permissions", () => ({
   requirePermission: dependencies.requirePermission,
 }));
 
-import { getStaffMembers } from "./staff-server";
+import { getStaffMembers, getStaffPromotionCandidates } from "./staff-server";
 
 describe("staff read projection", () => {
   beforeEach(() => {
@@ -55,12 +55,42 @@ describe("staff read projection", () => {
     );
     const statement = String(query.mock.calls[0]?.[0]);
     expect(statement).toContain("from users u");
-    expect(statement).toContain("left join sessions s");
+    expect(statement).toContain("where p.role in ('admin', 'support')");
+    expect(statement).not.toContain("left join sessions s");
     expect(statement).toContain("support_permission_grants");
     expect(statement).not.toContain("accounts");
     expect(statement).not.toContain("password");
     expect(statement).not.toContain("access_token");
     expect(statement).not.toContain("refresh_token");
     expect(statement).not.toContain("id_token");
+  });
+
+  it("searches only student accounts as promotion candidates", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          email: "student@example.test",
+          name: "Aluno",
+          user_id: "student-1",
+        },
+      ],
+    });
+    dependencies.getPool.mockReturnValue({ query });
+
+    await expect(getStaffPromotionCandidates("student")).resolves.toEqual({
+      candidates: [
+        {
+          email: "student@example.test",
+          name: "Aluno",
+          userId: "student-1",
+        },
+      ],
+      hasMore: false,
+      search: "student",
+    });
+
+    const statement = String(query.mock.calls[0]?.[0]);
+    expect(statement).toContain("where p.role = 'student'");
+    expect(query.mock.calls[0]?.[1]).toEqual(["%student%", 11]);
   });
 });

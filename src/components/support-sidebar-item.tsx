@@ -26,7 +26,11 @@ export function SupportSidebarItem(): React.JSX.Element {
   return (
     <>
       <SidebarMenuItem>
-        <SidebarMenuButton onClick={() => setOpen(true)} tooltip="Suporte">
+        <SidebarMenuButton
+          className="text-muted-foreground"
+          onClick={() => setOpen(true)}
+          tooltip="Suporte"
+        >
           <HugeiconsIcon
             aria-hidden="true"
             icon={CustomerService01Icon}

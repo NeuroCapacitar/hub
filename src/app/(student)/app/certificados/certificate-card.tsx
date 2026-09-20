@@ -49,7 +49,11 @@ export function CertificateCard({
           </CardDescription>
         </div>
         <CardTitle as="h2" id={titleId}>
-          <Link href={certificateLinks.publicHref}>
+          <Link
+            href={certificateLinks.publicHref}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
             {certificate.courseTitle}
           </Link>
         </CardTitle>

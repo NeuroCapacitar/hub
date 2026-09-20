@@ -25,6 +25,7 @@ interface CourseCoverUploadFieldProps {
   className?: string;
   defaultCoverImage?: unknown;
   defaultThumbnailUrl?: string | null | undefined;
+  onUploadingChange?: ((isUploading: boolean) => void) | undefined;
 }
 
 const MAX_COVER_BYTES = 4 * 1024 * 1024;
@@ -49,6 +50,7 @@ export function CourseCoverUploadField({
   className,
   defaultCoverImage,
   defaultThumbnailUrl,
+  onUploadingChange,
 }: CourseCoverUploadFieldProps): React.JSX.Element {
   const parsedCover = parseCourseCoverImage(defaultCoverImage);
   const inputId = `course-cover-upload-${aggregateId}`;
@@ -67,6 +69,10 @@ export function CourseCoverUploadField({
   const inputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
   const uploadRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    onUploadingChange?.(isUploading);
+  }, [isUploading, onUploadingChange]);
 
   useEffect(
     () => () => {

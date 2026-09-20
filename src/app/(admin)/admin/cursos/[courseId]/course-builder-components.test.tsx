@@ -126,7 +126,6 @@ const course: AdminCourse = {
   salesStatus: "open",
   slug: "course-1",
   status: "active",
-  subtitle: null,
   thumbnailUrl: null,
   title: "Curso",
   workloadHours: 2,
@@ -436,6 +435,8 @@ describe("course builder responsive presentation", () => {
     expect(disclosure?.getAttribute("aria-expanded")).toBe("true");
     expect(document.body.textContent).toContain("3 aulas");
     expect(document.body.textContent).toContain("42 min");
+    expect(document.body.textContent).toContain("Liberação imediata");
+    expect(document.querySelector('[data-slot="badge"]')).toBeNull();
     expect(disclosure?.querySelector("button")).toBeNull();
     expect(document.querySelector("h3")?.textContent).toContain(
       "Fundamentos essenciais"
@@ -460,6 +461,7 @@ describe("course builder responsive presentation", () => {
         type: "text",
       },
       durationSeconds: 42 * 60,
+      status: "active",
       title:
         "Introdução detalhada aos fundamentos de arquitetura de aplicações modernas",
       videoExternalId: "video-1",
@@ -474,11 +476,13 @@ describe("course builder responsive presentation", () => {
     expect(document.body.textContent).toContain("Vídeo + texto");
     expect(document.body.textContent).toContain("42 min");
     expect(document.body.textContent).toContain("Obrigatória");
+    expect(document.querySelector('[data-slot="badge"]')).toBeNull();
     expect(document.querySelector('[class*="md:grid"]')).not.toBeNull();
     expect(
       document.querySelector(
         `a[href="/admin/cursos/${course.id}/aulas/${richLesson.id}"]`
       )
     ).not.toBeNull();
+    expect(markup).not.toContain(">Editar<");
   });
 });

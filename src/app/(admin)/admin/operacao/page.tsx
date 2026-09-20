@@ -328,10 +328,7 @@ export default async function AdminOperationsPage({
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader
-          description="Acompanhe filas, alertas e recuperações que precisam de atenção operacional."
-          title="Operações e recuperação"
-        />
+        <PageHeader title="Operações e recuperação" />
 
         <Card className="min-w-0">
           <CardHeader className="border-b pb-4">
@@ -996,7 +993,10 @@ export default async function AdminOperationsPage({
               >
                 {getResultSummary({
                   count: data.outboxDeadLetters.messages.length,
-                  label: `mensagem${data.outboxDeadLetters.totalCount === 1 ? "" : "s"} em dead letter`,
+                  label:
+                    data.outboxDeadLetters.totalCount === 1
+                      ? "mensagem em dead letter"
+                      : "mensagens em dead letter",
                   page: data.outboxDeadLetters.page,
                   pageSize: data.outboxDeadLetters.pageSize,
                   totalCount: data.outboxDeadLetters.totalCount,

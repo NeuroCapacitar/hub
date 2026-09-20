@@ -53,7 +53,6 @@ const courseOverview = (
   course: {
     description: "Descrição",
     id: "course-1",
-    subtitle: "Subtítulo",
     title: "Curso de teste",
     workloadHours: 1,
   },
@@ -126,6 +125,8 @@ describe("StudentCourseOverviewPage certificate feedback", () => {
 
     expect(markup).toContain('href="/certificados/CERT-001"');
     expect(markup).toContain("Ver certificado");
+    expect(markup).toContain('target="_blank"');
+    expect(markup).toContain('rel="noopener noreferrer"');
     expect(markup).not.toContain("/app/certificados");
     expect(markup).not.toContain("certificate=issued");
   });
@@ -143,7 +144,7 @@ describe("StudentCourseOverviewPage certificate feedback", () => {
     expect(markup).not.toContain("/app/certificados");
   });
 
-  it("shows incomplete progress without a certificate destination", async () => {
+  it("does not show a certificate panel before a certificate exists", async () => {
     const markup = await renderPage({
       certificate: "",
       overview: courseOverview({
@@ -156,8 +157,8 @@ describe("StudentCourseOverviewPage certificate feedback", () => {
       }),
     });
 
-    expect(markup).toContain("Falta 1 aula obrigatória");
-    expect(markup).toContain("Conferir nome no perfil");
+    expect(markup).not.toContain("Falta 1 aula obrigatória");
+    expect(markup).not.toContain("Conferir nome no perfil");
     expect(markup).not.toContain("/certificados/");
     expect(markup).not.toContain("Atualizar status");
   });
@@ -186,7 +187,6 @@ describe("StudentCourseOverviewPage certificate feedback", () => {
         course: {
           description: null,
           id: "course-1",
-          subtitle: null,
           title: "Curso sem certificado",
           workloadHours: 1,
         },
@@ -257,6 +257,8 @@ describe("StudentCourseOverviewPage certificate feedback", () => {
     expect(markup).toContain("Este certificado não está mais válido");
     expect(markup).toContain('href="/certificados/CERT-001"');
     expect(markup).toContain("Ver certificado");
+    expect(markup).toContain('target="_blank"');
+    expect(markup).toContain('rel="noopener noreferrer"');
     expect(markup).not.toContain("Atualizar status");
     expect(markup).not.toContain("Tentar novamente");
   });

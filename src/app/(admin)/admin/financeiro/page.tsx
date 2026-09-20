@@ -204,7 +204,9 @@ export default async function AdminFinancePage({
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader
+        <PageHeader title="Financeiro" />
+
+        <FinancialTabs
           actions={
             canManageFinancialOperations ? (
               <FinancialOperationsMenu
@@ -213,11 +215,6 @@ export default async function AdminFinancePage({
               />
             ) : null
           }
-          description="Consulte pedidos, recebimentos e exceções que podem afetar o acesso."
-          title="Financeiro"
-        />
-
-        <FinancialTabs
           analysis={
             analysisData ? (
               <FinancialAnalysis analytics={analysisData.analytics} />

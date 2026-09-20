@@ -1,7 +1,11 @@
+import Link from "next/link";
+import { StaffPromotionDialog } from "@/components/admin/staff-promotion-dialog";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
+import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -20,18 +24,22 @@ export default async function StaffPage(): Promise<React.JSX.Element> {
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader
-          description="Administre o papel e as permissões de alteração das Contas existentes. Esta área não cria credenciais nem redefine senhas."
-          title="Equipe"
-        />
+        <PageHeader title="Equipe" />
         <Card className="min-w-0">
           <CardHeader>
-            <CardTitle as="h2">Contas administráveis</CardTitle>
+            <CardTitle as="h2">Contas com acesso administrativo</CardTitle>
             <CardDescription>
-              Todo Suporte mantém a leitura administrativa aprovada. As
-              alterações ficam limitadas às permissões delegáveis marcadas pelo
-              Admin.
+              Admins têm acesso total. O acesso do Suporte combina a leitura
+              administrativa padrão com as permissões delegáveis marcadas pelo
+              Admin. Adicione uma conta à equipe somente depois de revisar a
+              alteração.
             </CardDescription>
+            <CardAction className="flex flex-wrap gap-2">
+              <Button asChild variant="outline">
+                <Link href="/admin/alunos">Ver Alunos</Link>
+              </Button>
+              <StaffPromotionDialog />
+            </CardAction>
           </CardHeader>
           <CardContent>
             <StaffAccessTable actorUserId={session.user.id} members={members} />

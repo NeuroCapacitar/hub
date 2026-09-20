@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageContainer } from "@/components/page-container";
 import { RegisterPreviewCourseId } from "@/components/panel-layout";
+import { PanelPageTitle } from "@/components/panel-page-title";
 import { SupportRequestDialog } from "@/components/support-request-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -32,27 +33,6 @@ import { PendingCertificateRefresh } from "../../certificados/pending-certificat
 import { CourseOverviewClient } from "./course-overview-client";
 
 export const dynamic = "force-dynamic";
-
-function getIncompleteCertificateDescription({
-  completedCount,
-  studentName,
-  totalCount,
-}: {
-  completedCount: number;
-  studentName: string | null;
-  totalCount: number;
-}): string {
-  const remainingLessons = Math.max(0, totalCount - completedCount);
-  const lessonLabel =
-    remainingLessons === 1
-      ? "Falta 1 aula obrigatória."
-      : `Faltam ${remainingLessons} aulas obrigatórias.`;
-  const expectedName = studentName
-    ? ` O nome previsto é ${studentName}.`
-    : " O certificado usará o nome do perfil do Aluno.";
-
-  return `${lessonLabel}${expectedName}`;
-}
 
 export default async function StudentCourseOverviewPage({
   params,
@@ -97,7 +77,11 @@ export default async function StudentCourseOverviewPage({
   if (data.certificateCode) {
     primaryAction = (
       <Button asChild className="h-full w-full px-6 sm:w-auto" size="sm">
-        <Link href={route(`/certificados/${data.certificateCode}`)}>
+        <Link
+          href={route(`/certificados/${data.certificateCode}`)}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
           Ver certificado
         </Link>
       </Button>
@@ -127,6 +111,11 @@ export default async function StudentCourseOverviewPage({
 
   return (
     <PageContainer className="min-h-screen bg-background text-foreground">
+      <PanelPageTitle
+        ancestors={[{ href: route("/app"), label: "Início" }]}
+        title={data.course.title}
+        visibleHeading
+      />
       <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-8">
           {previewMode ? (
@@ -148,8 +137,7 @@ export default async function StudentCourseOverviewPage({
               <div className="flex-1 space-y-1">
                 <h1 className="type-page-title">{data.course.title}</h1>
                 <p className="max-w-2xl text-pretty text-muted-foreground text-sm">
-                  {data.course.subtitle ??
-                    data.course.description ??
+                  {data.course.description ??
                     (data.certificateEnabled
                       ? "Avance pelas aulas na ordem da trilha, acompanhe seu progresso e conclua o curso para liberar o certificado."
                       : "Avance pelas aulas na ordem da trilha, acompanhe seu progresso e conclua sua trilha.")}
@@ -189,15 +177,12 @@ export default async function StudentCourseOverviewPage({
               </div>
             </div>
           </header>
-          {data.certificateEnabled ? (
+          {data.certificateEnabled && data.certificateCode ? (
             <CourseCertificatePanel
               certificateCode={data.certificateCode}
               certificateRenderStatus={data.certificateRenderStatus}
               certificateStatus={data.certificateStatus}
-              completedCount={data.completedCount}
               courseTitle={data.course.title}
-              studentName={data.studentName}
-              totalCount={data.totalCount}
             />
           ) : null}
         </div>
@@ -217,48 +202,14 @@ function CourseCertificatePanel({
   certificateCode,
   certificateRenderStatus,
   certificateStatus,
-  completedCount,
   courseTitle,
-  studentName,
-  totalCount,
 }: {
-  certificateCode: string | null;
+  certificateCode: string;
   certificateRenderStatus: "failed" | "pending" | "ready" | null;
   certificateStatus: "revoked" | "valid" | null;
-  completedCount: number;
   courseTitle: string;
-  studentName: string | null;
-  totalCount: number;
 }): React.JSX.Element {
   const titleId = "course-certificate-title";
-
-  if (!certificateCode) {
-    return (
-      <Card aria-labelledby={titleId} role="region">
-        <CardHeader>
-          <CardTitle as="h2" id={titleId}>
-            Certificado de conclusão
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="max-w-2xl text-muted-foreground leading-6">
-            {getIncompleteCertificateDescription({
-              completedCount,
-              studentName,
-              totalCount,
-            })}
-          </p>
-        </CardContent>
-        <CardFooter>
-          <Button asChild size="sm" variant="outline">
-            <Link href={route("/app/configuracoes")}>
-              Conferir nome no perfil
-            </Link>
-          </Button>
-        </CardFooter>
-      </Card>
-    );
-  }
 
   if (certificateStatus === "revoked") {
     return (
@@ -279,7 +230,11 @@ function CourseCertificatePanel({
         </CardContent>
         <CardFooter>
           <Button asChild variant="outline">
-            <Link href={route(`/certificados/${certificateCode}`)}>
+            <Link
+              href={route(`/certificados/${certificateCode}`)}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
               Ver certificado
             </Link>
           </Button>
@@ -306,7 +261,11 @@ function CourseCertificatePanel({
         </CardContent>
         <CardFooter>
           <Button asChild>
-            <Link href={route(`/certificados/${certificateCode}`)}>
+            <Link
+              href={route(`/certificados/${certificateCode}`)}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
               Ver certificado
             </Link>
           </Button>

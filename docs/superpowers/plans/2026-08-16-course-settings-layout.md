@@ -58,7 +58,7 @@ Expected: card remains uncontrolled and the installment field is always shown.
 - Modify: `src/app/(admin)/admin/cursos/[courseId]/course-dialogs-client.tsx`
 - Test: `src/app/(admin)/admin/cursos/[courseId]/course-dialogs-client.test.tsx`
 
-- [x] **Step 1: Repair the identity grid.** Replace `lg:grid-cols-[240px_minmax(0,1fr)]` with a `280px` cover column. Move the description Field into the right-hand field group after title and subtitle so it shares one vertical editing column with them.
+- [x] **Step 1: Repair the identity grid.** Replace `lg:grid-cols-[240px_minmax(0,1fr)]` with a `280px` cover column. Keep the title and description Fields together in the right-hand field group.
 
 - [x] **Step 2: Compact workload into the access grid.** Render workload first and access duration second. Move status into the footer beside save. The trigger shows only the current resolved hour count and opens a dialog with automatic/manual selection; the manual field is disabled in automatic mode. Remove the standalone rounded workload summary surface.
 

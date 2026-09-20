@@ -79,6 +79,7 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 - [ADR-0016: autoinscrição gratuita em Curso](adr/0016-free-course-self-enrollment.md)
 - [ADR-0017: superfície compartilhada e permissões granulares para Suporte](adr/0017-support-granular-permissions.md)
 - [ADR-0017: permissões individuais para Suporte](adr/0017-support-granular-permissions.md)
+- [ADR-0018: persistência da identidade estável das discussões de Aula](adr/0018-stable-lesson-discussion-persistence.md)
 
 ### Revisões
 

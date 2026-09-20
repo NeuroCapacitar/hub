@@ -1,5 +1,6 @@
 import "server-only";
 import { getPool } from "@/db";
+import type { CourseOfferSummaryData } from "@/features/courses/course-offer-summary";
 import {
   assertScheduleFitsAccessDuration,
   buildContentReleaseScheduleSnapshot,
@@ -7,6 +8,7 @@ import {
 } from "@/features/courses/module-content-release";
 import { getContentReleaseScheduleDigest } from "@/features/courses/module-content-release-digest";
 import { assertCheckoutAvailable } from "@/features/payments/checkout-availability";
+import { getCourseCoverBlurDataUrl } from "@/features/storage/course-cover";
 import { getServerEnv } from "@/lib/env";
 import type { AppSession } from "@/lib/session";
 import { ASAAS_MINIMUM_CHECKOUT_VALUE_IN_CENTS } from "./asaas";
@@ -17,6 +19,7 @@ export type PurchaseHandoffView =
       courseSlug: string;
       courseTitle: string;
       kind: "checkout";
+      offer: CourseOfferSummaryData;
       releaseSchedule: ContentReleaseScheduleSnapshot;
       releaseScheduleDigest: string;
     }
@@ -63,29 +66,43 @@ export type PurchaseHandoffView =
 interface PurchaseHandoffRow {
   access_duration_months: number;
   catalog_visibility: "hidden" | "listed";
+  certificate_enabled: boolean;
+  course_description: string | null;
   course_id: string;
   course_slug: string;
   course_title: string;
+  cover_image_json: unknown;
   enrollment_status: "active" | "expired" | "revoked" | null;
   has_effective_access: boolean;
   has_published_publication: boolean;
   is_interested: boolean;
   launch_date: string | null;
   launch_landing_url: string | null;
+  lesson_count: number;
+  module_count: number;
+  payment_allow_credit_card: boolean;
+  payment_allow_pix: boolean;
+  payment_max_installment_count: number;
   price_in_cents: number;
   release_modules: Array<{
     releaseDelayDays: number;
     sortOrder: number;
     title: string;
   }> | null;
+  required_lesson_count: number;
   sales_status: "closed" | "open";
   status: "active" | "archived" | "draft";
+  thumbnail_url: string | null;
+  workload_hours: number;
 }
 
 const PURCHASE_HANDOFF_QUERY = `
   select c.id as course_id,
+    c.description as course_description,
     c.slug as course_slug,
     c.title as course_title,
+    c.cover_image_json,
+    c.certificate_enabled,
     c.status,
     c.catalog_visibility,
     c.sales_status,
@@ -93,6 +110,14 @@ const PURCHASE_HANDOFF_QUERY = `
     c.launch_landing_url,
     c.price_in_cents,
     c.access_duration_months,
+    c.payment_allow_credit_card,
+    c.payment_allow_pix,
+    c.payment_max_installment_count,
+    c.thumbnail_url,
+    coalesce(c.workload_hours_override, c.workload_hours) as workload_hours,
+    coalesce(content.lesson_count, 0) as lesson_count,
+    coalesce(content.module_count, 0) as module_count,
+    coalesce(content.required_lesson_count, 0) as required_lesson_count,
     coalesce((
       select json_agg(
         json_build_object(
@@ -131,9 +156,44 @@ const PURCHASE_HANDOFF_QUERY = `
   left join enrollments e
     on e.course_id = c.id
    and e.user_id = $2
+  left join lateral (
+    select
+      count(distinct m.id)::int as module_count,
+      count(l.id)::int as lesson_count,
+      (count(l.id) filter (where coalesce(l.is_required, true)))::int as required_lesson_count
+    from modules m
+    join course_publications cp_content
+      on cp_content.id = m.course_publication_id
+     and cp_content.status = 'published'
+    left join lessons l
+      on l.module_id = m.id
+     and l.course_publication_id = cp_content.id
+     and l.status = 'active'
+    where cp_content.course_id = c.id
+      and m.status = 'active'
+  ) content on true
   where c.slug = $1
   limit 1
 `;
+
+const getPurchaseOfferSummary = (
+  course: PurchaseHandoffRow
+): CourseOfferSummaryData => ({
+  accessDurationMonths: course.access_duration_months,
+  certificateEnabled:
+    course.certificate_enabled && course.required_lesson_count > 0,
+  coverBlurDataUrl: getCourseCoverBlurDataUrl(course.cover_image_json),
+  description: course.course_description,
+  lessonCount: course.lesson_count,
+  moduleCount: course.module_count,
+  paymentAllowCreditCard: course.payment_allow_credit_card,
+  paymentAllowPix: course.payment_allow_pix,
+  paymentMaxInstallmentCount: course.payment_max_installment_count,
+  priceInCents: course.price_in_cents,
+  thumbnailUrl: course.thumbnail_url,
+  title: course.course_title,
+  workloadHours: course.workload_hours,
+});
 
 const resolveOpenCheckoutView = (
   course: PurchaseHandoffRow
@@ -201,6 +261,7 @@ const resolveOpenCheckoutView = (
     courseSlug: course.course_slug,
     courseTitle: course.course_title,
     kind: "checkout",
+    offer: getPurchaseOfferSummary(course),
     releaseSchedule,
     releaseScheduleDigest: getContentReleaseScheduleDigest(releaseSchedule),
   };

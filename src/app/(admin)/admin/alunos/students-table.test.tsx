@@ -5,6 +5,9 @@ vi.mock("@/features/admin/actions", () => ({
   blockStudentPlatformAccessAction: vi.fn(),
   restoreStudentPlatformAccessAction: vi.fn(),
 }));
+vi.mock("@/features/admin/staff-actions", () => ({
+  changeStaffAccessAction: vi.fn(),
+}));
 vi.mock("@/features/certificates/actions", () => ({
   issueManualCertificateAction: vi.fn(),
   reissueCertificateAction: vi.fn(),
@@ -33,7 +36,7 @@ describe("StudentsTable", () => {
 
     expect(markup).toContain("Nome");
     expect(markup).toContain("E-mail");
-    expect(markup).toContain("Ações de Aluno Teste");
+    expect(markup).toContain("Abrir ficha de Aluno Teste");
     expect(markup).toContain("Acesso ativo");
     expect(markup).toContain("Último acesso");
     expect(markup).toContain("Sem registro");
@@ -44,11 +47,11 @@ describe("StudentsTable", () => {
 
   it("keeps pagination controls without repeating the result count", () => {
     const markup = renderToStaticMarkup(
-      <StudentsTable page={2} students={[student]} totalCount={3} />
+      <StudentsTable page={2} pageSize={1} students={[]} totalCount={3} />
     );
 
     expect(markup).toContain("Anterior");
-    expect(markup).not.toContain("de 3 alunos");
+    expect(markup).toContain("0 de 3");
   });
 
   it("shows a recorded last access in the compact row", () => {

@@ -37,6 +37,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { saveCourseAction } from "@/features/admin/actions";
+import { CourseCoverImage } from "@/features/courses/course-cover-image";
 import {
   getEffectiveMaxInstallmentCount,
   MAX_INSTALLMENT_COUNT,
@@ -59,7 +60,6 @@ export interface CourseData {
   priceInCents: number;
   slug: string;
   status: string;
-  subtitle: string | null;
   thumbnailUrl: string | null;
   title: string;
   workloadHours: number;
@@ -76,12 +76,144 @@ const INSTALLMENT_OPTIONS = Array.from(
   (_, index) => index + MIN_INSTALLMENT_COUNT
 );
 
+function ReadOnlyValue({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className="min-w-0 space-y-1">
+      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dd className="break-words font-medium text-sm">{value}</dd>
+    </div>
+  );
+}
+
+function CourseSettingsReadOnly({
+  course,
+}: {
+  course: CourseData;
+}): React.JSX.Element {
+  const effectiveWorkloadHours =
+    course.workloadHoursOverride ??
+    course.calculatedWorkloadHours ??
+    course.workloadHours;
+  const paymentMethods = [
+    course.paymentAllowPix ? "Pix" : null,
+    course.paymentAllowCreditCard ? "cartão" : null,
+  ].filter(Boolean);
+  const isFreeCourse = course.priceInCents === 0;
+
+  return (
+    <div className="flex flex-col gap-8" data-course-settings-readonly="true">
+      <p className="rounded-lg border bg-muted/20 px-4 py-3 text-muted-foreground text-sm">
+        Você pode consultar estas informações, mas não possui permissão para
+        alterá-las.
+      </p>
+
+      <section className="space-y-5">
+        <h3 className="font-medium text-base">Identidade do curso</h3>
+        <div className="grid gap-6 lg:grid-cols-[176px_minmax(0,1fr)] lg:items-start">
+          <div className="relative aspect-[24/25] max-w-[176px] overflow-hidden rounded-lg border bg-muted">
+            {course.thumbnailUrl ? (
+              <CourseCoverImage
+                alt=""
+                blurDataUrl={null}
+                sizes="176px"
+                src={course.thumbnailUrl}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center px-4 text-center text-muted-foreground text-xs">
+                Sem capa definida
+              </div>
+            )}
+          </div>
+          <dl className="grid min-w-0 gap-5">
+            <ReadOnlyValue label="Título" value={course.title} />
+            <ReadOnlyValue
+              label="Descrição"
+              value={course.description || "Sem descrição definida"}
+            />
+          </dl>
+        </div>
+      </section>
+
+      <Separator />
+
+      <section className="space-y-5">
+        <h3 className="font-medium text-base">Acesso e publicação</h3>
+        <dl className="grid max-w-2xl gap-5 md:grid-cols-2">
+          <ReadOnlyValue
+            label="Carga horária"
+            value={`${effectiveWorkloadHours} horas`}
+          />
+          <ReadOnlyValue
+            label="Meses de acesso"
+            value={`${course.accessDurationMonths} meses`}
+          />
+        </dl>
+      </section>
+
+      <Separator />
+
+      <section className="space-y-5">
+        <h3 className="font-medium text-base">Oferta de pagamento</h3>
+        <dl className="grid max-w-2xl gap-5 md:grid-cols-2">
+          <ReadOnlyValue
+            label="Preço do curso"
+            value={
+              isFreeCourse
+                ? "Gratuito"
+                : formatCurrencyInCents(course.priceInCents)
+            }
+          />
+          {isFreeCourse ? (
+            <ReadOnlyValue
+              label="Inscrição"
+              value="Feita diretamente pelo Hub"
+            />
+          ) : (
+            <>
+              <ReadOnlyValue
+                label="Formas de pagamento"
+                value={
+                  paymentMethods.length > 1
+                    ? `${paymentMethods[0]} e ${paymentMethods[1]}`
+                    : (paymentMethods[0] ?? "Não configuradas")
+                }
+              />
+              <ReadOnlyValue
+                label="Máximo de parcelas"
+                value={`${course.paymentMaxInstallmentCount}x`}
+              />
+            </>
+          )}
+        </dl>
+      </section>
+    </div>
+  );
+}
+
 export function CourseSettingsForm({
   course,
   readOnly = false,
 }: {
   course: CourseData;
   readOnly?: boolean;
+}): React.JSX.Element {
+  return readOnly ? (
+    <CourseSettingsReadOnly course={course} />
+  ) : (
+    <CourseSettingsEditor course={course} />
+  );
+}
+
+function CourseSettingsEditor({
+  course,
+}: {
+  course: CourseData;
 }): React.JSX.Element {
   const [isPending, startTransition] = useTransition();
   const [isDirty, setIsDirty] = useState(false);
@@ -173,9 +305,7 @@ export function CourseSettingsForm({
       <form
         className="flex flex-col gap-8"
         onChange={() => {
-          if (!readOnly) {
-            setIsDirty(true);
-          }
+          setIsDirty(true);
         }}
         onSubmit={handleSubmit}
       >
@@ -185,7 +315,7 @@ export function CourseSettingsForm({
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         ) : null}
-        <fieldset className="contents" disabled={isPending || readOnly}>
+        <fieldset className="contents" disabled={isPending}>
           <input name="courseId" type="hidden" value={course.id} />
           <input
             name="workloadHoursOverride"
@@ -214,16 +344,6 @@ export function CourseSettingsForm({
                       id="course-settings-title"
                       name="title"
                       required
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="course-settings-subtitle">
-                      Subtítulo
-                    </FieldLabel>
-                    <Input
-                      defaultValue={course.subtitle ?? ""}
-                      id="course-settings-subtitle"
-                      name="subtitle"
                     />
                   </Field>
                   <Field>

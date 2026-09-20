@@ -115,12 +115,19 @@ describe("content release PostgreSQL surfaces", () => {
       watch: string;
     }>(
       `
-        select
-          (select count(*) from lesson_comments where lesson_id = $1) as comments,
-          (select count(*) from lesson_progress where lesson_id = $1) as progress,
-          (select count(*) from lesson_watch_progress where lesson_id = $1) as watch
+       select
+          (
+            select count(*)
+            from lesson_comments
+            where course_id = $1
+              and curriculum_key = (
+                select curriculum_key from lessons where id = $2
+              )
+          ) as comments,
+          (select count(*) from lesson_progress where lesson_id = $2) as progress,
+          (select count(*) from lesson_watch_progress where lesson_id = $2) as watch
       `,
-      [fixture.futureLessonId]
+      [fixture.courseId, fixture.futureLessonId]
     );
     expect(counts.rows).toEqual([{ comments: "0", progress: "0", watch: "0" }]);
     const certificates = await pool.query(
@@ -340,8 +347,14 @@ describe("content release PostgreSQL surfaces", () => {
       await revocation.query("commit");
       await expect(comment).rejects.toThrow("Aula indisponivel");
       const comments = await pool.query(
-        "select count(*) from lesson_comments where lesson_id = $1 and author_user_id = $2",
-        [fixture.immediateLessonId, fixture.userId]
+        `select count(*)
+         from lesson_comments
+         where course_id = $1
+           and curriculum_key = (
+             select curriculum_key from lessons where id = $2
+           )
+           and author_user_id = $3`,
+        [fixture.courseId, fixture.immediateLessonId, fixture.userId]
       );
       expect(comments.rows).toEqual([{ count: "0" }]);
     } finally {

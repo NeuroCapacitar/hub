@@ -29,8 +29,9 @@ describe("CourseAvailabilityForm", () => {
       <CourseAvailabilityForm course={course} />
     );
 
-    expect(markup).toContain("Vendas pausadas");
     expect(markup).toContain("Exibir na vitrine");
+    expect(markup).toContain("Zona de risco");
+    expect(markup).not.toContain("Atual:");
     expect(markup).toContain(
       "Rascunho e Em breve estão indisponíveis porque este Curso já possui histórico comercial."
     );
@@ -68,6 +69,16 @@ describe("CourseAvailabilityForm", () => {
 
     expect(markup).toContain("Landing externa");
     expect(markup).toContain("https://landing.example/curso-pausado");
+  });
+
+  it("renders a consultation view without mutation controls", () => {
+    const markup = renderToStaticMarkup(
+      <CourseAvailabilityForm course={course} readOnly />
+    );
+
+    expect(markup).toContain("somente para consulta");
+    expect(markup).not.toContain("Salvar disponibilidade");
+    expect(markup).not.toContain("Arquivar curso");
   });
 
   it("separates restore from ordinary availability changes", () => {

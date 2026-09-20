@@ -91,8 +91,7 @@ export function CoursePurchaseLink({
       />
       {link.available ? null : (
         <p className="max-w-xs text-muted-foreground text-xs sm:text-right">
-          Checkout pago indisponível: {unavailableMessages[link.reason]} (
-          <code>{link.reason}</code>).
+          Checkout pago indisponível: {unavailableMessages[link.reason]}.
         </p>
       )}
     </div>

@@ -34,10 +34,7 @@ export default async function StudentFaqPage(): Promise<React.JSX.Element> {
   return (
     <PageContainer className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
-        <PageHeader
-          description="Respostas rápidas sobre acesso, pagamento, progresso, certificados e uso da plataforma."
-          title="Perguntas frequentes"
-        />
+        <PageHeader title="Perguntas frequentes" />
 
         <div className="flex flex-col gap-6">
           {faqs.length === 0 ? (

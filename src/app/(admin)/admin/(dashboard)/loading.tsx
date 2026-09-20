@@ -5,17 +5,6 @@ export default function AdminAreaLoading(): React.JSX.Element {
   return <AdminDashboardLoading />;
 }
 
-function LoadingHeader() {
-  return (
-    <header className="border-b pb-6">
-      <div className="flex flex-col gap-3">
-        <Skeleton className="h-9 w-56" />
-        <Skeleton className="h-5 w-full max-w-[420px]" />
-      </div>
-    </header>
-  );
-}
-
 function MetricLoadingBand(): React.JSX.Element {
   const metricKeys = ["revenue", "students", "access", "expiring", "orders"];
 
@@ -39,7 +28,6 @@ function AdminDashboardLoading(): React.JSX.Element {
     <PageContainer>
       <div aria-busy="true" className="flex flex-col gap-6" role="status">
         <span className="sr-only">Carregando o painel administrativo…</span>
-        <LoadingHeader />
         <MetricLoadingBand />
         <section>
           <div className="mb-3 flex items-end justify-between gap-3">

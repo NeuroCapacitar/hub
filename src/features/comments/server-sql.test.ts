@@ -57,6 +57,8 @@ describe("lesson comments SQL contracts", () => {
     expect(createSection).toContain("lockEnrollmentAggregate");
     expect(createSection).toContain("resolveLessonAccessWithClient");
     expect(createSection).toContain("client.query<");
+    expect(createSection).toContain('action: "lesson_comment.created"');
+    expect(createSection).toContain("writeAuditLog");
     expect(createSection).toContain('client.query("COMMIT")');
     expect(createSection).toContain("client.release()");
   });
@@ -90,6 +92,7 @@ describe("lesson comments SQL contracts", () => {
 
     expect(readSection).toContain("curriculum_key");
     expect(readSection).toContain("course_id");
+    expect(readSection).not.toContain("comment_publication.status");
     expect(source).toContain("discussion: {");
   });
 
@@ -99,9 +102,13 @@ describe("lesson comments SQL contracts", () => {
       "utf8"
     );
 
-    expect(source).toContain("const canModerateComments");
-    expect(source).toContain('role === "admin"');
-    expect(source).not.toContain('role === "admin" || role === "support"');
+    expect(source).toContain("isLessonCommentManager");
+    expect(source).toContain(
+      "const canModerateComments = isLessonCommentManager(role)"
+    );
+    expect(source).not.toContain(
+      'throw new Error("Acesso ao conteúdo não permitido para suporte.")'
+    );
     expect(source).toContain("lc.status = 'visible'");
     expect(source).toContain("parent.status = 'visible'");
   });
@@ -115,6 +122,7 @@ describe("lesson comments SQL contracts", () => {
     expect(source).toContain("status = 'hidden'");
     expect(source).toContain("hidden_by_user_id = $2");
     expect(source).toContain("hidden_at = now()");
+    expect(source).toContain('action: "lesson_comment.hidden"');
     expect(source).not.toContain("delete from lesson_comments");
   });
 
@@ -128,5 +136,6 @@ describe("lesson comments SQL contracts", () => {
     expect(source).toContain("status = 'visible'");
     expect(source).toContain("hidden_by_user_id = null");
     expect(source).toContain("hidden_at = null");
+    expect(source).toContain('action: "lesson_comment.restored"');
   });
 });

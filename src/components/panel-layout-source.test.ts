@@ -21,4 +21,15 @@ describe("PanelLayout", () => {
     expect(source).toContain('from "@/components/brand-logo"');
     expect(source).toContain("<BrandLogo");
   });
+
+  it("renders the current page title in the shared shell header", async () => {
+    const source = await readFile(
+      new URL("./panel-layout.tsx", import.meta.url),
+      "utf8"
+    );
+
+    expect(source).toContain("getPanelRouteMeta(pathname)");
+    expect(source).toContain("<PanelBreadcrumb");
+    expect(source).toContain("{pageMeta.title}");
+  });
 });

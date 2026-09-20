@@ -45,6 +45,7 @@ vi.mock("@/features/courses/protected-lesson-access", () => ({
 
 import {
   completeLesson,
+  getStudentCheckoutCourseContext,
   getStudentCourseCatalog,
   getStudentCourseOverview,
   getStudentLessonWorkspace,
@@ -88,7 +89,6 @@ const createCourseOverviewRow = ({
   course_description: "Description",
   course_id: "course-1",
   course_slug: "course-one",
-  course_subtitle: "Subtitle",
   course_title: "Course one",
   decision_now: decisionNow,
   duration_seconds: 120,
@@ -116,14 +116,18 @@ const createCatalogRow = ({
   isRequired = true,
   lessonId,
   lessonSortOrder,
+  moduleId = "module-1",
 }: {
   completedAt?: Date | null;
   isRequired?: boolean;
-  lessonId: string;
-  lessonSortOrder: number;
+  lessonId: string | null;
+  lessonSortOrder: number | null;
+  moduleId?: string;
 }) => ({
+  access_duration_months: 12,
   access_status: "active" as const,
   catalog_visibility: "listed" as const,
+  certificate_enabled: true,
   completed_at: completedAt,
   content_release_mode: "full_access" as const,
   content_release_started_at: null,
@@ -141,14 +145,16 @@ const createCatalogRow = ({
   launch_landing_url: null,
   lesson_id: lessonId,
   lesson_sort_order: lessonSortOrder,
-  module_id: "module-1",
+  module_id: moduleId,
   module_release_delay_days: 0,
   module_sort_order: 1,
+  payment_allow_credit_card: true,
+  payment_allow_pix: true,
+  payment_max_installment_count: 3,
   price_in_cents: 10_000,
   revoked_reason: null,
   sales_status: "open" as const,
   slug: "course-one",
-  subtitle: "Subtitle",
   thumbnail_url: null,
   title: "Course one",
   workload_hours: 1,
@@ -225,6 +231,37 @@ beforeEach(() => {
 });
 
 describe("student experience reads", () => {
+  it("returns a compact authorized context for checkout confirmation", async () => {
+    query.mockResolvedValue({
+      rows: [
+        {
+          catalog_visibility: "listed",
+          cover_image_json: null,
+          enrollment_id: null,
+          status: "active",
+          thumbnail_url: "/course-cover.webp",
+          title: "Curso one",
+        },
+      ],
+    });
+
+    await expect(
+      getStudentCheckoutCourseContext({
+        courseId: "course-1",
+        userId: "student-1",
+      })
+    ).resolves.toEqual({
+      coverBlurDataUrl: null,
+      thumbnailUrl: "/course-cover.webp",
+      title: "Curso one",
+    });
+
+    expect(String(query.mock.calls[0]?.[0])).toContain(
+      "c.catalog_visibility = 'listed'"
+    );
+    expect(String(query.mock.calls[0]?.[0])).toContain("e.id is not null");
+  });
+
   it("lists catalog-visible Courses and preserves hidden Courses with effective access", async () => {
     query.mockResolvedValue({
       rows: [
@@ -247,7 +284,6 @@ describe("student experience reads", () => {
           revoked_reason: null,
           sales_status: "closed",
           slug: "course-one",
-          subtitle: "Subtitle",
           thumbnail_url: null,
           title: "Course one",
           workload_hours: 0,
@@ -300,7 +336,6 @@ describe("student experience reads", () => {
           revoked_reason: null,
           sales_status: "open",
           slug: "course-one",
-          subtitle: "Subtitle",
           thumbnail_url: null,
           title: "Course one",
           workload_hours: 1,
@@ -388,11 +423,36 @@ describe("student experience reads", () => {
     const [course] = await getStudentCourseCatalog("student-1");
 
     expect(course).toMatchObject({
+      accessDurationMonths: 12,
+      certificateEnabled: true,
       completedCount: 3,
       lessonCount: 4,
+      moduleCount: 1,
       nextLessonId: "optional-1",
+      paymentAllowCreditCard: true,
+      paymentAllowPix: true,
+      paymentMaxInstallmentCount: 3,
       progressPercent: 100,
       totalCount: 3,
+    });
+  });
+
+  it("counts active modules even when one has no lessons", async () => {
+    query.mockResolvedValue({
+      rows: [
+        createCatalogRow({
+          lessonId: null,
+          lessonSortOrder: null,
+          moduleId: "module-without-lessons",
+        }),
+      ],
+    });
+
+    const [course] = await getStudentCourseCatalog("student-1");
+
+    expect(course).toMatchObject({
+      lessonCount: 0,
+      moduleCount: 1,
     });
   });
 

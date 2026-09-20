@@ -3,7 +3,6 @@ import {
   CheckmarkCircle02Icon,
   PlayIcon,
   Route03Icon,
-  ShoppingBasketDone01Icon,
   SquareLock02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -37,6 +36,8 @@ import type { StudentCatalogCourseCard } from "@/features/courses/server";
 import { getStudentCourseCatalog } from "@/features/courses/server";
 import { route } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
+import { cn } from "@/lib/utils";
+import { CoursePurchaseDialog } from "./course-purchase-dialog";
 import { FreeCourseEnrollmentDialog } from "./free-course-enrollment-dialog";
 import { StudentBannersCarousel } from "./student-banners-carousel";
 
@@ -70,10 +71,7 @@ export default async function StudentDashboardPage(): Promise<React.JSX.Element>
       <div className="flex flex-col gap-8">
         {banners.length > 0 && <StudentBannersCarousel banners={banners} />}
 
-        <PageHeader
-          description="Continue seus cursos, descubra novas possibilidades e acompanhe o que está chegando."
-          title="Seu espaço de aprendizagem"
-        />
+        <PageHeader title="Seu espaço de aprendizagem" />
 
         <div className="flex flex-col gap-12 pt-4">
           {courses.length === 0 ? (
@@ -84,6 +82,7 @@ export default async function StudentDashboardPage(): Promise<React.JSX.Element>
                 <CourseSection
                   courses={groups.active}
                   description="Retome sua jornada no ponto em que parou."
+                  sectionId="student-courses-active"
                   title="Continue aprendendo"
                 />
               ) : null}
@@ -92,27 +91,24 @@ export default async function StudentDashboardPage(): Promise<React.JSX.Element>
                 <CourseSection
                   courses={groups.completed}
                   description="Suas conquistas seguem disponíveis para revisar quando quiser."
+                  sectionId="student-courses-completed"
                   title="Cursos concluídos"
                 />
               ) : null}
 
-              <CourseSection
-                courses={groups.locked}
-                description="Escolha sua próxima experiência de aprendizagem."
-                title="Encontre seu próximo curso"
+              <CourseCatalogSection
+                availableCourses={groups.available}
+                upcomingCourses={groups.upcoming}
               />
 
-              <CourseSection
-                courses={groups.comingSoon}
-                description="Novas experiências estão sendo preparadas para você."
-                title="Chegando em breve"
-              />
-
-              <CourseSection
-                courses={groups.salesPaused}
-                description="Este Curso pode voltar em breve. Ative o aviso e fique por perto."
-                title="Inscrições em pausa"
-              />
+              {groups.revoked.length > 0 ? (
+                <CourseSection
+                  courses={groups.revoked}
+                  description="Fale com o suporte para regularizar estes acessos."
+                  sectionId="student-courses-revoked"
+                  title="Acesso requer suporte"
+                />
+              ) : null}
             </>
           )}
         </div>
@@ -170,10 +166,12 @@ function getShortCourseButtonLabel(
 function CourseSection({
   courses,
   description,
+  sectionId,
   title,
 }: {
   courses: StudentCatalogCourseCard[];
   description: string;
+  sectionId: string;
   title: string;
 }): React.JSX.Element | null {
   if (courses.length === 0) {
@@ -181,17 +179,61 @@ function CourseSection({
   }
 
   return (
-    <section>
+    <section aria-labelledby={sectionId}>
       <div className="mb-5">
-        <h2 className="font-bold text-xl">{title}</h2>
+        <h2 className="font-bold text-xl" id={sectionId}>
+          {title}
+        </h2>
         <p className="mt-1 text-muted-foreground text-sm">{description}</p>
       </div>
-      <div className="flex flex-wrap gap-5">
-        {courses.map((course) => (
-          <CourseCard course={course} key={course.courseId} />
-        ))}
-      </div>
+      <CourseGrid courses={courses} />
     </section>
+  );
+}
+
+function CourseCatalogSection({
+  availableCourses,
+  upcomingCourses,
+}: {
+  availableCourses: StudentCatalogCourseCard[];
+  upcomingCourses: StudentCatalogCourseCard[];
+}): React.JSX.Element | null {
+  const hasCatalogCourses =
+    availableCourses.length > 0 || upcomingCourses.length > 0;
+
+  if (!hasCatalogCourses) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-12">
+      <CourseSection
+        courses={availableCourses}
+        description="Cursos que você pode começar agora."
+        sectionId="student-courses-available"
+        title="Disponíveis agora"
+      />
+      <CourseSection
+        courses={upcomingCourses}
+        description="Acompanhe cursos novos e inscrições que podem reabrir. A etiqueta indica o estado de cada curso."
+        sectionId="student-courses-upcoming"
+        title="Em breve"
+      />
+    </div>
+  );
+}
+
+function CourseGrid({
+  courses,
+}: {
+  courses: StudentCatalogCourseCard[];
+}): React.JSX.Element {
+  return (
+    <div className="flex flex-wrap gap-5">
+      {courses.map((course) => (
+        <CourseCard course={course} key={course.courseId} />
+      ))}
+    </div>
   );
 }
 
@@ -220,13 +262,18 @@ const CATALOG_ACCESS_BADGE_VARIANTS = {
 
 const getCatalogCardBadge = (course: StudentCatalogCourseCard) => {
   const hasActiveAccess = course.accessStatus === "active";
+  const canShowAvailabilityBadge =
+    course.accessStatus === "none" || course.accessStatus === "expired";
 
-  if (course.availabilityPreset === "coming_soon" && !hasActiveAccess) {
-    return { label: "Em breve", variant: "outline" as const };
+  if (course.availabilityPreset === "coming_soon" && canShowAvailabilityBadge) {
+    return { label: "Novo curso", variant: "outline" as const };
   }
 
-  if (course.availabilityPreset === "sales_paused" && !hasActiveAccess) {
-    return { label: "Inscrições fechadas", variant: "outline" as const };
+  if (
+    course.availabilityPreset === "sales_paused" &&
+    canShowAvailabilityBadge
+  ) {
+    return { label: "Inscrições pausadas", variant: "outline" as const };
   }
 
   const presentation = getStudentCatalogAccessPresentation({
@@ -250,6 +297,13 @@ function CourseCard({
   course: StudentCatalogCourseCard;
 }): React.JSX.Element {
   const hasActiveAccess = course.accessStatus === "active";
+  const canOpenOfferDialog =
+    !hasActiveAccess &&
+    course.accessStatus !== "revoked" &&
+    course.availabilityPreset === "available";
+  const shouldLinkCardTitle =
+    hasActiveAccess ||
+    (!canOpenOfferDialog && course.accessStatus !== "revoked");
   const accessBadge = getCatalogCardBadge(course);
   const primaryHref = route(
     getStudentCoursePrimaryHref({
@@ -262,6 +316,28 @@ function CourseCard({
       ? `/app/cursos/${course.courseId}`
       : `/comprar/${course.slug}`
   );
+  let offerCardTrigger: React.JSX.Element | null = null;
+
+  if (canOpenOfferDialog && course.priceInCents === 0) {
+    offerCardTrigger = (
+      <FreeCourseEnrollmentDialog
+        accessStatus={course.accessStatus === "expired" ? "expired" : "none"}
+        certificateEnabled={course.certificateEnabled}
+        courseId={course.courseId}
+        coverBlurDataUrl={course.coverBlurDataUrl}
+        description={course.description}
+        lessonCount={course.lessonCount}
+        moduleCount={course.moduleCount}
+        thumbnailUrl={course.thumbnailUrl}
+        title={course.title}
+        triggerKind="card"
+      />
+    );
+  } else if (canOpenOfferDialog) {
+    offerCardTrigger = (
+      <CoursePurchaseDialog course={course} triggerKind="card" />
+    );
+  }
 
   return (
     <article className="group relative flex aspect-[24/25] w-full max-w-[340px] flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-colors hover:border-primary/45">
@@ -298,7 +374,14 @@ function CourseCard({
         )}
       </div>
 
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col p-5 sm:p-6">
+      {offerCardTrigger}
+
+      <div
+        className={cn(
+          "relative z-10 flex min-h-0 flex-1 flex-col p-5 sm:p-6",
+          canOpenOfferDialog && "pointer-events-none"
+        )}
+      >
         <div className="flex items-start justify-between gap-3">
           <Badge
             className={
@@ -321,15 +404,19 @@ function CourseCard({
 
         <div className="mt-auto pt-10">
           <h3 className="line-clamp-2 font-bold text-lg">
-            <Link className="before:absolute before:inset-0" href={cardHref}>
-              {course.title}
-            </Link>
+            {shouldLinkCardTitle ? (
+              <Link className="before:absolute before:inset-0" href={cardHref}>
+                {course.title}
+              </Link>
+            ) : (
+              <span>{course.title}</span>
+            )}
           </h3>
           <div className="mt-2 flex items-start gap-4">
             <div className="flex-1">
-              {course.subtitle || course.description ? (
+              {course.description ? (
                 <p className="line-clamp-2 text-card-foreground/70 text-sm leading-5">
-                  {course.description ?? course.subtitle}
+                  {course.description}
                 </p>
               ) : null}
             </div>
@@ -341,7 +428,7 @@ function CourseCard({
         </div>
       </div>
 
-      <div className="relative z-10 flex shrink-0 flex-col justify-end p-5 pt-0 sm:p-6 sm:pt-0">
+      <div className="relative z-20 flex shrink-0 flex-col justify-end p-5 pt-0 sm:p-6 sm:pt-0">
         <div className="flex flex-col gap-5">
           {hasActiveAccess ? (
             <div>
@@ -462,27 +549,17 @@ function CoursePurchaseForm({
     return (
       <FreeCourseEnrollmentDialog
         accessStatus={course.accessStatus === "expired" ? "expired" : "none"}
+        certificateEnabled={course.certificateEnabled}
         courseId={course.courseId}
-        description={course.description ?? course.subtitle}
+        coverBlurDataUrl={course.coverBlurDataUrl}
+        description={course.description}
         lessonCount={course.lessonCount}
+        moduleCount={course.moduleCount}
+        thumbnailUrl={course.thumbnailUrl}
         title={course.title}
-        workloadHours={course.workloadHours}
       />
     );
   }
 
-  return (
-    <Button asChild className="w-full" size="sm">
-      <Link href={route(`/comprar/${course.slug}`)}>
-        <HugeiconsIcon
-          aria-hidden="true"
-          data-icon="inline-start"
-          icon={ShoppingBasketDone01Icon}
-        />
-        {course.accessStatus === "expired"
-          ? "Renovar acesso"
-          : "Adquirir acesso"}
-      </Link>
-    </Button>
-  );
+  return <CoursePurchaseDialog course={course} />;
 }

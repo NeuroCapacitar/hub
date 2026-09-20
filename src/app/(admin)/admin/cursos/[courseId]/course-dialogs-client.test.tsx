@@ -44,7 +44,6 @@ const course: CourseData = {
   priceInCents: 1990,
   slug: "curso-teste",
   status: "active",
-  subtitle: null,
   thumbnailUrl: null,
   title: "Curso de teste",
   workloadHours: 10,
@@ -337,6 +336,18 @@ describe("course payment settings", () => {
     expect(markup.indexOf("Meses de acesso")).toBeLessThan(
       markup.indexOf("Oferta de pagamento")
     );
+  });
+
+  it("renders settings as a consultation view without mutation controls", () => {
+    const markup = renderToStaticMarkup(
+      <CourseSettingsForm course={course} readOnly />
+    );
+
+    expect(markup).toContain('data-course-settings-readonly="true"');
+    expect(markup).toContain("Você pode consultar estas informações");
+    expect(markup).toContain(formatCurrencyInCents(course.priceInCents));
+    expect(markup).not.toContain("Salvar configurações");
+    expect(markup).not.toContain("<form");
   });
 
   it("updates the available installment options as the price changes", () => {

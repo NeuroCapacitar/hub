@@ -1,6 +1,7 @@
 import "server-only";
 import type { PoolClient } from "pg";
 import { getPool } from "@/db";
+import { writeAuditLog } from "@/features/admin/audit-log";
 import { createContentReleaseDiagnostics } from "@/features/courses/content-release-observability";
 import {
   resolveLessonAccess,
@@ -10,6 +11,7 @@ import { lockEnrollmentAggregate } from "@/features/enrollments/enrollment-aggre
 import type { AppRole } from "@/lib/session";
 import {
   buildLessonCommentTree,
+  isLessonCommentManager,
   type LessonCommentRecord,
   type LessonCommentView,
   type LessonDiscussionIdentity,
@@ -29,8 +31,8 @@ interface LessonCommentRow {
   body: string;
   created_at: Date;
   id: string;
-  lesson_id: string;
   parent_id: string | null;
+  source_lesson_id: string | null;
   status: "hidden" | "visible";
   updated_at: Date;
 }
@@ -39,8 +41,8 @@ interface ParentCommentRow {
   course_id: string;
   curriculum_key: string;
   id: string;
-  lesson_id: string;
   parent_id: string | null;
+  source_lesson_id: string | null;
   status: "hidden" | "visible";
 }
 
@@ -63,11 +65,7 @@ export const ensureCanCommentOnLesson = async ({
   role: AppRole;
   userId: string;
 }): Promise<LessonAccessResult> => {
-  if (role === "support") {
-    throw new Error("Acesso ao conteúdo não permitido para suporte.");
-  }
-
-  if (role === "admin") {
+  if (isLessonCommentManager(role)) {
     const db = client ?? getPool();
     const { rows } = await db.query<{
       course_id: string;
@@ -151,12 +149,12 @@ export const getLessonComments = async ({
       role,
       userId,
     });
-    const canModerateComments = role === "admin";
+    const canModerateComments = isLessonCommentManager(role);
     const { rows } = await client.query<LessonCommentRow>(
       `
         select
           lc.id,
-          lc.lesson_id,
+          lc.source_lesson_id,
           lc.parent_id,
           lc.body,
           lc.status,
@@ -168,17 +166,8 @@ export const getLessonComments = async ({
         from lesson_comments lc
         left join users u on u.id = lc.author_user_id
         left join profiles p on p.user_id = u.id
-        where exists (
-          select 1
-            from lessons comment_lesson
-            join modules comment_module on comment_module.id = comment_lesson.module_id
-            join course_publications comment_publication
-              on comment_publication.id = comment_lesson.course_publication_id
-            where comment_lesson.id = lc.lesson_id
-              and comment_module.course_id = $1
-              and comment_lesson.curriculum_key = $2
-              and comment_publication.status in ('published', 'retired')
-          )
+        where lc.course_id = $1
+          and lc.curriculum_key = $2
           and (
             $3::boolean
             or (
@@ -258,11 +247,7 @@ export const createLessonComment = async ({
       throw new Error("Aula invalida.");
     }
 
-    if (role === "support") {
-      throw new Error("Acesso ao conteúdo não permitido para suporte.");
-    }
-
-    if (role !== "admin") {
+    if (!isLessonCommentManager(role)) {
       await lockEnrollmentAggregate(client, userId, courseId);
       const access = await resolveLessonAccessWithClient({
         client,
@@ -291,7 +276,7 @@ export const createLessonComment = async ({
             curriculumKey: parent.curriculum_key,
           },
           id: parent.id,
-          lessonId: parent.lesson_id,
+          lessonId: parent.source_lesson_id,
           parentId: parent.parent_id,
         },
       });
@@ -300,20 +285,45 @@ export const createLessonComment = async ({
     const { rows } = await client.query<{ id: string }>(
       `
         insert into lesson_comments (
-          lesson_id,
+          source_lesson_id,
+          course_id,
+          curriculum_key,
           author_user_id,
           parent_id,
           body
         )
-        values ($1, $2, $3, $4)
+        values ($1, $2, $3, $4, $5, $6)
         returning id
       `,
-      [lessonId, userId, parentId ?? null, normalizedBody]
+      [
+        lessonId,
+        courseId,
+        curriculumKey,
+        userId,
+        parentId ?? null,
+        normalizedBody,
+      ]
     );
     const commentId = rows[0]?.id;
 
     if (!commentId) {
       throw new Error("Nao foi possivel salvar o comentario.");
+    }
+
+    if (isLessonCommentManager(role)) {
+      await writeAuditLog({
+        action: "lesson_comment.created",
+        actorUserId: userId,
+        client,
+        metadata: {
+          courseId,
+          curriculumKey,
+          lessonId,
+          parentId: parentId ?? null,
+        },
+        targetId: commentId,
+        targetType: "lesson_comment",
+      });
     }
 
     await client.query("COMMIT");
@@ -336,70 +346,124 @@ export const hideLessonComment = async ({
 }: {
   actorUserId: string;
   commentId: string;
-}): Promise<{ courseId: string; lessonId: string }> => {
-  const { rows } = await getPool().query<{
-    course_id: string;
-    lesson_id: string;
-  }>(
-    `
-      update lesson_comments lc
-      set status = 'hidden',
-          hidden_by_user_id = $2,
-          hidden_at = now(),
-          updated_at = now()
-      from lessons l
-      join modules m on m.id = l.module_id
-      where lc.id = $1
-        and l.id = lc.lesson_id
-      returning l.id as lesson_id, m.course_id
-    `,
-    [commentId, actorUserId]
-  );
-  const result = rows[0];
+}): Promise<{ courseId: string; lessonId: string | null }> => {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query<{
+      course_id: string;
+      curriculum_key: string;
+      source_lesson_id: string | null;
+    }>(
+      `
+        update lesson_comments lc
+        set status = 'hidden',
+            hidden_by_user_id = $2,
+            hidden_at = now(),
+            updated_at = now()
+        where lc.id = $1
+        returning lc.source_lesson_id, lc.course_id, lc.curriculum_key
+      `,
+      [commentId, actorUserId]
+    );
+    const result = rows[0];
 
-  if (!result) {
-    throw new Error("Comentario invalido.");
+    if (!result) {
+      throw new Error("Comentario invalido.");
+    }
+
+    await writeAuditLog({
+      action: "lesson_comment.hidden",
+      actorUserId,
+      client,
+      metadata: {
+        courseId: result.course_id,
+        curriculumKey: result.curriculum_key,
+        lessonId: result.source_lesson_id,
+        status: "hidden",
+      },
+      targetId: commentId,
+      targetType: "lesson_comment",
+    });
+
+    await client.query("COMMIT");
+    return {
+      courseId: result.course_id,
+      lessonId: result.source_lesson_id,
+    };
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Preserve the original error.
+    }
+    throw error;
+  } finally {
+    client.release();
   }
-
-  return {
-    courseId: result.course_id,
-    lessonId: result.lesson_id,
-  };
 };
 
 export const restoreLessonComment = async ({
+  actorUserId,
   commentId,
 }: {
+  actorUserId: string;
   commentId: string;
-}): Promise<{ courseId: string; lessonId: string }> => {
-  const { rows } = await getPool().query<{
-    course_id: string;
-    lesson_id: string;
-  }>(
-    `
-      update lesson_comments lc
-      set status = 'visible',
-          hidden_by_user_id = null,
-          hidden_at = null,
-          updated_at = now()
-      from lessons l
-      join modules m on m.id = l.module_id
-      where lc.id = $1
-        and l.id = lc.lesson_id
-      returning l.id as lesson_id, m.course_id
-    `,
-    [commentId]
-  );
-  const result = rows[0];
+}): Promise<{ courseId: string; lessonId: string | null }> => {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query<{
+      course_id: string;
+      curriculum_key: string;
+      source_lesson_id: string | null;
+    }>(
+      `
+        update lesson_comments lc
+        set status = 'visible',
+            hidden_by_user_id = null,
+            hidden_at = null,
+            updated_at = now()
+        where lc.id = $1
+        returning lc.source_lesson_id, lc.course_id, lc.curriculum_key
+      `,
+      [commentId]
+    );
+    const result = rows[0];
 
-  if (!result) {
-    throw new Error("Comentario invalido.");
+    if (!result) {
+      throw new Error("Comentario invalido.");
+    }
+
+    await writeAuditLog({
+      action: "lesson_comment.restored",
+      actorUserId,
+      client,
+      metadata: {
+        courseId: result.course_id,
+        curriculumKey: result.curriculum_key,
+        lessonId: result.source_lesson_id,
+        status: "visible",
+      },
+      targetId: commentId,
+      targetType: "lesson_comment",
+    });
+
+    await client.query("COMMIT");
+    return {
+      courseId: result.course_id,
+      lessonId: result.source_lesson_id,
+    };
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Preserve the original error.
+    }
+    throw error;
+  } finally {
+    client.release();
   }
-
-  return {
-    courseId: result.course_id,
-    lessonId: result.lesson_id,
-  };
 };
 
 const getParentComment = async (
@@ -409,17 +473,13 @@ const getParentComment = async (
   const { rows } = await db.query<ParentCommentRow>(
     `
       select lesson_comments.id,
-             lesson_comments.lesson_id,
+             lesson_comments.source_lesson_id,
              lesson_comments.parent_id,
              lesson_comments.status,
-             modules.course_id,
-             lessons.curriculum_key
+             lesson_comments.course_id,
+             lesson_comments.curriculum_key
       from lesson_comments
-      join lessons on lessons.id = lesson_comments.lesson_id
-      join modules on modules.id = lessons.module_id
-      join course_publications on course_publications.id = lessons.course_publication_id
       where lesson_comments.id = $1
-        and course_publications.status in ('published', 'retired')
       limit 1
     `,
     [commentId]
@@ -430,7 +490,7 @@ const getParentComment = async (
 
 const toLessonCommentRecord = (row: LessonCommentRow): LessonCommentRecord => ({
   id: row.id,
-  lessonId: row.lesson_id,
+  lessonId: row.source_lesson_id,
   parentId: row.parent_id,
   body: row.body,
   status: row.status,

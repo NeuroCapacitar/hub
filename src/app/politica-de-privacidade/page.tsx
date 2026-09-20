@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { PageContainer } from "@/components/page-container";
-import { PageHeader } from "@/components/page-header";
 
 export const metadata: Metadata = {
   title: "Aviso de privacidade",
@@ -10,11 +9,9 @@ export default function PrivacyNoticePage(): React.JSX.Element {
   return (
     <PageContainer className="max-w-3xl">
       <article className="space-y-6">
-        <PageHeader
-          className="border-b-0 pb-0"
-          description="Como o Hub trata dados necessários para oferecer cursos e melhorar suas aulas."
-          title="Aviso de privacidade"
-        />
+        <header>
+          <h1 className="type-section-title">Aviso de privacidade</h1>
+        </header>
         <section className="space-y-2">
           <h2 className="font-semibold text-xl">Dados de aprendizagem</h2>
           <p>

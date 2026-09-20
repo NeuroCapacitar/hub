@@ -1,9 +1,20 @@
 "use client";
 
+import { Loading03Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrandLogo } from "@/components/brand-logo";
 import { PageContainer } from "@/components/page-container";
 import { Button } from "@/components/ui/button";
+import {
+  CourseOfferDetails,
+  CourseOfferHero,
+  CourseOfferPrice,
+  getCourseOfferFacts,
+  getCourseOfferPaymentDetails,
+} from "@/features/courses/course-offer-dialog";
+import type { CourseOfferSummaryData } from "@/features/courses/course-offer-summary";
+import { formatCurrencyInCents } from "@/lib/formatters";
 import { redirectToCheckout } from "./checkout-navigation";
 
 type HandoffState =
@@ -210,13 +221,139 @@ const getCheckoutOutcome = (
   }
 };
 
+function PurchaseOfferSummary({
+  offer,
+}: {
+  offer: CourseOfferSummaryData;
+}): React.JSX.Element {
+  const paymentDetails = getCourseOfferPaymentDetails(offer);
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card/90 shadow-sm">
+      <CourseOfferHero
+        badgeLabel="Resumo da compra"
+        coverBlurDataUrl={offer.coverBlurDataUrl}
+        description={
+          <p className="max-w-[38rem] text-pretty text-card-foreground/75 text-sm">
+            Confira as condições enquanto preparamos seu checkout.
+          </p>
+        }
+        thumbnailUrl={offer.thumbnailUrl}
+        title={
+          <h1 className="max-w-[38rem] text-balance font-semibold text-xl tracking-tight sm:text-2xl">
+            {offer.title}
+          </h1>
+        }
+      />
+      <div className="p-5 sm:p-6">
+        <CourseOfferDetails
+          courseDescription={offer.description}
+          facts={getCourseOfferFacts(offer)}
+        >
+          <CourseOfferPrice
+            {...(paymentDetails ? { details: paymentDetails } : {})}
+            value={formatCurrencyInCents(offer.priceInCents)}
+          />
+        </CourseOfferDetails>
+      </div>
+    </section>
+  );
+}
+
+function CheckoutStatusPanel({
+  onManualCheck,
+  onRetry,
+  state,
+}: {
+  onManualCheck: () => Promise<void>;
+  onRetry: () => Promise<void>;
+  state: HandoffState;
+}): React.JSX.Element {
+  if (state.kind === "starting") {
+    return (
+      <div className="flex items-start gap-3">
+        <HugeiconsIcon
+          aria-hidden="true"
+          className="mt-0.5 shrink-0 animate-spin text-primary"
+          icon={Loading03Icon}
+          size={19}
+        />
+        <div>
+          <p className="font-semibold text-sm">Preparando seu checkout…</p>
+          <p className="mt-1 text-muted-foreground text-sm leading-6">
+            Estamos conferindo os dados da compra. Você será encaminhado
+            automaticamente.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.kind === "processing") {
+    return (
+      <div className="flex items-start gap-3">
+        <HugeiconsIcon
+          aria-hidden="true"
+          className="mt-0.5 shrink-0 animate-spin text-primary"
+          icon={Loading03Icon}
+          size={19}
+        />
+        <div className="min-w-0">
+          <p className="font-semibold text-sm">
+            Ainda estamos preparando seu checkout.
+          </p>
+          <p className="mt-1 text-muted-foreground text-sm leading-6">
+            Não inicie outra tentativa. Assim que estiver pronto, o checkout
+            será aberto automaticamente.
+          </p>
+          <p className="mt-2 text-muted-foreground text-xs">
+            Referência do pedido: {state.orderId}
+          </p>
+          {state.manualCheck ? (
+            <Button className="mt-4" onClick={onManualCheck} type="button">
+              Verificar novamente
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (state.kind === "retry") {
+    return (
+      <div>
+        <p className="font-semibold text-sm">
+          Não foi possível preparar o checkout.
+        </p>
+        <p className="mt-1 text-muted-foreground text-sm leading-6">
+          Você pode tentar novamente sem perder o contexto desta compra.
+        </p>
+        <Button className="mt-4" onClick={onRetry} type="button">
+          Tentar novamente
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="font-semibold text-sm">Checkout indisponível</p>
+      <p className="mt-1 text-muted-foreground text-sm leading-6">
+        Não foi possível preparar a compra agora. Entre em contato com o suporte
+        para continuar.
+      </p>
+    </div>
+  );
+}
+
 export function PurchaseHandoffClient({
   courseSlug,
-  courseTitle,
+  offer,
   releaseScheduleDigest,
 }: {
   courseSlug: string;
   courseTitle: string;
+  offer: CourseOfferSummaryData;
   releaseScheduleDigest: string;
 }): React.JSX.Element {
   const [state, setState] = useState<HandoffState>({ kind: "starting" });
@@ -417,44 +554,21 @@ export function PurchaseHandoffClient({
       as="main"
       className="min-h-screen bg-background text-foreground"
     >
-      <BrandLogo className="mb-8 h-9 w-auto" preload />
-      <section
-        aria-live="polite"
-        className="max-w-2xl rounded-2xl border border-border/70 bg-card/90 p-6 shadow-sm sm:p-8"
-      >
-        <h1 className="type-page-title">{courseTitle}</h1>
-        {state.kind === "starting" ? (
-          <p className="mt-3 text-muted-foreground text-sm">
-            Iniciando checkout seguro…
-          </p>
-        ) : null}
-        {state.kind === "processing" ? (
-          <div className="mt-3 space-y-2 text-muted-foreground text-sm">
-            <p>O checkout está sendo preparado. Não inicie outra tentativa.</p>
-            <p>Referencia do pedido: {state.orderId}</p>
-            {state.manualCheck ? (
-              <Button onClick={handleManualCheck} type="button">
-                Verificar novamente
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-        {state.kind === "retry" ? (
-          <div className="mt-3 space-y-4">
-            <p className="text-muted-foreground text-sm">
-              Não foi possível iniciar o checkout.
-            </p>
-            <Button onClick={handleRetry} type="button">
-              Tentar novamente
-            </Button>
-          </div>
-        ) : null}
-        {state.kind === "unavailable" ? (
-          <p className="mt-3 text-muted-foreground text-sm">
-            Checkout indisponível. Entre em contato com o suporte.
-          </p>
-        ) : null}
-      </section>
+      <BrandLogo className="mx-auto mb-8 h-9 w-auto" preload />
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+        <section
+          aria-live="polite"
+          className="rounded-2xl border border-border/70 bg-card/90 p-5 shadow-sm sm:p-6"
+        >
+          <CheckoutStatusPanel
+            onManualCheck={handleManualCheck}
+            onRetry={handleRetry}
+            state={state}
+          />
+        </section>
+
+        <PurchaseOfferSummary offer={offer} />
+      </div>
     </PageContainer>
   );
 }

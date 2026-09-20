@@ -1,25 +1,9 @@
 "use client";
 
-import {
-  Book01Icon,
-  Certificate01Icon,
-  MoreHorizontalIcon,
-  SquareLock02Icon,
-  UndoIcon,
-  ViewIcon,
-} from "@hugeicons/core-free-icons";
+import { ViewIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import type { AdminCourseStudentAction } from "@/features/admin/student-navigation";
 import {
   StudentActionDialog,
@@ -63,59 +47,33 @@ const courseCertificateCapabilities: StudentManagementCapabilities = {
   canReissueCertificates: true,
 };
 
-function StudentActionMenuItems({
-  canManagePlatformAccess,
+function getDetailsCapabilities({
+  certificateCapabilities,
+  enrollmentCapabilities,
   isCourseContext,
-  isPlatformBlocked,
-  onSelect,
+  platformCapabilities,
 }: {
-  canManagePlatformAccess: boolean;
+  certificateCapabilities: StudentManagementCapabilities;
+  enrollmentCapabilities: StudentManagementCapabilities;
   isCourseContext: boolean;
-  isPlatformBlocked: boolean;
-  onSelect: (
-    overlay: Exclude<StudentActionOverlay, null>,
-    event: Event
-  ) => void;
-}): React.JSX.Element {
+  platformCapabilities: StudentManagementCapabilities;
+}): StudentManagementCapabilities {
   if (isCourseContext) {
-    return (
-      <>
-        <DropdownMenuItem onSelect={(event) => onSelect("enrollment", event)}>
-          <HugeiconsIcon aria-hidden="true" icon={Book01Icon} strokeWidth={2} />
-          Gerenciar matrícula
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={(event) => onSelect("certificate", event)}>
-          <HugeiconsIcon
-            aria-hidden="true"
-            icon={Certificate01Icon}
-            strokeWidth={2}
-          />
-          Gerenciar certificados
-        </DropdownMenuItem>
-      </>
-    );
+    return {
+      canManageCertificates: certificateCapabilities.canManageCertificates,
+      canManageEnrollmentAccess:
+        enrollmentCapabilities.canManageEnrollmentAccess ?? false,
+      canManageEnrollmentSupport:
+        enrollmentCapabilities.canManageEnrollmentSupport,
+      canManagePlatformAccess: false,
+      canReissueCertificates: certificateCapabilities.canReissueCertificates,
+    };
   }
 
-  return (
-    <DropdownMenuItem
-      onSelect={(event) => onSelect("platform", event)}
-      variant={
-        canManagePlatformAccess && !isPlatformBlocked
-          ? "destructive"
-          : "default"
-      }
-    >
-      <HugeiconsIcon
-        aria-hidden="true"
-        icon={isPlatformBlocked ? UndoIcon : SquareLock02Icon}
-        strokeWidth={2}
-      />
-      {isPlatformBlocked
-        ? "Restaurar acesso da plataforma"
-        : "Bloquear acesso da plataforma"}
-      {canManagePlatformAccess ? null : " (somente leitura)"}
-    </DropdownMenuItem>
-  );
+  return {
+    ...readOnlyStudentCapabilities,
+    canManagePlatformAccess: platformCapabilities.canManagePlatformAccess,
+  };
 }
 
 function StudentActionOverlays({
@@ -144,13 +102,18 @@ function StudentActionOverlays({
   if (activeOverlay === "details") {
     return (
       <StudentManagementSheet
-        capabilities={readOnlyStudentCapabilities}
+        capabilities={getDetailsCapabilities({
+          certificateCapabilities,
+          enrollmentCapabilities,
+          isCourseContext,
+          platformCapabilities,
+        })}
         {...(courseId ? { courseId } : {})}
         {...(dataUrl ? { dataUrl } : {})}
         onCloseAutoFocus={onDetailsCloseAutoFocus}
         onOpenChange={onOpenChange}
         open
-        showActions={false}
+        showActions={isCourseContext}
         trigger={null}
         userId={student.userId}
       />
@@ -223,13 +186,11 @@ export function StudentActionsMenu({
   platformCapabilities?: StudentManagementCapabilities;
   student: StudentActionMenuStudent;
 }): React.JSX.Element {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [activeOverlay, setActiveOverlay] =
     useState<StudentActionOverlay>(null);
   const actionTriggerRef = useRef<HTMLButtonElement | null>(null);
   const hasAutoOpened = useRef(false);
   const isCourseContext = Boolean(courseId);
-  const isPlatformBlocked = Boolean(student.platformBlockedAt);
 
   useEffect(() => {
     if (!(initialOverlay && !hasAutoOpened.current)) {
@@ -239,14 +200,6 @@ export function StudentActionsMenu({
     setActiveOverlay(initialOverlay);
   }, [initialOverlay]);
 
-  const openOverlay = (
-    overlay: Exclude<StudentActionOverlay, null>,
-    event: Event
-  ): void => {
-    event.preventDefault();
-    setMenuOpen(false);
-    setActiveOverlay(overlay);
-  };
   const handleOverlayChange = (open: boolean): void => {
     if (!open) {
       const closedOverlay = activeOverlay;
@@ -256,6 +209,7 @@ export function StudentActionsMenu({
       }
     }
   };
+
   const restoreDetailsFocus = (event: Event): void => {
     event.preventDefault();
     actionTriggerRef.current?.focus();
@@ -263,53 +217,23 @@ export function StudentActionsMenu({
 
   return (
     <>
-      <DropdownMenu onOpenChange={setMenuOpen} open={menuOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            aria-label={`Ações de ${student.name}`}
-            className="size-11"
-            ref={actionTriggerRef}
-            size="icon"
-            type="button"
-            variant="outline"
-          >
-            <HugeiconsIcon
-              aria-hidden="true"
-              icon={MoreHorizontalIcon}
-              strokeWidth={2}
-            />
-            <span className="sr-only">Abrir ações</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-60">
-          <DropdownMenuLabel>
-            {isCourseContext ? "Ações do Curso" : "Ações do Aluno"}
-          </DropdownMenuLabel>
-          <DropdownMenuGroup>
-            <DropdownMenuItem
-              onSelect={(event) => openOverlay("details", event)}
-            >
-              <HugeiconsIcon
-                aria-hidden="true"
-                icon={ViewIcon}
-                strokeWidth={2}
-              />
-              Ver detalhes
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <StudentActionMenuItems
-              canManagePlatformAccess={
-                platformCapabilities.canManagePlatformAccess
-              }
-              isCourseContext={isCourseContext}
-              isPlatformBlocked={isPlatformBlocked}
-              onSelect={openOverlay}
-            />
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button
+        aria-label={`Abrir ficha de ${student.name}`}
+        className="min-h-10"
+        onClick={() => setActiveOverlay("details")}
+        ref={actionTriggerRef}
+        type="button"
+        variant="outline"
+      >
+        <HugeiconsIcon
+          aria-hidden="true"
+          data-icon="inline-start"
+          icon={ViewIcon}
+          size={16}
+          strokeWidth={2}
+        />
+        Abrir ficha
+      </Button>
       <StudentActionOverlays
         activeOverlay={activeOverlay}
         certificateCapabilities={certificateCapabilities}

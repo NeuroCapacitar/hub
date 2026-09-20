@@ -63,10 +63,10 @@ export interface StudentCatalogCourseGroups<
   TCourse extends StudentCatalogCourseGroupingInput,
 > {
   active: TCourse[];
-  comingSoon: TCourse[];
+  available: TCourse[];
   completed: TCourse[];
-  locked: TCourse[];
-  salesPaused: TCourse[];
+  revoked: TCourse[];
+  upcoming: TCourse[];
 }
 
 const getDaysUntil = (date: Date, now: Date): number =>
@@ -178,10 +178,10 @@ export const groupStudentCatalogCourses = <
 ): StudentCatalogCourseGroups<TCourse> => {
   const groups: StudentCatalogCourseGroups<TCourse> = {
     active: [],
+    available: [],
     completed: [],
-    comingSoon: [],
-    locked: [],
-    salesPaused: [],
+    revoked: [],
+    upcoming: [],
   };
 
   for (const course of courses) {
@@ -195,17 +195,20 @@ export const groupStudentCatalogCourses = <
       continue;
     }
 
-    if (course.availabilityPreset === "coming_soon") {
-      groups.comingSoon.push(course);
+    if (course.accessStatus === "revoked") {
+      groups.revoked.push(course);
       continue;
     }
 
-    if (course.availabilityPreset === "sales_paused") {
-      groups.salesPaused.push(course);
+    if (
+      course.availabilityPreset === "coming_soon" ||
+      course.availabilityPreset === "sales_paused"
+    ) {
+      groups.upcoming.push(course);
       continue;
     }
 
-    groups.locked.push(course);
+    groups.available.push(course);
   }
 
   return groups;

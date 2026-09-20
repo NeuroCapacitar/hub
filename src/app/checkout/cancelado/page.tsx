@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 import { PageContainer } from "@/components/page-container";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { resolveCheckoutRetryPath } from "@/features/payments/checkout";
 import { route } from "@/lib/routes";
@@ -16,8 +18,10 @@ export default async function CheckoutCancelledPage({
 
   return (
     <PageContainer className="min-h-screen bg-background text-foreground">
-      <main className="max-w-2xl rounded-lg border bg-card p-6">
-        <h1 className="type-section-title">Checkout cancelado</h1>
+      <BrandLogo className="mb-8 h-9 w-auto" preload />
+      <section className="max-w-2xl rounded-2xl border border-border/70 bg-card/90 p-6 shadow-sm sm:p-8">
+        <Badge variant="destructive">Pagamento não concluído</Badge>
+        <h1 className="type-section-title mt-4">Checkout cancelado</h1>
         <p className="mt-3 text-muted-foreground text-sm leading-6">
           {retryPath
             ? "Nenhuma confirmação de pagamento foi recebida. Você pode voltar ao curso e iniciar uma nova tentativa."
@@ -28,7 +32,7 @@ export default async function CheckoutCancelledPage({
             {retryPath ? "Tentar novamente" : "Ir para login"}
           </Link>
         </Button>
-      </main>
+      </section>
     </PageContainer>
   );
 }

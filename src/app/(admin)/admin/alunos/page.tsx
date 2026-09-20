@@ -71,10 +71,7 @@ export default async function AdminStudentsPage({
   return (
     <PageContainer>
       <div className="flex flex-col gap-6">
-        <PageHeader
-          description="Consulte acesso, matrículas e validade por Aluno."
-          title="Alunos e matrículas"
-        />
+        <PageHeader title="Alunos e matrículas" />
 
         <section aria-labelledby="students-summary-title">
           <div className="mb-3 flex items-center gap-1">
@@ -150,6 +147,7 @@ export default async function AdminStudentsPage({
               hasNextPage={data.hasNextPage}
               managementCapabilities={managementCapabilities}
               page={data.page}
+              pageSize={data.pageSize}
               search={data.search}
               students={students}
               totalCount={data.totalCount}

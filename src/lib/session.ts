@@ -30,7 +30,7 @@ export interface AppSession {
   };
 }
 
-const STUDENT_LAST_ACCESS_WRITE_INTERVAL_MS = 5 * 60 * 1000;
+const LAST_ACCESS_WRITE_INTERVAL_MS = 5 * 60 * 1000;
 
 export const getCurrentSession = cache(async (): Promise<AppSession | null> => {
   const session = await getAuth().api.getSession({
@@ -72,13 +72,9 @@ export const getCurrentSession = cache(async (): Promise<AppSession | null> => {
   };
 });
 
-export const recordStudentLastAccess = async (
-  userId: string
-): Promise<void> => {
+export const recordLastAccess = async (userId: string): Promise<void> => {
   const now = new Date();
-  const writeAfter = new Date(
-    now.getTime() - STUDENT_LAST_ACCESS_WRITE_INTERVAL_MS
-  );
+  const writeAfter = new Date(now.getTime() - LAST_ACCESS_WRITE_INTERVAL_MS);
 
   await getDb()
     .update(profiles)
@@ -86,7 +82,6 @@ export const recordStudentLastAccess = async (
     .where(
       and(
         eq(profiles.userId, userId),
-        eq(profiles.role, "student"),
         or(isNull(profiles.lastAccessAt), lt(profiles.lastAccessAt, writeAfter))
       )
     );
@@ -103,18 +98,16 @@ export const requireSession = async (): Promise<AppSession> => {
     redirect(route("/entrar"));
   }
 
-  if (session.role === "student") {
-    try {
-      await recordStudentLastAccess(session.user.id);
-    } catch {
-      logOperationalEvent({
-        correlationId: createCorrelationId(null),
-        errorCode: "student_last_access_update_failed",
-        operation: "auth.last_access",
-        outcome: "failure",
-        provider: "database",
-      });
-    }
+  try {
+    await recordLastAccess(session.user.id);
+  } catch {
+    logOperationalEvent({
+      correlationId: createCorrelationId(null),
+      errorCode: "last_access_update_failed",
+      operation: "auth.last_access",
+      outcome: "failure",
+      provider: "database",
+    });
   }
 
   return session;

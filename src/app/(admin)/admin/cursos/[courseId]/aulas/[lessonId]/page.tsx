@@ -5,9 +5,11 @@ import {
   LessonVideoControls,
 } from "@/components/lesson-kind-controls";
 import { LessonRichTextEditor } from "@/components/lesson-rich-text-editor";
+import { PanelPageTitle } from "@/components/panel-page-title";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toUploadAsset } from "@/features/admin/jmvstream-assets";
 import { getAdminLessonEditorData } from "@/features/admin/server";
+import { isLessonCommentManager } from "@/features/comments/rules";
 import { getLessonComments } from "@/features/comments/server";
 import type { LessonResource } from "@/features/courses/lesson-content";
 import {
@@ -16,6 +18,7 @@ import {
 } from "@/features/courses/lesson-content";
 import { requirePermission } from "@/lib/auth-permissions";
 import { canPerform } from "@/lib/auth-policy";
+import { route } from "@/lib/routes";
 import { LessonEditorSidebarFields } from "../../course-builder-components";
 import { LessonSidebarActions } from "./lesson-sidebar-actions";
 import { LessonSidebarDuration } from "./lesson-sidebar-duration";
@@ -33,8 +36,14 @@ interface AdminLessonEditPageProps {
 
 export default async function AdminLessonEditPage({
   params,
-}: AdminLessonEditPageProps): Promise<React.JSX.Element> {
-  const { courseId, lessonId } = await params;
+  searchParams,
+}: AdminLessonEditPageProps & {
+  searchParams: Promise<{ tab?: string }>;
+}): Promise<React.JSX.Element> {
+  const [{ courseId, lessonId }, { tab }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
   const [data, session] = await Promise.all([
     getAdminLessonEditorData({ courseId, lessonId }),
     requirePermission("viewCourses"),
@@ -46,7 +55,7 @@ export default async function AdminLessonEditPage({
 
   const { asset, course, lesson, module: moduleData } = data;
   const canManageCourseContent = canPerform(session, "manageCourseContent");
-  const canManageComments = canPerform(session, "manageContent");
+  const canManageComments = isLessonCommentManager(session.role);
 
   const commentsData = await getLessonComments({
     lessonId: lesson.id,
@@ -59,6 +68,17 @@ export default async function AdminLessonEditPage({
 
   return (
     <div className="flex w-full min-w-0 max-w-full flex-col lg:grid lg:h-[calc(100svh-4rem)] lg:grid-cols-[minmax(0,1fr)_380px] lg:[grid-template-areas:'main_sidebar']">
+      <PanelPageTitle
+        ancestors={[
+          { href: route("/admin/cursos"), label: "Cursos" },
+          {
+            href: route(`/admin/cursos/${courseId}`),
+            label: course.title,
+          },
+        ]}
+        title={lesson.title}
+        visibleHeading
+      />
       {/* Sidebar de materiais e ações */}
       <aside className="min-h-0 min-w-0 bg-background lg:flex lg:flex-col lg:border-l lg:[grid-area:sidebar]">
         {/* Header da Aula no Sidebar com Duração */}
@@ -103,7 +123,10 @@ export default async function AdminLessonEditPage({
       {/* Coluna principal com Abas */}
       <div className="min-h-0 min-w-0 bg-muted/20 lg:flex lg:flex-col lg:overflow-y-auto lg:[grid-area:main]">
         <div className="mx-auto w-full max-w-5xl px-4 py-6 lg:px-8 lg:py-10">
-          <Tabs className="w-full" defaultValue="video">
+          <Tabs
+            className="w-full"
+            defaultValue={tab === "comments" ? "comments" : "video"}
+          >
             <div className="mb-8 pb-1">
               <TabsList className="!h-auto grid w-full grid-cols-2 gap-1 p-1 sm:flex">
                 <TabsTrigger className="flex-1 py-1.5" value="video">
