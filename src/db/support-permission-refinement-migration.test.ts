@@ -26,10 +26,12 @@ const REFINED_VIEWS = [
 
 describe("support permission refinement migration", () => {
   it("resets old Support grants before installing the refined constraints", async () => {
-    const migration = await readFile(
-      new URL("./migrations/0085_superb_wonder_man.sql", import.meta.url),
-      "utf8"
-    );
+    const migration = (
+      await readFile(
+        new URL("./migrations/0085_superb_wonder_man.sql", import.meta.url),
+        "utf8"
+      )
+    ).replaceAll("\r\n", "\n");
 
     expect(migration).toContain(
       'UPDATE "profiles"\nSET\n  "support_permission_grants" = \'{}\'::text[],\n  "support_permission_views" = \'{}\'::text[]\nWHERE "role" = \'support\';'

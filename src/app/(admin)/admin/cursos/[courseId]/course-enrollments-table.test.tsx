@@ -43,7 +43,7 @@ describe("CourseEnrollmentsTable", () => {
       />
     );
 
-    expect(markup).toContain("Ações de Student");
+    expect(markup).toContain("Abrir ficha de Student");
     expect(markup).toContain("Ativa");
     expect(markup).not.toContain(">Matrícula</th>");
     expect(markup).not.toContain("Expira em");
