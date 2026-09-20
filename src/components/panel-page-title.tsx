@@ -8,6 +8,7 @@ interface PanelPageTitleContextValue {
     title: string,
     ancestors?: readonly PanelBreadcrumb[]
   ) => void;
+  readonly setVisibleHeading: (visible: boolean) => void;
 }
 
 export const PanelPageTitleContext =
@@ -16,17 +17,26 @@ export const PanelPageTitleContext =
 interface PanelPageTitleProps {
   readonly ancestors?: readonly PanelBreadcrumb[];
   readonly title: string;
+  readonly visibleHeading?: boolean;
 }
 
 export function PanelPageTitle({
   ancestors,
   title,
+  visibleHeading = false,
 }: PanelPageTitleProps): null {
   const context = useContext(PanelPageTitleContext);
 
   useEffect(() => {
     context?.setTitle(title, ancestors);
-  }, [ancestors, context, title]);
+    context?.setVisibleHeading(visibleHeading);
+
+    return () => {
+      if (visibleHeading) {
+        context?.setVisibleHeading(false);
+      }
+    };
+  }, [ancestors, context, title, visibleHeading]);
 
   return null;
 }

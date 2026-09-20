@@ -175,8 +175,10 @@ function PanelLayoutInner({
     [pathname]
   );
   const [pageMeta, setPageMeta] = useState(fallbackPageMeta);
+  const [hasVisiblePageHeading, setHasVisiblePageHeading] = useState(false);
   useEffect(() => {
     setPageMeta(fallbackPageMeta);
+    setHasVisiblePageHeading(false);
   }, [fallbackPageMeta]);
   const setPanelTitle = useCallback(
     (title: string, ancestors?: readonly PanelBreadcrumbItem[]) => {
@@ -200,7 +202,10 @@ function PanelLayoutInner({
     [fallbackPageMeta]
   );
   const pageTitleContext = useMemo(
-    () => ({ setTitle: setPanelTitle }),
+    () => ({
+      setTitle: setPanelTitle,
+      setVisibleHeading: setHasVisiblePageHeading,
+    }),
     [setPanelTitle]
   );
   const focusModeContext = useMemo(
@@ -349,7 +354,9 @@ function PanelLayoutInner({
                   className="shrink-0 md:hidden"
                   onClick={() => setFocusMode(false)}
                 />
-                <h1 className="sr-only">{pageMeta.title}</h1>
+                {!hasVisiblePageHeading && (
+                  <h1 className="sr-only">{pageMeta.title}</h1>
+                )}
                 <PanelBreadcrumb
                   ancestors={pageMeta.ancestors}
                   currentTitle={pageMeta.title}

@@ -192,17 +192,11 @@ test("admin abre e fecha um Sheet pelo teclado e recupera o foco", async ({
     .locator("tbody tr")
     .filter({ hasText: fixture.studentWithGrant.email });
   const manageButton = studentRow.getByRole("button", {
-    name: `Ações de ${fixture.studentWithGrant.name}`,
+    name: `Abrir ficha de ${fixture.studentWithGrant.name}`,
   });
 
   await focusWithTab(page, manageButton);
   await expect(manageButton).toBeFocused();
-  await page.keyboard.press("Enter");
-
-  const detailsMenuItem = page.getByRole("menuitem", {
-    name: "Ver detalhes",
-  });
-  await expect(detailsMenuItem).toBeFocused();
   await page.keyboard.press("Enter");
 
   const studentSheet = page.getByRole("dialog");
@@ -226,18 +220,24 @@ test("aluno percorre o certificado e alcança as ações públicas com teclado",
     name: fixture.certificate.ready.courseTitle,
   });
   await focusWithTab(page, certificateLink);
+  const certificatePagePromise = page.waitForEvent("popup");
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(
+  const certificatePage = await certificatePagePromise;
+  await expect(certificatePage).toHaveURL(
     new RegExp(`/certificados/${fixture.certificate.ready.code}$`)
   );
   await expect(
-    page.getByRole("heading", { name: "Verificação de certificado" })
+    certificatePage.getByRole("heading", { name: "Verificação de certificado" })
   ).toBeVisible();
 
-  const downloadLink = page.getByRole("link", { name: "Baixar PDF" });
-  const copyLinkButton = page.getByRole("button", { name: "Copiar link" });
-  await focusWithTab(page, downloadLink);
+  const downloadLink = certificatePage.getByRole("link", {
+    name: "Baixar PDF",
+  });
+  const copyLinkButton = certificatePage.getByRole("button", {
+    name: "Copiar link",
+  });
+  await focusWithTab(certificatePage, downloadLink);
   await expect(downloadLink).toBeFocused();
-  await page.keyboard.press("Tab");
+  await certificatePage.keyboard.press("Tab");
   await expect(copyLinkButton).toBeFocused();
 });

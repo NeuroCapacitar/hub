@@ -114,6 +114,7 @@ export default async function StudentCourseOverviewPage({
       <PanelPageTitle
         ancestors={[{ href: route("/app"), label: "Início" }]}
         title={data.course.title}
+        visibleHeading
       />
       <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-8">

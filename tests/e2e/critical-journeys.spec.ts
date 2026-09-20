@@ -27,7 +27,7 @@ const ADMIN_URL_PATTERN = /\/admin$/;
 const APP_URL_PATTERN = /\/app$/;
 const OPEN_ORDER_DETAILS_NAME_PATTERN = /Abrir detalhes do pedido de /;
 const STUDENT_SEARCH_PLACEHOLDER_PATTERN = /Buscar/;
-const CORRELATION_ID_PATTERN = /Identificador de correlação/;
+const SUPPORT_CODE_PATTERN = /Código de suporte/;
 const DOWNLOAD_PDF_PATTERN = /Baixar PDF/;
 const SENSITIVE_ERROR_PATTERN = /key|token|secret|postgres|database/i;
 const UUID_PATTERN =
@@ -40,6 +40,8 @@ const CERTIFICATE_CODE_LABEL_PATTERN = /Código do certificado:/;
 const CERTIFICATE_CODE_PATTERN = /^PRT-[0-9A-F]{32}$/;
 const CERTIFICATE_STATUS_PATTERN = /Status: (Preparando|Disponível)/;
 const SCHEDULED_RELEASE_PATTERN = /Em breve/;
+const CHECKOUT_PREPARING_PATTERN =
+  /Preparando seu checkout|Ainda estamos preparando seu checkout/;
 
 const createCertificateBackground = async (): Promise<Buffer> =>
   await sharp({
@@ -214,9 +216,7 @@ test("checkout remount reuses the stored UUID and one provider mutation", async 
   });
 
   await page.goto(`/comprar/${fixture.course.slug}`);
-  await expect(
-    page.getByText("O checkout está sendo preparado.")
-  ).toBeVisible();
+  await expect(page.getByText(CHECKOUT_PREPARING_PATTERN)).toBeVisible();
   await page.reload();
   await page.waitForURL("http://127.0.0.1:4570/checkout/**");
 
@@ -391,7 +391,9 @@ test("public signup creates a student account without granting a course", async 
     0
   );
   await expect(
-    page.getByRole("link", { name: "Adquirir acesso" }).first()
+    page.getByRole("button", {
+      name: "Abrir resumo do Curso Curso E2E",
+    })
   ).toBeVisible();
 
   await page.context().clearCookies();
@@ -632,9 +634,11 @@ test("student area shows a safe recovery boundary after a server fault", async (
   await page.goto(`/app/aulas/${fixture.course.lessonOneId}?e2eFault=true`);
 
   await expect(
-    page.getByRole("heading", { name: "Não foi possível carregar esta área" })
+    page.getByRole("heading", {
+      name: "Não foi possível carregar seus cursos.",
+    })
   ).toBeFocused();
-  await expect(page.getByText(CORRELATION_ID_PATTERN)).toBeVisible();
+  await expect(page.getByText(SUPPORT_CODE_PATTERN)).toBeVisible();
   await expect(page.getByText(SENSITIVE_ERROR_PATTERN)).toHaveCount(0);
 });
 
@@ -645,7 +649,7 @@ test("student without a grant sees the unavailable lesson state", async ({
   await signIn(page, fixture.studentWithoutGrant, APP_URL_PATTERN);
   await page.goto(`/app/aulas/${fixture.course.lessonOneId}`);
   await expect(
-    page.getByRole("heading", { name: "Página indisponível" })
+    page.getByRole("heading", { name: "Não encontramos essa página" })
   ).toBeVisible();
 });
 
@@ -663,7 +667,7 @@ test("expired and revoked access explain the next action", async ({ page }) => {
     page.getByText("Acesso expirado", { exact: true })
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Renovar acesso" })
+    page.getByRole("button", { name: "Renovar acesso" })
   ).toBeVisible();
 
   await page.context().clearCookies();
@@ -687,7 +691,7 @@ test("sequencing keeps a future lesson locked", async ({ page }) => {
   ).toBeVisible();
   await page.goto(`/app/aulas/${fixture.course.lessonTwoId}`);
   await expect(
-    page.getByRole("heading", { name: "Página indisponível" })
+    page.getByRole("heading", { name: "Não encontramos essa página" })
   ).toBeVisible();
 });
 
@@ -965,11 +969,9 @@ test("support navigation and student Sheet preserve the role boundary @mobile", 
     .locator("tbody tr")
     .filter({ hasText: fixture.studentWithGrant.email });
   const manageButton = enrollmentRow.getByRole("button", {
-    name: `Ações de ${fixture.studentWithGrant.name}`,
+    name: `Abrir ficha de ${fixture.studentWithGrant.name}`,
   });
-  await expect(manageButton).toHaveAttribute("data-state", "closed");
   await manageButton.click();
-  await page.getByRole("menuitem", { name: "Ver detalhes" }).click();
   const studentSheet = page.getByRole("dialog");
   await expect(studentSheet.getByText("Curso em contexto")).toBeVisible();
   await expect(studentSheet.getByText("Acesso na plataforma")).toHaveCount(0);
@@ -1316,20 +1318,20 @@ test("admin sees certificate lifecycle controls in the student Sheet", async ({
     .locator("tbody tr")
     .filter({ hasText: fixture.studentWithGrant.email });
   const manageButton = studentRow.getByRole("button", {
-    name: `Ações de ${fixture.studentWithGrant.name}`,
+    name: `Abrir ficha de ${fixture.studentWithGrant.name}`,
   });
-  await expect(manageButton).toHaveAttribute("data-state", "closed");
   await manageButton.click();
-  await page.getByRole("menuitem", { name: "Gerenciar certificados" }).click();
 
   const studentSheet = page.getByRole("dialog");
+  await expect(studentSheet.getByText("Curso em contexto")).toBeVisible();
+  await studentSheet
+    .getByRole("button", { name: "Gerenciar certificados" })
+    .click();
   await expect(
-    studentSheet.getByRole("heading", { name: "Gerenciar certificados" })
+    page.getByRole("heading", { name: "Gerenciar certificados" })
   ).toBeVisible();
-  await studentSheet.getByText("Emitir certificado manual").click();
-  await expect(
-    studentSheet.getByText("Confirmo que revisei os dados")
-  ).toBeVisible();
+  await page.getByText("Emitir certificado manual").click();
+  await expect(page.getByText("Confirmo que revisei os dados")).toBeVisible();
 });
 
 test("the removed student detail route is not available", async ({ page }) => {
@@ -1354,11 +1356,9 @@ test("admin manages a student from the course context Sheet", async ({
     .locator("tbody tr")
     .filter({ hasText: fixture.studentWithGrant.email });
   const manageButton = enrollmentRow.getByRole("button", {
-    name: `Ações de ${fixture.studentWithGrant.name}`,
+    name: `Abrir ficha de ${fixture.studentWithGrant.name}`,
   });
-  await expect(manageButton).toHaveAttribute("data-state", "closed");
   await manageButton.click();
-  await page.getByRole("menuitem", { name: "Ver detalhes" }).click();
 
   const studentSheet = page.getByRole("dialog");
   await expect(studentSheet.getByText("Curso em contexto")).toBeVisible();

@@ -77,6 +77,7 @@ export default async function AdminLessonEditPage({
           },
         ]}
         title={lesson.title}
+        visibleHeading
       />
       {/* Sidebar de materiais e ações */}
       <aside className="min-h-0 min-w-0 bg-background lg:flex lg:flex-col lg:border-l lg:[grid-area:sidebar]">

@@ -161,6 +161,7 @@ export default async function LessonPage({
               },
             ]}
             title={data.lesson.title}
+            visibleHeading
           />
           {previewMode ? (
             <RegisterPreviewCourseId courseId={data.course.id} />
