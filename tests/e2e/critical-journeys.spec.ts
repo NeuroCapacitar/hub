@@ -392,6 +392,7 @@ test("public signup creates a student account without granting a course", async 
   );
   await expect(
     page.getByRole("button", {
+      exact: true,
       name: "Abrir resumo do Curso Curso E2E",
     })
   ).toBeVisible();

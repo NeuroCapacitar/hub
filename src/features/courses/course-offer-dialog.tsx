@@ -198,25 +198,25 @@ export function CourseOfferDetails({
           )}
         >
           {facts.map((fact) => (
-            <div className="flex min-w-0 items-start gap-3" key={fact.label}>
-              <HugeiconsIcon
-                aria-hidden="true"
-                className="mt-0.5 shrink-0 text-primary"
-                icon={fact.icon}
-                size={19}
-                strokeWidth={1.8}
-              />
-              <div className="min-w-0">
-                <dt className="text-muted-foreground text-xs">{fact.label}</dt>
-                <dd className="mt-0.5 flex items-baseline gap-2 font-semibold text-sm">
-                  {fact.value}
-                  {fact.secondaryValue ? (
-                    <span className="font-normal text-muted-foreground text-xs">
-                      {fact.secondaryValue}
-                    </span>
-                  ) : null}
-                </dd>
-              </div>
+            <div className="min-w-0" key={fact.label}>
+              <dt className="flex min-w-0 items-start gap-3 text-muted-foreground text-xs">
+                <HugeiconsIcon
+                  aria-hidden="true"
+                  className="mt-0.5 shrink-0 text-primary"
+                  icon={fact.icon}
+                  size={19}
+                  strokeWidth={1.8}
+                />
+                {fact.label}
+              </dt>
+              <dd className="mt-0.5 flex items-baseline gap-2 pl-8 font-semibold text-sm">
+                {fact.value}
+                {fact.secondaryValue ? (
+                  <span className="font-normal text-muted-foreground text-xs">
+                    {fact.secondaryValue}
+                  </span>
+                ) : null}
+              </dd>
             </div>
           ))}
         </dl>
