@@ -45,7 +45,9 @@ export default async function SignInPage({
             Bem-vinda de volta
           </CardTitle>
           <CardDescription>
-            Acesse sua conta para continuar seus estudos.
+            {safeReturnTo?.startsWith("/comprar/")
+              ? "Entre para voltar ao Curso e confirmar sua inscrição gratuita."
+              : "Acesse sua conta para continuar seus estudos."}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0">

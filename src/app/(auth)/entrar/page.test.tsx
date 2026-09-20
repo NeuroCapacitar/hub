@@ -44,6 +44,9 @@ describe("SignInPage", () => {
     );
 
     expect(markup).toContain('data-return-to="/comprar/curso-gratis"');
+    expect(markup).toContain(
+      "Entre para voltar ao Curso e confirmar sua inscrição gratuita."
+    );
     expect(dependencies.redirect).not.toHaveBeenCalled();
   });
 

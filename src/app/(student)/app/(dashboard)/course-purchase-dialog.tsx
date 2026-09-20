@@ -10,9 +10,11 @@ import {
   CourseOfferInfoNote,
   CourseOfferPrice,
   type CourseOfferTriggerKind,
+} from "@/features/courses/course-offer-dialog";
+import {
   getCourseOfferFacts,
   getCourseOfferPaymentDetails,
-} from "@/features/courses/course-offer-dialog";
+} from "@/features/courses/course-offer-facts";
 import type { StudentCatalogCourseCard } from "@/features/courses/server";
 import { formatCurrencyInCents } from "@/lib/formatters";
 import { route } from "@/lib/routes";

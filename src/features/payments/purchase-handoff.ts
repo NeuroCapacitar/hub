@@ -28,6 +28,7 @@ export type PurchaseHandoffView =
       courseSlug: string;
       courseTitle: string;
       kind: "free_enrollment";
+      offer: CourseOfferSummaryData;
     }
   | {
       courseId: string;
@@ -228,6 +229,7 @@ const resolveOpenCheckoutView = (
       courseSlug: course.course_slug,
       courseTitle: course.course_title,
       kind: "free_enrollment",
+      offer: getPurchaseOfferSummary(course),
     };
   }
 
