@@ -80,6 +80,109 @@ describe("Student dashboard availability", () => {
     dependencies.getActiveBannersData.mockResolvedValue({ banners: [] });
   });
 
+  it("highlights the next lesson when one active course is available", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        completedCount: 2,
+        courseId: "course-active",
+        expiresAt: new Date("2026-12-31T23:59:59.000Z"),
+        isEnrolled: true,
+        nextLessonDurationSeconds: 720,
+        nextLessonId: "lesson-next",
+        nextLessonTitle: "Comunicação em situações difíceis",
+        nextModuleTitle: "Fundamentos da comunicação",
+        progressPercent: 40,
+        slug: "curso-ativo",
+        title: "Curso ativo de fundamentos",
+        totalCount: 5,
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+
+    expect(markup).toContain("Continue aprendendo");
+    expect(markup).toContain("Próximo passo");
+    expect(markup).toContain("Comunicação em situações difíceis");
+    expect(markup).toContain("12min");
+    expect(markup).toContain('href="/app/aulas/lesson-next"');
+    expect(markup).toContain("Continuar aula");
+    expect(markup).toContain("Ver trilha");
+    expect(markup).not.toContain("Retome sua jornada no ponto em que parou.");
+  });
+
+  it("does not choose a single course when multiple courses are active", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        courseId: "course-active-1",
+        expiresAt: new Date("2026-12-31T23:59:59.000Z"),
+        isEnrolled: true,
+        nextLessonDurationSeconds: 600,
+        nextLessonId: "lesson-next-1",
+        nextLessonTitle: "Aula um",
+        nextModuleTitle: "Módulo um",
+        progressPercent: 20,
+        slug: "curso-ativo-1",
+        title: "Curso ativo um",
+      },
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        courseId: "course-active-2",
+        expiresAt: new Date("2026-12-31T23:59:59.000Z"),
+        isEnrolled: true,
+        nextLessonDurationSeconds: 900,
+        nextLessonId: "lesson-next-2",
+        nextLessonTitle: "Aula dois",
+        nextModuleTitle: "Módulo dois",
+        progressPercent: 40,
+        slug: "curso-ativo-2",
+        title: "Curso ativo dois",
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+
+    expect(markup).toContain("Retome sua jornada no ponto em que parou.");
+    expect(markup).not.toContain("Próximo passo");
+    expect(markup).toContain("Curso ativo um");
+    expect(markup).toContain("Curso ativo dois");
+  });
+
+  it("explains when the next lesson is waiting for scheduled release", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        courseId: "course-scheduled",
+        expiresAt: new Date("2026-12-31T23:59:59.000Z"),
+        isEnrolled: true,
+        nextLessonDurationSeconds: null,
+        nextLessonId: null,
+        nextLessonTitle: null,
+        nextModuleTitle: null,
+        nextReleaseAt: new Date("2026-10-02T15:00:00.000Z"),
+        progressPercent: 40,
+        slug: "curso-programado",
+        title: "Curso programado",
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+
+    expect(markup).toContain("A próxima aula estará disponível em");
+    expect(markup).toContain('href="/app/cursos/course-scheduled"');
+    expect(markup).toContain("Ver trilha");
+    expect(markup).not.toContain("Continuar aula");
+  });
+
   it("uses a modal for free course acquisition", async () => {
     dependencies.getStudentCourseCatalog.mockResolvedValue([
       {

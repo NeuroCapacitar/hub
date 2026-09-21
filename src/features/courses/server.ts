@@ -94,7 +94,10 @@ export interface StudentCatalogCourseCard extends CourseOfferSummaryData {
   isInterested: boolean;
   launchDate: string | null;
   launchLandingUrl: string | null;
+  nextLessonDurationSeconds: number | null;
   nextLessonId: string | null;
+  nextLessonTitle: string | null;
+  nextModuleTitle: string | null;
   nextReleaseAt: Date | null;
   progressPercent: number;
   revokedReason: string | null;
@@ -366,11 +369,14 @@ type StudentCatalogCourseAggregate = StudentCatalogCourseCard & {
   moduleIds: Set<string>;
   requiredLessonIds: string[];
   lessons: Array<{
+    durationSeconds: number;
     id: string;
     moduleId: string;
+    moduleTitle: string;
     moduleReleaseDelayDays: number;
     moduleSortOrder: number;
     sortOrder: number;
+    title: string;
   }>;
 };
 
@@ -645,9 +651,18 @@ const resolveCatalogNextLesson = ({
   course: StudentCatalogCourseAggregate;
   diagnostics: ReturnType<typeof createContentReleaseDiagnostics>;
   now: Date;
-}): { nextLessonId: string | null; nextReleaseAt: Date | null } => {
+}): {
+  nextLessonDurationSeconds: number | null;
+  nextLessonId: string | null;
+  nextLessonTitle: string | null;
+  nextModuleTitle: string | null;
+  nextReleaseAt: Date | null;
+} => {
   const completedLessonIds = course.completedLessonIds;
+  let nextLessonDurationSeconds: number | null = null;
   let nextLessonId: string | null = null;
+  let nextLessonTitle: string | null = null;
+  let nextModuleTitle: string | null = null;
   let nextReleaseAt: Date | null = null;
 
   const orderedLessons = [...course.lessons].sort(
@@ -675,7 +690,13 @@ const resolveCatalogNextLesson = ({
         moduleId: lesson.moduleId,
         reason: classifyContentReleaseError(error),
       });
-      return { nextLessonId: null, nextReleaseAt: null };
+      return {
+        nextLessonDurationSeconds: null,
+        nextLessonId: null,
+        nextLessonTitle: null,
+        nextModuleTitle: null,
+        nextReleaseAt: null,
+      };
     }
 
     if (release.kind === "time_locked") {
@@ -698,10 +719,19 @@ const resolveCatalogNextLesson = ({
       })
     ) {
       nextLessonId = lesson.id;
+      nextLessonDurationSeconds = lesson.durationSeconds;
+      nextLessonTitle = lesson.title;
+      nextModuleTitle = lesson.moduleTitle;
     }
   }
 
-  return { nextLessonId, nextReleaseAt };
+  return {
+    nextLessonDurationSeconds,
+    nextLessonId,
+    nextLessonTitle,
+    nextModuleTitle,
+    nextReleaseAt,
+  };
 };
 
 export const getStudentCourseCatalog = async (
@@ -728,9 +758,11 @@ export const getStudentCourseCatalog = async (
     launch_landing_url: string | null;
     is_required: boolean | null;
     lesson_id: string | null;
+    lesson_title: string;
     lesson_sort_order: number | null;
     module_release_delay_days: number | null;
     module_id: string | null;
+    module_title: string;
     module_sort_order: number | null;
     payment_allow_credit_card: boolean;
     payment_allow_pix: boolean;
@@ -790,9 +822,11 @@ export const getStudentCourseCatalog = async (
           where csi.course_id = c.id and csi.user_id = $1
         ) as is_interested,
         l.id as lesson_id,
+        l.title as lesson_title,
         l.is_required,
         l.sort_order as lesson_sort_order,
         m.id as module_id,
+        m.title as module_title,
         m.release_delay_days as module_release_delay_days,
         m.sort_order as module_sort_order,
         coalesce(l.duration_seconds, 0) as duration_seconds,
@@ -868,6 +902,9 @@ export const getStudentCourseCatalog = async (
       totalCount: 0,
       totalDurationSeconds: 0,
       nextLessonId: null,
+      nextLessonDurationSeconds: null,
+      nextLessonTitle: null,
+      nextModuleTitle: null,
       nextReleaseAt: null,
       paymentAllowCreditCard: row.payment_allow_credit_card,
       paymentAllowPix: row.payment_allow_pix,
@@ -895,11 +932,14 @@ export const getStudentCourseCatalog = async (
         typeof row.module_release_delay_days === "number"
       ) {
         course.lessons.push({
+          durationSeconds: row.duration_seconds,
           id: row.lesson_id,
           moduleId: row.module_id,
+          moduleTitle: row.module_title,
           moduleReleaseDelayDays: row.module_release_delay_days,
           moduleSortOrder: row.module_sort_order,
           sortOrder: row.lesson_sort_order,
+          title: row.lesson_title,
         });
       }
       if (row.completed_at && row.is_enrolled) {
@@ -924,7 +964,13 @@ export const getStudentCourseCatalog = async (
           diagnostics: createContentReleaseDiagnostics(),
           now: course.decisionNow,
         })
-      : { nextLessonId: null, nextReleaseAt: null };
+      : {
+          nextLessonDurationSeconds: null,
+          nextLessonId: null,
+          nextLessonTitle: null,
+          nextModuleTitle: null,
+          nextReleaseAt: null,
+        };
 
     return {
       accessDurationMonths: course.accessDurationMonths,
@@ -958,6 +1004,9 @@ export const getStudentCourseCatalog = async (
         ...course.durationSecondsPerLesson.values(),
       ].reduce((sum, s) => sum + Math.max(0, s), 0),
       nextLessonId: next.nextLessonId,
+      nextLessonDurationSeconds: next.nextLessonDurationSeconds,
+      nextLessonTitle: next.nextLessonTitle,
+      nextModuleTitle: next.nextModuleTitle,
       nextReleaseAt: next.nextReleaseAt,
     };
   });

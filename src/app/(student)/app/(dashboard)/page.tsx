@@ -37,6 +37,7 @@ import { getStudentCourseCatalog } from "@/features/courses/server";
 import { route } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
+import { ContinueLearningCard } from "./continue-learning-card";
 import { CoursePurchaseDialog } from "./course-purchase-dialog";
 import { FreeCourseEnrollmentDialog } from "./free-course-enrollment-dialog";
 import { StudentBannersCarousel } from "./student-banners-carousel";
@@ -64,7 +65,26 @@ export default async function StudentDashboardPage(): Promise<React.JSX.Element>
   const groups = groupStudentCatalogCourses(courses);
   const { banners } = await getActiveBannersData();
 
-  const _nextCourse = groups.active[0] ?? groups.completed[0] ?? courses[0];
+  const featuredActiveCourse =
+    groups.active.length === 1 &&
+    (groups.active[0]?.nextLessonId || groups.active[0]?.nextReleaseAt)
+      ? groups.active[0]
+      : null;
+  let activeCoursesContent: React.JSX.Element | null = null;
+  if (featuredActiveCourse) {
+    activeCoursesContent = (
+      <ContinueLearningCard course={featuredActiveCourse} />
+    );
+  } else if (groups.active.length > 0) {
+    activeCoursesContent = (
+      <CourseSection
+        courses={groups.active}
+        description="Retome sua jornada no ponto em que parou."
+        sectionId="student-courses-active"
+        title="Continue aprendendo"
+      />
+    );
+  }
 
   return (
     <PageContainer className="min-h-screen bg-background text-foreground">
@@ -78,14 +98,7 @@ export default async function StudentDashboardPage(): Promise<React.JSX.Element>
             <EmptyCoursesState />
           ) : (
             <>
-              {groups.active.length > 0 ? (
-                <CourseSection
-                  courses={groups.active}
-                  description="Retome sua jornada no ponto em que parou."
-                  sectionId="student-courses-active"
-                  title="Continue aprendendo"
-                />
-              ) : null}
+              {activeCoursesContent}
 
               {groups.completed.length > 0 ? (
                 <CourseSection

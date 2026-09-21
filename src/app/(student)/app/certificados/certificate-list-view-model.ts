@@ -13,7 +13,7 @@ export interface CertificateListViewModel {
     title: string;
     variant: "default" | "destructive";
   } | null;
-  badgeVariant: "default" | "destructive" | "secondary";
+  badgeVariant: "destructive" | "learning" | "secondary";
   canDownload: boolean;
   kind: "available" | "failed" | "preparing" | "revoked";
   showSupportAction: boolean;
@@ -39,7 +39,7 @@ export const getCertificateListViewModel = (
     return {
       alert: {
         description: getRevocationDescription(certificate),
-        title: "Este certificado foi revogado",
+        title: "Este certificado não está mais válido",
         variant: "destructive",
       },
       badgeVariant: "destructive",
@@ -69,7 +69,7 @@ export const getCertificateListViewModel = (
   if (certificate.renderStatus === "ready") {
     return {
       alert: null,
-      badgeVariant: "default",
+      badgeVariant: "learning",
       canDownload: true,
       kind: "available",
       showSupportAction: false,

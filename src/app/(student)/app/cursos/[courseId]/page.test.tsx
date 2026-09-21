@@ -125,6 +125,7 @@ describe("StudentCourseOverviewPage certificate feedback", () => {
 
     expect(markup).toContain('href="/certificados/CERT-001"');
     expect(markup).toContain("Ver certificado");
+    expect(markup.match(/Ver certificado/g)).toHaveLength(1);
     expect(markup).toContain('target="_blank"');
     expect(markup).toContain('rel="noopener noreferrer"');
     expect(markup).not.toContain("/app/certificados");

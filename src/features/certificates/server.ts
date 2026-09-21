@@ -76,6 +76,7 @@ export interface CertificateRecord {
   issuerName?: string | null;
   pdfSha256?: string | null;
   pdfStorageKey?: string | null;
+  previewAvailable?: boolean;
   renderStatus: "failed" | "pending" | "ready";
   revokedAt: Date | null;
   revokedReasonCategory: CertificateReasonCode | null;
@@ -1068,6 +1069,7 @@ export const getCertificatesForUser = async (
     course_title_snapshot: string;
     workload_hours_snapshot: number;
     issued_at: Date;
+    preview_sha256: string | null;
     revoked_at: Date | null;
     revoked_reason_category: string | null;
     status: "revoked" | "valid";
@@ -1080,6 +1082,7 @@ export const getCertificatesForUser = async (
         course_title_snapshot,
         workload_hours_snapshot,
         issued_at,
+        preview_sha256,
         revoked_at,
         revoked_reason_category,
         render_status,
@@ -1097,6 +1100,7 @@ export const getCertificatesForUser = async (
     courseTitle: row.course_title_snapshot,
     workloadHours: row.workload_hours_snapshot,
     issuedAt: row.issued_at,
+    previewAvailable: row.preview_sha256 !== null,
     revokedAt: row.revoked_at,
     revokedReasonCategory:
       parseCertificateReasonCode(row.revoked_reason_category) ??

@@ -15,13 +15,6 @@ vi.mock("./pending-certificate-refresh", () => ({
   }) =>
     showManualRefresh ? <button type="button">Atualizar status</button> : null,
 }));
-vi.mock("./certificate-copy-link-button", () => ({
-  CertificateCopyLinkButton: ({ publicUrl }: { publicUrl: string }) => (
-    <button data-public-url={publicUrl} type="button">
-      Copiar link
-    </button>
-  ),
-}));
 
 import { CertificateCard } from "./certificate-card";
 
@@ -37,18 +30,15 @@ const certificate = (
   status: "valid",
   studentName: "Maria Silva",
   workloadHours: 12,
+  previewAvailable: true,
   ...overrides,
 });
 
 const renderCertificate = (
-  overrides: Partial<CertificateRecord> = {},
-  publicUrl = "https://certificados.example/certificados/CERT-001"
+  overrides: Partial<CertificateRecord> = {}
 ): string =>
   renderToStaticMarkup(
-    <CertificateCard
-      certificate={certificate(overrides)}
-      publicUrl={publicUrl}
-    />
+    <CertificateCard certificate={certificate(overrides)} />
   );
 
 describe("CertificateCard", () => {
@@ -57,14 +47,26 @@ describe("CertificateCard", () => {
 
     expect(markup).toContain('role="article"');
     expect(markup).toContain('aria-label="Status: Disponível"');
+    expect(markup).toContain('data-variant="learning"');
     expect(markup).toContain('aria-label="Baixar PDF de Curso de teste"');
     expect(markup).toContain('href="/certificados/CERT-001"');
+    expect(markup).toContain('data-certificate-preview="true"');
+    expect(markup).toContain('src="/certificados/CERT-001/preview"');
     expect(markup).toContain('target="_blank"');
     expect(markup).toContain('rel="noopener noreferrer"');
     expect(markup).toContain(">Curso de teste</a>");
-    expect(markup).toContain("Copiar link");
+    expect(markup).not.toContain("Titular");
+    expect(markup).toContain("Visualizar certificado");
     expect(markup).not.toContain(">Validar</a>");
     expect(markup).not.toContain('role="alert"');
+  });
+
+  it("does not request a preview while the certificate is preparing", () => {
+    const markup = renderCertificate();
+
+    expect(markup).not.toContain('data-certificate-preview="true"');
+    expect(markup).not.toContain("/preview");
+    expect(markup).toContain('data-certificate-preview-slot="preparing"');
   });
 
   it("never renders download for a revoked ready certificate", () => {
@@ -79,9 +81,11 @@ describe("CertificateCard", () => {
     expect(markup).toContain('role="alert"');
     expect(markup).toContain("Revogado em 22 de jul. de 2026");
     expect(markup).toContain("Revisao de integridade");
+    expect(markup).toContain("Este certificado não está mais válido");
+    expect(markup).toContain('data-certificate-preview-slot="revoked"');
     expect(markup).not.toContain("Baixar PDF");
     expect(markup).toContain('href="/certificados/CERT-001"');
-    expect(markup).toContain("Copiar link");
+    expect(markup).toContain("Visualizar certificado");
     expect(markup).not.toContain(">Validar</a>");
   });
 
@@ -108,15 +112,14 @@ describe("CertificateCard", () => {
   });
 
   it("encodes reserved certificate code characters in every destination", () => {
-    const markup = renderCertificate(
-      { code: "CERT/A B?#", renderStatus: "ready" },
-      "https://certificados.example/certificados/CERT%2FA%20B%3F%23"
-    );
+    const markup = renderCertificate({
+      code: "CERT/A B?#",
+      renderStatus: "ready",
+    });
 
     expect(markup).toContain('href="/certificados/CERT%2FA%20B%3F%23"');
     expect(markup).toContain('href="/certificados/CERT%2FA%20B%3F%23/pdf"');
-    expect(markup).toContain(
-      'data-public-url="https://certificados.example/certificados/CERT%2FA%20B%3F%23"'
-    );
+    expect(markup).toContain('src="/certificados/CERT%2FA%20B%3F%23/preview"');
+    expect(markup).toContain('target="_blank"');
   });
 });

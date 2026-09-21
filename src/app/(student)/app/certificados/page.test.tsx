@@ -13,23 +13,28 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/features/certificates/server", () => ({
   getCertificatesForUser: dependencies.getCertificatesForUser,
 }));
-vi.mock("@/lib/env", () => ({
-  getServerEnv: () => ({
-    CERTIFICATE_PUBLIC_BASE_URL: "https://certificates.example",
-  }),
-}));
 vi.mock("@/lib/session", () => ({
   requireSession: dependencies.requireSession,
 }));
 vi.mock("./certificate-card", () => ({
-  CertificateCard: ({
-    certificate,
-    publicUrl,
+  CertificateCard: ({ certificate }: { certificate: CertificateRecord }) => (
+    <article data-certificate-code={certificate.code}>
+      {certificate.courseTitle}
+    </article>
+  ),
+}));
+vi.mock("./certificate-history-sheet", () => ({
+  CertificateHistorySheet: ({
+    certificateCount,
+    children,
   }: {
-    certificate: CertificateRecord;
-    publicUrl: string;
+    certificateCount: number;
+    children: React.ReactNode;
   }) => (
-    <article data-public-url={publicUrl}>{certificate.courseTitle}</article>
+    <div data-history-count={certificateCount}>
+      <button type="button">Histórico ({certificateCount})</button>
+      {children}
+    </div>
   ),
 }));
 vi.mock("./pending-certificate-refresh", () => ({
@@ -48,6 +53,15 @@ const readyCertificate: CertificateRecord = {
   status: "valid",
   studentName: "Maria Silva",
   workloadHours: 12,
+};
+
+const revokedCertificate: CertificateRecord = {
+  ...readyCertificate,
+  code: "CERT-REVOKED",
+  courseTitle: "Curso revogado",
+  revokedAt: new Date("2026-07-22T12:00:00.000Z"),
+  revokedReasonCategory: "integrity_review",
+  status: "revoked",
 };
 
 const renderPage = async (
@@ -70,9 +84,9 @@ describe("MyCertificatesPage", () => {
     const markup = await renderPage([readyCertificate]);
 
     expect(markup).toContain("Curso de teste");
-    expect(markup).toContain(
-      'data-public-url="https://certificates.example/certificados/CERT-001"'
-    );
+    expect(markup).toContain("Suas conquistas");
+    expect(markup).toContain("Cada certificado guarda um passo");
+    expect(markup).toContain('data-certificate-code="CERT-001"');
     expect(markup).not.toContain("Emitidos");
     expect(markup).not.toContain("Validação</p>");
     expect(markup).not.toContain(">QR<");
@@ -81,10 +95,20 @@ describe("MyCertificatesPage", () => {
   it("preserves the empty state and course navigation", async () => {
     const markup = await renderPage([]);
 
-    expect(markup).toContain("Nenhum certificado emitido ainda");
-    expect(markup).toContain("Conclua todas as aulas obrigatórias");
+    expect(markup).toContain("Seu primeiro certificado começa aqui");
+    expect(markup).toContain("Conclua as aulas obrigatórias");
     expect(markup).not.toContain("Conclua 100% das aulas");
     expect(markup).toContain('href="/app"');
     expect(markup).toContain("Voltar para meus cursos");
+  });
+
+  it("keeps revoked certificates in a separate history section", async () => {
+    const markup = await renderPage([readyCertificate, revokedCertificate]);
+
+    expect(markup).toContain("Curso de teste");
+    expect(markup).toContain('data-history-count="1"');
+    expect(markup).toContain("Histórico (1)");
+    expect(markup).toContain("Curso revogado");
+    expect(markup).toContain("CERT-REVOKED");
   });
 });

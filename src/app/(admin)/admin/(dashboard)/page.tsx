@@ -656,7 +656,7 @@ function IssueGroup({
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+      <CardContent className="divide-y divide-border/50 p-0">
         {issues.map((issue) => (
           <IssueRow issue={issue} key={issue.label} />
         ))}
@@ -667,7 +667,7 @@ function IssueGroup({
 
 function IssueRow({ issue }: { issue: DashboardIssue }): React.JSX.Element {
   return (
-    <div className="grid gap-3 rounded-lg border bg-muted/10 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+    <div className="grid gap-3 px-4 py-4 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5 sm:py-5 sm:last:pb-0 sm:first:pt-0">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-sm">{issue.label}</span>
@@ -740,7 +740,7 @@ function CatalogHealthCard({
         </CardAction>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="m-4 rounded-lg border bg-muted/10 p-4 sm:m-5">
+        <div className="border-border/50 border-b px-4 py-4 sm:px-5 sm:py-5">
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm">Prontidão média</span>
             <strong className="font-semibold tabular-nums">
@@ -793,7 +793,7 @@ function CoursePriorityList({
   }
 
   return (
-    <div className="p-4 pt-0 sm:p-5 sm:pt-0">
+    <div className="p-4 sm:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="type-label">Cursos que precisam de revisão</p>
         <Badge className="tabular-nums" variant="warning">
@@ -805,7 +805,7 @@ function CoursePriorityList({
           const missingItems = getCourseMissingItems(course);
           return (
             <div
-              className="grid gap-3 rounded-lg border bg-muted/10 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              className="grid gap-3 border-border/50 border-t py-3 first:border-t-0 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
               key={course.id}
             >
               <div className="min-w-0">
@@ -1117,7 +1117,7 @@ function ContextCard({
         </div>
       </CardHeader>
       <CardContent>
-        <dl className="grid gap-3">{children}</dl>
+        <dl className="divide-y divide-border/50">{children}</dl>
       </CardContent>
     </Card>
   );
@@ -1133,7 +1133,7 @@ function ContextMetric({
   value: string;
 }): React.JSX.Element {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/10 p-3">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-3 first:pt-0 last:pb-0">
       <dt className="truncate font-medium text-sm">{label}</dt>
       <dd className="row-span-2 shrink-0 text-right font-semibold text-lg tabular-nums">
         {value}
