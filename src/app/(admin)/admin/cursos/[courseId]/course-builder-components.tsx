@@ -57,14 +57,24 @@ export function CourseBuilderWrapper({
   editable,
   modules,
   lessons,
-  toolbar,
+  nextModuleSortOrder,
 }: {
   course: CourseData;
   editable: boolean;
   modules: ModuleData[];
   lessons: LessonData[];
-  toolbar?: React.ReactNode;
+  nextModuleSortOrder?: number;
 }) {
+  const toolbar =
+    editable && nextModuleSortOrder !== undefined ? (
+      <CreateModuleDialog
+        course={course}
+        key="create-module"
+        nextModuleSortOrder={nextModuleSortOrder}
+        triggerVariant="outline"
+      />
+    ) : null;
+
   return (
     <CourseBuilderClient
       course={course}

@@ -198,9 +198,34 @@ describe("authentication media actions", () => {
     expect(dependencies.writeAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "auth_media_slides.reordered",
+        client: dependencies.client,
         targetType: "auth_media_slide",
       })
     );
+  });
+
+  it("rolls back the reorder when its audit cannot be written", async () => {
+    dependencies.clientQuery.mockImplementation((sql: string) => {
+      if (sql.includes("select id, sort_order")) {
+        return Promise.resolve({
+          rows: [
+            { id: SLIDE_ID, sort_order: 1 },
+            { id: SECOND_SLIDE_ID, sort_order: 2 },
+          ],
+        });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+    dependencies.writeAuditLog.mockRejectedValueOnce(
+      new Error("audit unavailable")
+    );
+
+    await expect(
+      reorderAuthMediaAction([SECOND_SLIDE_ID, SLIDE_ID])
+    ).rejects.toThrow("audit unavailable");
+
+    expect(dependencies.clientQuery).toHaveBeenCalledWith("ROLLBACK");
+    expect(dependencies.clientQuery).not.toHaveBeenCalledWith("COMMIT");
   });
 
   it("removes public access before deleting a slide", async () => {

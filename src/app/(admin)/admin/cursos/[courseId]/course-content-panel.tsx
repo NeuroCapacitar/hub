@@ -267,15 +267,7 @@ export function CourseContentPanel({
           editable={canManageContent && publicationState.hasDraft}
           lessons={lessons}
           modules={modules}
-          toolbar={
-            canManageContent && publicationState.hasDraft ? (
-              <CreateModuleDialog
-                course={course}
-                nextModuleSortOrder={nextModuleSortOrder}
-                triggerVariant="outline"
-              />
-            ) : null
-          }
+          nextModuleSortOrder={nextModuleSortOrder}
         />
       ) : (
         <EmptyCourseContent

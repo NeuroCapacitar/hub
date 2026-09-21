@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import type { SortableDropPlacement } from "../sortable-context";
 
 interface ResourceListContainerProps
   extends React.HTMLAttributes<HTMLDivElement> {
@@ -47,17 +48,24 @@ export function ResourceListHeader({
   title,
   count,
   actions,
+  description,
 }: {
   title: string;
   count?: number;
   actions?: React.ReactNode;
+  description?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <h3 className="truncate font-medium text-sm">
-        {title} {typeof count === "number" && `(${count})`}
-      </h3>
-      {actions && <div className="flex gap-2">{actions}</div>}
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h3 className="truncate font-medium text-sm">
+          {title} {typeof count === "number" && `(${count})`}
+        </h3>
+        {description ? (
+          <p className="mt-1 text-muted-foreground text-xs">{description}</p>
+        ) : null}
+      </div>
+      {actions && <div className="flex shrink-0 gap-2">{actions}</div>}
     </div>
   );
 }
@@ -72,12 +80,14 @@ export function ResourceItem({
   nodeRef,
   style,
   className,
+  dropPlacement,
 }: {
   children: React.ReactNode;
   isDragging?: boolean;
   nodeRef?: (node: HTMLElement | null) => void;
   style?: React.CSSProperties;
   className?: string;
+  dropPlacement?: SortableDropPlacement | null;
 }) {
   return (
     <div
@@ -89,7 +99,19 @@ export function ResourceItem({
       ref={nodeRef}
       style={style}
     >
+      {dropPlacement === "before" ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-1 top-0 z-20 h-0.5 rounded-full bg-ring"
+        />
+      ) : null}
       {children}
+      {dropPlacement === "after" ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-1 bottom-0 z-20 h-0.5 rounded-full bg-ring"
+        />
+      ) : null}
     </div>
   );
 }
@@ -231,7 +253,13 @@ export function ResourceItemSkeleton() {
   );
 }
 
-export function ResourceDropzoneEmpty() {
+export function ResourceDropzoneEmpty({
+  description = "Suporta diversos formatos",
+  title = "Arraste seus arquivos aqui",
+}: {
+  description?: string;
+  title?: string;
+}) {
   return (
     <div className="flex h-full flex-1 flex-col items-center justify-center px-4 py-8 text-center">
       <div
@@ -245,8 +273,8 @@ export function ResourceDropzoneEmpty() {
           size={18}
         />
       </div>
-      <p className="mb-1.5 font-medium text-sm">Arraste seus arquivos aqui</p>
-      <p className="text-muted-foreground text-xs">Suporta diversos formatos</p>
+      <p className="mb-1.5 font-medium text-sm">{title}</p>
+      <p className="text-muted-foreground text-xs">{description}</p>
     </div>
   );
 }

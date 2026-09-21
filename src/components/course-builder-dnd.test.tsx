@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   dndHandlers: {
+    onDragCancel: undefined as (() => void) | undefined,
     onDragEnd: undefined as ((event: unknown) => void) | undefined,
     onDragOver: undefined as ((event: unknown) => void) | undefined,
     onDragStart: undefined as ((event: unknown) => void) | undefined,
@@ -24,15 +25,18 @@ vi.mock("@dnd-kit/core", () => ({
   defaultDropAnimationSideEffects: vi.fn(() => vi.fn()),
   DndContext: ({
     children,
+    onDragCancel,
     onDragEnd,
     onDragOver,
     onDragStart,
   }: {
     children: ReactNode;
+    onDragCancel: () => void;
     onDragEnd: (event: unknown) => void;
     onDragOver: (event: unknown) => void;
     onDragStart: (event: unknown) => void;
   }) => {
+    dependencies.dndHandlers.onDragCancel = onDragCancel;
     dependencies.dndHandlers.onDragEnd = onDragEnd;
     dependencies.dndHandlers.onDragOver = onDragOver;
     dependencies.dndHandlers.onDragStart = onDragStart;
@@ -250,8 +254,11 @@ describe("CourseBuilderClient editability", () => {
           initialLessons={[lesson]}
           initialModules={[moduleData, secondModule]}
           renderLesson={() => <div>Aula</div>}
-          renderModule={(currentModule, moduleLessons) => (
-            <div data-module={currentModule.id}>
+          renderModule={(currentModule, moduleLessons, _index, disclosure) => (
+            <div
+              data-expanded={disclosure.expanded}
+              data-module={currentModule.id}
+            >
               {moduleLessons.map((item) => item.id).join(",")}
             </div>
           )}
@@ -280,6 +287,11 @@ describe("CourseBuilderClient editability", () => {
     expect(
       container.querySelector('[data-module="module-2"]')?.textContent
     ).toBe("");
+    expect(
+      container
+        .querySelector('[data-module="module-2"]')
+        ?.getAttribute("data-expanded")
+    ).toBe("false");
     expect(container.textContent).not.toContain("Arrastando");
     expect(dependencies.reorderLessons).not.toHaveBeenCalled();
     expect(dependencies.reorderModules).not.toHaveBeenCalled();
@@ -445,6 +457,135 @@ describe("CourseBuilderClient editability", () => {
     expect(
       container.querySelector('[data-module="module-2"]')?.textContent
     ).toBe(lesson.id);
+  });
+
+  it("restores lesson placement when a drag is cancelled", () => {
+    act(() => {
+      root.render(
+        <CourseBuilderClient
+          course={course}
+          editable
+          initialLessons={[lesson]}
+          initialModules={[moduleData, secondModule]}
+          renderLesson={() => <div>Aula</div>}
+          renderModule={(currentModule, moduleLessons) => (
+            <div data-module={currentModule.id}>
+              {moduleLessons.map((item) => item.id).join(",")}
+            </div>
+          )}
+        />
+      );
+    });
+
+    act(() => {
+      dependencies.dndHandlers.onDragStart?.({
+        active: {
+          data: { current: { type: "lesson" } },
+          id: lesson.id,
+        },
+      });
+      dependencies.dndHandlers.onDragOver?.({
+        active: {
+          data: { current: { type: "lesson" } },
+          id: lesson.id,
+        },
+        over: {
+          data: { current: { type: "module" } },
+          id: secondModule.id,
+        },
+      });
+    });
+
+    expect(
+      container.querySelector('[data-module="module-2"]')?.textContent
+    ).toBe(lesson.id);
+
+    act(() => {
+      dependencies.dndHandlers.onDragCancel?.();
+    });
+
+    expect(
+      container.querySelector('[data-module="module-1"]')?.textContent
+    ).toBe(lesson.id);
+    expect(
+      container.querySelector('[data-module="module-2"]')?.textContent
+    ).toBe("");
+    expect(container.textContent).not.toContain("Arrastando");
+  });
+
+  it("shows the dragged lesson title in the overlay", () => {
+    act(() => {
+      root.render(
+        <CourseBuilderClient
+          course={course}
+          editable
+          initialLessons={[lesson]}
+          initialModules={[moduleData]}
+          renderLesson={() => <div>Aula</div>}
+          renderModule={() => <div>Módulo</div>}
+        />
+      );
+    });
+
+    act(() => {
+      dependencies.dndHandlers.onDragStart?.({
+        active: {
+          data: { current: { type: "lesson" } },
+          id: lesson.id,
+        },
+      });
+    });
+
+    expect(container.textContent).toContain(lesson.title);
+  });
+
+  it("restores lesson placement when a drag ends without a target", () => {
+    act(() => {
+      root.render(
+        <CourseBuilderClient
+          course={course}
+          editable
+          initialLessons={[lesson]}
+          initialModules={[moduleData, secondModule]}
+          renderLesson={() => <div>Aula</div>}
+          renderModule={(currentModule, moduleLessons) => (
+            <div data-module={currentModule.id}>
+              {moduleLessons.map((item) => item.id).join(",")}
+            </div>
+          )}
+        />
+      );
+    });
+
+    act(() => {
+      dependencies.dndHandlers.onDragStart?.({
+        active: {
+          data: { current: { type: "lesson" } },
+          id: lesson.id,
+        },
+      });
+      dependencies.dndHandlers.onDragOver?.({
+        active: {
+          data: { current: { type: "lesson" } },
+          id: lesson.id,
+        },
+        over: {
+          data: { current: { type: "module" } },
+          id: secondModule.id,
+        },
+      });
+      dependencies.dndHandlers.onDragEnd?.({
+        active: { id: lesson.id },
+        over: null,
+      });
+    });
+
+    expect(
+      container.querySelector('[data-module="module-1"]')?.textContent
+    ).toBe(lesson.id);
+    expect(
+      container.querySelector('[data-module="module-2"]')?.textContent
+    ).toBe("");
   });
 
   it("opens the first module when content arrives after an empty state", () => {

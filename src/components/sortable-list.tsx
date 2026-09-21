@@ -7,6 +7,10 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type React from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  getSortableDropPlacement,
+  type SortableDropPlacement,
+} from "./sortable-context";
 
 interface SortableItemProps {
   ariaLabel: string;
@@ -14,6 +18,7 @@ interface SortableItemProps {
   className?: string;
   data?: Record<string, unknown>;
   disabled?: boolean;
+  dropPlacementOverride?: SortableDropPlacement | "inside" | null;
   handleAlignment?: "center" | "start";
   handleClassName?: string;
   handleHidden?: boolean;
@@ -29,16 +34,39 @@ export function SortableItem({
   handleAlignment = "center",
   data,
   disabled = false,
+  dropPlacementOverride = null,
   handleHidden = false,
 }: SortableItemProps) {
   const {
     attributes,
+    active,
+    activeIndex,
+    index,
     listeners,
+    overIndex,
     setNodeRef,
     transform,
     transition,
     isDragging,
+    isOver,
   } = useSortable(data ? { data, disabled, id } : { disabled, id });
+
+  const calculatedDropPlacement = getSortableDropPlacement({
+    activeIndex,
+    index,
+    isDragging,
+    isOver,
+    overIndex,
+  });
+  const dropPlacement =
+    dropPlacementOverride === "inside"
+      ? null
+      : (dropPlacementOverride ?? calculatedDropPlacement);
+  const isLessonEnteringModule =
+    (dropPlacementOverride === "inside" || isOver) &&
+    !isDragging &&
+    data?.type === "module" &&
+    active?.data.current?.type === "lesson";
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -49,13 +77,20 @@ export function SortableItem({
   return (
     <div
       className={cn(
-        "group/sortable flex items-stretch transition-colors",
+        "group/sortable relative flex items-stretch transition-colors",
         isDragging && "opacity-95 drop-shadow-xl",
+        isLessonEnteringModule && "ring-2 ring-primary/50",
         className
       )}
       ref={setNodeRef}
       style={style}
     >
+      {dropPlacement === "before" ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-1 top-0 z-20 h-0.5 rounded-full bg-ring"
+        />
+      ) : null}
       {handleHidden ? null : (
         <Button
           aria-label={ariaLabel}
@@ -80,6 +115,12 @@ export function SortableItem({
           />
         </Button>
       )}
+      {dropPlacement === "after" ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-1 bottom-0 z-20 h-0.5 rounded-full bg-ring"
+        />
+      ) : null}
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );

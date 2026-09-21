@@ -8,15 +8,10 @@ import {
   DragOverlay,
   type DragStartEvent,
   defaultDropAnimationSideEffects,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
 } from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -37,6 +32,12 @@ import type {
   AdminModule,
 } from "@/features/admin/server";
 import { getAffectedLessonReorderGroups } from "./course-builder-reorder";
+import {
+  createSortableAccessibility,
+  getSortableDropPlacement,
+  type SortableDropPlacement,
+  useSortableSensors,
+} from "./sortable-context";
 import { SortableItem } from "./sortable-list";
 
 type CourseData = AdminCourse;
@@ -68,34 +69,64 @@ interface CourseBuilderClientProps {
   toolbar?: React.ReactNode;
 }
 
+interface CourseBuilderDropPreview {
+  id: string;
+  placement: "after" | "before" | "inside";
+  type: "lesson" | "module";
+}
+
+const getLessonDropPlacement = (
+  preview: CourseBuilderDropPreview | null,
+  lessonId: string
+): SortableDropPlacement | null => {
+  if (!(preview?.type === "lesson" && preview.id === lessonId)) {
+    return null;
+  }
+  return preview.placement === "inside" ? null : preview.placement;
+};
+
 function SortableLesson({
   children,
   disabled,
   handleHidden,
   lesson,
+  dropPlacementOverride = null,
 }: {
   children: React.ReactNode;
   disabled: boolean;
+  dropPlacementOverride?: SortableDropPlacement | null;
   handleHidden: boolean;
   lesson: LessonData;
 }): React.JSX.Element {
   const {
     attributes,
+    activeIndex,
+    index,
     listeners,
+    overIndex,
     setNodeRef,
     transform,
     transition,
     isDragging,
+    isOver,
   } = useSortable({
     data: { type: "lesson" },
     disabled,
     id: lesson.id,
   });
+  const calculatedDropPlacement = getSortableDropPlacement({
+    activeIndex,
+    index,
+    isDragging,
+    isOver,
+    overIndex,
+  });
+  const dropPlacement = dropPlacementOverride ?? calculatedDropPlacement;
 
   return (
     <div
-      className={`flex min-w-0 border-t transition-colors ${
-        isDragging ? "relative z-10 bg-card opacity-95 drop-shadow-xl" : ""
+      className={`relative flex min-w-0 border-t transition-colors ${
+        isDragging ? "z-10 bg-card opacity-95 drop-shadow-xl" : ""
       }`}
       ref={setNodeRef}
       style={{
@@ -103,6 +134,12 @@ function SortableLesson({
         transition,
       }}
     >
+      {dropPlacement === "before" ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-1 top-0 z-20 h-0.5 rounded-full bg-ring"
+        />
+      ) : null}
       {handleHidden ? null : (
         <Button
           aria-label={`Reordenar aula ${lesson.title}`}
@@ -122,6 +159,12 @@ function SortableLesson({
           />
         </Button>
       )}
+      {dropPlacement === "after" ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-1 bottom-0 z-20 h-0.5 rounded-full bg-ring"
+        />
+      ) : null}
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
@@ -142,6 +185,16 @@ export function CourseBuilderClient({
   const [activeType, setActiveType] = useState<"module" | "lesson" | null>(
     null
   );
+  const [activeLabel, setActiveLabel] = useState<string | null>(null);
+  const [activeWidth, setActiveWidth] = useState<number | null>(null);
+  const [dropPreview, setDropPreview] =
+    useState<CourseBuilderDropPreview | null>(null);
+  const dragOverRef = useRef<CourseBuilderDropPreview | null>(null);
+  const dragSnapshotRef = useRef<{
+    expandedModuleIds: Set<string>;
+    lessons: LessonData[];
+    modules: ModuleData[];
+  } | null>(null);
   const [expandedModuleIds, setExpandedModuleIds] = useState<Set<string>>(
     () => new Set(initialModules[0] ? [initialModules[0].id] : [])
   );
@@ -181,16 +234,15 @@ export function CourseBuilderClient({
     }
   }, [initialModules]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const sensors = useSortableSensors();
+  const accessibility = createSortableAccessibility((id) => {
+    const moduleData = modules.find((item) => item.id === id);
+    if (moduleData) {
+      return `Módulo ${moduleData.title}`;
+    }
+    const lesson = lessons.find((item) => item.id === id);
+    return lesson ? `Aula ${lesson.title}` : `item ${id}`;
+  });
 
   function handleDragStart(event: DragStartEvent) {
     if (!editable || isPending) {
@@ -199,8 +251,21 @@ export function CourseBuilderClient({
 
     const { active } = event;
     const type = active.data.current?.type;
+    dragOverRef.current = null;
+    setDropPreview(null);
+    dragSnapshotRef.current = {
+      expandedModuleIds: new Set(expandedModuleIds),
+      lessons,
+      modules,
+    };
     setActiveId(active.id as string);
     setActiveType(type as "module" | "lesson");
+    setActiveWidth(active.rect?.current?.initial?.width ?? null);
+    setActiveLabel(
+      type === "module"
+        ? (modules.find((item) => item.id === active.id)?.title ?? null)
+        : (lessons.find((item) => item.id === active.id)?.title ?? null)
+    );
   }
 
   function handleDragOver(event: DragOverEvent) {
@@ -213,82 +278,105 @@ export function CourseBuilderClient({
       return;
     }
 
-    const activeId = active.id;
-    const overId = over.id;
+    const activeId = String(active.id);
+    const overId = String(over.id);
 
     if (activeId === overId) {
+      dragOverRef.current = null;
+      setDropPreview(null);
       return;
     }
 
-    const isActiveLesson = active.data.current?.type === "lesson";
-    const isOverLesson = over.data.current?.type === "lesson";
-    const isOverModule = over.data.current?.type === "module";
-
-    if (!isActiveLesson) {
+    if (active.data.current?.type !== "lesson") {
       return;
     }
 
-    if (isActiveLesson && isOverLesson) {
-      const destinationLesson = lessons.find((lesson) => lesson.id === overId);
-      if (destinationLesson) {
-        setExpandedModuleIds((current) =>
-          new Set(current).add(destinationLesson.moduleId)
-        );
-      }
-      setLessons((prev) => {
-        const activeIndex = prev.findIndex((l) => l.id === activeId);
-        const overIndex = prev.findIndex((l) => l.id === overId);
-        if (activeIndex === -1 || overIndex === -1) {
-          return prev;
-        }
-
-        const activeLesson = prev[activeIndex];
-        const overLesson = prev[overIndex];
-
-        if (!(activeLesson && overLesson)) {
-          return prev;
-        }
-
-        if (activeLesson.moduleId !== overLesson.moduleId) {
-          const updatedLessons = [...prev];
-          updatedLessons[activeIndex] = {
-            ...activeLesson,
-            moduleId: overLesson.moduleId,
-          } as LessonData;
-          return arrayMove(updatedLessons, activeIndex, overIndex);
-        }
-
-        return arrayMove(prev, activeIndex, overIndex);
-      });
+    if (dragOverRef.current?.id === overId) {
+      return;
     }
 
-    if (isActiveLesson && isOverModule) {
-      setExpandedModuleIds((current) => new Set(current).add(overId as string));
-      setLessons((prev) => {
-        const activeIndex = prev.findIndex((l) => l.id === activeId);
-        if (activeIndex === -1) {
-          return prev;
-        }
+    if (over.data.current?.type === "lesson") {
+      handleLessonDragOver(activeId, overId);
+    } else if (over.data.current?.type === "module") {
+      handleModuleDragOver(activeId, overId);
+    }
+  }
 
-        const activeLesson = prev[activeIndex];
+  function handleLessonDragOver(activeId: string, overId: string) {
+    const activeIndex = lessons.findIndex((lesson) => lesson.id === activeId);
+    const overIndex = lessons.findIndex((lesson) => lesson.id === overId);
+    if (activeIndex === -1 || overIndex === -1) {
+      return;
+    }
 
-        if (!activeLesson) {
-          return prev;
-        }
-
-        if (activeLesson.moduleId !== overId) {
-          const updatedLessons = [...prev];
-          updatedLessons[activeIndex] = {
-            ...activeLesson,
-            moduleId: overId as string,
-          } as LessonData;
-          const newIndex = updatedLessons.length - 1;
-          return arrayMove(updatedLessons, activeIndex, newIndex);
-        }
-
+    const preview: CourseBuilderDropPreview = {
+      id: overId,
+      placement: activeIndex < overIndex ? "after" : "before",
+      type: "lesson",
+    };
+    dragOverRef.current = preview;
+    setDropPreview(preview);
+    const destinationLesson = lessons.find((lesson) => lesson.id === overId);
+    if (destinationLesson) {
+      setExpandedModuleIds((current) =>
+        new Set(current).add(destinationLesson.moduleId)
+      );
+    }
+    setLessons((prev) => {
+      const currentActiveIndex = prev.findIndex((l) => l.id === activeId);
+      const currentOverIndex = prev.findIndex((l) => l.id === overId);
+      if (currentActiveIndex === -1 || currentOverIndex === -1) {
         return prev;
-      });
-    }
+      }
+
+      const activeLesson = prev[currentActiveIndex];
+      const overLesson = prev[currentOverIndex];
+
+      if (!(activeLesson && overLesson)) {
+        return prev;
+      }
+
+      if (activeLesson.moduleId !== overLesson.moduleId) {
+        const updatedLessons = [...prev];
+        updatedLessons[currentActiveIndex] = {
+          ...activeLesson,
+          moduleId: overLesson.moduleId,
+        } as LessonData;
+        return arrayMove(updatedLessons, currentActiveIndex, currentOverIndex);
+      }
+
+      return arrayMove(prev, currentActiveIndex, currentOverIndex);
+    });
+  }
+
+  function handleModuleDragOver(activeId: string, overId: string) {
+    const preview: CourseBuilderDropPreview = {
+      id: overId,
+      placement: "inside",
+      type: "module",
+    };
+    dragOverRef.current = preview;
+    setDropPreview(preview);
+    setExpandedModuleIds((current) => new Set(current).add(overId));
+    setLessons((prev) => {
+      const activeIndex = prev.findIndex((l) => l.id === activeId);
+      if (activeIndex === -1) {
+        return prev;
+      }
+
+      const activeLesson = prev[activeIndex];
+
+      if (!activeLesson || activeLesson.moduleId === overId) {
+        return prev;
+      }
+
+      const updatedLessons = [...prev];
+      updatedLessons[activeIndex] = {
+        ...activeLesson,
+        moduleId: overId,
+      } as LessonData;
+      return arrayMove(updatedLessons, activeIndex, updatedLessons.length - 1);
+    });
   }
 
   function handleModuleDragEnd(
@@ -365,18 +453,28 @@ export function CourseBuilderClient({
 
   function handleDragEnd(event: DragEndEvent) {
     if (!editable || isPending) {
+      dragOverRef.current = null;
+      setDropPreview(null);
+      dragSnapshotRef.current = null;
       setActiveId(null);
       setActiveType(null);
+      setActiveLabel(null);
+      setActiveWidth(null);
       return;
     }
 
     const { active, over } = event;
-    setActiveId(null);
-    setActiveType(null);
-
     if (!over) {
+      handleDragCancel();
       return;
     }
+    dragOverRef.current = null;
+    setDropPreview(null);
+    dragSnapshotRef.current = null;
+    setActiveId(null);
+    setActiveType(null);
+    setActiveLabel(null);
+    setActiveWidth(null);
 
     const type = active.data.current?.type;
 
@@ -389,6 +487,22 @@ export function CourseBuilderClient({
     }
   }
 
+  function handleDragCancel() {
+    const snapshot = dragSnapshotRef.current;
+    if (snapshot) {
+      setExpandedModuleIds(snapshot.expandedModuleIds);
+      setModules(snapshot.modules);
+      setLessons(snapshot.lessons);
+    }
+    dragOverRef.current = null;
+    setDropPreview(null);
+    dragSnapshotRef.current = null;
+    setActiveId(null);
+    setActiveType(null);
+    setActiveLabel(null);
+    setActiveWidth(null);
+  }
+
   const dropAnimation = {
     sideEffects: defaultDropAnimationSideEffects({
       styles: { active: { opacity: "0.5" } },
@@ -397,8 +511,10 @@ export function CourseBuilderClient({
 
   return (
     <DndContext
+      accessibility={accessibility}
       collisionDetection={closestCenter}
       id="course-builder-dnd"
+      onDragCancel={handleDragCancel}
       onDragEnd={handleDragEnd}
       onDragOver={handleDragOver}
       onDragStart={handleDragStart}
@@ -451,12 +567,18 @@ export function CourseBuilderClient({
               const moduleLessons = lessons.filter(
                 (l) => l.moduleId === moduleData.id
               );
+              const moduleDropPreview =
+                dropPreview?.type === "module" &&
+                dropPreview.id === moduleData.id
+                  ? dropPreview.placement
+                  : null;
               return (
                 <SortableItem
                   ariaLabel={`Reordenar módulo ${moduleData.title}`}
                   className="overflow-hidden rounded-lg border bg-background/35 shadow-sm"
                   data={{ type: "module" }}
                   disabled={!editable || isPending}
+                  dropPlacementOverride={moduleDropPreview}
                   handleAlignment="start"
                   handleClassName="ml-1"
                   handleHidden={!editable}
@@ -491,6 +613,10 @@ export function CourseBuilderClient({
                           moduleLessons.map((lesson, lessonIndex) => (
                             <SortableLesson
                               disabled={!editable || isPending}
+                              dropPlacementOverride={getLessonDropPlacement(
+                                dropPreview,
+                                lesson.id
+                              )}
                               handleHidden={!editable}
                               key={lesson.id}
                               lesson={lesson}
@@ -515,8 +641,27 @@ export function CourseBuilderClient({
 
       <DragOverlay dropAnimation={dropAnimation}>
         {activeId ? (
-          <div className="rounded-lg border bg-card p-4 opacity-90 shadow-xl">
-            Arrastando {activeType === "module" ? "Módulo" : "Aula"}
+          <div
+            className="flex min-w-0 max-w-[calc(100vw-2rem)] items-center gap-3 rounded-lg border bg-card px-4 py-3 opacity-95 shadow-xl"
+            style={{
+              width: activeWidth ? `${activeWidth}px` : undefined,
+            }}
+          >
+            <HugeiconsIcon
+              aria-hidden="true"
+              className="shrink-0 text-muted-foreground"
+              icon={Menu01Icon}
+              size={18}
+              strokeWidth={2}
+            />
+            <div className="min-w-0">
+              <p className="text-muted-foreground text-xs">
+                {activeType === "module" ? "Módulo" : "Aula"}
+              </p>
+              <p className="truncate font-medium text-sm">
+                {activeLabel ?? "Conteúdo"}
+              </p>
+            </div>
           </div>
         ) : null}
       </DragOverlay>

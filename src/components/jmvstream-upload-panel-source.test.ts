@@ -105,6 +105,18 @@ describe("JmvstreamUploadPanel upload lifecycle", () => {
     expect(source).not.toContain("useKeyWithClickEvents: Dropzone Container");
   });
 
+  it("shows an active visual state while a video is dragged over the dropzone", async () => {
+    const source = await readFile(
+      new URL("./jmvstream-upload-panel.tsx", import.meta.url),
+      "utf8"
+    );
+
+    expect(source).toContain("const [isFileDragActive, setIsFileDragActive]");
+    expect(source).toContain("setIsFileDragActive(true)");
+    expect(source).toContain("setIsFileDragActive(false)");
+    expect(source).toContain("isFileDragActive &&");
+  });
+
   it("keeps the manual-link replacement path available while a video is active", async () => {
     const source = await readFile(
       new URL("./jmvstream-upload-panel.tsx", import.meta.url),

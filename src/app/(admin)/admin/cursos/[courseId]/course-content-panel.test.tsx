@@ -8,13 +8,15 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("./course-builder-components", () => ({
   CourseBuilderWrapper: ({
     editable,
-    toolbar,
+    nextModuleSortOrder,
   }: {
     editable: boolean;
-    toolbar?: React.ReactNode;
+    nextModuleSortOrder?: number;
   }) => (
     <div data-course-builder="true" data-editable={editable}>
-      {toolbar}
+      {editable && nextModuleSortOrder !== undefined ? (
+        <button type="button">Novo módulo</button>
+      ) : null}
     </div>
   ),
   CreateModuleDialog: ({

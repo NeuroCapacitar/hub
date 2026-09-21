@@ -1,18 +1,9 @@
 "use client";
 
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import {
@@ -30,6 +21,10 @@ import {
 } from "@tanstack/react-table";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import {
+  createSortableAccessibility,
+  useSortableSensors,
+} from "@/components/sortable-context";
 import { SortableTableRow } from "@/components/sortable-table-row";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,10 +71,11 @@ export function FaqTable({
     setFaqs(initialFaqs);
   }, [initialFaqs]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const sensors = useSortableSensors();
+  const accessibility = createSortableAccessibility((id) => {
+    const faq = faqs.find((item) => item.id === id);
+    return faq ? `pergunta ${faq.question}` : `pergunta ${id}`;
+  });
 
   function handleDragEnd(event: DragEndEvent) {
     if (readOnly || isPending) {
@@ -150,6 +146,7 @@ export function FaqTable({
 
   return (
     <DndContext
+      accessibility={accessibility}
       collisionDetection={closestCenter}
       id="faq-dnd"
       onDragEnd={handleDragEnd}
@@ -197,6 +194,7 @@ export function FaqTable({
               {faqs.length > 0 ? (
                 table.getRowModel().rows.map((row) => (
                   <SortableTableRow
+                    ariaLabel={`Reordenar pergunta ${row.original.question}`}
                     disabled={readOnly}
                     id={row.original.id}
                     key={row.id}

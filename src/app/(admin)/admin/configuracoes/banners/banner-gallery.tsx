@@ -1,18 +1,9 @@
 "use client";
 
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { AlertCircleIcon, CloudUploadIcon } from "@hugeicons/core-free-icons";
@@ -20,6 +11,10 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import {
+  createSortableAccessibility,
+  useSortableSensors,
+} from "@/components/sortable-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -82,16 +77,13 @@ export function BannerGallery({
     setBanners(initialBanners);
   }, [initialBanners]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const sensors = useSortableSensors();
+  const accessibility = createSortableAccessibility((id) => {
+    const banner = banners.find((item) => item.id === id);
+    return banner
+      ? `banner ${banner.buttonText ?? banner.linkUrl ?? banner.id}`
+      : `banner ${id}`;
+  });
 
   const maxFiles = 5;
   const maxSize = 5 * 1024 * 1024; // 5MB
@@ -361,6 +353,7 @@ export function BannerGallery({
           {banners.length > 0 || uploadingFiles.length > 0 ? (
             <ResourceListBody>
               <DndContext
+                accessibility={accessibility}
                 collisionDetection={closestCenter}
                 id="banner-gallery-dnd"
                 onDragEnd={handleDragEnd}

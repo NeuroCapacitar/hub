@@ -43,6 +43,7 @@ vi.mock("@/components/course-builder-dnd", () => ({
     initialModules,
     renderLesson,
     renderModule,
+    toolbar,
   }: {
     editable: boolean;
     initialLessons: Lesson[];
@@ -62,6 +63,7 @@ vi.mock("@/components/course-builder-dnd", () => ({
         onToggle: () => void;
       }
     ) => ReactNode;
+    toolbar?: ReactNode;
   }) => {
     const firstLesson = initialLessons[0];
     const firstModule = initialModules[0];
@@ -72,6 +74,7 @@ vi.mock("@/components/course-builder-dnd", () => ({
 
     return (
       <div data-builder-editable={editable}>
+        {toolbar}
         {renderModule(firstModule, initialLessons, 0, {
           contentId: "module-1-lessons",
           expanded: true,
@@ -194,6 +197,20 @@ describe("CourseBuilderWrapper editability", () => {
     expect(markup).toContain('data-builder-editable="true"');
     expect(markup).toContain("Nova aula");
     expect(markup).toContain(">Editar<");
+  });
+
+  it("creates the module trigger inside the client wrapper", () => {
+    const markup = renderToStaticMarkup(
+      <CourseBuilderWrapper
+        course={course}
+        editable
+        lessons={[lesson]}
+        modules={[moduleData]}
+        nextModuleSortOrder={2}
+      />
+    );
+
+    expect(markup).toContain("Novo módulo");
   });
 });
 

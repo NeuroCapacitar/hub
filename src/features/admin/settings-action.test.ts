@@ -36,6 +36,7 @@ vi.mock("@/lib/session", () => ({
 
 import {
   deleteFaqAction,
+  reorderBannersAction,
   reorderFaqsAction,
   saveFaqAction,
   saveSettingsAction,
@@ -294,5 +295,46 @@ describe("saveSettingsAction", () => {
         }),
       })
     );
+  });
+
+  it("records the previous and next banner order", async () => {
+    dependencies.clientQuery.mockImplementation((sql: string) => {
+      if (sql.includes("select id, button_text, link_url, sort_order")) {
+        return Promise.resolve({
+          rows: [
+            {
+              button_text: "Primeiro",
+              id: "banner-1",
+              link_url: "https://example.com/primeiro",
+              sort_order: 1,
+            },
+            {
+              button_text: "Segundo",
+              id: "banner-2",
+              link_url: "https://example.com/segundo",
+              sort_order: 2,
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    await reorderBannersAction(["banner-2", "banner-1"]);
+
+    expect(dependencies.writeAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "banners.reordered",
+        metadata: expect.objectContaining({
+          changes: {
+            order: {
+              after: ["Segundo", "Primeiro"],
+              before: ["Primeiro", "Segundo"],
+            },
+          },
+        }),
+      })
+    );
+    expect(dependencies.clientQuery).toHaveBeenCalledWith("COMMIT");
   });
 });

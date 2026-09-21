@@ -1,18 +1,9 @@
 "use client";
 
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { AlertCircleIcon, CloudUploadIcon } from "@hugeicons/core-free-icons";
@@ -20,6 +11,10 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import {
+  createSortableAccessibility,
+  useSortableSensors,
+} from "@/components/sortable-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,14 +65,11 @@ export function AuthMediaGallery({
     setSlides(initialSlides);
   }, [initialSlides]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const sensors = useSortableSensors();
+  const accessibility = createSortableAccessibility((id) => {
+    const slide = slides.find((item) => item.id === id);
+    return slide ? `imagem ${slide.sortOrder}` : `imagem ${id}`;
+  });
 
   const uploadFile = useCallback(
     async (file: File): Promise<void> => {
@@ -311,6 +303,7 @@ export function AuthMediaGallery({
         {slides.length > 0 || uploadingFiles.length > 0 ? (
           <ResourceListBody>
             <DndContext
+              accessibility={accessibility}
               collisionDetection={closestCenter}
               id="auth-media-gallery-dnd"
               onDragEnd={handleDragEnd}

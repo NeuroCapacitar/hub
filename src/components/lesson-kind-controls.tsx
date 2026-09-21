@@ -1,18 +1,9 @@
 "use client";
 
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -93,6 +84,11 @@ import {
   LESSON_RESOURCE_IMAGE_PREVIEW,
 } from "@/features/storage/r2-objects";
 import { cn } from "@/lib/utils";
+import {
+  createSortableAccessibility,
+  getSortableDropPlacement,
+  useSortableSensors,
+} from "./sortable-context";
 
 export function LessonVideoControls({
   asset,
@@ -435,12 +431,24 @@ export function SortableLessonResourceItem({
 }) {
   const {
     attributes,
+    activeIndex,
+    index,
     listeners,
+    overIndex,
     setNodeRef,
     transform,
     transition,
     isDragging,
+    isOver,
   } = useSortable({ id: resource.id });
+
+  const dropPlacement = getSortableDropPlacement({
+    activeIndex,
+    index,
+    isDragging,
+    isOver,
+    overIndex,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -452,7 +460,12 @@ export function SortableLessonResourceItem({
   const badgeText = resource.storage === "r2" ? extension : "LINK";
 
   return (
-    <ResourceItem isDragging={isDragging} nodeRef={setNodeRef} style={style}>
+    <ResourceItem
+      dropPlacement={dropPlacement}
+      isDragging={isDragging}
+      nodeRef={setNodeRef}
+      style={style}
+    >
       <input
         name="resourceStorage[]"
         type="hidden"
@@ -709,6 +722,7 @@ export function LessonResourcesFields({
   const [uploadingFiles, setUploadingFiles] = useState<
     { id: string; file: File }[]
   >([]);
+  const [isFileDragActive, setIsFileDragActive] = useState(false);
   const [editingResourceId, setEditingResourceId] = useState<string | null>(
     null
   );
@@ -774,10 +788,11 @@ export function LessonResourcesFields({
     }
   };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const sensors = useSortableSensors();
+  const accessibility = createSortableAccessibility((id) => {
+    const resource = resources.find((item) => item.id === id);
+    return resource ? `anexo ${resource.label || "sem nome"}` : `anexo ${id}`;
+  });
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -790,8 +805,60 @@ export function LessonResourcesFields({
     }
   };
 
+  const handleFileDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setIsFileDragActive(true);
+  };
+
+  const handleFileDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (
+      event.relatedTarget instanceof Node &&
+      event.currentTarget.contains(event.relatedTarget)
+    ) {
+      return;
+    }
+    setIsFileDragActive(false);
+  };
+
+  const handleFileDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setIsFileDragActive(true);
+  };
+
+  const handleFileDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setIsFileDragActive(false);
+    const file = event.dataTransfer.files.item(0);
+    if (file) {
+      uploadResource(file).catch(() => undefined);
+    }
+  };
+
   return (
-    <ResourceListContainer>
+    <ResourceListContainer
+      className={isFileDragActive ? "border-primary bg-primary/5" : ""}
+      onDragEnter={handleFileDragEnter}
+      onDragLeave={handleFileDragLeave}
+      onDragOver={handleFileDragOver}
+      onDrop={handleFileDrop}
+    >
       <ResourceEditModal
         onClose={() => setEditingResourceId(null)}
         onUpdate={updateResource}
@@ -847,12 +914,14 @@ export function LessonResourcesFields({
           </>
         }
         count={resources.length}
+        description="A ordem será salva ao salvar a aula."
         title="Anexos"
       />
 
       {resources.length > 0 || uploadingFiles.length > 0 ? (
         <ResourceListBody>
           <DndContext
+            accessibility={accessibility}
             collisionDetection={closestCenter}
             id="lesson-resources-dnd"
             onDragEnd={handleDragEnd}
@@ -879,7 +948,10 @@ export function LessonResourcesFields({
           ))}
         </ResourceListBody>
       ) : (
-        <ResourceDropzoneEmpty />
+        <ResourceDropzoneEmpty
+          description="Ou use o botão Upload acima."
+          title="Arraste um arquivo aqui"
+        />
       )}
     </ResourceListContainer>
   );
