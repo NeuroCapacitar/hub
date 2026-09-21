@@ -235,10 +235,7 @@ const CertificateTemplateSessionHeader = ({
   status,
   template,
 }: CertificateTemplateSessionHeaderProps): React.JSX.Element => (
-  <CardHeader
-    className="flex flex-col gap-2 border-b sm:flex-row sm:items-center sm:justify-between"
-    density="compact"
-  >
+  <CardHeader className="flex flex-col gap-1 border-b px-4 py-2 pb-2 sm:flex-row sm:items-center sm:justify-between">
     <div className="flex min-w-0 items-center gap-2">
       <CardTitle as="h2" className="text-sm">
         Certificado

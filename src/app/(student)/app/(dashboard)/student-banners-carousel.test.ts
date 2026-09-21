@@ -9,6 +9,7 @@ describe("student banners carousel", () => {
     );
 
     expect(source).toContain("aspect-[4/1]");
+    expect(source).toContain("rounded-media");
   });
 
   it("disables drag interaction when there is only one banner", () => {

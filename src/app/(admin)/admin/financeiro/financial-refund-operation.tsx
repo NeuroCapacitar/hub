@@ -72,8 +72,8 @@ export function RefundOperation({
   };
 
   return (
-    <details className="mt-3 rounded-md border bg-background p-3">
-      <summary className="cursor-pointer rounded-md font-medium text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+    <details className="mt-3 rounded-detail border bg-background p-3">
+      <summary className="cursor-pointer rounded-detail font-medium text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
         Solicitar reembolso integral
       </summary>
       {confirmationToken ? (

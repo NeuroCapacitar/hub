@@ -567,10 +567,7 @@ function LessonResourceItem({
   const isExternal = resource.storage !== "r2";
 
   return (
-    <Card
-      className="bg-card/50 transition-colors hover:bg-muted/40"
-      density="compact"
-    >
+    <Card className="gap-0 rounded-card bg-card/50 py-0 transition-colors hover:bg-muted/40">
       <CardContent className="px-4 py-1 sm:px-5">
         <div className="grid min-w-0 grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 py-3">
           <ResourceVisual

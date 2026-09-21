@@ -130,7 +130,7 @@ export function AuthMediaCarousel({
         <CarouselContent className="h-full">
           {displaySlides.map((slide) => (
             <CarouselItem className="relative h-full min-h-full" key={slide.id}>
-              <div className="absolute inset-0 overflow-hidden rounded-xl bg-muted ring-1 ring-white/10 ring-inset">
+              <div className="absolute inset-0 overflow-hidden rounded-media bg-muted ring-1 ring-white/10 ring-inset">
                 {slide.id === FALLBACK_SLIDE_ID && fallbackFailed ? (
                   <div
                     aria-hidden="true"

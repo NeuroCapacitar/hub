@@ -37,7 +37,7 @@ export function ContinueLearningCard({
         </h2>
       </div>
 
-      <article className="overflow-hidden rounded-2xl border border-border/70 bg-card text-card-foreground shadow-sm">
+      <article className="overflow-hidden rounded-surface border border-border/70 bg-card text-card-foreground shadow-sm">
         <div className="grid lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
           <ContinueLearningMedia course={course} />
 

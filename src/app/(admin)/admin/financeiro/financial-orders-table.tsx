@@ -163,7 +163,7 @@ export function FinancialOrdersTable({
         />
       </div>
 
-      <div className="rounded-lg border">
+      <div className="rounded-surface border">
         <Table className="min-w-[720px]">
           <TableCaption className="sr-only">
             Pedidos e pagamentos registrados

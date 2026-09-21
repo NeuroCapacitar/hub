@@ -10,7 +10,7 @@ export default function StudentAreaLoading(): React.JSX.Element {
             <div className="mb-5">
               <Skeleton className="h-6 w-48" />
             </div>
-            <div className="grid overflow-hidden rounded-2xl border border-border/70 bg-card lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
+            <div className="grid overflow-hidden rounded-surface border border-border/70 bg-card lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
               <Skeleton className="aspect-[16/10] rounded-none lg:aspect-auto lg:min-h-52" />
               <div className="flex flex-col gap-5 p-5 sm:p-6 lg:p-8">
                 <Skeleton className="h-5 w-28 rounded-full" />

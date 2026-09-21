@@ -332,6 +332,9 @@ Regras de superfície:
 - `Card` já fornece a superfície padrão, raio, sombra e anel semântico; nos
   usos comuns, a classe do chamador deve cuidar apenas de layout ou de uma
   variação comprovada;
+- `Card` usa espaçamento e forma confortáveis por padrão; detalhes que exigem
+  comparação rápida usam `size="sm"` e classes locais explícitas, sem uma
+  segunda API global de densidade;
 - um card agrupa conteúdo ou interação realmente relacionada;
 - não criar card apenas para dar peso visual a uma seção;
 - evitar card dentro de card, bordas repetidas e sombras ornamentais;
@@ -370,9 +373,25 @@ primitives existentes definem a topologia de cada tela.
 - tabelas longas podem rolar dentro do contêiner da tabela, nunca esconder o
   overflow da página inteira.
 
-Não transforme toda tela em um mosaico uniforme. A densidade deve acompanhar a
-tarefa: operação pode ser compacta e comparável; aprendizagem deve preservar
-leitura e foco no conteúdo.
+Não transforme toda tela em um mosaico uniforme. O padrão global é confortável;
+detalhes operacionais podem reduzir padding localmente quando a comparação for
+a tarefa principal, sem criar uma aparência operacional separada.
+
+As formas semânticas da fundação vivem em `src/app/globals.css`:
+`--shape-radius-detail`, `--shape-radius-control`, `--shape-radius-card`,
+`--shape-radius-surface` e `--shape-radius-media`. O valor-base `--radius`
+continua preservado para compatibilidade; novos usos devem preferir o papel
+semântico quando a intenção for um dos contextos acima. Não alterar o valor
+global sem validar os consumidores em `design-system-preview.tsx`, foco,
+mobile, dialogs, sheets e sidebar.
+
+O contrato atual usa uma linguagem confortável globalmente. Admin, Financeiro,
+Auditoria, Operação e tabelas podem usar `size="sm"` e espaçamento local quando
+a comparação rápida justificar a redução de espaço; isso é uma exceção do
+componente, não uma densidade visual alternativa.
+
+A fixture de [design-system-preview.tsx](src/components/design-system-preview.tsx)
+é a referência de comparação antes de migrar outros primitives ou telas reais.
 
 ## Tipografia e ritmo
 

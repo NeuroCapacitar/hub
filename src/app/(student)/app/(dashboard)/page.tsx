@@ -353,7 +353,7 @@ function CourseCard({
   }
 
   return (
-    <article className="group relative flex aspect-[24/25] w-full max-w-[340px] flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-colors hover:border-primary/45">
+    <article className="group relative flex aspect-[24/25] w-full max-w-[340px] flex-col overflow-hidden rounded-surface border border-border/70 bg-card text-card-foreground shadow-sm transition-colors hover:border-primary/45">
       <div className="absolute inset-0 z-0">
         {course.thumbnailUrl ? (
           <CourseCoverImage

@@ -196,7 +196,7 @@ export function CertificateTemplateEditor({
   const canEnable = Boolean(active && issuerConfigured);
 
   return (
-    <Card density="compact">
+    <Card className="gap-0 py-0">
       <PendingCertificateReconciliation
         count={pendingCertificateReconciliationCount}
         courseId={courseId}

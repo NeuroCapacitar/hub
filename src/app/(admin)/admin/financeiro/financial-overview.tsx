@@ -103,7 +103,7 @@ function PaymentReviewContent({
 
   if (paymentReviews.totalCount === 0) {
     return (
-      <Empty className="rounded-lg border border-dashed py-8">
+      <Empty className="rounded-surface border border-dashed py-8">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <HugeiconsIcon aria-hidden="true" icon={CheckmarkCircle02Icon} />
@@ -118,7 +118,7 @@ function PaymentReviewContent({
   }
 
   return (
-    <Empty className="rounded-lg border border-dashed py-8">
+    <Empty className="rounded-surface border border-dashed py-8">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <HugeiconsIcon aria-hidden="true" icon={Alert02Icon} />
@@ -275,55 +275,66 @@ export function FinancialOverview({
           {paymentReviewsSection}
         </section>
       ) : null}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminMetricCard
-          helper={`${financialHealth.paidOrders} pedido${
-            financialHealth.paidOrders === 1 ? "" : "s"
-          } pago${financialHealth.paidOrders === 1 ? "" : "s"} no histórico completo.`}
-          icon={Coins01Icon}
-          label="Receita bruta de pedidos pagos"
-          value={formatCurrencyInCents(financialHealth.paidRevenueInCents)}
-        />
-        <AdminMetricCard
-          helper={averagePaidTicketHelper}
-          icon={CreditCardIcon}
-          label="Valor médio dos pedidos pagos"
-          value={averagePaidTicket}
-        />
-        <AdminMetricCard
-          help={
-            <FinanceHelp
-              description="Valor dos pedidos que ainda aguardam confirmação de pagamento."
-              details={[
-                "Checkouts falhos, cancelados ou expirados ficam fora deste valor.",
-                "Use a aba Pedidos para consultar cada caso e a evidência disponível.",
-              ]}
-              title="Valor em aberto"
-            />
-          }
-          helper={`${financialHealth.pendingOrders} pedido${
-            financialHealth.pendingOrders === 1 ? "" : "s"
-          } em aberto no histórico.`}
-          icon={Alert02Icon}
-          label="Valor em aberto"
-          value={formatCurrencyInCents(financialHealth.pendingRevenueInCents)}
-        />
-        <AdminMetricCard
-          help={
-            <FinanceHelp
-              description="Percentual de pedidos pagos em relação a todos os pedidos registrados."
-              details={[
-                "É um indicador operacional de pedidos, não uma conversão de visitantes do checkout.",
-                "Pedidos cancelados e checkouts encerrados permanecem no denominador.",
-              ]}
-              title="Pedidos pagos / registrados"
-            />
-          }
-          helper={checkoutConversionHelper}
-          icon={ShoppingCart01Icon}
-          label="Pedidos pagos / registrados"
-          value={checkoutConversion}
-        />
+      <section aria-labelledby="financial-summary-title">
+        <div className="mb-3">
+          <h2 className="type-section-title" id="financial-summary-title">
+            Resumo financeiro
+          </h2>
+          <p className="type-body-sm mt-1 text-muted-foreground">
+            Valores históricos e indicadores derivados dos pedidos registrados
+            no Hub.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminMetricCard
+            helper={`${financialHealth.paidOrders} pedido${
+              financialHealth.paidOrders === 1 ? "" : "s"
+            } pago${financialHealth.paidOrders === 1 ? "" : "s"} no histórico completo.`}
+            icon={Coins01Icon}
+            label="Receita bruta de pedidos pagos"
+            value={formatCurrencyInCents(financialHealth.paidRevenueInCents)}
+          />
+          <AdminMetricCard
+            helper={averagePaidTicketHelper}
+            icon={CreditCardIcon}
+            label="Valor médio dos pedidos pagos"
+            value={averagePaidTicket}
+          />
+          <AdminMetricCard
+            help={
+              <FinanceHelp
+                description="Valor dos pedidos que ainda aguardam confirmação de pagamento."
+                details={[
+                  "Checkouts falhos, cancelados ou expirados ficam fora deste valor.",
+                  "Use a aba Pedidos para consultar cada caso e a evidência disponível.",
+                ]}
+                title="Valor em aberto"
+              />
+            }
+            helper={`${financialHealth.pendingOrders} pedido${
+              financialHealth.pendingOrders === 1 ? "" : "s"
+            } em aberto no histórico.`}
+            icon={Alert02Icon}
+            label="Valor em aberto"
+            value={formatCurrencyInCents(financialHealth.pendingRevenueInCents)}
+          />
+          <AdminMetricCard
+            help={
+              <FinanceHelp
+                description="Percentual de pedidos pagos em relação a todos os pedidos registrados."
+                details={[
+                  "É um indicador operacional de pedidos, não uma conversão de visitantes do checkout.",
+                  "Pedidos cancelados e checkouts encerrados permanecem no denominador.",
+                ]}
+                title="Pedidos pagos / registrados"
+              />
+            }
+            helper={checkoutConversionHelper}
+            icon={ShoppingCart01Icon}
+            label="Pedidos pagos / registrados"
+            value={checkoutConversion}
+          />
+        </div>
       </section>
 
       <section>
@@ -545,7 +556,7 @@ function FinanceStatusTile({
 }): React.JSX.Element {
   return (
     <Link
-      className="group flex h-full min-h-[126px] flex-col rounded-xl bg-card p-4 shadow-sm ring-1 ring-border/50 transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+      className="group flex h-full min-h-[126px] flex-col rounded-surface bg-card p-4 shadow-sm ring-1 ring-border/50 transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       href={href}
     >
       <p className="font-medium text-muted-foreground text-sm tracking-tight">

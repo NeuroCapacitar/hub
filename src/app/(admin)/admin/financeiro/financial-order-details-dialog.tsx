@@ -451,7 +451,7 @@ function InstallmentScheduleSection({
         <>
           {scheduleSummary ? (
             <dl className="mt-4 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg bg-muted/30 p-3">
+              <div className="rounded-card bg-muted/30 p-3">
                 <dt className="text-muted-foreground text-xs">
                   Confirmadas no Asaas
                 </dt>
@@ -460,7 +460,7 @@ function InstallmentScheduleSection({
                   {formatCurrencyInCents(scheduleSummary.confirmedValueInCents)}
                 </dd>
               </div>
-              <div className="rounded-lg bg-muted/30 p-3">
+              <div className="rounded-card bg-muted/30 p-3">
                 <dt className="text-muted-foreground text-xs">
                   Ainda não confirmadas
                 </dt>
@@ -470,7 +470,7 @@ function InstallmentScheduleSection({
                 </dd>
               </div>
               {scheduleSummary.reversedCount > 0 ? (
-                <div className="rounded-lg bg-muted/30 p-3">
+                <div className="rounded-card bg-muted/30 p-3">
                   <dt className="text-muted-foreground text-xs">
                     Reembolsadas ou removidas
                   </dt>
@@ -487,7 +487,7 @@ function InstallmentScheduleSection({
               {formatDateTime(order.installmentPaymentsSyncedAt)}
             </p>
           ) : null}
-          <div className="mt-3 rounded-lg border">
+          <div className="mt-3 rounded-surface border">
             <Table className="min-w-[560px]">
               <TableCaption className="sr-only">
                 Cobranças individuais do parcelamento
@@ -770,8 +770,8 @@ function OrderTechnicalDetailsSection({
   }
 
   return (
-    <details className="rounded-lg border p-4">
-      <summary className="cursor-pointer rounded-md font-medium text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+    <details className="rounded-card border p-4">
+      <summary className="cursor-pointer rounded-detail font-medium text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
         Detalhes técnicos
       </summary>
       <div className="mt-4 flex flex-col gap-6">

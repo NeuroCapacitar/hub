@@ -31,7 +31,7 @@ export function CoursesRevenueTable({
 }: CoursesRevenueTableProps): React.JSX.Element {
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border">
+      <div className="rounded-surface border">
         <Table className="min-w-[520px]">
           <TableCaption className="sr-only">
             Receita agregada por curso

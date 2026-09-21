@@ -156,6 +156,43 @@ function SurfaceSamples(): React.JSX.Element {
   );
 }
 
+function DensitySamples(): React.JSX.Element {
+  return (
+    <section aria-labelledby="density-samples-title" className="space-y-3">
+      <div>
+        <h3 className="font-medium text-sm" id="density-samples-title">
+          Ritmo confortável e exceções
+        </h3>
+        <p className="mt-1 text-muted-foreground text-xs">
+          O produto mantém uma base confortável; apenas detalhes específicos
+          podem usar uma composição compacta.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Aprendizagem</CardTitle>
+          </CardHeader>
+          <CardContent className="text-muted-foreground text-sm">
+            Mais respiro, menos divisores e uma hierarquia tranquila para
+            leitura e continuidade.
+          </CardContent>
+        </Card>
+        <Card className="gap-0 py-0" size="sm">
+          <CardHeader className="gap-1 px-4 py-2 pb-2">
+            <CardTitle>Detalhe compacto</CardTitle>
+          </CardHeader>
+          <CardContent className="text-muted-foreground text-sm">
+            Exceção reservada para auditoria, tabelas e detalhes que exigem
+            comparação rápida.
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
 function PrimitiveSamples(): React.JSX.Element {
   return (
     <div className="space-y-4">
@@ -472,6 +509,7 @@ function PreviewColumn(): React.JSX.Element {
 
         <ProgressSamples />
         <SurfaceSamples />
+        <DensitySamples />
         <PrimitiveSamples />
         <ControlSamples />
 

@@ -32,6 +32,7 @@ describe("design system preview coverage", () => {
     }
 
     expect(source).toContain('variant="progress"');
+    expect(source).toContain('size="sm"');
 
     for (const surface of [
       "bg-background",

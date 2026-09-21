@@ -188,7 +188,7 @@ export function CourseOverviewClient({
   return (
     <>
       {continueWatchingLessons.length > 0 && (
-        <section className="mt-8 rounded-xl border border-border/50 bg-muted/20 px-6 pt-4">
+        <section className="mt-8 rounded-surface border border-border/50 bg-muted/20 px-6 pt-4">
           <div>
             <h2 className="font-bold text-xl tracking-tight">
               {previewMode ? "Preview da trilha" : "Continuar assistindo"}

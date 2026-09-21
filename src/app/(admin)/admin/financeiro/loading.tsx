@@ -35,15 +35,15 @@ function OverviewLoading(): React.JSX.Element {
     <>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {["revenue", "ticket", "open", "orders"].map((key) => (
-          <Skeleton className="h-[120px] rounded-xl" key={key} />
+          <Skeleton className="h-[120px] rounded-surface" key={key} />
         ))}
       </section>
       <section>
-        <Skeleton className="h-[300px] w-full rounded-xl" />
+        <Skeleton className="h-[300px] w-full rounded-surface" />
       </section>
       <section className="grid gap-8 xl:grid-cols-2">
-        <Skeleton className="h-[380px] w-full rounded-xl" />
-        <Skeleton className="h-[380px] w-full rounded-xl" />
+        <Skeleton className="h-[380px] w-full rounded-surface" />
+        <Skeleton className="h-[380px] w-full rounded-surface" />
       </section>
     </>
   );
@@ -52,7 +52,7 @@ function OverviewLoading(): React.JSX.Element {
 function OrdersLoading(): React.JSX.Element {
   return (
     <section>
-      <div className="rounded-xl border bg-card p-6">
+      <div className="rounded-surface border bg-card p-6">
         <div className="flex flex-col gap-3">
           <Skeleton className="h-5 w-32" />
           <Skeleton className="h-4 w-full max-w-[420px]" />
@@ -61,7 +61,7 @@ function OrdersLoading(): React.JSX.Element {
           <Skeleton className="h-9 w-full max-w-xl" />
           <Skeleton className="h-9 w-24" />
         </div>
-        <div className="mt-4 overflow-hidden rounded-lg border">
+        <div className="mt-4 overflow-hidden rounded-surface border">
           <Skeleton className="h-10 w-full rounded-none" />
           {["one", "two", "three", "four", "five", "six"].map((key) => (
             <Skeleton className="mt-px h-14 w-full rounded-none" key={key} />
@@ -85,7 +85,7 @@ const getFinancialTabLoading = (activeTab: string | null): React.ReactNode => {
 function AnalysisLoading(): React.JSX.Element {
   return (
     <section>
-      <div className="rounded-xl border bg-card p-6">
+      <div className="rounded-surface border bg-card p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col gap-3">
             <Skeleton className="h-5 w-40" />
@@ -104,7 +104,7 @@ function AnalysisLoading(): React.JSX.Element {
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {["gross", "fees", "refunds", "net"].map((key) => (
-                <Skeleton className="h-[120px] rounded-xl" key={key} />
+                <Skeleton className="h-[120px] rounded-surface" key={key} />
               ))}
             </div>
           </section>
@@ -115,12 +115,12 @@ function AnalysisLoading(): React.JSX.Element {
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {["orders", "average", "open", "refund-rate"].map((key) => (
-                <Skeleton className="h-[120px] rounded-xl" key={key} />
+                <Skeleton className="h-[120px] rounded-surface" key={key} />
               ))}
             </div>
           </section>
         </div>
-        <Skeleton className="mt-6 h-24 w-full rounded-xl" />
+        <Skeleton className="mt-6 h-24 w-full rounded-surface" />
       </div>
     </section>
   );

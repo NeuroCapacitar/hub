@@ -30,7 +30,7 @@ export function StudentBannersCarousel({
         We use an inner div to apply the concentric border-radius & subtle outline 
         ensuring the carousel itself masks overflow correctly. 
       */}
-      <div className="overflow-hidden rounded-3xl border border-border/60 shadow-sm">
+      <div className="overflow-hidden rounded-media border border-border/60 shadow-sm">
         <Carousel
           aria-label="Destaques da plataforma"
           className="w-full"
