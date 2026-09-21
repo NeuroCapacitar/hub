@@ -27,5 +27,8 @@ describe("LessonResourcesFields drop behavior", () => {
       'description="A ordem será salva ao salvar a aula."'
     );
     expect(source).toContain('title="Arraste um arquivo aqui"');
+    expect(source).toContain('status: "error" | "uploading"');
+    expect(source).toContain('role="alert"');
+    expect(source).toContain("Tentar novamente");
   });
 });

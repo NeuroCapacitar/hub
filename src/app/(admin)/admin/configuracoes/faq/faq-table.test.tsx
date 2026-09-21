@@ -89,6 +89,8 @@ describe("FaqTable", () => {
     expect(markup).toContain("Reordenação");
     expect(markup).toContain("Publicado");
     expect(markup).toContain('scope="col"');
+    expect(markup).toContain("table-fixed");
+    expect(markup).toContain("overflow-x-hidden");
   });
 
   it("keeps the empty state inside the FAQ table", () => {

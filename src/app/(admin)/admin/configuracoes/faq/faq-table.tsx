@@ -112,8 +112,10 @@ export function FaqTable({
       header: "Pergunta",
       cell: ({ row }) => (
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="font-medium">{row.original.question}</span>
-          <span className="text-muted-foreground text-xs">
+          <span className="block break-words font-medium [overflow-wrap:anywhere]">
+            {row.original.question}
+          </span>
+          <span className="block break-words text-muted-foreground text-xs [overflow-wrap:anywhere]">
             {row.original.answer.slice(0, 100)}
             {row.original.answer.length > 100 ? "…" : ""}
           </span>
@@ -158,7 +160,7 @@ export function FaqTable({
           isPending && "pointer-events-none opacity-60"
         )}
       >
-        <Table>
+        <Table className="table-fixed" containerClassName="overflow-x-hidden">
           <TableCaption className="sr-only">
             Perguntas frequentes cadastradas
           </TableCaption>
@@ -170,9 +172,12 @@ export function FaqTable({
                 </TableHead>
                 {headerGroup.headers.map((header) => (
                   <TableHead
-                    className={
-                      header.column.id === "actions" ? "text-right" : undefined
-                    }
+                    className={cn(
+                      header.column.id === "isPublished" &&
+                        "w-24 whitespace-nowrap",
+                      header.column.id === "actions" &&
+                        "w-16 whitespace-nowrap text-right"
+                    )}
                     key={header.id}
                   >
                     {header.isPlaceholder
@@ -199,25 +204,34 @@ export function FaqTable({
                     id={row.original.id}
                     key={row.id}
                   >
-                    {row
-                      .getVisibleCells()
-                      .map((cell) =>
-                        cell.column.id === "question" ? (
-                          <TableRowHeader key={cell.id}>
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </TableRowHeader>
-                        ) : (
-                          <TableCell key={cell.id}>
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext()
-                            )}
-                          </TableCell>
-                        )
-                      )}
+                    {row.getVisibleCells().map((cell) =>
+                      cell.column.id === "question" ? (
+                        <TableRowHeader
+                          className="min-w-0 max-w-0 break-words [overflow-wrap:anywhere]"
+                          key={cell.id}
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </TableRowHeader>
+                      ) : (
+                        <TableCell
+                          className={cn(
+                            cell.column.id === "isPublished" &&
+                              "w-24 whitespace-nowrap",
+                            cell.column.id === "actions" &&
+                              "w-16 whitespace-nowrap text-right"
+                          )}
+                          key={cell.id}
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </TableCell>
+                      )
+                    )}
                   </SortableTableRow>
                 ))
               ) : (

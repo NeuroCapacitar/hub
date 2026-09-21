@@ -6,10 +6,13 @@ import { cn } from "@/lib/utils";
 
 const TABLE_CONTAINER_ACCESSIBILITY_PROPS = { tabIndex: 0 } as const;
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({ className, containerClassName, ...props }: TableProps) {
   return (
     <div
-      className="relative w-full overflow-x-auto border border-transparent focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 focus-visible:ring-2 focus-visible:ring-background"
+      className={cn(
+        "relative w-full overflow-x-auto border border-transparent focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 focus-visible:ring-2 focus-visible:ring-background",
+        containerClassName
+      )}
       data-slot="table-container"
       {...TABLE_CONTAINER_ACCESSIBILITY_PROPS}
     >
@@ -21,6 +24,10 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
     </div>
   );
 }
+
+type TableProps = React.ComponentProps<"table"> & {
+  containerClassName?: string;
+};
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
