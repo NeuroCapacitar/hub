@@ -6,6 +6,15 @@ import { PageContainer } from "@/components/page-container";
 import { Button } from "@/components/ui/button";
 import { CourseInterestButton } from "@/features/courses/course-interest-button";
 import {
+  CourseOfferAccessNote,
+  CourseOfferInfoNote,
+} from "@/features/courses/course-offer-dialog";
+import { getFreeCourseOfferFacts } from "@/features/courses/course-offer-facts";
+import {
+  CourseOfferPageFrame,
+  CourseOfferSummarySurface,
+} from "@/features/courses/course-offer-page";
+import {
   getPurchaseHandoffView,
   type PurchaseHandoffView,
 } from "@/features/payments/purchase-handoff";
@@ -110,60 +119,78 @@ function FreeEnrollment({
   session: Awaited<ReturnType<typeof getCurrentSession>>;
   view: Extract<PurchaseHandoffView, { kind: "free_enrollment" }>;
 }): React.JSX.Element {
-  if (session?.role === "student") {
-    return (
-      <PageContainer
-        as="main"
-        className="min-h-screen bg-background text-foreground"
-      >
-        <section className="max-w-2xl rounded-lg border bg-card p-6">
-          <p className="font-medium text-muted-foreground text-sm">
-            Curso gratuito
-          </p>
-          <h1 className="type-section-title mt-2">{view.courseTitle}</h1>
-          <p className="mt-3 text-muted-foreground text-sm leading-6">
-            Inscreva-se gratuitamente para liberar seu acesso ao Curso.
-          </p>
-          <FreeEnrollmentButton className="mt-6" courseId={view.courseId} />
-        </section>
-      </PageContainer>
-    );
-  }
-
+  const isStudent = session?.role === "student";
+  const facts = getFreeCourseOfferFacts(view.offer);
   const returnTo = getSafeAuthReturnTo(`/comprar/${view.courseSlug}`);
   const returnQuery = returnTo
     ? `?${new URLSearchParams({ returnTo }).toString()}`
     : "";
+  let accessNoteDescription = allowPublicSignup
+    ? "Depois de entrar ou criar sua conta, você confirmará a inscrição gratuita."
+    : "Entre para confirmar a inscrição gratuita.";
+  if (isStudent) {
+    accessNoteDescription = view.offer.certificateEnabled
+      ? "Aulas publicadas e Certificado ao concluir, sem cobrança."
+      : "Aulas publicadas para você começar no seu ritmo, sem cobrança.";
+  }
+  let heroDescription = allowPublicSignup
+    ? "A inscrição é gratuita. Crie sua conta ou entre para continuar."
+    : "A inscrição é gratuita. Entre para continuar.";
+  if (isStudent) {
+    heroDescription = "Inscreva-se sem custo e comece a aprender no seu ritmo.";
+  }
 
   return (
-    <PageContainer
-      as="main"
-      className="min-h-screen bg-background text-foreground"
-    >
-      <section className="max-w-2xl rounded-lg border bg-card p-6">
-        <p className="font-medium text-muted-foreground text-sm">
-          Curso gratuito
-        </p>
-        <h1 className="type-section-title mt-2">{view.courseTitle}</h1>
-        <p className="mt-3 text-muted-foreground text-sm leading-6">
-          {allowPublicSignup
-            ? "Crie sua conta ou entre para fazer sua inscrição gratuita."
-            : "Entre para fazer sua inscrição gratuita."}
-        </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          {allowPublicSignup ? (
-            <Button asChild>
-              <Link href={route(`/cadastro${returnQuery}`)}>
-                Criar conta para se inscrever
-              </Link>
+    <CourseOfferPageFrame>
+      <CourseOfferSummarySurface
+        badgeLabel="Curso gratuito"
+        courseDescription={view.offer.description}
+        coverBlurDataUrl={view.offer.coverBlurDataUrl}
+        facts={facts}
+        heroDescription={
+          <p className="max-w-[38rem] text-pretty text-card-foreground/75 text-sm">
+            {heroDescription}
+          </p>
+        }
+        thumbnailUrl={view.offer.thumbnailUrl}
+        title={
+          <h1 className="max-w-[38rem] text-balance font-semibold text-xl tracking-tight sm:text-2xl">
+            {view.offer.title}
+          </h1>
+        }
+      >
+        {isStudent ? (
+          <CourseOfferAccessNote
+            description={accessNoteDescription}
+            title="Acesso gratuito"
+          />
+        ) : (
+          <CourseOfferInfoNote
+            description={accessNoteDescription}
+            title="Inscrição gratuita"
+          />
+        )}
+        {isStudent ? (
+          <FreeEnrollmentButton
+            className="w-full sm:flex-1"
+            courseId={view.courseId}
+          />
+        ) : (
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            {allowPublicSignup ? (
+              <Button asChild className="w-full sm:flex-1">
+                <Link href={route(`/cadastro${returnQuery}`)}>
+                  Criar conta para se inscrever
+                </Link>
+              </Button>
+            ) : null}
+            <Button asChild className="w-full sm:flex-1" variant="outline">
+              <Link href={route(`/entrar${returnQuery}`)}>Entrar</Link>
             </Button>
-          ) : null}
-          <Button asChild variant="outline">
-            <Link href={route(`/entrar${returnQuery}`)}>Entrar</Link>
-          </Button>
-        </div>
-      </section>
-    </PageContainer>
+          </div>
+        )}
+      </CourseOfferSummarySurface>
+    </CourseOfferPageFrame>
   );
 }
 

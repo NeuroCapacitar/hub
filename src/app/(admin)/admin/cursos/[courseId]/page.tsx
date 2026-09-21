@@ -1,11 +1,7 @@
-import { ViewIcon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { notFound } from "next/navigation";
 import type { StudentManagementCapabilities } from "@/components/admin/student-management-types";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -291,20 +287,6 @@ export default async function AdminCourseDetailPage({
         <PageHeader title={course.title} />
 
         <CourseManagementTabs
-          actions={
-            <Button asChild size="sm" variant="outline">
-              <a href={route(`/app/cursos/${course.id}?preview=student`)}>
-                <HugeiconsIcon
-                  aria-hidden="true"
-                  data-icon="inline-start"
-                  icon={ViewIcon}
-                  size={16}
-                  strokeWidth={2}
-                />
-                Ver como aluno
-              </a>
-            </Button>
-          }
           certificate={certificateContent}
           content={
             data.tab === "content" && contentData && contentSignal ? (
@@ -323,11 +305,13 @@ export default async function AdminCourseDetailPage({
             data.tab === "overview" && contentSummary && operationalState ? (
               <CourseOverview
                 contentSummary={contentSummary}
+                courseAvailability={courseStatusPresentation}
                 courseId={course.id}
                 durationSeconds={contentSummary.totalDurationSeconds}
                 moduleCount={data.modules.length}
                 operationalState={operationalState}
                 overviewSummary={data.overviewSummary}
+                previewHref={route(`/app/cursos/${course.id}?preview=student`)}
                 publicationState={data.publicationState}
               />
             ) : null
@@ -379,11 +363,6 @@ export default async function AdminCourseDetailPage({
                 </Card>
               </div>
             ) : null
-          }
-          status={
-            <Badge variant={courseStatusPresentation.variant}>
-              {courseStatusPresentation.label}
-            </Badge>
           }
           students={
             data.tab === "students" ? (

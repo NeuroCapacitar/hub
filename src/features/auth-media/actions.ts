@@ -533,6 +533,22 @@ export const reorderAuthMediaAction = async (
         [index + 1, slideId]
       );
     }
+    await writeAuditLog({
+      action: "auth_media_slides.reordered",
+      actorUserId: session.user.id,
+      client,
+      metadata: {
+        changes: {
+          order: {
+            after: normalizedIds,
+            before: previousOrder,
+          },
+        },
+        targetLabelAfter: "Mídia da tela de acesso",
+        targetLabelBefore: "Mídia da tela de acesso",
+      },
+      targetType: "auth_media_slide",
+    });
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -541,20 +557,5 @@ export const reorderAuthMediaAction = async (
     client.release();
   }
 
-  await writeAuditLog({
-    action: "auth_media_slides.reordered",
-    actorUserId: session.user.id,
-    metadata: {
-      changes: {
-        order: {
-          after: normalizedIds,
-          before: previousOrder,
-        },
-      },
-      targetLabelAfter: "Mídia da tela de acesso",
-      targetLabelBefore: "Mídia da tela de acesso",
-    },
-    targetType: "auth_media_slide",
-  });
   revalidateAuthMedia();
 };

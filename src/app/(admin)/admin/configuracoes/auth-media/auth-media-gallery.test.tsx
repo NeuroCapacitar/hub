@@ -7,6 +7,9 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
+  dndHandlers: {
+    onDragEnd: undefined as ((event: unknown) => void) | undefined,
+  },
   deleteAuthMediaAction: vi.fn(),
   reorderAuthMediaAction: vi.fn(),
   router: { refresh: vi.fn() },
@@ -58,7 +61,16 @@ vi.mock("@/features/auth-media/auth-media-crop-dialog", () => ({
     ) : null,
 }));
 vi.mock("@dnd-kit/core", () => ({
-  DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DndContext: ({
+    children,
+    onDragEnd,
+  }: {
+    children: React.ReactNode;
+    onDragEnd: (event: unknown) => void;
+  }) => {
+    dependencies.dndHandlers.onDragEnd = onDragEnd;
+    return <>{children}</>;
+  },
   closestCenter: vi.fn(),
   KeyboardSensor: vi.fn(),
   PointerSensor: vi.fn(),
@@ -69,7 +81,14 @@ vi.mock("@dnd-kit/sortable", () => ({
   SortableContext: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
-  arrayMove: vi.fn(),
+  arrayMove: vi.fn((items: unknown[], from: number, to: number) => {
+    const next = [...items];
+    const [item] = next.splice(from, 1);
+    if (item !== undefined) {
+      next.splice(to, 0, item);
+    }
+    return next;
+  }),
   sortableKeyboardCoordinates: vi.fn(),
   verticalListSortingStrategy: vi.fn(),
 }));
@@ -277,6 +296,43 @@ describe("AuthMediaGallery", () => {
     const { container, root } = renderGallery(initialSlides);
 
     expect(container.querySelector('input[type="file"]')).toBeNull();
+    act(() => root.unmount());
+  });
+
+  it("persists a reordered image list", async () => {
+    const initialSlides = [
+      {
+        blurDataUrl: "blur",
+        id: "slide-1",
+        imageUrl: "/api/admin/auth-media/slide-1/image",
+        isActive: true,
+        sortOrder: 1,
+      },
+      {
+        blurDataUrl: "blur",
+        id: "slide-2",
+        imageUrl: "/api/admin/auth-media/slide-2/image",
+        isActive: true,
+        sortOrder: 2,
+      },
+    ];
+    const { root } = renderGallery(initialSlides);
+
+    act(() => {
+      dependencies.dndHandlers.onDragEnd?.({
+        active: { id: "slide-1" },
+        over: { id: "slide-2" },
+      });
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(dependencies.reorderAuthMediaAction).toHaveBeenCalledWith([
+      "slide-2",
+      "slide-1",
+    ]);
     act(() => root.unmount());
   });
 });

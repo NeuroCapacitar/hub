@@ -26,4 +26,15 @@ describe("AccordionTrigger accessibility", () => {
       'className="overflow-hidden px-4 text-sm data-closed:animate-accordion-up data-open:animate-accordion-down"'
     );
   });
+
+  it("gives triggers and expanded content distinct shared surfaces", async () => {
+    const source = await readFile(
+      new URL("./accordion.tsx", import.meta.url),
+      "utf8"
+    );
+
+    expect(source).toContain("bg-background/35");
+    expect(source).toContain("data-[state=open]:bg-background/45");
+    expect(source).toContain("border-border/50 border-t bg-muted/30");
+  });
 });

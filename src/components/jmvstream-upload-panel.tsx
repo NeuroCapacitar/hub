@@ -43,6 +43,7 @@ import {
   syncJmvstreamLessonPlayerAction,
 } from "@/features/admin/actions";
 import { uploadFileParts } from "@/features/jmvstream/upload";
+import { cn } from "@/lib/utils";
 
 const PLAYER_SYNC_ATTEMPTS = 18;
 const PLAYER_SYNC_INTERVAL_MS = 5000;
@@ -89,6 +90,7 @@ export function JmvstreamUploadPanel({
   const [isUploading, setIsUploading] = useState(false);
   const [isCancellingUpload, setIsCancellingUpload] = useState(false);
   const [isLocalProcessing, setIsLocalProcessing] = useState(false);
+  const [isFileDragActive, setIsFileDragActive] = useState(false);
   const [localFilename, setLocalFilename] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
 
@@ -387,15 +389,36 @@ export function JmvstreamUploadPanel({
               />
               {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: Drag-and-drop supplements the labelled file input. */}
               <label
-                className="group relative flex w-full flex-1 cursor-pointer flex-col items-center justify-between gap-4 rounded-xl border border-border border-dashed bg-muted/20 p-5 transition-colors hover:border-ring/50 hover:bg-muted/30 sm:flex-row"
+                className={cn(
+                  "group relative flex w-full flex-1 cursor-pointer flex-col items-center justify-between gap-4 rounded-xl border border-border border-dashed bg-muted/20 p-5 transition-colors hover:border-ring/50 hover:bg-muted/30 sm:flex-row",
+                  isFileDragActive && "border-ring bg-muted/40"
+                )}
                 htmlFor={inputId}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsFileDragActive(true);
+                }}
+                onDragLeave={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (
+                    event.relatedTarget instanceof Node &&
+                    event.currentTarget.contains(event.relatedTarget)
+                  ) {
+                    return;
+                  }
+                  setIsFileDragActive(false);
+                }}
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  setIsFileDragActive(true);
                 }}
                 onDrop={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  setIsFileDragActive(false);
                   const file = e.dataTransfer.files?.[0];
                   if (file) {
                     uploadSelectedFile(file);

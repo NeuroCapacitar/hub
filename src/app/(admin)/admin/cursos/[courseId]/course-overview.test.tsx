@@ -47,11 +47,13 @@ const renderOverview = ({
   renderToStaticMarkup(
     <CourseOverview
       contentSummary={contentSummary}
+      courseAvailability={{ label: "Disponível", variant: "success" }}
       courseId="course-1"
       durationSeconds={contentSummary.totalDurationSeconds}
       moduleCount={4}
       operationalState={operationalState}
       overviewSummary={overviewSummary}
+      previewHref="/app/cursos/course-1?preview=student"
       publicationState={publicationState}
     />
   );
@@ -99,7 +101,8 @@ describe("CourseOverview", () => {
     expect(markup).toContain(
       "O Curso está disponível e não possui alterações pendentes."
     );
-    expect(markup).not.toContain("href=");
+    expect(markup).toContain('href="/app/cursos/course-1?preview=student"');
+    expect(markup).not.toContain('href="/admin/cursos/course-1?tab=');
   });
 
   it.each([

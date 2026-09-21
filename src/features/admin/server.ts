@@ -1760,7 +1760,9 @@ const readLessonEditor = async ({
       join modules m on m.id = l.module_id
       join courses c on c.id = m.course_id
       join course_publications cp on cp.id = l.course_publication_id
-      where m.course_id = $1 and l.id = $2 and cp.status = 'draft'
+      where m.course_id = $1
+        and l.id = $2
+        and cp.status in ('draft', 'published')
       limit 1
     `,
     [courseId, lessonId]

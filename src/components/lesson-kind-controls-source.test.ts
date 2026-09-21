@@ -13,3 +13,22 @@ describe("LessonVideoControls preview wiring", () => {
     expect(source).toContain("onPlayerReady={applyUploadedPlayerUrl}");
   });
 });
+
+describe("LessonResourcesFields drop behavior", () => {
+  it("wires the visible empty state to the lesson resource upload flow", async () => {
+    const source = await readFile(
+      new URL("./lesson-kind-controls.tsx", import.meta.url),
+      "utf8"
+    );
+
+    expect(source).toContain("const handleFileDrop =");
+    expect(source).toContain("onDrop={handleFileDrop}");
+    expect(source).toContain(
+      'description="A ordem será salva ao salvar a aula."'
+    );
+    expect(source).toContain('title="Arraste um arquivo aqui"');
+    expect(source).toContain('status: "error" | "uploading"');
+    expect(source).toContain('role="alert"');
+    expect(source).toContain("Tentar novamente");
+  });
+});

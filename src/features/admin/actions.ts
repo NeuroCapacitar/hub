@@ -15,6 +15,7 @@ import type {
 import {
   createCoursePublicationDraft,
   createLessonDraft,
+  discardCoursePublicationDraft,
   publishCoursePublication,
   removeLessonVideo,
   saveCourse,
@@ -341,6 +342,35 @@ export const publishCoursePublicationAction = async (
     return getCoursePublicationActionError(
       error,
       "Não foi possível publicar as alterações. Tente novamente."
+    );
+  }
+};
+
+export const discardCoursePublicationDraftAction = async (
+  courseId: string
+): Promise<CoursePublicationActionResult> => {
+  try {
+    const session = await requirePermission("manageCourseContent");
+    const normalizedCourseId = parseAuthoringUuid(courseId, "courseId");
+    const result = await discardCoursePublicationDraft({
+      actorUserId: session.user.id,
+      courseId: normalizedCourseId,
+    });
+
+    if (result === "no_draft") {
+      return {
+        message: "Não há alterações em preparo para descartar.",
+        ok: false,
+      };
+    }
+
+    revalidateAdmin();
+    revalidatePath(`/admin/cursos/${normalizedCourseId}`);
+    return { ok: true };
+  } catch (error) {
+    return getCoursePublicationActionError(
+      error,
+      "Não foi possível descartar as alterações. Tente novamente."
     );
   }
 };

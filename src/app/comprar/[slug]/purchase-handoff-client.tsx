@@ -6,13 +6,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BrandLogo } from "@/components/brand-logo";
 import { PageContainer } from "@/components/page-container";
 import { Button } from "@/components/ui/button";
+import { CourseOfferPrice } from "@/features/courses/course-offer-dialog";
 import {
-  CourseOfferDetails,
-  CourseOfferHero,
-  CourseOfferPrice,
   getCourseOfferFacts,
   getCourseOfferPaymentDetails,
-} from "@/features/courses/course-offer-dialog";
+} from "@/features/courses/course-offer-facts";
+import { CourseOfferSummarySurface } from "@/features/courses/course-offer-page";
 import type { CourseOfferSummaryData } from "@/features/courses/course-offer-summary";
 import { formatCurrencyInCents } from "@/lib/formatters";
 import { redirectToCheckout } from "./checkout-navigation";
@@ -220,45 +219,6 @@ const getCheckoutOutcome = (
       return { kind: "retry", replaceAttempt: false };
   }
 };
-
-function PurchaseOfferSummary({
-  offer,
-}: {
-  offer: CourseOfferSummaryData;
-}): React.JSX.Element {
-  const paymentDetails = getCourseOfferPaymentDetails(offer);
-
-  return (
-    <section className="overflow-hidden rounded-2xl border border-border/70 bg-card/90 shadow-sm">
-      <CourseOfferHero
-        badgeLabel="Resumo da compra"
-        coverBlurDataUrl={offer.coverBlurDataUrl}
-        description={
-          <p className="max-w-[38rem] text-pretty text-card-foreground/75 text-sm">
-            Confira as condições enquanto preparamos seu checkout.
-          </p>
-        }
-        thumbnailUrl={offer.thumbnailUrl}
-        title={
-          <h1 className="max-w-[38rem] text-balance font-semibold text-xl tracking-tight sm:text-2xl">
-            {offer.title}
-          </h1>
-        }
-      />
-      <div className="p-5 sm:p-6">
-        <CourseOfferDetails
-          courseDescription={offer.description}
-          facts={getCourseOfferFacts(offer)}
-        >
-          <CourseOfferPrice
-            {...(paymentDetails ? { details: paymentDetails } : {})}
-            value={formatCurrencyInCents(offer.priceInCents)}
-          />
-        </CourseOfferDetails>
-      </div>
-    </section>
-  );
-}
 
 function CheckoutStatusPanel({
   onManualCheck,
@@ -549,6 +509,8 @@ export function PurchaseHandoffClient({
     await checkCheckoutStatus(attemptId);
   };
 
+  const paymentDetails = getCourseOfferPaymentDetails(offer);
+
   return (
     <PageContainer
       as="main"
@@ -567,7 +529,28 @@ export function PurchaseHandoffClient({
           />
         </section>
 
-        <PurchaseOfferSummary offer={offer} />
+        <CourseOfferSummarySurface
+          badgeLabel="Resumo da compra"
+          courseDescription={offer.description}
+          coverBlurDataUrl={offer.coverBlurDataUrl}
+          facts={getCourseOfferFacts(offer)}
+          heroDescription={
+            <p className="max-w-[38rem] text-pretty text-card-foreground/75 text-sm">
+              Confira as condições enquanto preparamos seu checkout.
+            </p>
+          }
+          thumbnailUrl={offer.thumbnailUrl}
+          title={
+            <h1 className="max-w-[38rem] text-balance font-semibold text-xl tracking-tight sm:text-2xl">
+              {offer.title}
+            </h1>
+          }
+        >
+          <CourseOfferPrice
+            {...(paymentDetails ? { details: paymentDetails } : {})}
+            value={formatCurrencyInCents(offer.priceInCents)}
+          />
+        </CourseOfferSummarySurface>
       </div>
     </PageContainer>
   );

@@ -11,6 +11,8 @@ describe("lesson editor authorization", () => {
     expect(source).toContain('requirePermission("viewCourses")');
     expect(source).not.toContain('requireRole(["admin", "support"])');
     expect(source).toContain("searchParams");
+    expect(source).toContain("LessonReadOnlyContent");
+    expect(source).toContain("LessonReadOnlySidebar");
     expect(source).toContain(
       'defaultValue={tab === "comments" ? "comments" : "video"}'
     );

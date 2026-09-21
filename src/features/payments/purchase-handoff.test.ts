@@ -148,6 +148,21 @@ describe("getPurchaseHandoffView", () => {
       courseSlug: ACTIVE_COURSE.course_slug,
       courseTitle: ACTIVE_COURSE.course_title,
       kind: "free_enrollment",
+      offer: {
+        accessDurationMonths: 12,
+        certificateEnabled: true,
+        coverBlurDataUrl: null,
+        description: "Descrição do Curso.",
+        lessonCount: 8,
+        moduleCount: 3,
+        paymentAllowCreditCard: true,
+        paymentAllowPix: true,
+        paymentMaxInstallmentCount: 3,
+        priceInCents: 0,
+        thumbnailUrl: null,
+        title: "Curso publico",
+        workloadHours: 2,
+      },
     });
     expect(dependencies.getServerEnv).not.toHaveBeenCalled();
   });

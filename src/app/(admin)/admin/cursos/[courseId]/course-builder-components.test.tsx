@@ -43,6 +43,7 @@ vi.mock("@/components/course-builder-dnd", () => ({
     initialModules,
     renderLesson,
     renderModule,
+    toolbar,
   }: {
     editable: boolean;
     initialLessons: Lesson[];
@@ -62,6 +63,7 @@ vi.mock("@/components/course-builder-dnd", () => ({
         onToggle: () => void;
       }
     ) => ReactNode;
+    toolbar?: ReactNode;
   }) => {
     const firstLesson = initialLessons[0];
     const firstModule = initialModules[0];
@@ -72,6 +74,7 @@ vi.mock("@/components/course-builder-dnd", () => ({
 
     return (
       <div data-builder-editable={editable}>
+        {toolbar}
         {renderModule(firstModule, initialLessons, 0, {
           contentId: "module-1-lessons",
           expanded: true,
@@ -194,6 +197,20 @@ describe("CourseBuilderWrapper editability", () => {
     expect(markup).toContain('data-builder-editable="true"');
     expect(markup).toContain("Nova aula");
     expect(markup).toContain(">Editar<");
+  });
+
+  it("creates the module trigger inside the client wrapper", () => {
+    const markup = renderToStaticMarkup(
+      <CourseBuilderWrapper
+        course={course}
+        editable
+        lessons={[lesson]}
+        modules={[moduleData]}
+        nextModuleSortOrder={2}
+      />
+    );
+
+    expect(markup).toContain("Novo módulo");
   });
 });
 
@@ -335,7 +352,7 @@ describe("module content release controls", () => {
       />
     );
     const lessonMarkup = renderToStaticMarkup(
-      <LessonRow courseId={course.id} editable index={0} lesson={lesson} />
+      <LessonRow courseId={course.id} index={0} lesson={lesson} />
     );
 
     expect(moduleMarkup).toContain("Liberação em D+8");
@@ -371,13 +388,8 @@ describe("course builder copy", () => {
     };
     const lessonMarkup = renderToStaticMarkup(
       <div>
-        <LessonRow
-          courseId={course.id}
-          editable
-          index={0}
-          lesson={videoLesson}
-        />
-        <LessonRow courseId={course.id} editable index={1} lesson={lesson} />
+        <LessonRow courseId={course.id} index={0} lesson={videoLesson} />
+        <LessonRow courseId={course.id} index={1} lesson={lesson} />
       </div>
     );
     const formMarkup = [
@@ -467,7 +479,7 @@ describe("course builder responsive presentation", () => {
       videoExternalId: "video-1",
     };
     const markup = renderToStaticMarkup(
-      <LessonRow courseId={course.id} editable index={0} lesson={richLesson} />
+      <LessonRow courseId={course.id} index={0} lesson={richLesson} />
     );
     const document = new DOMParser().parseFromString(markup, "text/html");
 

@@ -178,7 +178,6 @@ function PanelLayoutInner({
   const [hasVisiblePageHeading, setHasVisiblePageHeading] = useState(false);
   useEffect(() => {
     setPageMeta(fallbackPageMeta);
-    setHasVisiblePageHeading(false);
   }, [fallbackPageMeta]);
   const setPanelTitle = useCallback(
     (title: string, ancestors?: readonly PanelBreadcrumbItem[]) => {

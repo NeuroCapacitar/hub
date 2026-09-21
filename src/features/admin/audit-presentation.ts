@@ -28,6 +28,7 @@ const ADMIN_AUDIT_ACTION_LABELS: Record<string, string> = {
   "course_content.reorder_lessons": "Aulas reordenadas",
   "course_content.reorder_modules": "Módulos reordenados",
   "course_publication.draft_created": "Rascunho de publicação criado",
+  "course_publication.draft_discarded": "Rascunho de publicação descartado",
   "course_publication.prepared": "Publicação preparada",
   "course_publication.published": "Conteúdo publicado",
   "enrollment.access_blocked": "Acesso bloqueado",

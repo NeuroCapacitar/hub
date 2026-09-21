@@ -7,6 +7,7 @@ import {
   PencilEdit01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { getSortableDropPlacement } from "@/components/sortable-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,12 +36,24 @@ export function SortableBannerItem({
 }: SortableBannerItemProps) {
   const {
     attributes,
+    activeIndex,
+    index,
     listeners,
+    overIndex,
     setNodeRef,
     transform,
     transition,
     isDragging,
+    isOver,
   } = useSortable({ id: banner.id });
+
+  const dropPlacement = getSortableDropPlacement({
+    activeIndex,
+    index,
+    isDragging,
+    isOver,
+    overIndex,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -48,7 +61,12 @@ export function SortableBannerItem({
   };
 
   return (
-    <ResourceItem isDragging={isDragging} nodeRef={setNodeRef} style={style}>
+    <ResourceItem
+      dropPlacement={dropPlacement}
+      isDragging={isDragging}
+      nodeRef={setNodeRef}
+      style={style}
+    >
       {readOnly ? null : (
         <ResourceItemDragHandle
           ariaLabel={`Reordenar banner ${banner.buttonText ?? banner.id}`}

@@ -43,6 +43,22 @@ vi.mock("./free-enrollment-button", () => ({
 
 import PurchasePage, { dynamic } from "./page";
 
+const FREE_OFFER = {
+  accessDurationMonths: 12,
+  certificateEnabled: true,
+  coverBlurDataUrl: null,
+  description: "Uma introdução prática ao tema.",
+  lessonCount: 8,
+  moduleCount: 3,
+  paymentAllowCreditCard: true,
+  paymentAllowPix: true,
+  paymentMaxInstallmentCount: 3,
+  priceInCents: 0,
+  thumbnailUrl: null,
+  title: "Curso gratuito",
+  workloadHours: 2,
+} as const;
+
 beforeEach(() => {
   vi.resetAllMocks();
   dependencies.getCurrentSession.mockResolvedValue(null);
@@ -119,6 +135,7 @@ describe("PurchasePage", () => {
       courseSlug: "curso-gratis",
       courseTitle: "Curso gratuito",
       kind: "free_enrollment",
+      offer: FREE_OFFER,
     });
 
     const markup = renderToStaticMarkup(
@@ -126,6 +143,10 @@ describe("PurchasePage", () => {
     );
 
     expect(markup).toContain("Curso gratuito");
+    expect(markup).toContain("8 aulas");
+    expect(markup).toContain("3 módulos");
+    expect(markup).toContain("Certificado");
+    expect(markup).toContain("Acesso gratuito");
     expect(markup).toContain('data-free-course-id="course-1"');
     expect(markup).toContain("Inscrever-se gratuitamente");
     expect(markup).not.toContain("Checkout");
@@ -139,6 +160,7 @@ describe("PurchasePage", () => {
       courseSlug: "curso-gratis",
       courseTitle: "Curso gratuito",
       kind: "free_enrollment",
+      offer: FREE_OFFER,
     });
 
     const markup = renderToStaticMarkup(
@@ -153,6 +175,7 @@ describe("PurchasePage", () => {
     );
     expect(markup).toContain("Criar conta para se inscrever");
     expect(markup).toContain("Entrar");
+    expect(markup).toContain("Inscrição gratuita");
     expect(markup).not.toContain("Checkout");
     expect(markup).not.toContain("Pedido");
     expect(markup).not.toContain("Asaas");
@@ -167,6 +190,7 @@ describe("PurchasePage", () => {
       courseSlug: "curso-gratis",
       courseTitle: "Curso gratuito",
       kind: "free_enrollment",
+      offer: FREE_OFFER,
     });
 
     const markup = renderToStaticMarkup(
@@ -178,7 +202,7 @@ describe("PurchasePage", () => {
     expect(markup).toContain(
       'href="/entrar?returnTo=%2Fcomprar%2Fcurso-gratis"'
     );
-    expect(markup).toContain("Entre para fazer sua inscrição gratuita.");
+    expect(markup).toContain("Entre para confirmar a inscrição gratuita.");
   });
 
   it.each([

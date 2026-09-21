@@ -22,24 +22,43 @@ interface ScrollspyProps {
   throttleTime?: number;
 }
 
-function getScrollElement(
-  targetRef?: RefObject<
-    HTMLElement | HTMLDivElement | Document | null | undefined
-  >
+type ScrollTargetRef = RefObject<
+  HTMLElement | HTMLDivElement | Document | null | undefined
+>;
+
+const SCROLL_AREA_VIEWPORT_SELECTOR = '[data-slot="scroll-area-viewport"]';
+
+function getNearestScrollAreaViewport(
+  sourceElement: HTMLElement | null
 ): HTMLElement | null {
-  if (!targetRef?.current) {
-    return null;
+  return (
+    sourceElement?.closest<HTMLElement>(SCROLL_AREA_VIEWPORT_SELECTOR) ?? null
+  );
+}
+
+function getScrollElement(
+  targetRef: ScrollTargetRef | undefined,
+  sourceElement: HTMLElement | null
+): HTMLElement | null {
+  const target = targetRef?.current;
+  if (!target) {
+    return (
+      getNearestScrollAreaViewport(sourceElement) ?? document.documentElement
+    );
   }
-  let element =
-    targetRef.current === document
-      ? document.documentElement
-      : (targetRef.current as HTMLElement);
+  if (target === document) {
+    return document.documentElement;
+  }
+
+  let element = target as HTMLElement;
 
   if (!element) {
     return null;
   }
 
-  const viewport = element.querySelector('[data-slot="scroll-area-viewport"]');
+  const viewport = element.matches(SCROLL_AREA_VIEWPORT_SELECTOR)
+    ? element
+    : element.querySelector<HTMLElement>(SCROLL_AREA_VIEWPORT_SELECTOR);
   if (viewport instanceof HTMLElement) {
     element = viewport;
   }
@@ -47,22 +66,24 @@ function getScrollElement(
 }
 
 function getScrollToElement(
-  targetRef?: RefObject<
-    HTMLElement | HTMLDivElement | Document | null | undefined
-  >
+  targetRef: ScrollTargetRef | undefined,
+  sourceElement: HTMLElement | null
 ): HTMLElement | Window | null {
-  if (!targetRef?.current) {
+  const target = targetRef?.current;
+  if (!target) {
+    return getNearestScrollAreaViewport(sourceElement) ?? window;
+  }
+
+  if (target === document) {
     return window;
   }
-  let element: HTMLElement | Window | null =
-    targetRef.current === document
-      ? window
-      : (targetRef.current as HTMLElement);
+
+  let element: HTMLElement | Window | null = target as HTMLElement;
 
   if (element instanceof HTMLElement) {
-    const viewport = element.querySelector(
-      '[data-slot="scroll-area-viewport"]'
-    );
+    const viewport = element.matches(SCROLL_AREA_VIEWPORT_SELECTOR)
+      ? element
+      : element.querySelector<HTMLElement>(SCROLL_AREA_VIEWPORT_SELECTOR);
     if (viewport instanceof HTMLElement) {
       element = viewport;
     }
@@ -74,8 +95,12 @@ function findActiveAnchorIndex(
   anchors: Element[],
   dataAttribute: string,
   offset: number,
-  scrollTop: number
+  scrollElement: HTMLElement
 ): number {
+  const scrollTop =
+    scrollElement === document.documentElement
+      ? window.scrollY || document.documentElement.scrollTop
+      : scrollElement.scrollTop;
   let activeIdx = 0;
   let minDelta = Number.POSITIVE_INFINITY;
 
@@ -99,11 +124,9 @@ function findActiveAnchorIndex(
       customOffset = Number.parseInt(dataOffset, 10);
     }
 
-    const delta = Math.abs(sectionElement.offsetTop - customOffset - scrollTop);
-    if (
-      sectionElement.offsetTop - customOffset <= scrollTop &&
-      delta < minDelta
-    ) {
+    const sectionTop = getSectionScrollTop(sectionElement, scrollElement);
+    const delta = Math.abs(sectionTop - customOffset - scrollTop);
+    if (sectionTop - customOffset <= scrollTop && delta < minDelta) {
       minDelta = delta;
       activeIdx = idx;
     }
@@ -111,14 +134,26 @@ function findActiveAnchorIndex(
   return activeIdx;
 }
 
+function getSectionScrollTop(
+  sectionElement: HTMLElement,
+  scrollElement: HTMLElement
+): number {
+  if (scrollElement === document.documentElement) {
+    return sectionElement.offsetTop;
+  }
+
+  const scrollRect = scrollElement.getBoundingClientRect();
+  const sectionRect = sectionElement.getBoundingClientRect();
+  return scrollElement.scrollTop + sectionRect.top - scrollRect.top;
+}
+
 function performScrollTo(
   anchorElement: HTMLElement,
   dataAttribute: string,
   offset: number,
   smooth: boolean,
-  targetRef?: RefObject<
-    HTMLElement | HTMLDivElement | Document | null | undefined
-  >
+  targetRef: ScrollTargetRef | undefined,
+  sourceElement: HTMLElement | null
 ): string | null {
   const sectionId =
     anchorElement
@@ -133,7 +168,8 @@ function performScrollTo(
     return null;
   }
 
-  const scrollToElement = getScrollToElement(targetRef);
+  const scrollToElement = getScrollToElement(targetRef, sourceElement);
+  const scrollElement = getScrollElement(targetRef, sourceElement);
 
   let customOffset = offset;
   const dataOffset = anchorElement.getAttribute(`data-${dataAttribute}-offset`);
@@ -141,7 +177,9 @@ function performScrollTo(
     customOffset = Number.parseInt(dataOffset, 10);
   }
 
-  const scrollTop = sectionElement.offsetTop - customOffset;
+  const scrollTop = scrollElement
+    ? getSectionScrollTop(sectionElement, scrollElement) - customOffset
+    : sectionElement.offsetTop - customOffset;
 
   if (scrollToElement && "scrollTo" in scrollToElement) {
     scrollToElement.scrollTo({
@@ -197,7 +235,7 @@ export function Scrollspy({
       return;
     }
 
-    const scrollElement = getScrollElement(targetRef);
+    const scrollElement = getScrollElement(targetRef, selfRef.current);
     if (!scrollElement) {
       return;
     }
@@ -211,7 +249,7 @@ export function Scrollspy({
       anchors,
       dataAttribute,
       offset,
-      scrollTop
+      scrollElement
     );
 
     const scrollHeight = scrollElement.scrollHeight;
@@ -238,7 +276,8 @@ export function Scrollspy({
         dataAttribute,
         offset,
         smooth,
-        targetRef
+        targetRef,
+        selfRef.current
       );
       if (sectionId) {
         setActiveSection(sectionId, true);
@@ -272,18 +311,14 @@ export function Scrollspy({
     }
 
     const onScroll = (event: Event) => {
-      const scrollElement =
-        targetRef?.current === document
-          ? window
-          : (targetRef?.current as HTMLElement);
+      const scrollElement = getScrollElement(targetRef, selfRef.current);
       if (!scrollElement) {
         return;
       }
 
       if (
-        scrollElement === window ||
-        (scrollElement instanceof HTMLElement &&
-          scrollElement.contains(event.target as Node))
+        scrollElement === document.documentElement ||
+        scrollElement.contains(event.target as Node)
       ) {
         handleScroll();
       }

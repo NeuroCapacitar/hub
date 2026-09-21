@@ -6,8 +6,18 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./course-builder-components", () => ({
-  CourseBuilderWrapper: ({ editable }: { editable: boolean }) => (
-    <div data-course-builder="true" data-editable={editable} />
+  CourseBuilderWrapper: ({
+    editable,
+    nextModuleSortOrder,
+  }: {
+    editable: boolean;
+    nextModuleSortOrder?: number;
+  }) => (
+    <div data-course-builder="true" data-editable={editable}>
+      {editable && nextModuleSortOrder !== undefined ? (
+        <button type="button">Novo módulo</button>
+      ) : null}
+    </div>
   ),
   CreateModuleDialog: ({
     triggerLabel = "Novo módulo",
@@ -29,6 +39,11 @@ vi.mock("./course-publication-action", () => ({
       type="button"
     >
       {action === "prepare" ? "Preparar alterações" : "Publicar alterações"}
+    </button>
+  ),
+  CoursePublicationDiscardAction: ({ courseId }: { courseId: string }) => (
+    <button data-course-id={courseId} type="button">
+      Descartar preparação
     </button>
   ),
 }));
@@ -123,7 +138,8 @@ describe("CourseContentPanel", () => {
 
     expect(markup).toContain("<h2");
     expect(markup).toContain("Conteúdo do curso");
-    expect(markup).toContain("Prepare alterações para editar");
+    expect(markup).not.toContain("Prepare alterações para editar");
+    expect(markup).toContain('aria-label="Ajuda: Preparação e publicação"');
     expect(getButtonLabels(markup)).toContain("Preparar alterações");
     expect(getButtonLabels(markup)).not.toContain("Novo módulo");
     expect(markup).toContain('data-editable="false"');
@@ -137,7 +153,14 @@ describe("CourseContentPanel", () => {
 
     expect(markup).toContain("Alterações em preparo");
     expect(buttons).toContain("Publicar alterações");
+    expect(buttons).toContain("Descartar preparação");
     expect(buttons).toContain("Novo módulo");
+    expect(buttons.indexOf("Descartar preparação")).toBeLessThan(
+      buttons.indexOf("Publicar alterações")
+    );
+    expect(markup.indexOf("Conteúdo do curso")).toBeLessThan(
+      markup.indexOf("Alterações em preparo")
+    );
     expect(markup).toContain('data-editable="true"');
     expect(markup).toContain('data-publication-action="publish"');
   });
@@ -170,8 +193,8 @@ describe("CourseContentPanel", () => {
       hasPublished: false,
     });
 
-    expect(publishedMarkup).toContain(contentSignal.label);
-    expect(publishedMarkup).toContain(contentSignal.helper);
+    expect(publishedMarkup).not.toContain(contentSignal.label);
+    expect(publishedMarkup).not.toContain(contentSignal.helper);
     expect(publishedMarkup).toContain("Publicado");
     expect(unpublishedMarkup).toContain("Ainda não publicado");
   });

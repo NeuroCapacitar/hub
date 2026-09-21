@@ -71,6 +71,7 @@ import { MAX_RELEASE_DELAY_DAYS } from "@/features/courses/module-content-releas
 import {
   createCoursePublicationDraft,
   createLessonDraft,
+  discardCoursePublicationDraft,
   publishCoursePublication,
   removeLessonVideo,
   saveCourse,
@@ -1228,6 +1229,50 @@ describe("admin authoring", () => {
       "active",
       8,
     ]);
+  });
+
+  it("discards a prepared publication and audits the destructive action", async () => {
+    query.mockImplementation((sql: string) => {
+      if (sql.includes("select cp.id, cp.publication_number")) {
+        return {
+          rows: [
+            {
+              course_title: "Curso de teste",
+              id: "publication-draft",
+              publication_number: 2,
+              title_snapshot: "Curso de teste",
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    });
+
+    await expect(
+      discardCoursePublicationDraft({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+      })
+    ).resolves.toBe("discarded");
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "delete from course_publications where id = $1 and status = 'draft'"
+      ),
+      ["publication-draft"]
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("insert into audit_logs"),
+      [
+        "admin-1",
+        "course_publication.draft_discarded",
+        "course_publication",
+        "publication-draft",
+        expect.any(String),
+      ]
+    );
+    expect(query).toHaveBeenCalledWith("commit");
   });
 
   it("creates a minimal lesson draft and returns its editor identifiers", async () => {

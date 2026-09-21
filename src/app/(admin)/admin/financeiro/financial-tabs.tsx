@@ -81,12 +81,11 @@ export function FinancialTabs({
 
   return (
     <Tabs className="gap-6" onValueChange={changeTab} value={activeTab}>
-      <div className="flex min-w-0 items-center justify-between gap-3 border-b">
+      <div className="flex min-w-0 items-center justify-between gap-3 pb-1">
         <div className="min-w-0 flex-1 overflow-x-auto">
           <TabsList
             aria-label="Seções do financeiro"
             className="min-w-max flex-nowrap"
-            variant="line"
           >
             {FINANCIAL_TABS.filter(
               (tab) => effectiveVisibleTabs[tab.value]

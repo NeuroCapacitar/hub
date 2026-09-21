@@ -1,14 +1,16 @@
+import {
+  Certificate01Icon,
+  DashboardSquare01Icon,
+  HelpSquareIcon,
+  Image01Icon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { FinanceHelp } from "@/components/admin/finance-help";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
+import { Scrollspy } from "@/components/reui/scrollspy";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   getAdminBannersData,
   getAdminFaqData,
@@ -82,127 +84,177 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
       <div className="flex flex-col gap-8">
         <PageHeader title="Configurações globais" />
 
-        <section aria-labelledby="settings-certificates" className="grid gap-4">
-          <div className="flex items-center gap-2">
-            <h2 className="type-section-title" id="settings-certificates">
-              Emissão de certificados
-            </h2>
-            <FinanceHelp
-              description="Configure a identidade global usada para novas emissões. Um Curso pode definir uma assinatura própria, e Certificados já emitidos permanecem imutáveis."
-              details={[
-                "Razão social e CNPJ formam o perfil emissor e precisam ser preenchidos juntos.",
-                "A marca exibida aparece no documento quando o template não define outro valor.",
-                "A assinatura padrão é usada apenas quando o Curso não possui uma assinatura própria.",
-              ]}
-              title="Como funciona a emissão"
-            />
-          </div>
+        <div className="grid grid-cols-1 gap-14 md:grid-cols-[220px_1fr] lg:grid-cols-[240px_1fr]">
+          <aside className="hidden md:block">
+            <div className="sticky top-8">
+              <nav aria-label="Seções das configurações">
+                <Card className="border-none bg-card p-1.5 shadow-xs ring-1 ring-border/50">
+                  <Scrollspy
+                    className="flex flex-col gap-1"
+                    history={false}
+                    offset={96}
+                  >
+                    <a
+                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-muted-foreground text-sm transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-muted data-[active=true]:text-foreground"
+                      data-scrollspy-anchor="certificados"
+                      href="#certificados"
+                    >
+                      <HugeiconsIcon
+                        aria-hidden="true"
+                        icon={Certificate01Icon}
+                        size={18}
+                        strokeWidth={1.5}
+                      />
+                      <span>Emissão de certificados</span>
+                    </a>
+                    <a
+                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-muted-foreground text-sm transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-muted data-[active=true]:text-foreground"
+                      data-scrollspy-anchor="tela-acesso"
+                      href="#tela-acesso"
+                    >
+                      <HugeiconsIcon
+                        aria-hidden="true"
+                        icon={Image01Icon}
+                        size={18}
+                        strokeWidth={1.5}
+                      />
+                      <span>Tela de acesso</span>
+                    </a>
+                    <a
+                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-muted-foreground text-sm transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-muted data-[active=true]:text-foreground"
+                      data-scrollspy-anchor="banners-dashboard"
+                      href="#banners-dashboard"
+                    >
+                      <HugeiconsIcon
+                        aria-hidden="true"
+                        icon={DashboardSquare01Icon}
+                        size={18}
+                        strokeWidth={1.5}
+                      />
+                      <span>Banners do Dashboard</span>
+                    </a>
+                    <a
+                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-muted-foreground text-sm transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-muted data-[active=true]:text-foreground"
+                      data-scrollspy-anchor="perguntas-frequentes"
+                      href="#perguntas-frequentes"
+                    >
+                      <HugeiconsIcon
+                        aria-hidden="true"
+                        icon={HelpSquareIcon}
+                        size={18}
+                        strokeWidth={1.5}
+                      />
+                      <span>Perguntas frequentes</span>
+                    </a>
+                  </Scrollspy>
+                </Card>
+              </nav>
+            </div>
+          </aside>
 
-          <Card>
-            <CardHeader className="pb-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <CardTitle as="h2" className="text-base">
-                    Perfil e assinatura
-                  </CardTitle>
-                  <CardDescription className="mt-1">
+          <div className="min-w-0 space-y-16">
+            <section
+              aria-labelledby="settings-certificates"
+              className="grid scroll-mt-24 gap-5"
+              id="certificados"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h2
+                      className="type-section-title"
+                      id="settings-certificates"
+                    >
+                      Emissão de certificados
+                    </h2>
+                    <FinanceHelp
+                      description="Configure a identidade global usada para novas emissões. Um Curso pode definir uma assinatura própria, e Certificados já emitidos permanecem imutáveis."
+                      details={[
+                        "Razão social e CNPJ formam o perfil emissor e precisam ser preenchidos juntos.",
+                        "A marca exibida aparece no documento quando o template não define outro valor.",
+                        "A assinatura padrão é usada apenas quando o Curso não possui uma assinatura própria.",
+                      ]}
+                      title="Como funciona a emissão"
+                    />
+                  </div>
+                  <p className="text-muted-foreground text-sm">
                     Dados globais usados como base nos Certificados da
                     plataforma.
-                  </CardDescription>
+                  </p>
                   {issuerProfileReady ? null : (
-                    <p className="mt-2 text-sm text-warning">
+                    <p className="text-sm text-warning">
                       Pendências: {issuerProfileIssues.join(", ")}.
                     </p>
                   )}
                 </div>
-                <Badge variant={issuerProfileReady ? "success" : "warning"}>
+                <Badge
+                  className="shrink-0"
+                  variant={issuerProfileReady ? "success" : "warning"}
+                >
                   {issuerProfileReady ? "Perfil pronto" : "Perfil incompleto"}
                 </Badge>
               </div>
-            </CardHeader>
-            <CardContent>
-              <CertificateSettingsForm
-                readOnly={!canManageCertificateIssuerProfile}
-                settings={certificateSettings}
-              />
-            </CardContent>
-          </Card>
-        </section>
 
-        <section aria-labelledby="settings-editorial" className="grid gap-4">
-          <div className="flex items-center gap-2">
-            <h2 className="type-section-title" id="settings-editorial">
-              Conteúdo editorial
-            </h2>
-            <FinanceHelp
-              description="Gerencie conteúdos compartilhados na área do Aluno. As alterações ficam disponíveis depois que forem salvas."
-              details={[
-                "A mídia da tela de acesso aparece na entrada pública e não contém links ou texto promocional.",
-                "Banners aparecem no Dashboard e podem ser reordenados por arraste ou teclado.",
-                "Perguntas frequentes aparecem na área do Aluno e podem ser publicadas ou ocultadas.",
-              ]}
-              title="Como gerenciar conteúdo editorial"
-            />
-          </div>
+              <Card>
+                <CardContent>
+                  <CertificateSettingsForm
+                    readOnly={!canManageCertificateIssuerProfile}
+                    settings={certificateSettings}
+                  />
+                </CardContent>
+              </Card>
+            </section>
 
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle as="h2" className="text-base">
-                Tela de acesso
-              </CardTitle>
-              <CardDescription className="mt-1">
-                Até cinco imagens 8:7 exibidas na autenticação pública.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+            <section className="grid scroll-mt-24 gap-5" id="tela-acesso">
+              <div className="space-y-1">
+                <h2 className="type-section-title">Tela de acesso</h2>
+                <p className="text-muted-foreground text-sm">
+                  Até cinco imagens 8:7 exibidas na autenticação pública.
+                </p>
+              </div>
               <AuthMediaGallery
                 initialSlides={sortedAuthMediaSlides}
                 readOnly={!canManageAuthMedia}
               />
-            </CardContent>
-          </Card>
+            </section>
 
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle as="h2" className="text-base">
-                Banners do Dashboard
-              </CardTitle>
-              <CardDescription className="mt-1">
-                Até cinco banners cadastrados para a página inicial da área do
-                Aluno.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+            <section className="grid scroll-mt-24 gap-5" id="banners-dashboard">
+              <div className="space-y-1">
+                <h2 className="type-section-title">Banners do Dashboard</h2>
+                <p className="text-muted-foreground text-sm">
+                  Até cinco banners cadastrados para a página inicial da área do
+                  Aluno.
+                </p>
+              </div>
               <BannerGallery
                 initialBanners={sortedBanners}
                 readOnly={!canManageBanners}
               />
-            </CardContent>
-          </Card>
+            </section>
 
-          <Card>
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <CardTitle as="h2" className="text-base">
-                    Perguntas frequentes
-                  </CardTitle>
-                  <CardDescription className="mt-1">
+            <section
+              className="grid scroll-mt-24 gap-5"
+              id="perguntas-frequentes"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <h2 className="type-section-title">Perguntas frequentes</h2>
+                  <p className="text-muted-foreground text-sm">
                     Respostas publicadas na área do Aluno.
-                  </CardDescription>
+                  </p>
                 </div>
                 {canManageFaq ? (
                   <FaqCreateDialog nextSortOrder={nextSortOrder} />
                 ) : (
-                  <Badge variant="outline">Somente leitura</Badge>
+                  <Badge className="shrink-0" variant="outline">
+                    Somente leitura
+                  </Badge>
                 )}
               </div>
-            </CardHeader>
-            <CardContent>
               <FaqTable faqs={sortedFaqs} readOnly={!canManageFaq} />
-            </CardContent>
-          </Card>
-        </section>
+            </section>
+          </div>
+        </div>
       </div>
     </PageContainer>
   );

@@ -1,24 +1,17 @@
 "use client";
 
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
+import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   Add01Icon,
+  AlertCircleIcon,
+  Cancel01Icon,
   CloudUploadIcon,
   Delete02Icon,
   DragDropVerticalIcon,
@@ -28,8 +21,10 @@ import {
   FileImageIcon,
   FileLinkIcon,
   Link04Icon,
+  Loading03Icon,
   Pdf01Icon,
   PencilEdit01Icon,
+  RefreshIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useState } from "react";
@@ -70,7 +65,6 @@ import {
   ResourceItemActions,
   ResourceItemContent,
   ResourceItemDragHandle,
-  ResourceItemSkeleton,
   ResourceItemVisual,
   ResourceListBody,
   ResourceListContainer,
@@ -93,6 +87,11 @@ import {
   LESSON_RESOURCE_IMAGE_PREVIEW,
 } from "@/features/storage/r2-objects";
 import { cn } from "@/lib/utils";
+import {
+  createSortableAccessibility,
+  getSortableDropPlacement,
+  useSortableSensors,
+} from "./sortable-context";
 
 export function LessonVideoControls({
   asset,
@@ -420,6 +419,136 @@ function getFileTypeLabel(resource: EditableLessonResource): string {
   return getResourceTypeLabel(resource, { presentationLabel: "Apresentação" });
 }
 
+function getUploadFilePresentation(file: File) {
+  return {
+    contentType: file.type,
+    fileName: file.name,
+    label: file.name,
+    sizeBytes: file.size,
+    storage: "r2" as const,
+  };
+}
+
+function getUploadFileIcon(file: File) {
+  const presentation = getUploadFilePresentation(file);
+  const extension = getSharedResourceExtension(presentation);
+
+  if (file.type.startsWith("image/")) {
+    return FileImageIcon;
+  }
+  if (extension === "pdf") {
+    return Pdf01Icon;
+  }
+  if (extension === "zip") {
+    return FileArchiveIcon;
+  }
+  if (
+    extension &&
+    ["doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(extension)
+  ) {
+    return FileDownloadIcon;
+  }
+
+  return File01Icon;
+}
+
+function LessonResourceUploadItem({
+  onDiscard,
+  onRetry,
+  upload,
+}: {
+  onDiscard: () => void;
+  onRetry: () => void;
+  upload: LessonResourceUpload;
+}): React.JSX.Element {
+  const Icon = getUploadFileIcon(upload.file);
+  const metadata = `${getResourceTypeLabel(getUploadFilePresentation(upload.file), { presentationLabel: "Apresentação" })} · ${formatResourceFileSize(upload.file.size)}`;
+  const isError = upload.status === "error";
+
+  return (
+    <ResourceItem
+      className={cn(
+        "items-start py-2",
+        isError && "border-destructive/40 bg-destructive/5"
+      )}
+    >
+      <ResourceItemVisual className="mt-0.5 border-0 bg-muted/40">
+        <HugeiconsIcon
+          aria-hidden="true"
+          className={isError ? "text-destructive" : "text-muted-foreground"}
+          icon={isError ? AlertCircleIcon : Icon}
+          size={20}
+          strokeWidth={2}
+        />
+      </ResourceItemVisual>
+
+      <ResourceItemContent className="gap-0.5 py-0.5">
+        <p className="min-w-0 truncate font-medium text-[13px]">
+          {upload.file.name}
+        </p>
+        <p className="truncate text-muted-foreground text-xs">{metadata}</p>
+        {isError ? (
+          <p className="break-words text-destructive text-xs" role="alert">
+            {upload.error ?? "Não foi possível concluir o upload."}
+          </p>
+        ) : (
+          <p
+            aria-live="polite"
+            className="flex items-center gap-1 text-muted-foreground text-xs"
+          >
+            <HugeiconsIcon
+              aria-hidden="true"
+              className="animate-spin"
+              icon={Loading03Icon}
+              size={13}
+              strokeWidth={2}
+            />
+            Enviando anexo…
+          </p>
+        )}
+      </ResourceItemContent>
+
+      <ResourceItemActions>
+        {isError ? (
+          <Button
+            className="min-h-10 px-2.5"
+            onClick={onRetry}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <HugeiconsIcon
+              aria-hidden="true"
+              data-icon="inline-start"
+              icon={RefreshIcon}
+              size={14}
+            />
+            Tentar novamente
+          </Button>
+        ) : null}
+        {isError ? (
+          <Button
+            aria-label={`Remover upload de ${upload.file.name}`}
+            className="size-10 text-muted-foreground hover:text-foreground"
+            onClick={onDiscard}
+            size="icon"
+            title="Remover upload"
+            type="button"
+            variant="ghost"
+          >
+            <HugeiconsIcon
+              aria-hidden="true"
+              icon={Cancel01Icon}
+              size={16}
+              strokeWidth={2}
+            />
+          </Button>
+        ) : null}
+      </ResourceItemActions>
+    </ResourceItem>
+  );
+}
+
 export function SortableLessonResourceItem({
   formProps,
   lessonId,
@@ -435,12 +564,24 @@ export function SortableLessonResourceItem({
 }) {
   const {
     attributes,
+    activeIndex,
+    index,
     listeners,
+    overIndex,
     setNodeRef,
     transform,
     transition,
     isDragging,
+    isOver,
   } = useSortable({ id: resource.id });
+
+  const dropPlacement = getSortableDropPlacement({
+    activeIndex,
+    index,
+    isDragging,
+    isOver,
+    overIndex,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -452,7 +593,12 @@ export function SortableLessonResourceItem({
   const badgeText = resource.storage === "r2" ? extension : "LINK";
 
   return (
-    <ResourceItem isDragging={isDragging} nodeRef={setNodeRef} style={style}>
+    <ResourceItem
+      dropPlacement={dropPlacement}
+      isDragging={isDragging}
+      nodeRef={setNodeRef}
+      style={style}
+    >
       <input
         name="resourceStorage[]"
         type="hidden"
@@ -706,9 +852,10 @@ export function LessonResourcesFields({
     defaultResources.length > 0 ? defaultResources.map(toEditableResource) : []
   );
 
-  const [uploadingFiles, setUploadingFiles] = useState<
-    { id: string; file: File }[]
-  >([]);
+  const [uploadingFiles, setUploadingFiles] = useState<LessonResourceUpload[]>(
+    []
+  );
+  const [isFileDragActive, setIsFileDragActive] = useState(false);
   const [editingResourceId, setEditingResourceId] = useState<string | null>(
     null
   );
@@ -736,15 +883,27 @@ export function LessonResourcesFields({
     );
   };
 
-  const uploadResource = async (file: File): Promise<void> => {
+  const uploadResource = async (
+    file: File,
+    uploadId = `temp-${crypto.randomUUID()}`
+  ): Promise<void> => {
     if (!lessonId) {
       toast.error("Salve a aula antes de enviar anexos.");
       return;
     }
 
     const toastId = toast.loading("Enviando anexo…");
-    const tempId = `temp-${Date.now()}`;
-    setUploadingFiles((prev) => [...prev, { id: tempId, file }]);
+    setUploadingFiles((prev) => {
+      const existing = prev.some((upload) => upload.id === uploadId);
+      if (existing) {
+        return prev.map((upload) =>
+          upload.id === uploadId
+            ? { file: upload.file, id: upload.id, status: "uploading" }
+            : upload
+        );
+      }
+      return [...prev, { file, id: uploadId, status: "uploading" }];
+    });
 
     try {
       const preview = await createImagePreview(file);
@@ -761,23 +920,37 @@ export function LessonResourcesFields({
 
       setResources((current) => [...current, newResource]);
       setEditingResourceId(newResource.id);
-      setUploadingFiles((prev) => prev.filter((f) => f.id !== tempId));
+      setUploadingFiles((prev) =>
+        prev.filter((upload) => upload.id !== uploadId)
+      );
       toast.success("Anexo enviado. Salve a aula para publicar o material.", {
         id: toastId,
       });
     } catch (error) {
-      setUploadingFiles((prev) => prev.filter((f) => f.id !== tempId));
-      toast.error(
-        error instanceof Error ? error.message : "Não foi possível enviar.",
-        { id: toastId }
+      const message =
+        error instanceof Error ? error.message : "Não foi possível enviar.";
+      setUploadingFiles((prev) =>
+        prev.map((upload) =>
+          upload.id === uploadId
+            ? { ...upload, error: message, status: "error" }
+            : upload
+        )
       );
+      toast.error(message, { id: toastId });
     }
   };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const discardUpload = (uploadId: string): void => {
+    setUploadingFiles((current) =>
+      current.filter((upload) => upload.id !== uploadId)
+    );
+  };
+
+  const sensors = useSortableSensors();
+  const accessibility = createSortableAccessibility((id) => {
+    const resource = resources.find((item) => item.id === id);
+    return resource ? `anexo ${resource.label || "sem nome"}` : `anexo ${id}`;
+  });
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -790,8 +963,60 @@ export function LessonResourcesFields({
     }
   };
 
+  const handleFileDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setIsFileDragActive(true);
+  };
+
+  const handleFileDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (
+      event.relatedTarget instanceof Node &&
+      event.currentTarget.contains(event.relatedTarget)
+    ) {
+      return;
+    }
+    setIsFileDragActive(false);
+  };
+
+  const handleFileDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setIsFileDragActive(true);
+  };
+
+  const handleFileDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setIsFileDragActive(false);
+    const file = event.dataTransfer.files.item(0);
+    if (file) {
+      uploadResource(file).catch(() => undefined);
+    }
+  };
+
   return (
-    <ResourceListContainer>
+    <ResourceListContainer
+      className={isFileDragActive ? "border-primary bg-primary/5" : ""}
+      onDragEnter={handleFileDragEnter}
+      onDragLeave={handleFileDragLeave}
+      onDragOver={handleFileDragOver}
+      onDrop={handleFileDrop}
+    >
       <ResourceEditModal
         onClose={() => setEditingResourceId(null)}
         onUpdate={updateResource}
@@ -847,12 +1072,14 @@ export function LessonResourcesFields({
           </>
         }
         count={resources.length}
+        description="A ordem será salva ao salvar a aula."
         title="Anexos"
       />
 
       {resources.length > 0 || uploadingFiles.length > 0 ? (
         <ResourceListBody>
           <DndContext
+            accessibility={accessibility}
             collisionDetection={closestCenter}
             id="lesson-resources-dnd"
             onDragEnd={handleDragEnd}
@@ -874,12 +1101,22 @@ export function LessonResourcesFields({
               ))}
             </SortableContext>
           </DndContext>
-          {uploadingFiles.map((f) => (
-            <ResourceItemSkeleton key={f.id} />
+          {uploadingFiles.map((upload) => (
+            <LessonResourceUploadItem
+              key={upload.id}
+              onDiscard={() => discardUpload(upload.id)}
+              onRetry={() => {
+                uploadResource(upload.file, upload.id).catch(() => undefined);
+              }}
+              upload={upload}
+            />
           ))}
         </ResourceListBody>
       ) : (
-        <ResourceDropzoneEmpty />
+        <ResourceDropzoneEmpty
+          description="Ou use o botão Upload acima."
+          title="Arraste um arquivo aqui"
+        />
       )}
     </ResourceListContainer>
   );
@@ -909,6 +1146,13 @@ type EditableLessonResource =
       storage: "r2";
       localPreviewUrl?: string;
     };
+
+interface LessonResourceUpload {
+  error?: string;
+  file: File;
+  id: string;
+  status: "error" | "uploading";
+}
 
 const createEmptyExternalResource = (): EditableLessonResource => ({
   id: `resource-${crypto.randomUUID()}`,

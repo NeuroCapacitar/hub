@@ -1,5 +1,7 @@
 "use client";
 
+import { Tick02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import {
@@ -440,11 +442,22 @@ export function StaffPromotionDialog({
             ))}
 
             <Stepper
+              aria-label="Promoção de membro"
               className="gap-3"
+              indicators={{
+                completed: (
+                  <HugeiconsIcon
+                    aria-hidden="true"
+                    icon={Tick02Icon}
+                    size={14}
+                    strokeWidth={2.5}
+                  />
+                ),
+              }}
               onValueChange={handleStepChange}
               value={step}
             >
-              <StepperNav className="gap-1">
+              <StepperNav aria-label="Etapas da promoção" className="gap-1">
                 {steps.map((item, index) => (
                   <StepperItem
                     completed={item.value < step}

@@ -3,6 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { DragDropVerticalIcon } from "@hugeicons/core-free-icons";
+import { getSortableDropPlacement } from "@/components/sortable-context";
 import { Badge } from "@/components/ui/badge";
 import {
   ResourceDeleteAction,
@@ -32,15 +33,28 @@ export function SortableAuthMediaItem({
 }: SortableAuthMediaItemProps): React.JSX.Element {
   const {
     attributes,
+    activeIndex,
+    index,
     listeners,
+    overIndex,
     setNodeRef,
     transform,
     transition,
     isDragging,
+    isOver,
   } = useSortable({ id: slide.id });
+
+  const dropPlacement = getSortableDropPlacement({
+    activeIndex,
+    index,
+    isDragging,
+    isOver,
+    overIndex,
+  });
 
   return (
     <ResourceItem
+      dropPlacement={dropPlacement}
       isDragging={isDragging}
       nodeRef={setNodeRef}
       style={{
