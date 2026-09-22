@@ -97,7 +97,7 @@ export default async function AdminCoursesPage(): Promise<React.JSX.Element> {
                           blurDataUrl={getCourseCoverBlurDataUrl(
                             course.coverImage
                           )}
-                          className="opacity-70 transition-transform duration-400 group-hover:scale-[1.02]"
+                          className="opacity-100 transition-transform duration-400 group-hover:scale-[1.02]"
                           sizes="340px"
                           src={course.thumbnailUrl}
                         />
@@ -111,10 +111,10 @@ export default async function AdminCoursesPage(): Promise<React.JSX.Element> {
                           </div>
                         </>
                       )}
-                      <div className="absolute inset-0 bg-linear-to-b from-transparent via-card/80 to-card" />
+                      <div className="absolute inset-0 bg-linear-to-b from-transparent via-card/70 to-card" />
                     </div>
 
-                    <div className="relative z-10 flex min-h-0 flex-1 flex-col p-5 sm:p-6">
+                    <div className="relative z-10 flex min-h-0 flex-1 flex-col p-5 pb-3 sm:p-6 sm:pb-4">
                       <div className="flex items-start justify-between gap-3">
                         <Badge variant={statusInfo.variant}>
                           {statusInfo.label}
@@ -125,11 +125,9 @@ export default async function AdminCoursesPage(): Promise<React.JSX.Element> {
                         <h3 className="line-clamp-2 font-bold text-lg">
                           {course.title}
                         </h3>
-                        <div className="mt-2 flex items-start justify-end">
-                          <div className="shrink-0 pt-0.5 text-right font-medium text-card-foreground/60 text-xs">
-                            {course.moduleCount} módulos • {course.lessonCount}{" "}
-                            aulas
-                          </div>
+                        <div className="mt-2 font-medium text-card-foreground/60 text-xs">
+                          {course.moduleCount} módulos • {course.lessonCount}{" "}
+                          aulas
                         </div>
                       </div>
                     </div>

@@ -359,7 +359,7 @@ function CourseCard({
           <CourseCoverImage
             alt=""
             blurDataUrl={course.coverBlurDataUrl}
-            className="opacity-70 transition-transform duration-400 group-hover:scale-[1.02]"
+            className="opacity-100 transition-transform duration-400 group-hover:scale-[1.02]"
             sizes="340px"
             src={course.thumbnailUrl}
           />
@@ -373,7 +373,7 @@ function CourseCard({
             </div>
           </>
         )}
-        <div className="absolute inset-0 bg-linear-to-b from-transparent via-card/80 to-card" />
+        <div className="absolute inset-0 bg-linear-to-b from-transparent via-card/70 to-card" />
 
         {!hasActiveAccess && (
           <div className="absolute inset-0 flex items-start justify-center bg-background/60 pt-24 backdrop-blur-[2px]">
@@ -391,7 +391,7 @@ function CourseCard({
 
       <div
         className={cn(
-          "relative z-10 flex min-h-0 flex-1 flex-col p-5 sm:p-6",
+          "relative z-10 flex min-h-0 flex-1 flex-col p-5 pb-3 sm:p-6 sm:pb-4",
           canOpenOfferDialog && "pointer-events-none"
         )}
       >
@@ -425,18 +425,9 @@ function CourseCard({
               <span>{course.title}</span>
             )}
           </h3>
-          <div className="mt-2 flex items-start gap-4">
-            <div className="flex-1">
-              {course.description ? (
-                <p className="line-clamp-2 text-card-foreground/70 text-sm leading-5">
-                  {course.description}
-                </p>
-              ) : null}
-            </div>
-            <div className="shrink-0 pt-0.5 text-right font-medium text-card-foreground/60 text-xs">
-              {course.lessonCount} aulas •{" "}
-              {formatCourseWorkloadHours(course.workloadHours)}
-            </div>
+          <div className="mt-2 font-medium text-card-foreground/60 text-xs">
+            {course.lessonCount} aulas •{" "}
+            {formatCourseWorkloadHours(course.workloadHours)}
           </div>
         </div>
       </div>
