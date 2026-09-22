@@ -1,6 +1,6 @@
 # Análise: refinamento do header da página de Curso
 
-> Status: **pulada por decisão do produto**; nenhuma alteração de produto foi feita nesta análise.
+> Status: **descartada por decisão do produto**; nenhuma alteração de produto foi feita nesta análise.
 > Baseline: `f115568a` (`feature/small-changes`).
 
 ## Etapa identificada
@@ -62,10 +62,9 @@ apenas tipografia, métricas e borda.
 
 ## Decisão original da análise
 
-A análise considerou o refinamento válido, mas o produto decidiu **não
-implementar esta sugestão**. O header atual deve permanecer como está nesta
-rodada; esta recomendação não deve voltar para a fila sem uma nova decisão
-explícita.
+A análise considerou o refinamento válido, mas o produto decidiu **descartar
+esta sugestão**. O header atual deve permanecer como está; esta recomendação
+não deve voltar para a fila sem uma nova decisão explícita.
 
 ### Composição recomendada
 
@@ -116,6 +115,6 @@ Módulo 1 ...
 
 ## Resultado da análise
 
-Resultado final: **não implementar e seguir para a próxima sugestão do
+Resultado final: **descartar e seguir para a próxima sugestão do
 relatório**. O conteúdo desta nota permanece como registro da decisão
 rejeitada, não como plano ativo.

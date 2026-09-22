@@ -24,8 +24,22 @@ describe("brand token contract", () => {
     const classes = buttonVariants({ variant: "default" });
 
     expect(classes).toContain("bg-button-primary");
+    expect(classes).toContain("rounded-control");
     expect(classes).toContain("focus-visible:outline-focus");
     expect(classes).toContain("focus-visible:ring-background");
+  });
+
+  it("uses semantic radius roles for shared form controls", async () => {
+    const sources = await Promise.all(
+      ["input.tsx", "select.tsx", "textarea.tsx"].map((file) =>
+        readFile(new URL(`./${file}`, import.meta.url), "utf8")
+      )
+    );
+
+    expect(sources[0]).toContain("rounded-control");
+    expect(sources[1]).toContain("rounded-control");
+    expect(sources[1]).toContain("rounded-card");
+    expect(sources[2]).toContain("rounded-control");
   });
 
   it("keeps the orange Button accent opt-in", () => {

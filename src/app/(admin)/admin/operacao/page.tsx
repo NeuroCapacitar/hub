@@ -334,7 +334,7 @@ export default async function AdminOperationsPage({
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-16">
         <PageHeader title="Operações e recuperação" />
 
         <Card className="min-w-0">
@@ -509,12 +509,16 @@ export default async function AdminOperationsPage({
           </Card>
         </section>
 
-        <Card className="min-w-0" id="webhooks">
-          <CardHeader className="pb-4">
+        <section
+          aria-labelledby="webhooks-title"
+          className="grid min-w-0 gap-6"
+          id="webhooks"
+        >
+          <div>
             <div className="flex items-center gap-1">
-              <CardTitle as="h2" className="text-base">
+              <h2 className="type-section-title" id="webhooks-title">
                 Webhooks que exigem recuperação
-              </CardTitle>
+              </h2>
               <FinanceHelp
                 description="A fila mostra o estado local do processamento Asaas; o portal do provedor é a evidência da entrega externa."
                 details={[
@@ -524,12 +528,12 @@ export default async function AdminOperationsPage({
                 title="Recuperação de webhooks"
               />
             </div>
-            <CardDescription>
+            <p className="mt-1 text-muted-foreground text-sm">
               Eventos Asaas falhos ou em retry. Confira o estado local antes de
               reenfileirar.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div className="grid gap-4">
             <form className="mb-4 flex flex-wrap items-end gap-3" method="get">
               {outboxPage > 1 ? (
                 <input name="outboxPage" type="hidden" value={outboxPage} />
@@ -655,8 +659,8 @@ export default async function AdminOperationsPage({
                 </TableBody>
               </Table>
             </div>
-            <Separator className="mt-4" />
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
+            <Separator />
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <span
                 aria-live="polite"
                 className="text-muted-foreground text-sm"
@@ -716,17 +720,21 @@ export default async function AdminOperationsPage({
                 </nav>
               ) : null}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <Card className="min-w-0" id="resend-webhooks">
-          <CardHeader className="pb-4">
+        <section
+          aria-labelledby="resend-webhooks-title"
+          className="grid min-w-0 gap-6"
+          id="resend-webhooks"
+        >
+          <div>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-1">
-                  <CardTitle as="h2" className="text-base">
+                  <h2 className="type-section-title" id="resend-webhooks-title">
                     Eventos Resend em dead letter
-                  </CardTitle>
+                  </h2>
                   <FinanceHelp
                     description="A lista mostra eventos do Resend que não foram reconciliados no estado local do Hub."
                     details={[
@@ -737,10 +745,10 @@ export default async function AdminOperationsPage({
                     title="Eventos Resend em dead letter"
                   />
                 </div>
-                <CardDescription>
+                <p className="mt-1 text-muted-foreground text-sm">
                   Eventos que exigem investigação entre o Resend e o estado
                   local do Hub.
-                </CardDescription>
+                </p>
               </div>
               <Button asChild size="sm" variant="outline">
                 <Link
@@ -752,8 +760,8 @@ export default async function AdminOperationsPage({
                 </Link>
               </Button>
             </div>
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div className="grid gap-4">
             <div className="rounded-lg border">
               <Table className="min-w-[980px]">
                 <TableCaption className="sr-only">
@@ -834,8 +842,8 @@ export default async function AdminOperationsPage({
                 </TableBody>
               </Table>
             </div>
-            <Separator className="mt-4" />
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
+            <Separator />
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <span
                 aria-live="polite"
                 className="text-muted-foreground text-sm"
@@ -897,15 +905,19 @@ export default async function AdminOperationsPage({
                 </nav>
               ) : null}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <Card className="min-w-0" id="outbox">
-          <CardHeader className="pb-4">
+        <section
+          aria-labelledby="outbox-title"
+          className="grid min-w-0 gap-6"
+          id="outbox"
+        >
+          <div>
             <div className="flex items-center gap-1">
-              <CardTitle as="h2" className="text-base">
+              <h2 className="type-section-title" id="outbox-title">
                 Mensagens em dead letter
-              </CardTitle>
+              </h2>
               <FinanceHelp
                 description="Dead letter significa que a Outbox esgotou as tentativas automáticas e precisa de revisão manual."
                 details={[
@@ -915,12 +927,12 @@ export default async function AdminOperationsPage({
                 title="Mensagens em dead letter"
               />
             </div>
-            <CardDescription>
+            <p className="mt-1 text-muted-foreground text-sm">
               Mensagens que esgotaram as tentativas automáticas e aguardam uma
               decisão do Administrador.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </p>
+          </div>
+          <div className="grid gap-4">
             <div className="rounded-lg border">
               <Table className="min-w-[860px]">
                 <TableCaption className="sr-only">
@@ -995,8 +1007,8 @@ export default async function AdminOperationsPage({
                 </TableBody>
               </Table>
             </div>
-            <Separator className="mt-4" />
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
+            <Separator />
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <span
                 aria-live="polite"
                 className="text-muted-foreground text-sm"
@@ -1061,11 +1073,11 @@ export default async function AdminOperationsPage({
                 </nav>
               ) : null}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
         <section aria-labelledby="other-signals-title" id="outros-sinais">
-          <div className="mb-3 flex items-center gap-1">
+          <div className="mb-6 flex items-center gap-1">
             <h2 className="type-section-title" id="other-signals-title">
               Outros sinais operacionais
             </h2>
@@ -1079,7 +1091,7 @@ export default async function AdminOperationsPage({
               title="Outros sinais"
             />
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-x-4 gap-y-12 md:grid-cols-3">
             <Card className="min-w-0">
               <CardHeader className="pb-4">
                 <CardTitle as="h3" className="text-base">

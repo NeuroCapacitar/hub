@@ -93,7 +93,7 @@ export function FinancialAnalysis({
               Totais do período, com o líquido apresentado como estimativa.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
             <AdminMetricCard
               helper={`${analytics.paidOrders} pedido${analytics.paidOrders === 1 ? "" : "s"} com evidência de pagamento; valor antes de taxas e reembolsos.`}
               label="Recebido confirmado"

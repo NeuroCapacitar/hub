@@ -81,7 +81,7 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-16">
         <PageHeader title="Configurações globais" />
 
         <div className="grid grid-cols-1 gap-14 md:grid-cols-[220px_1fr] lg:grid-cols-[240px_1fr]">
@@ -152,10 +152,10 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
             </div>
           </aside>
 
-          <div className="min-w-0 space-y-16">
+          <div className="min-w-0 space-y-20">
             <section
               aria-labelledby="settings-certificates"
-              className="grid scroll-mt-24 gap-5"
+              className="grid scroll-mt-24 gap-6"
               id="certificados"
             >
               <div className="flex items-start justify-between gap-3">
@@ -205,7 +205,7 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
               </Card>
             </section>
 
-            <section className="grid scroll-mt-24 gap-5" id="tela-acesso">
+            <section className="grid scroll-mt-24 gap-6" id="tela-acesso">
               <div className="space-y-1">
                 <h2 className="type-section-title">Tela de acesso</h2>
                 <p className="text-muted-foreground text-sm">
@@ -218,7 +218,7 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
               />
             </section>
 
-            <section className="grid scroll-mt-24 gap-5" id="banners-dashboard">
+            <section className="grid scroll-mt-24 gap-6" id="banners-dashboard">
               <div className="space-y-1">
                 <h2 className="type-section-title">Banners do Dashboard</h2>
                 <p className="text-muted-foreground text-sm">
@@ -233,7 +233,7 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
             </section>
 
             <section
-              className="grid scroll-mt-24 gap-5"
+              className="grid scroll-mt-24 gap-6"
               id="perguntas-frequentes"
             >
               <div className="flex items-start justify-between gap-3">

@@ -130,7 +130,7 @@ function LearningAnalyticsKpisSection({
 
   return (
     <section aria-labelledby="learning-report-heading">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
         <AdminMetricCard
           helper="Aulas ativas na publicação vigente."
           icon={BookOpen01Icon}
@@ -180,7 +180,7 @@ function LearningAnalyticsPauseInsights({
 
   return (
     <section aria-labelledby="learning-pause-insights-heading">
-      <div className="mb-3">
+      <div className="mb-6">
         <h2 className="type-section-title" id="learning-pause-insights-heading">
           Pausas observadas
         </h2>
@@ -256,9 +256,9 @@ function LearningAnalyticsLessonsTable({
   totalPages: number;
 }): React.JSX.Element {
   return (
-    <>
+    <div className="grid gap-3">
       <p
-        className="type-meta mb-2 text-muted-foreground"
+        className="type-meta text-muted-foreground"
         id="learning-activity-note"
       >
         Atividade: inícios e conclusões registrados no período; não é uma taxa
@@ -379,7 +379,7 @@ function LearningAnalyticsLessonsTable({
         </Table>
       </div>
       {totalLessonCount > 0 && (page > 1 || page < totalPages) ? (
-        <div className="mt-4 flex justify-end">
+        <div className="flex justify-end">
           <nav
             aria-label="Paginação do relatório de aprendizagem"
             className="flex gap-2"
@@ -401,7 +401,7 @@ function LearningAnalyticsLessonsTable({
           </nav>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }
 

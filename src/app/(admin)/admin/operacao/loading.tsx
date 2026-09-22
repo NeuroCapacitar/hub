@@ -12,7 +12,7 @@ const OPERATIONS_SECTION_SKELETON_KEYS = [
 export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
-      <div aria-busy="true" className="flex flex-col gap-8" role="status">
+      <div aria-busy="true" className="flex flex-col gap-16" role="status">
         <span className="sr-only">Carregando operações e recuperação…</span>
         {OPERATIONS_SECTION_SKELETON_KEYS.map((key) => (
           <Skeleton

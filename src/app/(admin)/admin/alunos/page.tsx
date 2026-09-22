@@ -8,13 +8,6 @@ import { FinanceHelp } from "@/components/admin/finance-help";
 import type { StudentManagementCapabilities } from "@/components/admin/student-management-types";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { getAdminStudentsData } from "@/features/admin/server";
 import { parseAdminStudentAccessFilter } from "@/features/admin/student-filters";
 import { requirePermission } from "@/lib/auth-permissions";
@@ -70,11 +63,11 @@ export default async function AdminStudentsPage({
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-16">
         <PageHeader title="Alunos e matrículas" />
 
         <section aria-labelledby="students-summary-title">
-          <div className="mb-3 flex items-center gap-1">
+          <div className="mb-6 flex items-center gap-1">
             <h2 className="type-section-title" id="students-summary-title">
               Resumo de acesso
             </h2>
@@ -88,7 +81,7 @@ export default async function AdminStudentsPage({
               title="Resumo de acesso"
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
             <AdminMetricCard
               helper="Global; não muda com busca ou página."
               icon={UserGroupIcon}
@@ -118,13 +111,16 @@ export default async function AdminStudentsPage({
           </div>
         </section>
 
-        <Card className="min-w-0">
-          <CardHeader className="pb-4">
+        <section
+          aria-labelledby="students-table-title"
+          className="grid min-w-0 gap-6"
+        >
+          <div>
             <div>
               <div className="flex items-center gap-1">
-                <CardTitle as="h2" className="text-base">
+                <h2 className="type-section-title" id="students-table-title">
                   Alunos cadastrados
-                </CardTitle>
+                </h2>
                 <FinanceHelp
                   description="Cada linha representa um Aluno. O menu de ações separa consulta, detalhes e operação da plataforma."
                   details={[
@@ -135,25 +131,23 @@ export default async function AdminStudentsPage({
                   title="Lista de Alunos"
                 />
               </div>
-              <CardDescription className="mt-1">
+              <p className="mt-1 text-muted-foreground text-sm">
                 Busque por nome ou e-mail, filtre o estado do acesso e use o
                 menu de ações para consultar ou operar a plataforma.
-              </CardDescription>
+              </p>
             </div>
-          </CardHeader>
-          <CardContent>
-            <StudentsTable
-              context={createGlobalStudentsTableContext(accessFilter)}
-              hasNextPage={data.hasNextPage}
-              managementCapabilities={managementCapabilities}
-              page={data.page}
-              pageSize={data.pageSize}
-              search={data.search}
-              students={students}
-              totalCount={data.totalCount}
-            />
-          </CardContent>
-        </Card>
+          </div>
+          <StudentsTable
+            context={createGlobalStudentsTableContext(accessFilter)}
+            hasNextPage={data.hasNextPage}
+            managementCapabilities={managementCapabilities}
+            page={data.page}
+            pageSize={data.pageSize}
+            search={data.search}
+            students={students}
+            totalCount={data.totalCount}
+          />
+        </section>
       </div>
     </PageContainer>
   );

@@ -98,13 +98,13 @@ export function FinancialTabs({
         </div>
         {actions ? <div className="shrink-0 pb-1">{actions}</div> : null}
       </div>
-      <TabsContent className="flex flex-col gap-8" value="overview">
+      <TabsContent className="flex flex-col gap-12" value="overview">
         {overview}
       </TabsContent>
-      <TabsContent className="flex flex-col gap-8" value="orders">
+      <TabsContent className="flex flex-col gap-12" value="orders">
         {orders}
       </TabsContent>
-      <TabsContent className="flex flex-col gap-8" value="analysis">
+      <TabsContent className="flex flex-col gap-12" value="analysis">
         {analysis}
       </TabsContent>
     </Tabs>

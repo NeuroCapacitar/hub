@@ -9,7 +9,7 @@ export default function Loading(): React.JSX.Element {
 
   return (
     <PageContainer>
-      <div aria-busy="true" className="flex flex-col gap-8">
+      <div aria-busy="true" className="flex flex-col gap-16">
         <span className="sr-only" role="status">
           Carregando Financeiro…
         </span>
@@ -33,7 +33,7 @@ export default function Loading(): React.JSX.Element {
 function OverviewLoading(): React.JSX.Element {
   return (
     <>
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
         {["revenue", "ticket", "open", "orders"].map((key) => (
           <Skeleton className="h-[120px] rounded-surface" key={key} />
         ))}
@@ -41,7 +41,7 @@ function OverviewLoading(): React.JSX.Element {
       <section>
         <Skeleton className="h-[300px] w-full rounded-surface" />
       </section>
-      <section className="grid gap-8 xl:grid-cols-2">
+      <section className="grid gap-x-10 gap-y-12 xl:grid-cols-2">
         <Skeleton className="h-[380px] w-full rounded-surface" />
         <Skeleton className="h-[380px] w-full rounded-surface" />
       </section>
@@ -51,8 +51,8 @@ function OverviewLoading(): React.JSX.Element {
 
 function OrdersLoading(): React.JSX.Element {
   return (
-    <section>
-      <div className="rounded-surface border bg-card p-6">
+    <section className="grid gap-6">
+      <div>
         <div className="flex flex-col gap-3">
           <Skeleton className="h-5 w-32" />
           <Skeleton className="h-4 w-full max-w-[420px]" />
@@ -96,13 +96,13 @@ function AnalysisLoading(): React.JSX.Element {
             <Skeleton className="h-9 w-52" />
           </div>
         </div>
-        <div className="mt-6 grid gap-8">
+        <div className="mt-6 grid gap-12">
           <section className="grid gap-3">
             <div className="grid gap-2">
               <Skeleton className="h-5 w-40" />
               <Skeleton className="h-4 w-full max-w-[420px]" />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
               {["gross", "fees", "refunds", "net"].map((key) => (
                 <Skeleton className="h-[120px] rounded-surface" key={key} />
               ))}
@@ -113,7 +113,7 @@ function AnalysisLoading(): React.JSX.Element {
               <Skeleton className="h-5 w-52" />
               <Skeleton className="h-4 w-full max-w-[420px]" />
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
               {["orders", "average", "open", "refund-rate"].map((key) => (
                 <Skeleton className="h-[120px] rounded-surface" key={key} />
               ))}

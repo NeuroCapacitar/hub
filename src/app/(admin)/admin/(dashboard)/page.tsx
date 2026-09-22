@@ -390,7 +390,7 @@ export default async function AdminPage(): Promise<React.JSX.Element> {
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-16">
         <PageHeader title="Operação diária" />
 
         <DashboardSummary operations={data.operations} overview={overview} />
@@ -490,7 +490,7 @@ function DashboardSummary({
 
   return (
     <section aria-labelledby="dashboard-summary-title">
-      <div className="mb-3">
+      <div className="mb-6">
         <h2 className="type-section-title" id="dashboard-summary-title">
           Resumo do dia
         </h2>
@@ -498,7 +498,7 @@ function DashboardSummary({
           Os números principais para começar a operação.
         </p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-5">
         {metrics.map((metric) => (
           <AdminMetricCard
             help={metric.help}
@@ -551,7 +551,7 @@ function OperationsOverview({
     <>
       {hasOperationalQueues ? (
         <section aria-labelledby="dashboard-operations-title">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-center gap-1">
               <h2
                 className="type-section-title"
@@ -572,7 +572,7 @@ function OperationsOverview({
               {operationBadgeLabel}
             </Badge>
           </div>
-          <div className="grid gap-4">
+          <div className="grid gap-12">
             {hasAttention ? (
               <IssueGroup
                 description="Falhas e exceções que podem bloquear uma decisão."
@@ -594,7 +594,7 @@ function OperationsOverview({
       ) : null}
       {hasCatalogContent ? (
         <section aria-labelledby="dashboard-content-title">
-          <div className="mb-3">
+          <div className="mb-6">
             <h2 className="type-section-title" id="dashboard-content-title">
               Conteúdo e certificados
             </h2>
@@ -604,7 +604,7 @@ function OperationsOverview({
           </div>
           <div
             className={cn(
-              "grid gap-4",
+              "grid gap-x-5 gap-y-12",
               hasCatalog && hasPendingCertificates && "xl:grid-cols-2"
             )}
           >
@@ -980,7 +980,7 @@ function OperationalContext({
 
   return (
     <section aria-labelledby="dashboard-context-title">
-      <div className="mb-3">
+      <div className="mb-6">
         <h2 className="type-section-title" id="dashboard-context-title">
           Contexto de acompanhamento
         </h2>
@@ -988,7 +988,7 @@ function OperationalContext({
           Valores e filas que ajudam a interpretar as pendências.
         </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-x-5 gap-y-12 md:grid-cols-3">
         {hasFinancialContext ? (
           <ContextCard
             help={
@@ -1086,7 +1086,7 @@ function OperationalContext({
         </ContextCard>
       </div>
       {hasFinancialContext ? (
-        <p className="mt-2 text-muted-foreground text-xs">
+        <p className="mt-4 text-muted-foreground text-xs">
           Receita bruta paga é o histórico do Hub. Saldo disponível, liquidação
           e detalhes do provedor devem ser conferidos no Asaas.
         </p>
@@ -1162,7 +1162,7 @@ function RecentActivity({
 
   return (
     <section aria-labelledby="dashboard-activity-title">
-      <div className="mb-3">
+      <div className="mb-6">
         <h2 className="type-section-title" id="dashboard-activity-title">
           Atividade recente
         </h2>
@@ -1171,7 +1171,7 @@ function RecentActivity({
           fluxo.
         </p>
       </div>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-12">
         {recentOrders.length > 0 ? (
           <RecentOrdersCard orders={recentOrders} />
         ) : null}
@@ -1192,21 +1192,19 @@ function RecentCommentsCard({
   comments: AdminDashboardRecentComment[];
 }): React.JSX.Element {
   return (
-    <Card className="min-w-0">
-      <CardHeader className="border-b pb-4">
-        <CardTitle as="h3" className="text-base">
+    <section aria-labelledby="dashboard-comments-title" className="grid gap-6">
+      <div>
+        <h3 className="type-section-title" id="dashboard-comments-title">
           Últimos comentários
-        </CardTitle>
-        <CardDescription className="mt-1">
+        </h3>
+        <p className="mt-1 text-muted-foreground text-sm">
           Os 5 comentários mais recentes nas aulas.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="rounded-lg border">
-          <RecentCommentsTable comments={comments} />
-        </div>
-      </CardContent>
-    </Card>
+        </p>
+      </div>
+      <div className="rounded-lg border">
+        <RecentCommentsTable comments={comments} />
+      </div>
+    </section>
   );
 }
 
@@ -1216,17 +1214,17 @@ function RecentOrdersCard({
   orders: AdminDashboardRecentOrder[];
 }): React.JSX.Element {
   return (
-    <Card className="min-w-0">
-      <CardHeader className="border-b pb-4">
+    <section aria-labelledby="dashboard-orders-title" className="grid gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <CardTitle as="h3" className="text-base">
+          <h3 className="type-section-title" id="dashboard-orders-title">
             Últimas compras
-          </CardTitle>
-          <CardDescription className="mt-1">
+          </h3>
+          <p className="mt-1 text-muted-foreground text-sm">
             Os 5 pedidos mais recentes do checkout.
-          </CardDescription>
+          </p>
         </div>
-        <CardAction>
+        <div>
           <Button asChild size="sm" variant="outline">
             <Link href={route("/admin/financeiro?tab=orders")}>
               Ver todos os pedidos
@@ -1239,14 +1237,12 @@ function RecentOrdersCard({
               />
             </Link>
           </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        <div className="rounded-lg border">
-          <RecentOrdersTable orders={orders} />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+      <div className="rounded-lg border">
+        <RecentOrdersTable orders={orders} />
+      </div>
+    </section>
   );
 }
 
@@ -1256,21 +1252,22 @@ function RecentCertificatesCard({
   certificates: AdminDashboardRecentCertificate[];
 }): React.JSX.Element {
   return (
-    <Card className="min-w-0">
-      <CardHeader className="border-b pb-4">
-        <CardTitle as="h3" className="text-base">
+    <section
+      aria-labelledby="dashboard-certificates-title"
+      className="grid gap-6"
+    >
+      <div>
+        <h3 className="type-section-title" id="dashboard-certificates-title">
           Últimos certificados emitidos
-        </CardTitle>
-        <CardDescription className="mt-1">
+        </h3>
+        <p className="mt-1 text-muted-foreground text-sm">
           Os 5 certificados emitidos mais recentemente.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="rounded-lg border">
-          <RecentCertificatesTable certificates={certificates} />
-        </div>
-      </CardContent>
-    </Card>
+        </p>
+      </div>
+      <div className="rounded-lg border">
+        <RecentCertificatesTable certificates={certificates} />
+      </div>
+    </section>
   );
 }
 
@@ -1547,31 +1544,23 @@ function SupportRequestsSection({
   totalCount: number;
 }): React.JSX.Element {
   return (
-    <section aria-labelledby="dashboard-support-title">
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b pb-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle
-              as="h2"
-              className="text-base"
-              id="dashboard-support-title"
-            >
-              Solicitações de suporte
-            </CardTitle>
-            <Badge variant="info">{formatCount(totalCount)}</Badge>
-          </div>
-          <CardDescription className="mt-1">
-            Mostrando {formatCount(recent.length)} de {formatCount(totalCount)}
-            solicitações mais recentes; o estado indica se o e-mail foi colocado
-            na fila, aceito ou entregue.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-lg border">
-            <SupportRequestsTable recent={recent} />
-          </div>
-        </CardContent>
-      </Card>
+    <section aria-labelledby="dashboard-support-title" className="grid gap-6">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="type-section-title" id="dashboard-support-title">
+            Solicitações de suporte
+          </h2>
+          <Badge variant="info">{formatCount(totalCount)}</Badge>
+        </div>
+        <p className="mt-1 text-muted-foreground text-sm">
+          Mostrando {formatCount(recent.length)} de {formatCount(totalCount)}
+          solicitações mais recentes; o estado indica se o e-mail foi colocado
+          na fila, aceito ou entregue.
+        </p>
+      </div>
+      <div className="rounded-lg border">
+        <SupportRequestsTable recent={recent} />
+      </div>
     </section>
   );
 }

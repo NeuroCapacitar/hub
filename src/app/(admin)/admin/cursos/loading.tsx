@@ -4,8 +4,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
-      <div className="flex flex-col gap-8">
-        <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="flex flex-col gap-16">
+        <section className="grid grid-cols-1 gap-x-5 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
           <Skeleton className="aspect-[24/25] w-full rounded-xl border border-dashed" />
           {Array.from({ length: 6 }).map((_, i) => (
             <div

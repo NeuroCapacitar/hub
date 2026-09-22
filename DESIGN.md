@@ -385,6 +385,12 @@ semântico quando a intenção for um dos contextos acima. Não alterar o valor
 global sem validar os consumidores em `design-system-preview.tsx`, foco,
 mobile, dialogs, sheets e sidebar.
 
+Os primitives de controle compartilhados usam `rounded-control`; dropdowns e
+superfícies de Card usam o papel correspondente (`rounded-card`,
+`rounded-surface` ou `rounded-media`). Essa migração semântica é a forma
+confortável global do Hub. O fallback `--radius` não deve ser alterado em lote
+enquanto existirem consumidores legados explícitos.
+
 O contrato atual usa uma linguagem confortável globalmente. Admin, Financeiro,
 Auditoria, Operação e tabelas podem usar `size="sm"` e espaçamento local quando
 a comparação rápida justificar a redução de espaço; isso é uma exceção do
@@ -445,6 +451,13 @@ Ritmo vertical:
 - parágrafos seguem um ritmo de corpo consistente;
 - label, valor e detalhe mantêm a mesma relação entre peers;
 - mudança de grupo tem gap claramente maior que o espaço interno;
+- nas rotas administrativas, o stack principal separa cabeçalho e blocos
+  independentes com um ritmo confortável de `gap-16`;
+- o título e a descrição de uma sessão permanecem próximos do conteúdo, em
+  torno de `gap-6` ou `mb-6`; o espaço maior pertence entre sessões e também
+  após o cabeçalho que introduz o bloco;
+- sessões irmãs dentro de um bloco e grupos internos relacionados usam o mesmo
+  ritmo maior, em torno de `gap-12`;
 - caption ou fonte ficam próximos da evidência que qualificam;
 - componentes filhos não adicionam margens concorrentes quando o container já
   possui o gap.

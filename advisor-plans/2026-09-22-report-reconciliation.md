@@ -17,7 +17,7 @@ produto**. A nota correspondente foi marcada como rejeitada e não deve voltar
 | --- | --- | --- |
 | Fundação visual e densidade | Implementada com ajustes | Tokens semânticos de forma, base confortável global e exceções locais `size="sm"`. A troca global de `--radius` foi rejeitada. |
 | Home do Aluno | Implementada | `ContinueLearningCard`, próximo passo, progresso e ação contextual. |
-| Header da página de Curso | **Pulada** | Não implementar capa no header, remoção de métricas ou remoção do CTA nesta rodada. |
+| Header da página de Curso | **Descartada** | Não implementar capa no header, remoção de métricas ou remoção do CTA. Só volta com nova decisão explícita. |
 | Módulos, LessonCards e movimento | Parcialmente implementada | Hover/motion já foram refinados; separadores e alguns microajustes continuam opcionais. |
 | Certificados | Implementada | Arquivo, preview, histórico, estados, revogação e ações foram refinados. |
 | Auth | Analisada, não implementada como nova direção | A estrutura atual já é sólida; art direction institucional exigiria mock e pesquisa própria. |

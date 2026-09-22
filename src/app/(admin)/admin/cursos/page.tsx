@@ -48,10 +48,10 @@ export default async function AdminCoursesPage(): Promise<React.JSX.Element> {
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-16">
         <PageHeader title="Cursos" />
 
-        <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-1 gap-x-5 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
           {canCreateCourse && data.courses.length > 0 ? (
             <NewCourseCard priceFieldId="new-course-price" />
           ) : null}

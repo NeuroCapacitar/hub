@@ -4,9 +4,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
-      <div aria-busy="true" className="flex flex-col gap-8" role="status">
+      <div aria-busy="true" className="flex flex-col gap-16" role="status">
         <span className="sr-only">Carregando configurações globais…</span>
-        <section className="grid gap-4">
+        <section className="grid gap-6">
           <Skeleton className="h-6 w-56" />
           <div className="rounded-xl border bg-card p-6">
             <div className="flex items-start justify-between gap-3">
@@ -49,7 +49,7 @@ export default function Loading(): React.JSX.Element {
           </div>
         </section>
 
-        <section className="grid gap-4">
+        <section className="grid gap-6">
           <Skeleton className="h-6 w-44" />
           <Skeleton className="h-[300px] w-full rounded-xl" />
           <Skeleton className="h-[280px] w-full rounded-xl" />

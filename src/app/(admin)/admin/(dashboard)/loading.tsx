@@ -10,8 +10,8 @@ function MetricLoadingBand(): React.JSX.Element {
 
   return (
     <section>
-      <Skeleton className="mb-3 h-5 w-28" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <Skeleton className="mb-6 h-5 w-28" />
+      <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-5">
         {metricKeys.map((key) => (
           <Skeleton
             className="h-[126px] rounded-xl"
@@ -26,49 +26,49 @@ function MetricLoadingBand(): React.JSX.Element {
 function AdminDashboardLoading(): React.JSX.Element {
   return (
     <PageContainer>
-      <div aria-busy="true" className="flex flex-col gap-6" role="status">
+      <div aria-busy="true" className="flex flex-col gap-16" role="status">
         <span className="sr-only">Carregando o painel administrativo…</span>
         <MetricLoadingBand />
         <section>
-          <div className="mb-3 flex items-end justify-between gap-3">
+          <div className="mb-6 flex items-end justify-between gap-3">
             <div className="grid gap-2">
               <Skeleton className="h-5 w-52" />
               <Skeleton className="h-4 w-80 max-w-full" />
             </div>
             <Skeleton className="h-5 w-28" />
           </div>
-          <div className="grid gap-4">
+          <div className="grid gap-12">
             <Skeleton className="h-[340px] rounded-xl" />
             <Skeleton className="h-[420px] rounded-xl" />
           </div>
         </section>
         <section>
-          <div className="mb-3 grid gap-2">
+          <div className="mb-6 grid gap-2">
             <Skeleton className="h-5 w-56" />
             <Skeleton className="h-4 w-80 max-w-full" />
           </div>
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-x-5 gap-y-12 xl:grid-cols-2">
             <Skeleton className="h-[460px] rounded-xl" />
             <Skeleton className="h-[400px] rounded-xl" />
           </div>
         </section>
         <section>
-          <div className="mb-3 grid gap-2">
+          <div className="mb-6 grid gap-2">
             <Skeleton className="h-5 w-52" />
             <Skeleton className="h-4 w-72 max-w-full" />
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-x-5 gap-y-12 md:grid-cols-3">
             <Skeleton className="h-[240px] rounded-xl" />
             <Skeleton className="h-[210px] rounded-xl" />
             <Skeleton className="h-[270px] rounded-xl" />
           </div>
         </section>
         <section>
-          <div className="mb-3 grid gap-2">
+          <div className="mb-6 grid gap-2">
             <Skeleton className="h-5 w-40" />
             <Skeleton className="h-4 w-72 max-w-full" />
           </div>
-          <div className="grid gap-4">
+          <div className="grid gap-12">
             <Skeleton className="h-[360px] rounded-xl" />
             <Skeleton className="h-[420px] rounded-xl" />
           </div>

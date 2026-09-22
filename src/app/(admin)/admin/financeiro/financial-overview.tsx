@@ -276,7 +276,7 @@ export function FinancialOverview({
         </section>
       ) : null}
       <section aria-labelledby="financial-summary-title">
-        <div className="mb-3">
+        <div className="mb-6">
           <h2 className="type-section-title" id="financial-summary-title">
             Resumo financeiro
           </h2>
@@ -285,7 +285,7 @@ export function FinancialOverview({
             no Hub.
           </p>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
           <AdminMetricCard
             helper={`${financialHealth.paidOrders} pedido${
               financialHealth.paidOrders === 1 ? "" : "s"
@@ -373,7 +373,7 @@ export function FinancialOverview({
           </CardHeader>
           <CardContent className="p-0">
             <div className="p-5 sm:p-6">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
                 <FinanceStatusTile
                   href={getOrdersHref({
                     checkout: "open",
@@ -434,13 +434,14 @@ export function FinancialOverview({
         </Card>
       </section>
 
-      <section className="grid min-w-0 gap-8 xl:grid-cols-2">
+      <section className="grid min-w-0 gap-x-10 gap-y-12 xl:grid-cols-2">
         {hasPendingReviews ? null : paymentReviewsSection}
         {coursesRevenue ? (
-          <Card
+          <section
+            aria-labelledby="financial-course-revenue-title"
             className={hasPendingReviews ? "min-w-0 xl:col-span-2" : "min-w-0"}
           >
-            <CardHeader className="pb-4">
+            <div>
               <div className="flex items-center gap-2">
                 <HugeiconsIcon
                   aria-hidden="true"
@@ -448,18 +449,19 @@ export function FinancialOverview({
                   size={18}
                   strokeWidth={2}
                 />
-                <CardTitle as="h2" className="font-medium text-base">
+                <h2
+                  className="type-section-title"
+                  id="financial-course-revenue-title"
+                >
                   Receita por curso
-                </CardTitle>
+                </h2>
               </div>
-              <CardDescription className="mt-1">
+              <p className="mt-1 text-muted-foreground text-sm">
                 Pedidos pagos e receita bruta por curso no histórico completo.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CoursesRevenueTable data={coursesRevenue.courses} />
-            </CardContent>
-          </Card>
+              </p>
+            </div>
+            <CoursesRevenueTable data={coursesRevenue.courses} />
+          </section>
         ) : null}
       </section>
     </>

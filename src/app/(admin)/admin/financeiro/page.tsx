@@ -1,13 +1,6 @@
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   type AdminFinancialPeriod,
   isAdminFinancialPeriod,
 } from "@/features/admin/financial-period";
@@ -203,7 +196,7 @@ export default async function AdminFinancePage({
   }
   return (
     <PageContainer>
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-16">
         <PageHeader title="Financeiro" />
 
         <FinancialTabs
@@ -222,31 +215,35 @@ export default async function AdminFinancePage({
           }
           orders={
             ordersData ? (
-              <Card>
-                <CardHeader className="pb-4">
-                  <CardTitle as="h2" className="text-base">
+              <section
+                aria-labelledby="financial-orders-title"
+                className="grid gap-6"
+              >
+                <div>
+                  <h2
+                    className="type-section-title"
+                    id="financial-orders-title"
+                  >
                     Pedidos
-                  </CardTitle>
-                  <CardDescription className="mt-1">
+                  </h2>
+                  <p className="mt-1 text-muted-foreground text-sm">
                     Busque, filtre e abra um pedido para consultar detalhes e
                     ações.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <FinancialOrdersTable
-                    canExecuteRefund={canExecuteRefund}
-                    canManageFinancialOperations={canManageFinancialOperations}
-                    checkout={orderCheckout}
-                    hasNextPage={ordersData.ordersHasNextPage}
-                    orders={ordersData.orders}
-                    page={orderPage}
-                    paymentMethod={orderPaymentMethod}
-                    search={orderSearch}
-                    status={orderStatus}
-                    totalCount={ordersData.ordersTotalCount}
-                  />
-                </CardContent>
-              </Card>
+                  </p>
+                </div>
+                <FinancialOrdersTable
+                  canExecuteRefund={canExecuteRefund}
+                  canManageFinancialOperations={canManageFinancialOperations}
+                  checkout={orderCheckout}
+                  hasNextPage={ordersData.ordersHasNextPage}
+                  orders={ordersData.orders}
+                  page={orderPage}
+                  paymentMethod={orderPaymentMethod}
+                  search={orderSearch}
+                  status={orderStatus}
+                  totalCount={ordersData.ordersTotalCount}
+                />
+              </section>
             ) : null
           }
           overview={

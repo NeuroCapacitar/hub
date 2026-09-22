@@ -81,6 +81,40 @@ function ColorSwatches(): React.JSX.Element {
   );
 }
 
+const radiusSamples = [
+  { className: "rounded-detail", label: "Detalhe · 4px" },
+  { className: "rounded-control", label: "Controle · 6px" },
+  { className: "rounded-card", label: "Card · 8px" },
+  { className: "rounded-surface", label: "Superfície · 12px" },
+  { className: "rounded-media", label: "Mídia · 16px" },
+] as const;
+
+function RadiusSamples(): React.JSX.Element {
+  return (
+    <section aria-labelledby="radius-samples-title" className="space-y-3">
+      <div>
+        <h3 className="font-medium text-sm" id="radius-samples-title">
+          Papéis de forma
+        </h3>
+        <p className="mt-1 text-muted-foreground text-xs">
+          Controles, Cards, superfícies e mídia usam tokens próprios; o raio
+          global permanece compatível enquanto os consumidores são migrados.
+        </p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        {radiusSamples.map((sample) => (
+          <div
+            className={`${sample.className} flex min-h-16 items-center justify-center border border-border bg-card px-3 text-center font-medium text-xs`}
+            key={sample.label}
+          >
+            {sample.label}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ActionSamples(): React.JSX.Element {
   return (
     <div className="flex flex-wrap gap-2">
@@ -496,6 +530,7 @@ function PreviewColumn(): React.JSX.Element {
         </div>
 
         <ColorSwatches />
+        <RadiusSamples />
 
         <div className="space-y-3">
           <p className="font-medium text-sm">Ações</p>

@@ -8,13 +8,6 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -171,40 +164,41 @@ export default async function AuditoriaPage({
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-16">
         <PageHeader title="Auditoria administrativa" />
 
-        <Card className="min-w-0">
-          <CardHeader className="pb-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <CardTitle as="h2" className="text-base">
-                    Eventos registrados
-                  </CardTitle>
-                  <FinanceHelp
-                    description="A auditoria mostra decisões administrativas e eventos de acesso. Filas de webhook, Outbox e dead letters ficam em Operação."
-                    details={[
-                      "A origem diferencia alterações administrativas de eventos de Matrícula e acesso.",
-                      "Os dados técnicos exibidos aqui são referências seguras; payloads de integração e e-mails não fazem parte do histórico global.",
-                      "Use os detalhes para confirmar o código, o alvo e o horário exato do evento.",
-                    ]}
-                    title="Como ler a auditoria"
-                  />
-                  <Badge variant="secondary">
-                    {data.totalCount.toLocaleString("pt-BR")}
-                  </Badge>
-                </div>
-                <CardDescription className="mt-1">
-                  Busque por ação, curso, responsável, e-mail ou identificador e
-                  abra os detalhes do evento.
-                </CardDescription>
+        <section
+          aria-labelledby="audit-events-title"
+          className="grid min-w-0 gap-6"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="type-section-title" id="audit-events-title">
+                  Eventos registrados
+                </h2>
+                <FinanceHelp
+                  description="A auditoria mostra decisões administrativas e eventos de acesso. Filas de webhook, Outbox e dead letters ficam em Operação."
+                  details={[
+                    "A origem diferencia alterações administrativas de eventos de Matrícula e acesso.",
+                    "Os dados técnicos exibidos aqui são referências seguras; payloads de integração e e-mails não fazem parte do histórico global.",
+                    "Use os detalhes para confirmar o código, o alvo e o horário exato do evento.",
+                  ]}
+                  title="Como ler a auditoria"
+                />
+                <Badge variant="secondary">
+                  {data.totalCount.toLocaleString("pt-BR")}
+                </Badge>
               </div>
+              <p className="mt-1 text-muted-foreground text-sm">
+                Busque por ação, curso, responsável, e-mail ou identificador e
+                abra os detalhes do evento.
+              </p>
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent>
-            <div className="mb-4 flex flex-wrap items-end gap-2">
+          <div className="grid gap-4">
+            <div className="flex flex-wrap items-end gap-2">
               <form
                 aria-label="Busca da auditoria"
                 className="flex min-w-0 flex-1 basis-full gap-2 sm:max-w-xl sm:basis-auto"
@@ -318,8 +312,8 @@ export default async function AuditoriaPage({
               </Table>
             </div>
 
-            <Separator className="mt-4" />
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
+            <Separator />
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <span
                 aria-live="polite"
                 className="text-muted-foreground text-sm"
@@ -380,8 +374,8 @@ export default async function AuditoriaPage({
                 </nav>
               ) : null}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
     </PageContainer>
   );

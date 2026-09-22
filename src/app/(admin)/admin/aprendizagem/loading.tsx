@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-16">
         <section>
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="space-y-2">
@@ -26,7 +26,7 @@ export default function Loading(): React.JSX.Element {
         </section>
 
         <section>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
             {["lessons", "errors", "without-starts", "viewing"].map((key) => (
               <div className="rounded-lg border bg-card p-5" key={key}>
                 <div className="flex items-center justify-between gap-3">
