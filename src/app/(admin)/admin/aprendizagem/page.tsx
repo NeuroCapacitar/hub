@@ -14,6 +14,7 @@ import {
   parseLearningAnalyticsPeriod,
 } from "@/features/learning-analytics/period";
 import {
+  buildLearningAnalyticsActivityScale,
   buildLearningAnalyticsKpis,
   buildLessonAnalyticsLessonReports,
 } from "@/features/learning-analytics/presentation";
@@ -70,6 +71,7 @@ export default async function LearningAnalyticsPage({
     ? rawMetrics.filter((metric) => metric.courseId === selectedCourse.id)
     : [];
   const lessons = buildLessonAnalyticsLessonReports(courseMetrics);
+  const activityScale = buildLearningAnalyticsActivityScale(lessons);
   const kpis = buildLearningAnalyticsKpis(lessons);
   const totalPages = Math.max(1, Math.ceil(lessons.length / PAGE_SIZE));
   const page = Number.isFinite(requestedPage)
@@ -91,6 +93,7 @@ export default async function LearningAnalyticsPage({
 
         {selectedCourse ? (
           <LearningAnalyticsReport
+            activityScale={activityScale}
             course={selectedCourse}
             courses={courses}
             exportHref={exportHref}

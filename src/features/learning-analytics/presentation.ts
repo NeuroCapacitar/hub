@@ -1,4 +1,5 @@
 import type {
+  LearningAnalyticsActivityScale,
   LearningAnalyticsKpis,
   LessonAnalyticsLessonReport,
   LessonAnalyticsLessonSummary,
@@ -122,6 +123,33 @@ export const buildLearningAnalyticsKpis = (
       (lesson) => lesson.aggregate.started === 0
     ).length,
   };
+};
+
+export const buildLearningAnalyticsActivityScale = (
+  lessons: readonly LessonAnalyticsLessonReport[]
+): LearningAnalyticsActivityScale => {
+  let maxValue = 0;
+
+  for (const lesson of lessons) {
+    maxValue = Math.max(
+      maxValue,
+      lesson.aggregate.completed,
+      lesson.aggregate.started
+    );
+  }
+
+  return { maxValue };
+};
+
+export const getLearningAnalyticsActivityWidth = (
+  value: number,
+  maximum: number
+): number => {
+  if (value <= 0 || maximum <= 0) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, Math.round((value / maximum) * 100)));
 };
 
 export const formatLearningAnalyticsHours = (value: number | null): string =>

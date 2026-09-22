@@ -147,3 +147,101 @@ O próximo trabalho de código deve começar por `DIR-02`, não pela aparência 
 gráfico. A decisão visual está aprovada apenas para uma leitura descritiva e
 reversível.
 
+## Revisão individual da proposta original
+
+### “Progressão pelas Aulas” como seção nova
+
+**Decisão: não criar um card ou gráfico separado na primeira versão.**
+
+A rota já apresenta KPIs, filtros, tabela, paginação e Sheet de detalhes. Uma
+segunda composição com os mesmos valores aumentaria repetição e altura da
+página. A visualização precisa responder uma pergunta diferente da tabela —
+“como a atividade se distribui na sequência?” — e não apenas repetir os dez
+campos de cada linha.
+
+### Barras de “iniciaram” e “concluíram”
+
+**Decisão: adotar somente como sinal descritivo inline, sem taxa ou funil.**
+
+A melhor adaptação ao Hub é uma única coluna compacta `Atividade`, dentro da
+tabela existente, com duas linhas claramente rotuladas:
+
+```text
+Atividade
+Inícios       42  ━━━━━━━━━━━
+Conclusões    18  ━━━━━
+```
+
+As barras devem usar a escala máxima do Curso selecionado, preservar o número
+visível e manter a leitura por teclado e leitor de tela. Isso permite perceber
+variações entre Aulas sem criar um painel paralelo ou sugerir que 18/42 é uma
+conversão.
+
+O padrão também é compatível com referências externas: tabelas organizam dados
+para comparação e podem ter uma visualização correspondente, enquanto a
+visualização não substitui os dados brutos ([Material — Data tables](https://m2.material.io/components/data-tables/web)). Para gráficos, cores devem
+ser auxiliares, não o único sinal; rótulos diretos e alternativa textual são
+necessários ([Atlassian — Data visualization color](https://atlassian.design/foundations/color/data-visualization-color), [W3C G103](https://www.w3.org/WAI/WCAG22/Techniques/general/G103)).
+
+### “Drop-off”, “taxa de conclusão” ou “coorte”
+
+**Decisão: rejeitar nesta etapa.**
+
+Esses termos exigem que o mesmo conjunto de Alunos tenha iniciado uma Aula,
+tenha sido acompanhado até uma conclusão e esteja submetido à mesma janela de
+observação. O modelo atual não oferece esse contrato; usar a linguagem seria
+mais persuasivo que verdadeiro.
+
+### Usar `Progress` do design system
+
+**Decisão: não usar o primitive de progresso para as barras da tabela.**
+
+`Progress` comunica o avanço de um processo do sistema e já é usado assim em
+KPIs. Para dados analíticos, usar uma trilha visual própria, com número e label
+ao lado. A própria Atlassian recomenda não usar progress bars para visualização
+de dados ([Progress bar](https://atlassian.design/components/progress-bar/usage)).
+
+### Adicionar biblioteca de gráficos
+
+**Decisão: não adicionar.**
+
+O sinal proposto cabe em HTML/CSS e não precisa de tooltip, animação, canvas ou
+hidratação client-side. Uma dependência de charts aumentaria bundle, estados de
+acessibilidade e manutenção para uma única comparação simples.
+
+### Mostrar todos os dados acima da paginação
+
+**Decisão: usar a escala completa do Curso, mas manter a tabela paginada.**
+
+O loader atual já consulta todas as métricas, constrói os relatórios e só depois
+separa `visibleLessons` por página (`src/app/(admin)/admin/aprendizagem/page.tsx:61-80`).
+Portanto, a escala pode ser calculada no servidor sem uma query adicional. A
+visualização deve permanecer dentro da tabela e respeitar a mesma ordem e o
+mesmo Curso/Período da página atual.
+
+## Composição recomendada para uma implementação futura
+
+1. Renomear a ideia para **Atividade registrada por Aula**; “Progressão” sugere
+   uma medida de avanço que os dados ainda não comprovam.
+2. Substituir as colunas separadas `Iniciaram` e `Concluíram` por `Atividade`,
+   mantendo ambos os valores em duas linhas e adicionando `no período` na
+   descrição da seção.
+3. Normalizar as duas barras pela maior contagem do Curso, nunca pela soma de
+   uma linha e nunca como percentual de conclusão.
+4. Usar uma cor de marca e uma cor neutra, com legenda textual; não usar verde,
+   vermelho ou amarelo para classificar uma Aula sem uma regra aprovada.
+5. Preservar a tabela semântica, a caption, o Sheet de versões, o export e a
+   paginação. Os números devem continuar visíveis quando CSS ou cor não forem
+   percebidos.
+6. Cobrir `0`, valores iguais, valores muito desiguais, Curso com muitos
+   Módulos, descrições longas, dados sem checkpoint e versões históricas.
+
+## Veredito
+
+**Implementar, em uma fatia pequena, somente o refinamento inline da tabela.**
+
+Antes dele, implementar `DIR-02`: contrato de copy, escala e testes da
+apresentação. Não criar um gráfico separado, não adicionar risco/abandono, não
+criar coortes e não introduzir uma biblioteca visual. Depois dessa fatia,
+reavaliar com dados reais se existe evidência suficiente para um relatório de
+coorte — essa seria outra decisão de produto, não uma continuação automática.

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildLearningAnalyticsActivityScale,
   buildLearningAnalyticsKpis,
   buildLessonAnalyticsLessonReports,
   formatLearningAnalyticsPlayingTime,
+  getLearningAnalyticsActivityWidth,
 } from "./presentation";
 import type { LessonAnalyticsMetric } from "./types";
 
@@ -119,5 +121,25 @@ describe("learning analytics presentation", () => {
     );
     expect(formatLearningAnalyticsPlayingTime(42 * 60)).toBe("42 min");
     expect(formatLearningAnalyticsPlayingTime(8)).toBe("8 s");
+  });
+
+  it("builds a course-wide activity scale without converting counts to rates", () => {
+    const reports = buildLessonAnalyticsLessonReports([
+      metric({ completed: 3, started: 12 }),
+      metric({
+        curriculumKey: "curriculum-2",
+        completed: 8,
+        lessonId: "lesson-2-v2",
+        lessonSortOrder: 2,
+        started: 4,
+      }),
+    ]);
+
+    expect(buildLearningAnalyticsActivityScale(reports)).toEqual({
+      maxValue: 12,
+    });
+    expect(getLearningAnalyticsActivityWidth(6, 12)).toBe(50);
+    expect(getLearningAnalyticsActivityWidth(0, 12)).toBe(0);
+    expect(getLearningAnalyticsActivityWidth(4, 0)).toBe(0);
   });
 });

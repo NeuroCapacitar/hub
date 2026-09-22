@@ -77,6 +77,10 @@ export interface LearningAnalyticsKpis {
   lessonsWithoutStarts: number;
 }
 
+export interface LearningAnalyticsActivityScale {
+  maxValue: number;
+}
+
 export interface LearningAnalyticsCourseOption {
   id: string;
   lessonCount: number;

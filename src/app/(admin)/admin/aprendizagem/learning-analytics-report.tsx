@@ -40,8 +40,10 @@ import {
   formatLearningAnalyticsHours,
   formatLearningAnalyticsPercent,
   formatLearningAnalyticsPlayingTime,
+  getLearningAnalyticsActivityWidth,
 } from "@/features/learning-analytics/presentation";
 import type {
+  LearningAnalyticsActivityScale,
   LearningAnalyticsCourseOption,
   LearningAnalyticsKpis,
   LessonAnalyticsLessonReport,
@@ -160,6 +162,7 @@ function LearningAnalyticsKpisSection({
 }
 
 function LearningAnalyticsLessonsTable({
+  activityScale,
   course,
   lessons,
   page,
@@ -167,6 +170,7 @@ function LearningAnalyticsLessonsTable({
   totalLessonCount,
   totalPages,
 }: {
+  activityScale: LearningAnalyticsActivityScale;
   course: LearningAnalyticsCourseOption;
   lessons: LessonAnalyticsLessonReport[];
   page: number;
@@ -176,8 +180,18 @@ function LearningAnalyticsLessonsTable({
 }): React.JSX.Element {
   return (
     <>
+      <p
+        className="type-meta mb-2 text-muted-foreground"
+        id="learning-activity-note"
+      >
+        Atividade: inícios e conclusões registrados no período; não é uma taxa
+        de conclusão.
+      </p>
       <div className="overflow-x-auto rounded-lg border">
-        <Table className="min-w-[1040px]">
+        <Table
+          aria-describedby="learning-activity-note"
+          className="min-w-[960px]"
+        >
           <TableCaption className="sr-only">
             Desempenho das Aulas do Curso {course.title}
           </TableCaption>
@@ -185,12 +199,7 @@ function LearningAnalyticsLessonsTable({
             <TableRow>
               <TableHead className="whitespace-nowrap">Ordem</TableHead>
               <TableHead>Aula</TableHead>
-              <TableHead className="whitespace-nowrap text-right">
-                Iniciaram
-              </TableHead>
-              <TableHead className="whitespace-nowrap text-right">
-                Concluíram
-              </TableHead>
+              <TableHead className="min-w-[220px]">Atividade</TableHead>
               <TableHead className="whitespace-nowrap text-right">
                 Checkpoint
               </TableHead>
@@ -229,11 +238,8 @@ function LearningAnalyticsLessonsTable({
                       </p>
                     </div>
                   </TableRowHeader>
-                  <TableCell className="text-right tabular-nums">
-                    {lesson.aggregate.started}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {lesson.aggregate.completed}
+                  <TableCell>
+                    <LessonActivityCell lesson={lesson} scale={activityScale} />
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatLearningAnalyticsPercent(
@@ -268,7 +274,7 @@ function LearningAnalyticsLessonsTable({
               ))
             ) : (
               <TableRow>
-                <TableCell className="h-56 p-0" colSpan={10}>
+                <TableCell className="h-56 p-0" colSpan={9}>
                   <Empty className="rounded-none border-0 p-8">
                     <EmptyHeader>
                       <EmptyMedia variant="icon">
@@ -319,7 +325,64 @@ function LearningAnalyticsLessonsTable({
   );
 }
 
+function LessonActivityCell({
+  lesson,
+  scale,
+}: {
+  lesson: LessonAnalyticsLessonReport;
+  scale: LearningAnalyticsActivityScale;
+}): React.JSX.Element {
+  return (
+    <div className="grid min-w-[220px] gap-1.5 py-0.5">
+      <LessonActivityBar
+        label="Inícios"
+        maximum={scale.maxValue}
+        value={lesson.aggregate.started}
+        variant="started"
+      />
+      <LessonActivityBar
+        label="Conclusões"
+        maximum={scale.maxValue}
+        value={lesson.aggregate.completed}
+        variant="completed"
+      />
+    </div>
+  );
+}
+
+function LessonActivityBar({
+  label,
+  maximum,
+  value,
+  variant,
+}: {
+  label: string;
+  maximum: number;
+  value: number;
+  variant: "completed" | "started";
+}): React.JSX.Element {
+  const width = getLearningAnalyticsActivityWidth(value, maximum);
+  const barClassName = variant === "started" ? "bg-chart-1" : "bg-chart-2";
+
+  return (
+    <div className="grid grid-cols-[5rem_minmax(4rem,1fr)_auto] items-center gap-2">
+      <span className="type-meta text-muted-foreground">{label}</span>
+      <span
+        aria-hidden="true"
+        className="h-1.5 overflow-hidden rounded-full bg-muted/70"
+      >
+        <span
+          className={`block h-full rounded-full ${barClassName}`}
+          style={{ width: `${width}%` }}
+        />
+      </span>
+      <span className="text-xs tabular-nums">{value}</span>
+    </div>
+  );
+}
+
 export function LearningAnalyticsReport({
+  activityScale,
   course,
   courses,
   exportHref,
@@ -331,6 +394,7 @@ export function LearningAnalyticsReport({
   totalLessonCount,
   totalPages,
 }: {
+  activityScale: LearningAnalyticsActivityScale;
   course: LearningAnalyticsCourseOption;
   courses: LearningAnalyticsCourseOption[];
   exportHref: string | null;
@@ -380,6 +444,7 @@ export function LearningAnalyticsReport({
       </section>
       <LearningAnalyticsKpisSection kpis={kpis} />
       <LearningAnalyticsLessonsTable
+        activityScale={activityScale}
         course={course}
         lessons={lessons}
         page={page}

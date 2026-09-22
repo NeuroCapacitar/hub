@@ -133,6 +133,10 @@ describe("LearningAnalyticsPage", () => {
     expect(markup).toContain("Segunda aula");
     expect(markup).toContain("Aula 01");
     expect(markup).toContain("Aula 02");
+    expect(markup).toContain("Atividade");
+    expect(markup).toContain("Inícios");
+    expect(markup).toContain("Conclusões");
+    expect(markup).toContain("não é uma taxa de conclusão");
     expect(markup).not.toContain("Publicação vigente · v2");
     expect(markup).not.toContain("1–2 de 2 Aulas");
     expect(markup).toContain("Aulas sem início");
