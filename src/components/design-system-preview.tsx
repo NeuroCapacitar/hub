@@ -82,9 +82,9 @@ function ColorSwatches(): React.JSX.Element {
 }
 
 const radiusSamples = [
-  { className: "rounded-detail", label: "Detalhe · 4px" },
-  { className: "rounded-control", label: "Controle · 6px" },
-  { className: "rounded-card", label: "Card · 8px" },
+  { className: "rounded-detail", label: "Detalhe · 6px" },
+  { className: "rounded-control", label: "Controle · 8px" },
+  { className: "rounded-card", label: "Card · 10px" },
   { className: "rounded-surface", label: "Superfície · 12px" },
   { className: "rounded-media", label: "Mídia · 16px" },
 ] as const;

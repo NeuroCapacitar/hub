@@ -29,6 +29,26 @@ describe("brand token contract", () => {
     expect(classes).toContain("focus-visible:ring-background");
   });
 
+  it("keeps the comfortable radius baseline and semantic scale centralized", async () => {
+    const source = await readFile(
+      new URL("../../app/globals.css", import.meta.url),
+      "utf8"
+    );
+
+    expect(source).toContain("--radius: 0.5rem;");
+    expect(source).toContain(
+      "--shape-radius-detail: calc(var(--radius) * 0.75);"
+    );
+    expect(source).toContain("--shape-radius-control: var(--radius);");
+    expect(source).toContain(
+      "--shape-radius-card: calc(var(--radius) * 1.25);"
+    );
+    expect(source).toContain(
+      "--shape-radius-surface: calc(var(--radius) * 1.5);"
+    );
+    expect(source).toContain("--shape-radius-media: calc(var(--radius) * 2);");
+  });
+
   it("uses semantic radius roles for shared form controls", async () => {
     const sources = await Promise.all(
       ["input.tsx", "select.tsx", "textarea.tsx"].map((file) =>

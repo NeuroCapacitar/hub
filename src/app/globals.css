@@ -165,12 +165,12 @@ html {
   --chart-3: var(--brand-olive);
   --chart-4: var(--brand-terracotta);
   --chart-5: oklch(0.82 0.03 80);
-  --radius: 0.25rem;
-  --shape-radius-detail: 0.25rem;
-  --shape-radius-control: 0.375rem;
-  --shape-radius-card: 0.5rem;
-  --shape-radius-surface: 0.75rem;
-  --shape-radius-media: 1rem;
+  --radius: 0.5rem;
+  --shape-radius-detail: calc(var(--radius) * 0.75);
+  --shape-radius-control: var(--radius);
+  --shape-radius-card: calc(var(--radius) * 1.25);
+  --shape-radius-surface: calc(var(--radius) * 1.5);
+  --shape-radius-media: calc(var(--radius) * 2);
   --sidebar: oklch(0.221 0.023 205.4);
   --sidebar-foreground: var(--brand-cream);
   --sidebar-primary: var(--brand-petroleum);

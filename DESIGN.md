@@ -379,17 +379,18 @@ a tarefa principal, sem criar uma aparência operacional separada.
 
 As formas semânticas da fundação vivem em `src/app/globals.css`:
 `--shape-radius-detail`, `--shape-radius-control`, `--shape-radius-card`,
-`--shape-radius-surface` e `--shape-radius-media`. O valor-base `--radius`
-continua preservado para compatibilidade; novos usos devem preferir o papel
-semântico quando a intenção for um dos contextos acima. Não alterar o valor
-global sem validar os consumidores em `design-system-preview.tsx`, foco,
-mobile, dialogs, sheets e sidebar.
+`--shape-radius-surface` e `--shape-radius-media`. O valor-base `--radius` é o
+baseline confortável global de 8px; os papéis semânticos derivam dele para
+manter uma escala centralizada de detalhe, controle, card, superfície e mídia.
+Novos usos devem preferir o papel semântico quando a intenção for um dos
+contextos acima.
 
 Os primitives de controle compartilhados usam `rounded-control`; dropdowns e
 superfícies de Card usam o papel correspondente (`rounded-card`,
-`rounded-surface` ou `rounded-media`). Essa migração semântica é a forma
-confortável global do Hub. O fallback `--radius` não deve ser alterado em lote
-enquanto existirem consumidores legados explícitos.
+`rounded-surface` ou `rounded-media`). Classes legadas que dependem da escala de
+`--radius` também recebem o baseline confortável automaticamente; exceções devem
+ser definidas centralmente por papel, nunca como valores locais espalhados pelos
+componentes.
 
 O contrato atual usa uma linguagem confortável globalmente. Admin, Financeiro,
 Auditoria, Operação e tabelas podem usar `size="sm"` e espaçamento local quando
