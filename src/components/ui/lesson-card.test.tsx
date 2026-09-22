@@ -55,6 +55,15 @@ describe("LessonCard", () => {
     expect(markup).toContain("object-cover");
   });
 
+  it("emphasizes the next lesson with the progress badge", () => {
+    const markup = renderToStaticMarkup(
+      <LessonCard {...baseProps} status="next" />
+    );
+
+    expect(markup).toContain('data-variant="progress"');
+    expect(markup).toContain("Próxima");
+  });
+
   it("keeps the visual fallback when neither image exists", () => {
     const markup = renderToStaticMarkup(<LessonCard {...baseProps} />);
 

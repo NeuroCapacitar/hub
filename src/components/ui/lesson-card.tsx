@@ -184,7 +184,7 @@ function getStatusBadge({
   }
   if (status === "next") {
     return (
-      <Badge className={className} variant="secondary">
+      <Badge className={className} variant="progress">
         Próxima
       </Badge>
     );
