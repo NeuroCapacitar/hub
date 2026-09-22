@@ -1,20 +1,9 @@
 import { redirect } from "next/navigation";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
+import { Frame, FramePanel, FrameTitle } from "@/components/reui/frame";
 import { SupportRequestDialog } from "@/components/support-request-dialog";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { canMutateStudentExperience } from "@/features/courses/preview";
 import { getPublishedFaqItems } from "@/features/courses/server";
 import { route } from "@/lib/routes";
@@ -32,46 +21,83 @@ export default async function StudentFaqPage(): Promise<React.JSX.Element> {
   const faqs = await getPublishedFaqItems();
 
   return (
-    <PageContainer className="min-h-screen bg-background text-foreground">
+    <PageContainer className="bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
         <PageHeader title="Perguntas frequentes" />
 
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           {faqs.length === 0 ? (
-            <Card>
-              <CardHeader>
-                <CardDescription>FAQ</CardDescription>
-                <CardTitle as="h2">Nenhuma pergunta publicada</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-sm leading-6">
+            <Frame
+              className="bg-muted/25 [--frame-radius:var(--radius-surface)]"
+              spacing="sm"
+              variant="ghost"
+            >
+              <FrameTitle
+                aria-level={2}
+                className="type-section-title text-balance px-2 py-1"
+                role="heading"
+              >
+                Nenhuma pergunta publicada
+              </FrameTitle>
+              <FramePanel className="border-border/70 bg-card px-5 py-5 shadow-none sm:px-6 sm:py-6">
+                <p className="type-body-sm text-muted-foreground">
                   Quando a equipe publicar respostas, elas aparecerão aqui.
                 </p>
-              </CardContent>
-            </Card>
+              </FramePanel>
+            </Frame>
           ) : (
-            <Accordion
-              className="w-full"
-              collapsible
-              defaultValue={faqs[0]?.id ?? ""}
-              type="single"
+            <section
+              aria-labelledby="faq-answers-title"
+              className="flex flex-col gap-4"
             >
+              <h2 className="sr-only" id="faq-answers-title">
+                Respostas para perguntas frequentes
+              </h2>
               {faqs.map((faq) => (
-                <AccordionItem key={faq.id} value={faq.id}>
-                  <AccordionTrigger className="text-left text-base">
+                <Frame
+                  className="bg-muted/25 [--frame-radius:var(--radius-surface)]"
+                  key={faq.id}
+                  spacing="sm"
+                  variant="ghost"
+                >
+                  <FrameTitle
+                    aria-level={3}
+                    className="type-section-title text-balance px-2 py-1 text-base sm:text-lg"
+                    role="heading"
+                  >
                     {faq.question}
-                  </AccordionTrigger>
-                  <AccordionContent className="px-4 text-muted-foreground text-sm leading-7">
-                    {faq.answer}
-                  </AccordionContent>
-                </AccordionItem>
+                  </FrameTitle>
+                  <FramePanel className="border-border/70 bg-card px-5 py-5 shadow-none sm:px-6 sm:py-6">
+                    <p className="type-body max-w-[68ch] whitespace-pre-wrap text-muted-foreground">
+                      {faq.answer}
+                    </p>
+                  </FramePanel>
+                </Frame>
               ))}
-            </Accordion>
+            </section>
           )}
 
-          <div className="flex justify-end">
-            <SupportRequestDialog triggerLabel="Falar com suporte" />
-          </div>
+          <Card
+            className="border-border/70 bg-card/60 py-0 shadow-sm"
+            size="sm"
+          >
+            <CardContent className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-4">
+              <div className="min-w-0">
+                <h2 className="type-card-title text-base">
+                  Não encontrou sua resposta?
+                </h2>
+                <p className="type-body-sm mt-1 text-muted-foreground">
+                  Nossa equipe pode ajudar você a resolver a dúvida.
+                </p>
+              </div>
+              <SupportRequestDialog
+                triggerClassName="shrink-0"
+                triggerLabel="Falar com suporte"
+                triggerSize="sm"
+                triggerVariant="outline"
+              />
+            </CardContent>
+          </Card>
         </div>
       </div>
     </PageContainer>
