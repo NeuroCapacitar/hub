@@ -5,6 +5,7 @@ import {
   buildLessonAnalyticsLessonReports,
   formatLearningAnalyticsPlayingTime,
   getLearningAnalyticsActivityWidth,
+  getLearningAnalyticsPauseInsights,
 } from "./presentation";
 import type { LessonAnalyticsMetric } from "./types";
 
@@ -37,6 +38,7 @@ const metric = (
   aggregateMedianCheckpointPercent: 50,
   aggregateMedianHoursToComplete: 2,
   aggregateMedianHoursToNextLesson: 1,
+  aggregateNextLessonTimingSampleCount: 4,
   ...overrides,
 });
 
@@ -144,5 +146,34 @@ describe("learning analytics presentation", () => {
     expect(getLearningAnalyticsActivityWidth(6, 12)).toBe(50);
     expect(getLearningAnalyticsActivityWidth(0, 12)).toBe(0);
     expect(getLearningAnalyticsActivityWidth(4, 0)).toBe(0);
+  });
+
+  it("ranks pause insights by the aggregate observed median", () => {
+    const reports = buildLessonAnalyticsLessonReports([
+      metric({
+        aggregateMedianHoursToNextLesson: 1,
+        aggregateNextLessonTimingSampleCount: 4,
+      }),
+      metric({
+        aggregateMedianHoursToNextLesson: 4,
+        aggregateNextLessonTimingSampleCount: 4,
+        curriculumKey: "curriculum-2",
+        lessonId: "lesson-2-v2",
+        lessonSortOrder: 2,
+      }),
+      metric({
+        aggregateMedianHoursToNextLesson: 8,
+        aggregateNextLessonTimingSampleCount: 1,
+        curriculumKey: "curriculum-3",
+        lessonId: "lesson-3-v2",
+        lessonSortOrder: 3,
+      }),
+    ]);
+
+    expect(
+      getLearningAnalyticsPauseInsights(reports).map(
+        (lesson) => lesson.position
+      )
+    ).toEqual([2, 1]);
   });
 });

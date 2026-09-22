@@ -32,6 +32,7 @@ describe("GET /api/admin/learning-analytics/export", () => {
       {
         activeEnrollments: 5,
         completed: 2,
+        aggregateNextLessonTimingSampleCount: 2,
         checkpointSampleCount: 3,
         completionTimingSampleCount: 0,
         coursePublicationId: "publication-1",

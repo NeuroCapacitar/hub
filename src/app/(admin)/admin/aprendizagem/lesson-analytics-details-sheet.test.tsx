@@ -14,6 +14,7 @@ const lesson: LessonAnalyticsLessonReport = {
     medianCheckpointPercent: 70,
     medianHoursToComplete: 1.75,
     medianHoursToNextLesson: 2,
+    nextLessonTimingSampleCount: 2,
     playingSeconds: 5400,
     started: 8,
   },

@@ -75,6 +75,7 @@ describe("learning analytics preference persistence", () => {
           aggregate_median_checkpoint_percent: null,
           aggregate_median_hours_to_complete: null,
           aggregate_median_hours_to_next_lesson: null,
+          aggregate_next_lesson_timing_sample_count: "0",
           course_average_viewing_percent: 62.5,
           module_sort_order: 1,
           module_title: "Módulo",

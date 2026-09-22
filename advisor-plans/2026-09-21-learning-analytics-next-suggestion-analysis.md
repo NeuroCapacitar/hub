@@ -121,3 +121,44 @@ depois adicionar um insight contextual pequeno. A sugestão original está corre
 ao pedir um insight em vez de outro KPI, mas precisa dessa proteção para não
 transformar uma mediana observacional em diagnóstico de conteúdo.
 
+## Reavaliação da segunda fatia: destacar as maiores pausas
+
+O commit `cdd93746` implementou a primeira fatia: a amostra por versão agora
+aparece no Sheet. A segunda fatia adiciona a amostra agregada e a entrada para a
+tabela; o destaque visual continua condicionado ao piso de três observações
+definido como proteção de interface.
+
+### Contrato que ainda falta
+
+A tabela principal trabalha com o agregado da `curriculumKey`, mas a amostra
+adicionada ao Sheet é específica de cada versão. Para ordenar ou destacar uma
+Aula de forma coerente, a consulta também precisa retornar a contagem agregada
+do CTE `curriculum_next_lesson_timing`, não apenas somar medianas ou somar
+contagens sem explicar a unidade.
+
+### Composição recomendada
+
+Depois desse contrato, usar uma seção plana chamada **Pausas observadas**, sem
+KPI, cor de risco ou card de métrica. Cada linha deve mostrar:
+
+- Aula e Módulo;
+- mediana observada até a próxima Aula;
+- `n` de observações agregadas;
+- período selecionado;
+- ação para abrir os detalhes da mesma Aula, sem duplicar a tabela inteira.
+
+Ocultar a seção quando não houver observações. Não exibir “gargalo”, “atraso” ou
+“problema” automaticamente: o valor pode refletir ritmo individual ou
+liberação temporal.
+
+### Decisão
+
+**Implementar com piso de três observações e amostra explícita.**
+
+Não criar o destaque somente com os dados atuais, porque isso misturaria a
+identidade agregada da Aula com uma amostra por versão e deixaria a ação de
+investigação indefinida. A próxima implementação desta sugestão deve começar
+por esse contrato, não pelo novo bloco visual. O piso de três observações evita
+destacar um único registro; ele não é uma afirmação de significância estatística
+e deve ser revisto se Produto/Aprendizagem definir uma política de amostra
+diferente.

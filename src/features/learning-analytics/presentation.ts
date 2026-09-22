@@ -13,6 +13,8 @@ const PUBLICATION_STATUS_ORDER = {
   retired: 2,
 } as const;
 
+export const MIN_LEARNING_ANALYTICS_PAUSE_INSIGHT_SAMPLE_SIZE = 3;
+
 const compareCurrentLessons = (
   left: LessonAnalyticsMetric,
   right: LessonAnalyticsMetric
@@ -55,6 +57,7 @@ const toAggregateMetric = (
   medianCheckpointPercent: current.aggregateMedianCheckpointPercent,
   medianHoursToComplete: current.aggregateMedianHoursToComplete,
   medianHoursToNextLesson: current.aggregateMedianHoursToNextLesson,
+  nextLessonTimingSampleCount: current.aggregateNextLessonTimingSampleCount,
   playingSeconds: versions.reduce(
     (total, version) => total + version.playingSeconds,
     0
@@ -143,6 +146,30 @@ export const buildLearningAnalyticsActivityScale = (
 
   return { maxValue };
 };
+
+export const getLearningAnalyticsPauseInsights = (
+  lessons: readonly LessonAnalyticsLessonReport[],
+  limit = 3
+): LessonAnalyticsLessonReport[] =>
+  lessons
+    .filter(
+      (lesson) =>
+        lesson.aggregate.medianHoursToNextLesson !== null &&
+        lesson.aggregate.nextLessonTimingSampleCount >=
+          MIN_LEARNING_ANALYTICS_PAUSE_INSIGHT_SAMPLE_SIZE
+    )
+    .sort((left, right) => {
+      const leftHours = left.aggregate.medianHoursToNextLesson ?? 0;
+      const rightHours = right.aggregate.medianHoursToNextLesson ?? 0;
+
+      return (
+        rightHours - leftHours ||
+        right.aggregate.nextLessonTimingSampleCount -
+          left.aggregate.nextLessonTimingSampleCount ||
+        left.position - right.position
+      );
+    })
+    .slice(0, Math.max(0, limit));
 
 export const getLearningAnalyticsActivityWidth = (
   value: number,

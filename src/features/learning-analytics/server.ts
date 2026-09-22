@@ -329,7 +329,8 @@ const getLessonAnalyticsMetricsQuery = (
       group by lesson_id
     ), curriculum_next_lesson_timing as (
       select cp.course_id, l.curriculum_key,
-             percentile_cont(0.5) within group (order by next_lesson_timing_samples.hours) as median_hours_to_next_lesson
+             percentile_cont(0.5) within group (order by next_lesson_timing_samples.hours) as median_hours_to_next_lesson,
+             count(*)::int as sample_count
       from next_lesson_timing_samples
       join lessons l on l.id = next_lesson_timing_samples.lesson_id
       join course_publications cp on cp.id = l.course_publication_id
@@ -393,6 +394,7 @@ const getLessonAnalyticsMetricsQuery = (
       curriculum_checkpoints.median_checkpoint_percent as aggregate_median_checkpoint_percent,
       curriculum_completion_timing.median_hours_to_complete as aggregate_median_hours_to_complete,
       curriculum_next_lesson_timing.median_hours_to_next_lesson as aggregate_median_hours_to_next_lesson,
+      coalesce(curriculum_next_lesson_timing.sample_count, 0)::int as aggregate_next_lesson_timing_sample_count,
       course_viewing.average_course_viewing_percent as course_average_viewing_percent,
       count(*) over()::int as total_count
     from course_publications cp
@@ -464,6 +466,7 @@ const readLessonAnalyticsMetrics = async ({
     aggregate_median_checkpoint_percent: number | null;
     aggregate_median_hours_to_complete: number | null;
     aggregate_median_hours_to_next_lesson: number | null;
+    aggregate_next_lesson_timing_sample_count: string;
     course_average_viewing_percent: number | null;
     module_sort_order: number;
     module_title: string;
@@ -515,6 +518,9 @@ const readLessonAnalyticsMetrics = async ({
         row.aggregate_median_hours_to_next_lesson === null
           ? null
           : Number(row.aggregate_median_hours_to_next_lesson),
+      aggregateNextLessonTimingSampleCount: Number(
+        row.aggregate_next_lesson_timing_sample_count
+      ),
       courseAverageViewingPercent:
         row.course_average_viewing_percent === null
           ? null

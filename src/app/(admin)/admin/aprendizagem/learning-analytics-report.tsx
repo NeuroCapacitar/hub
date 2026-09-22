@@ -1,6 +1,7 @@
 import {
   Alert02Icon,
   Analytics01Icon,
+  ArrowRight01Icon,
   BookOpen01Icon,
   Download01Icon,
   MoreHorizontalIcon,
@@ -8,6 +9,7 @@ import {
   ViewIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import Link from "next/link";
 import { AdminMetricCard } from "@/app/(admin)/admin/admin-metric-card";
 import { FinanceHelp } from "@/components/admin/finance-help";
 import { Button } from "@/components/ui/button";
@@ -161,6 +163,81 @@ function LearningAnalyticsKpisSection({
   );
 }
 
+function LearningAnalyticsPauseInsights({
+  courseId,
+  insights,
+  lessonPageSize,
+  period,
+}: {
+  courseId: string;
+  insights: LessonAnalyticsLessonReport[];
+  lessonPageSize: number;
+  period: LearningAnalyticsPeriod;
+}): React.JSX.Element | null {
+  if (insights.length === 0) {
+    return null;
+  }
+
+  return (
+    <section aria-labelledby="learning-pause-insights-heading">
+      <div className="mb-3">
+        <h2 className="type-section-title" id="learning-pause-insights-heading">
+          Pausas observadas
+        </h2>
+        <p className="type-body-sm mt-1 text-muted-foreground">
+          Medianas observadas entre a conclusão e o início da próxima Aula no
+          período. Não representam bloqueio do Curso.
+        </p>
+      </div>
+      <div className="divide-y divide-border/50 rounded-surface border bg-card">
+        {insights.map((lesson) => {
+          const lessonPage = Math.ceil(lesson.position / lessonPageSize);
+          const lessonHref =
+            getCoursePageHref(courseId, period, lessonPage) +
+            "#lesson-row-" +
+            String(lesson.position);
+
+          return (
+            <div
+              className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              key={lesson.curriculumKey}
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-sm">
+                  Aula {formatLessonPosition(lesson.position)} ·{" "}
+                  {lesson.lessonTitle}
+                </p>
+                <p className="mt-1 truncate text-muted-foreground text-xs">
+                  {lesson.moduleTitle}
+                </p>
+                <p className="mt-2 text-muted-foreground text-xs">
+                  Mediana observada:{" "}
+                  {formatLearningAnalyticsHours(
+                    lesson.aggregate.medianHoursToNextLesson
+                  )}{" "}
+                  · n={lesson.aggregate.nextLessonTimingSampleCount} observações
+                </p>
+              </div>
+              <Button asChild size="sm" variant="outline">
+                <Link href={lessonHref}>
+                  Ver na tabela
+                  <HugeiconsIcon
+                    aria-hidden="true"
+                    data-icon="inline-end"
+                    icon={ArrowRight01Icon}
+                    size={16}
+                    strokeWidth={2}
+                  />
+                </Link>
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function LearningAnalyticsLessonsTable({
   activityScale,
   course,
@@ -224,7 +301,10 @@ function LearningAnalyticsLessonsTable({
           <TableBody>
             {lessons.length > 0 ? (
               lessons.map((lesson) => (
-                <TableRow key={lesson.curriculumKey}>
+                <TableRow
+                  id={`lesson-row-${lesson.position}`}
+                  key={lesson.curriculumKey}
+                >
                   <TableCell className="font-mono text-muted-foreground text-xs">
                     Aula {formatLessonPosition(lesson.position)}
                   </TableCell>
@@ -387,9 +467,11 @@ export function LearningAnalyticsReport({
   courses,
   exportHref,
   kpis,
+  lessonPageSize,
   lessons,
   page,
   period,
+  pauseInsights,
   selectedCourseId,
   totalLessonCount,
   totalPages,
@@ -399,9 +481,11 @@ export function LearningAnalyticsReport({
   courses: LearningAnalyticsCourseOption[];
   exportHref: string | null;
   kpis: LearningAnalyticsKpis;
+  lessonPageSize: number;
   lessons: LessonAnalyticsLessonReport[];
   page: number;
   period: LearningAnalyticsPeriod;
+  pauseInsights: LessonAnalyticsLessonReport[];
   selectedCourseId: string;
   totalLessonCount: number;
   totalPages: number;
@@ -443,6 +527,12 @@ export function LearningAnalyticsReport({
         </div>
       </section>
       <LearningAnalyticsKpisSection kpis={kpis} />
+      <LearningAnalyticsPauseInsights
+        courseId={course.id}
+        insights={pauseInsights}
+        lessonPageSize={lessonPageSize}
+        period={period}
+      />
       <LearningAnalyticsLessonsTable
         activityScale={activityScale}
         course={course}

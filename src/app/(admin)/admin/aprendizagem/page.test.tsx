@@ -72,6 +72,7 @@ describe("LearningAnalyticsPage", () => {
         aggregateMedianCheckpointPercent: 45,
         aggregateMedianHoursToComplete: 1.75,
         aggregateMedianHoursToNextLesson: null,
+        aggregateNextLessonTimingSampleCount: 0,
       },
       {
         activeEnrollments: 2,
@@ -100,6 +101,7 @@ describe("LearningAnalyticsPage", () => {
         aggregateMedianCheckpointPercent: null,
         aggregateMedianHoursToComplete: 4,
         aggregateMedianHoursToNextLesson: 1,
+        aggregateNextLessonTimingSampleCount: 3,
       },
       {
         activeEnrollments: 0,
@@ -128,6 +130,7 @@ describe("LearningAnalyticsPage", () => {
         aggregateMedianCheckpointPercent: 45,
         aggregateMedianHoursToComplete: 1.75,
         aggregateMedianHoursToNextLesson: null,
+        aggregateNextLessonTimingSampleCount: 0,
       },
     ]);
 
@@ -150,6 +153,8 @@ describe("LearningAnalyticsPage", () => {
     expect(markup).not.toContain("1–2 de 2 Aulas");
     expect(markup).toContain("Aulas sem início");
     expect(markup).toContain("Visualização média do Curso");
+    expect(markup).toContain("Pausas observadas");
+    expect(markup).toContain("Ver na tabela");
     expect(markup).toContain("Tempo reproduzido");
     expect(markup).toContain("Visualização média do Curso: 63%");
     expect(markup).toContain('data-slot="progress"');

@@ -12,6 +12,7 @@ export interface LessonAnalyticsMetric {
   aggregateMedianCheckpointPercent: number | null;
   aggregateMedianHoursToComplete: number | null;
   aggregateMedianHoursToNextLesson: number | null;
+  aggregateNextLessonTimingSampleCount: number;
   checkpointSampleCount: number;
   completed: number;
   completionTimingSampleCount: number;
@@ -61,6 +62,7 @@ export interface LessonAnalyticsLessonSummary {
   medianCheckpointPercent: number | null;
   medianHoursToComplete: number | null;
   medianHoursToNextLesson: number | null;
+  nextLessonTimingSampleCount: number;
   playingSeconds: number;
   started: number;
 }
