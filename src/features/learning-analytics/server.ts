@@ -262,7 +262,8 @@ const getLessonAnalyticsMetricsQuery = (
       group by course_publication_id, lesson_id, enrollment_id
     ), checkpoints as (
       select course_publication_id, lesson_id,
-             percentile_cont(0.5) within group (order by checkpoint_percent) as median_checkpoint_percent
+             percentile_cont(0.5) within group (order by checkpoint_percent) as median_checkpoint_percent,
+             count(*)::int as sample_count
       from checkpoint_by_enrollment
       group by course_publication_id, lesson_id
     ), curriculum_checkpoints as (
@@ -289,7 +290,8 @@ const getLessonAnalyticsMetricsQuery = (
       where lp.completed_at >= starts.started_at
     ), completion_timing as (
       select lesson_id,
-             percentile_cont(0.5) within group (order by hours) as median_hours_to_complete
+             percentile_cont(0.5) within group (order by hours) as median_hours_to_complete,
+             count(*)::int as sample_count
       from completion_timing_samples
       group by lesson_id
     ), curriculum_completion_timing as (
@@ -321,7 +323,8 @@ const getLessonAnalyticsMetricsQuery = (
         and next_start.started_at >= completed_progress.completed_at
     ), next_lesson_timing as (
       select lesson_id,
-             percentile_cont(0.5) within group (order by hours) as median_hours_to_next_lesson
+             percentile_cont(0.5) within group (order by hours) as median_hours_to_next_lesson,
+             count(*)::int as sample_count
       from next_lesson_timing_samples
       group by lesson_id
     ), curriculum_next_lesson_timing as (
@@ -382,8 +385,11 @@ const getLessonAnalyticsMetricsQuery = (
       coalesce(analytics.error_count, 0) as error_count,
       coalesce(analytics.playing_seconds, 0) as playing_seconds,
       checkpoints.median_checkpoint_percent,
+      coalesce(checkpoints.sample_count, 0)::int as checkpoint_sample_count,
       completion_timing.median_hours_to_complete,
+      coalesce(completion_timing.sample_count, 0)::int as completion_timing_sample_count,
       next_lesson_timing.median_hours_to_next_lesson,
+      coalesce(next_lesson_timing.sample_count, 0)::int as next_lesson_timing_sample_count,
       curriculum_checkpoints.median_checkpoint_percent as aggregate_median_checkpoint_percent,
       curriculum_completion_timing.median_hours_to_complete as aggregate_median_hours_to_complete,
       curriculum_next_lesson_timing.median_hours_to_next_lesson as aggregate_median_hours_to_next_lesson,
@@ -439,7 +445,9 @@ const readLessonAnalyticsMetrics = async ({
   ];
   const result = await getPool().query<{
     active_enrollments: string;
+    checkpoint_sample_count: string;
     completed: string;
+    completion_timing_sample_count: string;
     course_id: string;
     course_publication_id: string;
     course_title: string;
@@ -451,6 +459,7 @@ const readLessonAnalyticsMetrics = async ({
     median_checkpoint_percent: number | null;
     median_hours_to_complete: number | null;
     median_hours_to_next_lesson: number | null;
+    next_lesson_timing_sample_count: string;
     playing_seconds: string;
     aggregate_median_checkpoint_percent: number | null;
     aggregate_median_hours_to_complete: number | null;
@@ -472,6 +481,8 @@ const readLessonAnalyticsMetrics = async ({
     .map((row) => ({
       activeEnrollments: Number(row.active_enrollments),
       completed: Number(row.completed),
+      checkpointSampleCount: Number(row.checkpoint_sample_count),
+      completionTimingSampleCount: Number(row.completion_timing_sample_count),
       courseId: row.course_id,
       coursePublicationId: row.course_publication_id,
       courseTitle: row.course_title,
@@ -510,6 +521,7 @@ const readLessonAnalyticsMetrics = async ({
           : Number(row.course_average_viewing_percent),
       moduleSortOrder: row.module_sort_order,
       moduleTitle: row.module_title,
+      nextLessonTimingSampleCount: Number(row.next_lesson_timing_sample_count),
       playingSeconds: Number(row.playing_seconds),
       publicationNumber: row.publication_number,
       publicationStatus: row.publication_status,

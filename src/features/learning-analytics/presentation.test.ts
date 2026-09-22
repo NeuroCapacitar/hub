@@ -13,6 +13,8 @@ const metric = (
 ): LessonAnalyticsMetric => ({
   activeEnrollments: 10,
   completed: 4,
+  checkpointSampleCount: 6,
+  completionTimingSampleCount: 5,
   courseId: "course-1",
   coursePublicationId: "publication-2",
   courseTitle: "Curso",
@@ -27,6 +29,7 @@ const metric = (
   medianHoursToNextLesson: 1,
   moduleSortOrder: 1,
   moduleTitle: "Módulo 1",
+  nextLessonTimingSampleCount: 4,
   playingSeconds: 3600,
   publicationNumber: 2,
   publicationStatus: "published",

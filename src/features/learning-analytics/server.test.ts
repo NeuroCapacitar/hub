@@ -36,6 +36,9 @@ describe("learning analytics preference persistence", () => {
     expect(metricsQuery).toContain("curriculum_checkpoints");
     expect(metricsQuery).toContain("course_viewing_by_enrollment");
     expect(metricsQuery).toContain("aggregate_median_hours_to_complete");
+    expect(metricsQuery).toContain("checkpoint_sample_count");
+    expect(metricsQuery).toContain("completion_timing_sample_count");
+    expect(metricsQuery).toContain("next_lesson_timing_sample_count");
     expect(metricsQuery).toContain(
       "sum(playing_seconds) filter (where event_type = 'watch_progress')"
     );
@@ -53,7 +56,9 @@ describe("learning analytics preference persistence", () => {
       rows: [
         {
           active_enrollments: "2",
+          checkpoint_sample_count: "0",
           completed: "1",
+          completion_timing_sample_count: "0",
           course_id: "course-1",
           course_publication_id: "publication-1",
           course_title: "Curso",
@@ -65,6 +70,7 @@ describe("learning analytics preference persistence", () => {
           median_checkpoint_percent: null,
           median_hours_to_complete: null,
           median_hours_to_next_lesson: null,
+          next_lesson_timing_sample_count: "0",
           playing_seconds: "120",
           aggregate_median_checkpoint_percent: null,
           aggregate_median_hours_to_complete: null,
