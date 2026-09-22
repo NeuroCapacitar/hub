@@ -893,12 +893,12 @@ function CertificateQueueCard({
           </Badge>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className={pending.length > 0 ? "p-0" : undefined}>
         {pending.length > 0 ? (
-          <div className="grid gap-3">
+          <div className="divide-y divide-border/50">
             {pending.map((certificate) => (
               <div
-                className="grid gap-3 rounded-lg border bg-muted/10 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5 sm:py-5"
                 key={
                   certificate.courseId +
                   ":" +

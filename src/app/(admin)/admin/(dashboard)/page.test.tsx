@@ -456,6 +456,8 @@ describe("AdminPage", () => {
     expect(markup).toContain("Certificados pendentes");
     expect(markup).toContain("Certificados sem emissão");
     expect(markup).toContain("Concluído em");
+    expect(markup).toContain("divide-y divide-border/50");
+    expect(markup).not.toContain("bg-muted/10");
     expect(markup).toContain("Webhooks em retry");
     expect(markup).toContain("Eventos de e-mail em dead letter");
     expect(markup).toContain("Acessos vencendo em 30 dias");
