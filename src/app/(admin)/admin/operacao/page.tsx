@@ -44,6 +44,7 @@ import type {
 import { requirePermission } from "@/lib/auth-permissions";
 import { formatDateTime } from "@/lib/formatters";
 import { route } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 import { OutboxDeadLetterDialog } from "./outbox-dead-letter-dialog";
 import { WebhookRecoveryDialog } from "./webhook-recovery-dialog";
 
@@ -128,6 +129,12 @@ const SEVERITY_PRESENTATION = {
     badgeVariant: "outline" as const,
     label: "Atenção",
   },
+};
+
+const SEVERITY_SURFACE_CLASS: Record<OperationalAlert["severity"], string> = {
+  critical: "border-destructive/30 bg-destructive/5",
+  high: "border-warning/30 bg-warning/5",
+  warning: "border-border/50 bg-muted/10",
 };
 
 const formatAge = (date: Date | null, now: Date): string => {
@@ -370,7 +377,10 @@ export default async function AdminOperationsPage({
 
                 return (
                   <div
-                    className="grid gap-3 rounded-lg border bg-muted/10 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    className={cn(
+                      "grid gap-3 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
+                      SEVERITY_SURFACE_CLASS[alert.severity]
+                    )}
                     key={alert.code}
                     role={
                       severity.alertVariant === "destructive"
