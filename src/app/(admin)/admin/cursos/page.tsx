@@ -97,14 +97,14 @@ export default async function AdminCoursesPage(): Promise<React.JSX.Element> {
                           blurDataUrl={getCourseCoverBlurDataUrl(
                             course.coverImage
                           )}
-                          className="opacity-70 transition-transform duration-500 group-hover:scale-105"
+                          className="opacity-70 transition-transform duration-400 group-hover:scale-[1.02]"
                           sizes="340px"
                           src={course.thumbnailUrl}
                         />
                       ) : (
                         <>
                           <div className="absolute inset-0 bg-linear-to-br from-card via-card/95 to-secondary/70" />
-                          <div className="absolute top-[20%] -right-4 select-none opacity-10 transition-transform duration-500 group-hover:scale-105">
+                          <div className="absolute top-[20%] -right-4 select-none opacity-10 transition-transform duration-400 group-hover:scale-[1.02]">
                             <span className="font-black text-[8rem] leading-none tracking-tighter">
                               {getInitials(course.title)}
                             </span>

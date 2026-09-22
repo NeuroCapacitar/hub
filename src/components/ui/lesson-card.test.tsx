@@ -25,6 +25,8 @@ describe("LessonCard", () => {
     expect(markup).toContain("Bloqueada");
     expect(markup).not.toContain('data-variant="destructive"');
     expect(markup).not.toContain("bg-destructive/10");
+    expect(markup).toContain("group-hover:scale-[1.02]");
+    expect(markup).toContain("group-hover:scale-[1.05]");
   });
 
   it("prefers the lesson thumbnail and keeps cover fitting explicit", () => {
