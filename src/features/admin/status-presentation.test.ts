@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getCourseAvailabilityOptions } from "@/features/courses/availability";
 import {
   getCertificateStatusPresentation,
   getCheckoutStatusPresentation,
@@ -62,9 +63,37 @@ describe("admin status presentation", () => {
   });
 
   it("covers operational statuses without exposing internal values", () => {
-    expect(getCourseAvailabilityStatusPresentation("coming_soon").label).toBe(
-      "Em breve"
+    const availabilityCases = [
+      { label: "Rascunho", preset: "draft", variant: "warning" },
+      { label: "Em breve", preset: "coming_soon", variant: "info" },
+      { label: "Disponível", preset: "available", variant: "success" },
+      {
+        label: "Vendas pausadas",
+        preset: "sales_paused",
+        variant: "warning",
+      },
+    ] as const;
+    const options = getCourseAvailabilityOptions({
+      hasCommercialHistory: false,
+    });
+
+    expect(options.map(({ label, value }) => ({ label, value }))).toEqual(
+      availabilityCases.map(({ label, preset }) => ({
+        label,
+        value: preset,
+      }))
     );
+    for (const { label, preset, variant } of availabilityCases) {
+      expect(getCourseAvailabilityStatusPresentation(preset)).toEqual({
+        label,
+        variant,
+      });
+    }
+    expect(getCourseAvailabilityStatusPresentation("archived")).toEqual({
+      label: "Arquivado",
+      variant: "secondary",
+    });
+
     expect(getCourseContentStatusPresentation("active").label).toBe(
       "Publicado"
     );

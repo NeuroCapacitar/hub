@@ -35,9 +35,19 @@ describe("course presentation helpers", () => {
 
     expect(presentation).toEqual({
       tone: "expiring",
-      label: "Acesso expira em 15 dias",
+      label: "Expira em 15 dias",
       helper: "Priorize as próximas aulas deste curso.",
     });
+  });
+
+  it("uses a concise label when active access expires today", () => {
+    const presentation = getCourseAccessPresentation({
+      expiresAt: new Date("2026-06-16T12:00:00.000Z"),
+      now: new Date("2026-06-16T12:00:00.000Z"),
+      progressPercent: 40,
+    });
+
+    expect(presentation.label).toBe("Expira hoje");
   });
 
   it("presents expired and revoked catalog access distinctly", () => {
@@ -65,7 +75,7 @@ describe("course presentation helpers", () => {
       })
     ).toEqual({
       tone: "revoked",
-      label: "Acesso em analise",
+      label: "Acesso em análise",
       helper: "Fale com o suporte para regularizar este acesso.",
     });
   });

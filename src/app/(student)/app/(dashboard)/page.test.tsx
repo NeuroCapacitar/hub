@@ -345,6 +345,12 @@ describe("Student dashboard availability", () => {
     );
     expect(markup).toContain("Novo curso");
     expect(markup).toContain("Inscrições pausadas");
+    expect(getCardMarkup(markup, "Curso futuro")).toContain(
+      'data-variant="outline"'
+    );
+    expect(getCardMarkup(markup, "Curso pausado")).toContain(
+      'data-variant="outline"'
+    );
     expect(markup).toContain("Quero ser avisada");
     expect(markup).toContain("Cancelar aviso");
     expect(markup).not.toContain("Ver detalhes");
@@ -487,7 +493,8 @@ describe("Student dashboard availability", () => {
     const expiringCard = getCardMarkup(markup, "Curso expirando");
     const completedCard = getCardMarkup(markup, "Curso concluído");
 
-    expect(expiringCard).toContain("Acesso expira em");
+    expect(expiringCard).toContain("Expira em");
+    expect(expiringCard).not.toContain("Acesso expira em");
     expect(expiringCard).toContain('data-variant="warning"');
     expect(completedCard).toContain("Curso concluído");
     expect(completedCard).toContain('data-variant="learning"');
