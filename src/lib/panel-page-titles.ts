@@ -31,6 +31,11 @@ const PAGE_TITLES: Readonly<Record<string, string>> = {
 
 const TRAILING_SLASHES = /\/+$/;
 const COMPACT_PAGE_TITLES = new Set(["/admin", "/app"]);
+const PAGE_ANCESTORS: Readonly<Record<string, readonly PanelBreadcrumb[]>> = {
+  "/admin/configuracoes/design-system": [
+    { href: "/admin/configuracoes", label: "Configurações" },
+  ],
+};
 
 const DYNAMIC_PAGE_TITLES = [
   [
@@ -70,7 +75,7 @@ export function getPanelRouteMeta(pathname: string): PanelRouteMeta {
 
   if (exactTitle) {
     return {
-      ancestors: [],
+      ancestors: PAGE_ANCESTORS[normalizedPath] ?? [],
       title: exactTitle,
       visibleHeading: !COMPACT_PAGE_TITLES.has(normalizedPath),
     };

@@ -3,13 +3,16 @@ import {
   DashboardSquare01Icon,
   HelpSquareIcon,
   Image01Icon,
+  PaintBoardIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import Link from "next/link";
 import { FinanceHelp } from "@/components/admin/finance-help";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Scrollspy } from "@/components/reui/scrollspy";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   getAdminBannersData,
@@ -19,6 +22,7 @@ import {
 import { getAdminAuthMediaData } from "@/features/auth-media/server";
 import { requirePermission } from "@/lib/auth-permissions";
 import { canPerform } from "@/lib/auth-policy";
+import { route } from "@/lib/routes";
 import { AuthMediaGallery } from "./auth-media/auth-media-gallery";
 import { BannerGallery } from "./banners/banner-gallery";
 import {
@@ -82,7 +86,23 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader title="Configurações globais" />
+        <PageHeader
+          actions={
+            <Button asChild variant="outline">
+              <Link href={route("/admin/configuracoes/design-system")}>
+                <HugeiconsIcon
+                  aria-hidden="true"
+                  data-icon="inline-start"
+                  icon={PaintBoardIcon}
+                  size={16}
+                  strokeWidth={1.5}
+                />
+                Sistema visual
+              </Link>
+            </Button>
+          }
+          title="Configurações globais"
+        />
 
         <div className="grid grid-cols-1 gap-14 md:grid-cols-[220px_1fr] lg:grid-cols-[240px_1fr]">
           <aside className="hidden md:block">

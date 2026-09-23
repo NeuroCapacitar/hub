@@ -23,6 +23,14 @@ describe("getPanelPageTitle", () => {
     });
   });
 
+  it("returns to global settings from the design-system reference", () => {
+    expect(getPanelRouteMeta("/admin/configuracoes/design-system")).toEqual({
+      ancestors: [{ href: "/admin/configuracoes", label: "Configurações" }],
+      title: "Sistema visual",
+      visibleHeading: true,
+    });
+  });
+
   it("keeps dashboards compact while preparing headings for content pages", () => {
     expect(getPanelRouteMeta("/admin").visibleHeading).toBe(false);
     expect(getPanelRouteMeta("/app").visibleHeading).toBe(false);

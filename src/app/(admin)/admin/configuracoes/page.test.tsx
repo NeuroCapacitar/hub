@@ -84,6 +84,8 @@ describe("AdminSettingsPage", () => {
     expect(markup).toContain("Banners renderizados");
     expect(markup).toContain("Mídias de acesso renderizadas");
     expect(markup).toContain("FAQs renderizadas");
+    expect(markup).toContain('href="/admin/configuracoes/design-system"');
+    expect(markup).toContain("Sistema visual");
     expect(markup).not.toContain("JMVStream");
     expect(dependencies.requirePermission).toHaveBeenCalledWith("viewSettings");
   });
