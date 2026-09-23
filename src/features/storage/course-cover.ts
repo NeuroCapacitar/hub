@@ -1,35 +1,25 @@
 import { sanitizeR2FileName } from "@/features/storage/r2-objects";
 
-export const COURSE_COVER_CARD_WIDTH = 960;
-export const COURSE_COVER_CARD_HEIGHT = 1000;
+export const COURSE_COVER_CARD_WIDTH = 1280;
+export const COURSE_COVER_CARD_HEIGHT = 720;
 export const COURSE_COVER_ASPECT_RATIO =
   COURSE_COVER_CARD_WIDTH / COURSE_COVER_CARD_HEIGHT;
 
 export const COURSE_COVER_VARIANTS = {
-  thumb: {
-    height: COURSE_COVER_CARD_HEIGHT / 2,
-    maxSizeBytes: 350 * 1024,
-    width: COURSE_COVER_CARD_WIDTH / 2,
-  },
   card: {
     height: COURSE_COVER_CARD_HEIGHT,
-    maxSizeBytes: 950 * 1024,
     width: COURSE_COVER_CARD_WIDTH,
   },
 } as const;
 
-export type CourseCoverVariant = keyof typeof COURSE_COVER_VARIANTS;
+export type CourseCoverOutputVariant = keyof typeof COURSE_COVER_VARIANTS;
+export type CourseCoverVariant = CourseCoverOutputVariant | "thumb";
 
 export const COURSE_COVER_ACCEPT = ".jpg,.jpeg,.png,.webp";
 
-export const MAX_ORIGINAL_COVER_BYTES = 4 * 1024 * 1024;
-const ALLOWED_ORIGINAL_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
-const ALLOWED_ORIGINAL_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
-const ALLOWED_VARIANT_TYPES = new Set(["image/webp", "image/jpeg"]);
+export const MAX_COURSE_COVER_UPLOAD_BYTES = 4 * 1024 * 1024;
+const ALLOWED_UPLOAD_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_UPLOAD_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
 
 export interface CourseCoverOriginal {
   contentType: string;
@@ -48,13 +38,13 @@ export interface CourseCoverVariantImage {
 
 export interface CourseCoverImage {
   blurDataUrl?: string;
-  original: CourseCoverOriginal;
+  original?: CourseCoverOriginal;
   variants: Partial<Record<CourseCoverVariant, CourseCoverVariantImage>>;
 }
 
 interface CourseCoverUploadRequest {
   courseId: string;
-  original: {
+  upload: {
     contentType: string;
     fileName: string;
     sizeBytes: number;
@@ -66,10 +56,10 @@ interface CourseCoverUploadRequest {
   }>;
 }
 
-const requiredVariants = Object.keys(
+const generatedVariants = Object.keys(
   COURSE_COVER_VARIANTS
-) as CourseCoverVariant[];
-const CARD_COVER_PATH_PATTERN = /\/cover\/card(?=\?|$)/;
+) as CourseCoverOutputVariant[];
+const readableVariants: CourseCoverVariant[] = ["card", "thumb"];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -86,7 +76,7 @@ const getFileExtension = (fileName: string): string | null => {
 
 export const isCourseCoverVariant = (
   value: string
-): value is CourseCoverVariant => value in COURSE_COVER_VARIANTS;
+): value is CourseCoverVariant => value === "card" || value === "thumb";
 
 export const buildCourseCoverObjectKey = ({
   courseId,
@@ -97,71 +87,71 @@ export const buildCourseCoverObjectKey = ({
   courseId: string;
   extension: string;
   nonce: string;
-  variant: CourseCoverVariant | "original";
+  variant: CourseCoverOutputVariant;
 }): string =>
   `courses/${courseId}/cover/${nonce}-${variant}.${sanitizeR2FileName(extension).replaceAll(".", "")}`;
 
-const validateOriginalCover = (
-  original: CourseCoverUploadRequest["original"]
+const validateCourseCoverUpload = (
+  upload: CourseCoverUploadRequest["upload"]
 ): void => {
-  if (!original.fileName.trim()) {
+  if (!upload.fileName.trim()) {
     throw new Error("Informe o nome da imagem.");
   }
 
-  const extension = getFileExtension(original.fileName);
+  const extension = getFileExtension(upload.fileName);
 
-  if (!(extension && ALLOWED_ORIGINAL_EXTENSIONS.has(extension))) {
+  if (!(extension && ALLOWED_UPLOAD_EXTENSIONS.has(extension))) {
     throw new Error("Extensao de imagem nao permitida.");
   }
 
-  if (!ALLOWED_ORIGINAL_TYPES.has(original.contentType)) {
+  if (!ALLOWED_UPLOAD_TYPES.has(upload.contentType)) {
     throw new Error("Tipo de imagem nao permitido.");
   }
 
-  if (!(Number.isInteger(original.sizeBytes) && original.sizeBytes > 0)) {
+  if (!(Number.isInteger(upload.sizeBytes) && upload.sizeBytes > 0)) {
     throw new Error("Tamanho da imagem invalido.");
   }
 
-  if (original.sizeBytes > MAX_ORIGINAL_COVER_BYTES) {
-    throw new Error("Imagem original maior que 4 MB.");
+  if (upload.sizeBytes > MAX_COURSE_COVER_UPLOAD_BYTES) {
+    throw new Error("Imagem maior que 4 MB.");
   }
 };
 
 export const validateCourseCoverUploadRequest = ({
   courseId,
-  original,
+  upload,
   variants,
 }: CourseCoverUploadRequest): void => {
   if (!courseId.trim()) {
     throw new Error("Curso invalido.");
   }
 
-  validateOriginalCover(original);
+  validateCourseCoverUpload(upload);
 
   const variantNames = new Set(variants.map(({ variant }) => variant));
 
-  if (!requiredVariants.every((variant) => variantNames.has(variant))) {
-    throw new Error("Envie as variantes thumb e card da capa.");
+  if (!generatedVariants.every((variant) => variantNames.has(variant))) {
+    throw new Error("Envie a imagem final da capa.");
   }
 
   for (const candidate of variants) {
-    if (!isCourseCoverVariant(candidate.variant)) {
+    if (
+      !(
+        isCourseCoverVariant(candidate.variant) &&
+        generatedVariants.includes(
+          candidate.variant as CourseCoverOutputVariant
+        )
+      )
+    ) {
       throw new Error("Variante de capa invalida.");
     }
 
-    if (!ALLOWED_VARIANT_TYPES.has(candidate.contentType)) {
+    if (candidate.contentType !== "image/webp") {
       throw new Error("Tipo de variante de capa invalido.");
     }
 
     if (!(Number.isInteger(candidate.sizeBytes) && candidate.sizeBytes > 0)) {
       throw new Error("Tamanho da variante invalido.");
-    }
-
-    if (
-      candidate.sizeBytes >
-      COURSE_COVER_VARIANTS[candidate.variant].maxSizeBytes
-    ) {
-      throw new Error("Variante da capa maior que o permitido.");
     }
   }
 };
@@ -225,13 +215,13 @@ export const parseCourseCoverImage = (
 
   const original = parseOriginal(value.original);
 
-  if (!(original && isRecord(value.variants))) {
+  if (!isRecord(value.variants)) {
     return null;
   }
 
   const variants: CourseCoverImage["variants"] = {};
 
-  for (const variant of requiredVariants) {
+  for (const variant of readableVariants) {
     const image = parseVariantImage(value.variants[variant]);
 
     if (image) {
@@ -239,11 +229,15 @@ export const parseCourseCoverImage = (
     }
   }
 
+  if (!variants.card) {
+    return null;
+  }
+
   return {
     ...(typeof value.blurDataUrl === "string"
       ? { blurDataUrl: value.blurDataUrl }
       : {}),
-    original,
+    ...(original ? { original } : {}),
     variants,
   };
 };
@@ -261,30 +255,31 @@ export const getCourseCoverVariantPath = ({
   variant: CourseCoverVariant;
 }): string | null => {
   const parsed = parseCourseCoverImage(coverImage);
+  const image = parsed?.variants[variant] ?? parsed?.variants.card;
 
-  if (!parsed?.variants[variant]) {
+  if (!image) {
     return null;
   }
 
   return `/api/courses/${courseId}/cover/${variant}?v=${encodeURIComponent(
-    parsed.variants[variant].key
+    image.key
   )}`;
 };
 
-export const getCourseCoverBackgroundImage = (
-  cardPath: string | null | undefined
-): string | undefined => {
-  if (!cardPath) {
-    return;
+export const getCourseCoverPublicStorageKeys = (value: unknown): string[] => {
+  const coverImage = parseCourseCoverImage(value);
+
+  if (!coverImage) {
+    return [];
   }
 
-  const thumbPath = cardPath.replace(CARD_COVER_PATH_PATTERN, "/cover/thumb");
-
-  if (thumbPath === cardPath) {
-    return `url("${cardPath}")`;
-  }
-
-  return `image-set(url("${thumbPath}") 1x, url("${cardPath}") 2x)`;
+  return Array.from(
+    new Set(
+      Object.values(coverImage.variants)
+        .map((variant) => variant?.key)
+        .filter((key): key is string => Boolean(key))
+    )
+  );
 };
 
 export const getCourseCoverStorageKeys = (value: unknown): string[] => {

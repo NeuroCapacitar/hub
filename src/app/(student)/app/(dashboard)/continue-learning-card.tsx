@@ -10,10 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { CourseCoverImage } from "@/features/courses/course-cover-image";
+import { COURSE_COVER_HOVER_ZOOM_CLASS } from "@/features/courses/course-cover-motion";
 import { formatCourseWorkload } from "@/features/courses/presentation";
 import type { StudentCatalogCourseCard } from "@/features/courses/server";
 import { formatDateTime } from "@/lib/formatters";
 import { route } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 
 export function ContinueLearningCard({
   course,
@@ -37,15 +39,11 @@ export function ContinueLearningCard({
         </h2>
       </div>
 
-      <article className="overflow-hidden rounded-surface border border-border/70 bg-card text-card-foreground shadow-sm">
-        <div className="grid lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
+      <article className="group overflow-hidden rounded-surface border border-border/70 bg-card text-card-foreground shadow-sm">
+        <div className="grid lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
           <ContinueLearningMedia course={course} />
 
-          <div className="flex min-w-0 flex-col gap-5 p-5 sm:p-6 lg:p-8">
-            <Badge className="w-fit" variant="secondary">
-              Próximo passo
-            </Badge>
-
+          <div className="flex min-w-0 flex-col gap-4 p-4 sm:p-5 lg:p-6">
             <ContinueLearningDetails
               course={course}
               hasFutureRelease={hasFutureRelease}
@@ -74,28 +72,34 @@ function ContinueLearningMedia({
   course: StudentCatalogCourseCard;
 }): React.JSX.Element {
   return (
-    <div className="relative aspect-[16/10] min-h-52 overflow-hidden bg-muted lg:aspect-auto">
-      {course.thumbnailUrl ? (
-        <CourseCoverImage
-          alt=""
-          blurDataUrl={course.coverBlurDataUrl}
-          className="object-center"
-          sizes="(min-width: 1024px) 40vw, 100vw"
-          src={course.thumbnailUrl}
-        />
-      ) : (
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground"
-        >
-          <HugeiconsIcon
-            aria-hidden="true"
-            icon={BookOpen01Icon}
-            size={48}
-            strokeWidth={1.4}
+    <div className="flex items-center p-2">
+      <div className="relative aspect-video w-full overflow-hidden rounded-media bg-muted">
+        {course.thumbnailUrl ? (
+          <CourseCoverImage
+            alt=""
+            blurDataUrl={course.coverBlurDataUrl}
+            className="object-center"
+            sizes="(min-width: 1024px) 40vw, 100vw"
+            src={course.thumbnailUrl}
+            zoomOnHover
           />
-        </div>
-      )}
+        ) : (
+          <div
+            aria-hidden="true"
+            className={cn(
+              "absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground",
+              COURSE_COVER_HOVER_ZOOM_CLASS
+            )}
+          >
+            <HugeiconsIcon
+              aria-hidden="true"
+              icon={BookOpen01Icon}
+              size={48}
+              strokeWidth={1.4}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -112,8 +116,8 @@ function ContinueLearningDetails({
   if (!hasNextLesson) {
     return (
       <div className="min-w-0">
-        <h3 className="type-section-title text-balance">{course.title}</h3>
-        <p className="mt-3 text-muted-foreground text-sm leading-6">
+        <ContinueLearningTitle courseTitle={course.title} />
+        <p className="mt-2 text-muted-foreground text-sm leading-6">
           {hasFutureRelease && course.nextReleaseAt
             ? `A próxima aula estará disponível em ${formatDateTime(course.nextReleaseAt)}.`
             : "Veja a trilha para escolher o próximo conteúdo."}
@@ -124,8 +128,10 @@ function ContinueLearningDetails({
 
   return (
     <div className="min-w-0">
-      <h3 className="type-section-title text-balance">{course.title}</h3>
-      <p className="mt-3 font-medium text-sm">{course.nextLessonTitle}</p>
+      <ContinueLearningTitle courseTitle={course.title} />
+      <p className="mt-2 font-semibold text-base leading-snug">
+        {course.nextLessonTitle}
+      </p>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground text-sm">
         {course.nextModuleTitle ? <span>{course.nextModuleTitle}</span> : null}
         {course.nextModuleTitle && course.nextLessonDurationSeconds ? (
@@ -143,6 +149,23 @@ function ContinueLearningDetails({
           </span>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function ContinueLearningTitle({
+  courseTitle,
+}: {
+  courseTitle: string;
+}): React.JSX.Element {
+  return (
+    <div className="flex min-w-0 items-start justify-between gap-3">
+      <h3 className="type-section-title line-clamp-2 min-w-0 text-balance">
+        {courseTitle}
+      </h3>
+      <Badge className="shrink-0" variant="secondary">
+        Próximo passo
+      </Badge>
     </div>
   );
 }

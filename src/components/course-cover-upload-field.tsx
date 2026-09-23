@@ -243,7 +243,7 @@ export function CourseCoverUploadField({
         value={isUploading ? "on" : ""}
       />
 
-      <div className="relative aspect-[24/25] w-full">
+      <div className="relative aspect-video w-full">
         {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: Drag-and-drop supplements the labelled file input. */}
         <label
           className={cn(
@@ -315,21 +315,19 @@ export function CourseCoverUploadField({
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center p-4 text-center">
-              <div className="mb-2 flex size-10 shrink-0 items-center justify-center rounded-full border bg-background">
-                <HugeiconsIcon
-                  aria-hidden="true"
-                  className="text-muted-foreground opacity-60"
-                  icon={ImageUpload01Icon}
-                  size={18}
-                />
-              </div>
-              <p className="mb-1 font-medium text-sm leading-snug">
+            <div className="flex min-h-0 flex-col items-center justify-center gap-1.5 p-2 text-center">
+              <HugeiconsIcon
+                aria-hidden="true"
+                className="shrink-0 text-muted-foreground opacity-70"
+                icon={ImageUpload01Icon}
+                size={16}
+              />
+              <p className="font-medium text-xs leading-4">
                 Arraste ou clique para selecionar a capa
               </p>
-              <p className="text-muted-foreground text-xs">
-                Card: {COURSE_COVER_CARD_WIDTH} × {COURSE_COVER_CARD_HEIGHT} px
-                (24:25) · PNG, JPG ou WebP até 4 MB
+              <p className="text-[11px] text-muted-foreground leading-4">
+                {COURSE_COVER_CARD_WIDTH} × {COURSE_COVER_CARD_HEIGHT} · 16:9 ·
+                PNG/JPG/WebP · 4 MB
               </p>
             </div>
           )}

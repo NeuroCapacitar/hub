@@ -44,6 +44,7 @@ import {
 import { parseCoursePriceToCents } from "@/features/payments/course-price";
 import {
   type CourseCoverImage,
+  getCourseCoverPublicStorageKeys,
   getCourseCoverStorageKeys,
   getCourseCoverVariantPath,
   parseCourseCoverImage,
@@ -354,7 +355,9 @@ const publishCourseCover = async (
   coverImage: CourseCoverImage | null
 ): Promise<void> => {
   await Promise.all(
-    getCourseCoverStorageKeys(coverImage).map((key) => publishR2Object(key))
+    getCourseCoverPublicStorageKeys(coverImage).map((key) =>
+      publishR2Object(key)
+    )
   );
 };
 

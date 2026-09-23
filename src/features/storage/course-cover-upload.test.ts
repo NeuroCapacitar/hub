@@ -59,7 +59,7 @@ describe("course cover upload", () => {
     });
 
     expect(() => readCourseCoverFile(oversized)).toThrow(
-      "Imagem original maior que 4 MB."
+      "Imagem maior que 4 MB."
     );
 
     const invalidExtension = await createImageFile({
@@ -71,7 +71,7 @@ describe("course cover upload", () => {
     );
   });
 
-  it("creates original and responsive variants for a valid cover", async () => {
+  it("creates one optimized 16:9 image and a blur placeholder", async () => {
     const file = await createImageFile();
     const coverFile = readCourseCoverFile(file);
 
@@ -83,23 +83,11 @@ describe("course cover upload", () => {
       nonce: "upload-1",
     });
 
-    expect(parts.coverImage.original).toMatchObject({
-      contentType: "image/png",
-      fileName: "cover.png",
-      key: "courses/course-1/cover/upload-1-original.png",
-      sizeBytes: file.size,
-    });
     expect(parts.coverImage.variants.card).toMatchObject({
       contentType: "image/webp",
-      height: 1000,
+      height: 720,
       key: "courses/course-1/cover/upload-1-card.webp",
-      width: 960,
-    });
-    expect(parts.coverImage.variants.thumb).toMatchObject({
-      contentType: "image/webp",
-      height: 500,
-      key: "courses/course-1/cover/upload-1-thumb.webp",
-      width: 480,
+      width: 1280,
     });
     expect(
       parts.coverImage.blurDataUrl?.startsWith("data:image/webp;base64,")
@@ -110,7 +98,12 @@ describe("course cover upload", () => {
     );
     const blurMetadata = await sharp(blurBuffer).metadata();
     expect(blurMetadata.width).toBeLessThanOrEqual(10);
-    expect(parts.objects).toHaveLength(3);
+    expect(parts.objects).toHaveLength(1);
+    expect(parts.objects[0]?.key).toBe(
+      "courses/course-1/cover/upload-1-card.webp"
+    );
     expect(parts.objects.every((object) => object.body.length > 0)).toBe(true);
+    expect(parts.coverImage.original).toBeUndefined();
+    expect(parts.coverImage.variants.thumb).toBeUndefined();
   });
 });

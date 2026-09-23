@@ -24,7 +24,7 @@ class LoadedImageMock {
 describe("course cover crop", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("renders the selected crop into the card's canonical 24:25 WebP artifact", async () => {
+  it("renders the selected crop into the canonical 16:9 WebP artifact", async () => {
     vi.stubGlobal("Image", LoadedImageMock);
     const drawImage = vi.fn();
     let renderedCanvas: HTMLCanvasElement | null = null;

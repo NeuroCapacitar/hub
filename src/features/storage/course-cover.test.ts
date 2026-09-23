@@ -4,7 +4,7 @@ import {
   COURSE_COVER_ASPECT_RATIO,
   COURSE_COVER_CARD_HEIGHT,
   COURSE_COVER_CARD_WIDTH,
-  getCourseCoverBackgroundImage,
+  getCourseCoverPublicStorageKeys,
   getCourseCoverStorageKeys,
   getCourseCoverVariantPath,
   parseCourseCoverImage,
@@ -12,10 +12,10 @@ import {
 } from "./course-cover";
 
 describe("course cover storage", () => {
-  it("defines the card crop as 960x1000 at 24:25", () => {
-    expect(COURSE_COVER_CARD_WIDTH).toBe(960);
-    expect(COURSE_COVER_CARD_HEIGHT).toBe(1000);
-    expect(COURSE_COVER_ASPECT_RATIO).toBe(24 / 25);
+  it("defines the single course cover image as 1280x720 at 16:9", () => {
+    expect(COURSE_COVER_CARD_WIDTH).toBe(1280);
+    expect(COURSE_COVER_CARD_HEIGHT).toBe(720);
+    expect(COURSE_COVER_ASPECT_RATIO).toBe(16 / 9);
   });
 
   it("builds scoped R2 object keys for cover variants", () => {
@@ -29,11 +29,11 @@ describe("course cover storage", () => {
     ).toBe("courses/course-1/cover/upload-1-card.webp");
   });
 
-  it("validates generated variants before signing uploads", () => {
+  it("validates one generated image without imposing an output-size ceiling", () => {
     expect(() =>
       validateCourseCoverUploadRequest({
         courseId: "course-1",
-        original: {
+        upload: {
           contentType: "image/png",
           fileName: "capa.png",
           sizeBytes: 4 * 1024 * 1024,
@@ -41,12 +41,7 @@ describe("course cover storage", () => {
         variants: [
           {
             contentType: "image/webp",
-            sizeBytes: 220 * 1024,
-            variant: "thumb",
-          },
-          {
-            contentType: "image/webp",
-            sizeBytes: 700 * 1024,
+            sizeBytes: 2 * 1024 * 1024,
             variant: "card",
           },
         ],
@@ -54,11 +49,11 @@ describe("course cover storage", () => {
     ).not.toThrow();
   });
 
-  it("rejects unsafe cover images and missing variants", () => {
+  it("rejects unsafe uploads, oversized inputs and a missing card image", () => {
     expect(() =>
       validateCourseCoverUploadRequest({
         courseId: "course-1",
-        original: {
+        upload: {
           contentType: "image/svg+xml",
           fileName: "capa.png",
           sizeBytes: 1024,
@@ -70,7 +65,7 @@ describe("course cover storage", () => {
     expect(() =>
       validateCourseCoverUploadRequest({
         courseId: "course-1",
-        original: {
+        upload: {
           contentType: "image/png",
           fileName: "capa.svg",
           sizeBytes: 1024,
@@ -82,20 +77,26 @@ describe("course cover storage", () => {
     expect(() =>
       validateCourseCoverUploadRequest({
         courseId: "course-1",
-        original: {
+        upload: {
           contentType: "image/jpeg",
           fileName: "capa.jpg",
-          sizeBytes: 2 * 1024 * 1024,
+          sizeBytes: 4 * 1024 * 1024 + 1,
         },
-        variants: [
-          {
-            contentType: "image/webp",
-            sizeBytes: 100 * 1024,
-            variant: "thumb",
-          },
-        ],
+        variants: [],
       })
-    ).toThrow("Envie as variantes thumb e card da capa.");
+    ).toThrow("Imagem maior que 4 MB.");
+
+    expect(() =>
+      validateCourseCoverUploadRequest({
+        courseId: "course-1",
+        upload: {
+          contentType: "image/png",
+          fileName: "capa.png",
+          sizeBytes: 1024,
+        },
+        variants: [],
+      })
+    ).toThrow("Envie a imagem final da capa.");
   });
 
   it("parses stored cover metadata and ignores invalid variants", () => {
@@ -212,15 +213,6 @@ describe("course cover storage", () => {
     ).toBeNull();
   });
 
-  it("preserves the cover version when deriving the thumb background path", () => {
-    const cardPath =
-      "/api/courses/course-1/cover/card?v=courses%2Fcourse-1%2Fcover%2Fupload-card.webp";
-
-    expect(getCourseCoverBackgroundImage(cardPath)).toBe(
-      'image-set(url("/api/courses/course-1/cover/thumb?v=courses%2Fcourse-1%2Fcover%2Fupload-card.webp") 1x, url("/api/courses/course-1/cover/card?v=courses%2Fcourse-1%2Fcover%2Fupload-card.webp") 2x)'
-    );
-  });
-
   it("extracts all R2 keys from stored cover metadata, including old variants", () => {
     expect(
       getCourseCoverStorageKeys({
@@ -260,5 +252,63 @@ describe("course cover storage", () => {
       "courses/course-1/cover/upload-hero.webp",
       "courses/course-1/cover/upload-thumb.webp",
     ]);
+  });
+
+  it("parses a new single-image cover without a persisted original", () => {
+    const coverImage = {
+      blurDataUrl: "data:image/webp;base64,blur",
+      variants: {
+        card: {
+          contentType: "image/webp",
+          height: 720,
+          key: "courses/course-1/cover/upload-card.webp",
+          sizeBytes: 1_500_000,
+          width: 1280,
+        },
+      },
+    };
+
+    expect(parseCourseCoverImage(coverImage)).toEqual(coverImage);
+    expect(getCourseCoverStorageKeys(coverImage)).toEqual([
+      "courses/course-1/cover/upload-card.webp",
+    ]);
+    expect(getCourseCoverPublicStorageKeys(coverImage)).toEqual([
+      "courses/course-1/cover/upload-card.webp",
+    ]);
+  });
+
+  it("does not publish the legacy original object", () => {
+    const legacyCover = {
+      original: {
+        contentType: "image/png",
+        fileName: "capa.png",
+        key: "courses/course-1/cover/upload-original.png",
+        sizeBytes: 1_000_000,
+      },
+      variants: {
+        card: {
+          contentType: "image/webp",
+          height: 1000,
+          key: "courses/course-1/cover/upload-card.webp",
+          sizeBytes: 500_000,
+          width: 960,
+        },
+        thumb: {
+          contentType: "image/webp",
+          height: 500,
+          key: "courses/course-1/cover/upload-thumb.webp",
+          sizeBytes: 120_000,
+          width: 480,
+        },
+      },
+    };
+
+    expect(getCourseCoverPublicStorageKeys(legacyCover)).toEqual([
+      "courses/course-1/cover/upload-card.webp",
+      "courses/course-1/cover/upload-thumb.webp",
+    ]);
+    expect(getCourseCoverStorageKeys(legacyCover)).toContain(
+      "courses/course-1/cover/upload-original.png"
+    );
   });
 });

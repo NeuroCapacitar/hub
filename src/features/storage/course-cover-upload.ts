@@ -3,25 +3,12 @@ import {
   buildCourseCoverObjectKey,
   COURSE_COVER_VARIANTS,
   type CourseCoverImage,
-  type CourseCoverVariant,
+  type CourseCoverOutputVariant,
   validateCourseCoverUploadRequest,
 } from "@/features/storage/course-cover";
 
-const VARIANT_QUALITY: Record<CourseCoverVariant, number> = {
+const VARIANT_QUALITY: Record<CourseCoverOutputVariant, number> = {
   card: 82,
-  thumb: 80,
-};
-
-const getExtensionForContentType = (contentType: string): string => {
-  if (contentType === "image/png") {
-    return "png";
-  }
-
-  if (contentType === "image/jpeg") {
-    return "jpg";
-  }
-
-  return "webp";
 };
 
 export interface CourseCoverFile {
@@ -60,13 +47,8 @@ export const readCourseCoverFile = (value: unknown): CourseCoverFile | null => {
 
   validateCourseCoverUploadRequest({
     courseId: "pending-course",
-    original: coverFile,
+    upload: coverFile,
     variants: [
-      {
-        contentType: "image/webp",
-        sizeBytes: 1,
-        variant: "thumb",
-      },
       {
         contentType: "image/webp",
         sizeBytes: 1,
@@ -94,43 +76,25 @@ export const createCourseCoverUploadParts = async ({
     throw new Error("Capa invalida.");
   }
 
-  const originalBuffer = Buffer.from(await file.file.arrayBuffer());
+  const uploadedBuffer = Buffer.from(await file.file.arrayBuffer());
   const blurDataUrl = `data:image/webp;base64,${(
-    await sharp(originalBuffer)
+    await sharp(uploadedBuffer)
       .rotate()
       .resize({ width: 10 })
       .webp({ quality: 20 })
       .toBuffer()
   ).toString("base64")}`;
-  const originalKey = buildCourseCoverObjectKey({
-    courseId,
-    extension: getExtensionForContentType(file.contentType),
-    nonce,
-    variant: "original",
-  });
   const coverImage: CourseCoverImage = {
     blurDataUrl,
-    original: {
-      contentType: file.contentType,
-      fileName: file.fileName,
-      key: originalKey,
-      sizeBytes: file.sizeBytes,
-    },
     variants: {},
   };
-  const objects: CourseCoverUploadObject[] = [
-    {
-      body: originalBuffer,
-      contentType: file.contentType,
-      key: originalKey,
-    },
-  ];
+  const objects: CourseCoverUploadObject[] = [];
 
   for (const variant of Object.keys(
     COURSE_COVER_VARIANTS
-  ) as CourseCoverVariant[]) {
+  ) as CourseCoverOutputVariant[]) {
     const dimensions = COURSE_COVER_VARIANTS[variant];
-    const body = await sharp(originalBuffer)
+    const body = await sharp(uploadedBuffer)
       .rotate()
       .resize(dimensions.width, dimensions.height, {
         fit: "cover",
@@ -160,7 +124,7 @@ export const createCourseCoverUploadParts = async ({
   }
 
   const variants = (
-    Object.keys(COURSE_COVER_VARIANTS) as CourseCoverVariant[]
+    Object.keys(COURSE_COVER_VARIANTS) as CourseCoverOutputVariant[]
   ).map((variant) => {
     const image = coverImage.variants[variant];
 
@@ -177,7 +141,7 @@ export const createCourseCoverUploadParts = async ({
 
   validateCourseCoverUploadRequest({
     courseId,
-    original: {
+    upload: {
       contentType: file.contentType,
       fileName: file.fileName,
       sizeBytes: file.sizeBytes,

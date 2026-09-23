@@ -165,18 +165,18 @@ function CourseCreationFields({
     <>
       <input name="courseId" type="hidden" value="" />
       <FieldSet aria-label="Identidade do curso" className="gap-5">
-        <div className="grid min-w-0 gap-5 md:grid-cols-[minmax(0,11rem)_minmax(0,1fr)] md:items-stretch">
+        <div className="grid min-w-0 gap-5 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] md:items-stretch">
           <Field className="min-w-0">
             <FieldTitle className="items-center">
               <span>Capa do curso</span>
               <FieldHelp label="Ajuda sobre a capa do curso">
-                Opcional. Use PNG, JPG ou WebP de até 4 MB, na proporção
-                recomendada de 24:25.
+                Opcional. Envie PNG, JPG ou WebP de até 4 MB e ajuste o
+                enquadramento em 16:9.
               </FieldHelp>
             </FieldTitle>
             <CourseCoverUploadField
               aggregateId={aggregateId}
-              className="mx-auto max-w-[176px] md:mx-0 md:w-[176px]"
+              className="mx-auto max-w-[224px] md:mx-0 md:w-[224px]"
               onUploadingChange={onCoverUploadingChange}
             />
             {isCoverUploading ? (

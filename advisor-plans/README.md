@@ -23,6 +23,7 @@ pessoa responsável autorize sua execução.
 | [Pesquisa externa do Admin](admin-dashboard-external-research-2026-09-08.md) | Referências e operadores | research | — |
 | [Validação técnica de Curso gratuito](free-course-enrollment-analysis-2026-09-15.md) | Validação do relatório preliminar e decisões de domínio | proposed | plano de autoinscrição |
 | [Autoinscrição gratuita](free-course-enrollment-2026-09-15.md) | Curso gratuito, grants, handoff e segurança | implemented — Etapas 0–13 completas | — |
+| [Capa 16:9 e CourseCards horizontais](2026-09-22-course-cover-16-9-and-cards-plan.md) | Upload de capa, CourseCards e fallback visual de Aula | implemented — sem commit | decisões ratificadas em 2026-09-22 |
 
 Ao executar ou encerrar um plano, atualize seu `status` e esta tabela. O
 roadmap integrado do produto permanece em `plans/README.md`.

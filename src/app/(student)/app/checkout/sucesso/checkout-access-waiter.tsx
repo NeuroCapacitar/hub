@@ -122,12 +122,12 @@ export function CheckoutAccessWaiter({
     <div className="mt-5 flex flex-col gap-4">
       {courseContext ? (
         <div className="flex max-w-full items-center gap-3 rounded-lg border bg-background/45 p-3">
-          <div className="relative size-12 shrink-0 overflow-hidden rounded-md bg-muted">
+          <div className="relative aspect-video w-16 shrink-0 overflow-hidden rounded-md bg-muted">
             {courseContext.thumbnailUrl ? (
               <CourseCoverImage
                 alt=""
                 blurDataUrl={courseContext.coverBlurDataUrl}
-                sizes="48px"
+                sizes="64px"
                 src={courseContext.thumbnailUrl}
               />
             ) : (

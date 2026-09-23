@@ -323,7 +323,6 @@ describe("admin authoring", () => {
     expect(providerStates).toEqual([
       { connectionHeld: false, transactionOpen: false },
       { connectionHeld: false, transactionOpen: false },
-      { connectionHeld: false, transactionOpen: false },
     ]);
     expect(query).toHaveBeenCalledWith("commit");
     expect(query).toHaveBeenCalledWith("rollback");
@@ -370,9 +369,9 @@ describe("admin authoring", () => {
       publishCoursePublication({ actorUserId: "admin-1", courseId: "course-1" })
     ).resolves.toBe("published");
 
-    expect(publishR2Object).toHaveBeenCalledWith(coverImage.original.key);
     expect(publishR2Object).toHaveBeenCalledWith(coverImage.variants.card.key);
     expect(publishR2Object).toHaveBeenCalledWith(coverImage.variants.thumb.key);
+    expect(publishR2Object).not.toHaveBeenCalledWith(coverImage.original.key);
     expect(
       query.mock.calls.some(([sql]) =>
         COURSE_ACTIVATION_UPDATE_PATTERN.test(String(sql))
@@ -894,7 +893,7 @@ describe("admin authoring", () => {
       "O cronograma de conteúdo não cabe na duração comercial do Curso."
     );
 
-    expect(providerStates).toHaveLength(6);
+    expect(providerStates).toHaveLength(5);
     expect(
       providerStates.every(
         (state) => !(state.connectionHeld || state.transactionOpen)

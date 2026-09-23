@@ -18,12 +18,18 @@ import {
 import { getAdminCourseCatalogData } from "@/features/admin/server";
 import { getCourseAvailabilityStatusPresentation } from "@/features/admin/status-presentation";
 import { resolveCourseAvailability } from "@/features/courses/availability";
+import {
+  COURSE_CARD_GRID_CLASS,
+  CourseCardLayout,
+} from "@/features/courses/course-card-layout";
 import { CourseCoverImage } from "@/features/courses/course-cover-image";
+import { COURSE_COVER_HOVER_ZOOM_CLASS } from "@/features/courses/course-cover-motion";
 import { getCourseCoverBlurDataUrl } from "@/features/storage/course-cover";
 import { requirePermission } from "@/lib/auth-permissions";
 import { canPerform } from "@/lib/auth-policy";
 import { formatCurrencyInCents } from "@/lib/formatters";
 import { route } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 
 import { CourseCreationForm } from "./course-creation-form";
 
@@ -51,7 +57,7 @@ export default async function AdminCoursesPage(): Promise<React.JSX.Element> {
       <div className="flex flex-col gap-16">
         <PageHeader title="Cursos" />
 
-        <section className="grid grid-cols-1 gap-x-5 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
+        <section className={COURSE_CARD_GRID_CLASS}>
           {canCreateCourse && data.courses.length > 0 ? (
             <NewCourseCard priceFieldId="new-course-price" />
           ) : null}
@@ -84,65 +90,48 @@ export default async function AdminCoursesPage(): Promise<React.JSX.Element> {
                 const statusInfo = getCourseAvailabilityStatusPresentation(
                   availability.preset
                 );
+                const media = course.thumbnailUrl ? (
+                  <CourseCoverImage
+                    alt=""
+                    blurDataUrl={getCourseCoverBlurDataUrl(course.coverImage)}
+                    sizes="320px"
+                    src={course.thumbnailUrl}
+                    zoomOnHover
+                  />
+                ) : (
+                  <div
+                    className={cn(
+                      "absolute inset-0 flex items-center justify-center bg-linear-to-br from-card via-card/95 to-secondary/70",
+                      COURSE_COVER_HOVER_ZOOM_CLASS
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="select-none font-black text-6xl text-card-foreground/10 leading-none tracking-tight"
+                    >
+                      {getInitials(course.title)}
+                    </span>
+                  </div>
+                );
+                const statusBadge = (
+                  <Badge
+                    className={
+                      statusInfo.variant === "outline"
+                        ? "w-fit bg-card/95 text-card-foreground shadow-sm"
+                        : "w-fit shadow-sm"
+                    }
+                    variant={statusInfo.variant}
+                  >
+                    {statusInfo.label}
+                  </Badge>
+                );
 
                 return (
-                  <article
-                    className="group relative flex aspect-[24/25] w-full flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-colors hover:border-border/80"
-                    key={course.id}
-                  >
-                    <div className="absolute inset-0 z-0">
-                      {course.thumbnailUrl ? (
-                        <CourseCoverImage
-                          alt=""
-                          blurDataUrl={getCourseCoverBlurDataUrl(
-                            course.coverImage
-                          )}
-                          className="opacity-100 transition-transform duration-400 group-hover:scale-[1.02]"
-                          sizes="340px"
-                          src={course.thumbnailUrl}
-                        />
-                      ) : (
-                        <>
-                          <div className="absolute inset-0 bg-linear-to-br from-card via-card/95 to-secondary/70" />
-                          <div className="absolute top-[20%] -right-4 select-none opacity-10 transition-transform duration-400 group-hover:scale-[1.02]">
-                            <span className="font-black text-[8rem] leading-none tracking-tighter">
-                              {getInitials(course.title)}
-                            </span>
-                          </div>
-                        </>
-                      )}
-                      <div className="absolute inset-0 bg-linear-to-b from-transparent via-card/70 to-card" />
-                    </div>
-
-                    <div className="relative z-10 flex min-h-0 flex-1 flex-col p-5 pb-3 sm:p-6 sm:pb-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <Badge variant={statusInfo.variant}>
-                          {statusInfo.label}
-                        </Badge>
-                      </div>
-
-                      <div className="mt-auto pt-10">
-                        <h3 className="line-clamp-2 font-bold text-lg">
-                          {course.title}
-                        </h3>
-                        <div className="mt-2 font-medium text-card-foreground/60 text-xs">
-                          {course.moduleCount} módulos • {course.lessonCount}{" "}
-                          aulas
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="relative z-10 flex shrink-0 flex-col gap-5 p-5 pt-0 sm:p-6 sm:pt-0">
-                      <div className="flex items-center justify-between text-muted-foreground text-xs">
-                        <span>{course.accessDurationMonths}m acesso</span>
-                        <span className="font-semibold text-foreground">
-                          {formatCurrencyInCents(course.priceInCents)}
-                        </span>
-                      </div>
-
+                  <CourseCardLayout
+                    actions={
                       <Button
                         asChild
-                        className="w-full"
+                        className="relative z-20 w-full"
                         size="sm"
                         variant="secondary"
                       >
@@ -152,8 +141,29 @@ export default async function AdminCoursesPage(): Promise<React.JSX.Element> {
                             : "Consultar curso"}
                         </Link>
                       </Button>
+                    }
+                    badge={statusBadge}
+                    key={course.id}
+                    media={media}
+                  >
+                    <div className="flex min-h-full min-w-0 flex-1 flex-col gap-3">
+                      <div className="flex min-w-0 flex-col gap-2">
+                        <h3 className="line-clamp-2 font-bold text-lg leading-6">
+                          {course.title}
+                        </h3>
+                        <p className="font-medium text-card-foreground/60 text-xs">
+                          {course.moduleCount} módulos · {course.lessonCount}{" "}
+                          aulas
+                        </p>
+                        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
+                          <span>{course.accessDurationMonths}m de acesso</span>
+                          <span className="font-semibold text-foreground">
+                            {formatCurrencyInCents(course.priceInCents)}
+                          </span>
+                        </p>
+                      </div>
                     </div>
-                  </article>
+                  </CourseCardLayout>
                 );
               })
             : null}
@@ -175,10 +185,10 @@ function NewCourseCard({
       trigger={
         <DialogTrigger asChild>
           <button
-            className="group flex aspect-[24/25] w-full flex-col items-center justify-center rounded-xl border border-border border-dashed bg-card p-6 text-center text-card-foreground outline-none transition-[background-color,border-color,color,scale] duration-150 hover:border-primary/50 hover:bg-muted/20 focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 focus-visible:ring-2 focus-visible:ring-background active:scale-[0.98]"
+            className="group grid min-h-48 w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-4 rounded-surface border border-border border-dashed bg-card p-5 text-left text-card-foreground outline-none transition-[background-color,border-color,color,scale] duration-150 hover:border-primary/50 hover:bg-muted/20 focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2 focus-visible:ring-2 focus-visible:ring-background active:scale-[0.98]"
             type="button"
           >
-            <span className="mb-4 flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+            <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
               <HugeiconsIcon
                 aria-hidden="true"
                 icon={Add01Icon}
@@ -186,9 +196,11 @@ function NewCourseCard({
                 strokeWidth={1.75}
               />
             </span>
-            <span className="type-card-title">Novo curso</span>
-            <span className="mt-2 max-w-[18rem] text-muted-foreground text-sm leading-5">
-              Crie um curso para começar a organizar módulos e aulas.
+            <span className="flex min-w-0 flex-col">
+              <span className="type-card-title">Novo curso</span>
+              <span className="mt-2 max-w-[18rem] text-muted-foreground text-sm leading-5">
+                Crie um curso para começar a organizar módulos e aulas.
+              </span>
             </span>
           </button>
         </DialogTrigger>

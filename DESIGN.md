@@ -654,6 +654,9 @@ os substitua por uma transição ampla.
 - cards de Aula em moldura horizontal priorizam a thumbnail do vídeo; quando ela
   não existe, usam a capa do Curso; sem nenhuma das duas, usam o fallback visual
   do próprio card;
+- capas de Curso e molduras dos LessonCards usam proporção 16:9. Novas capas
+  são geradas como uma única imagem WebP de 1280×720; capas legadas mantêm
+  os arquivos atuais e podem ser recortadas visualmente até a substituição;
 - imagens de Aula ocupam a moldura com `fill` e `object-cover object-center`,
   preservando a proporção e aceitando corte para não deformar a imagem;
 - URLs lógicas de Capa incluem uma versão codificada da chave da variante em

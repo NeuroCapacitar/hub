@@ -116,7 +116,7 @@ function CourseSettingsReadOnly({
       <section className="space-y-5">
         <h3 className="font-medium text-base">Identidade do curso</h3>
         <div className="grid gap-6 lg:grid-cols-[176px_minmax(0,1fr)] lg:items-start">
-          <div className="relative aspect-[24/25] max-w-[176px] overflow-hidden rounded-lg border bg-muted">
+          <div className="relative aspect-video max-w-[176px] overflow-hidden rounded-media border bg-muted">
             {course.thumbnailUrl ? (
               <CourseCoverImage
                 alt=""

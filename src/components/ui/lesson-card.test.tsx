@@ -40,6 +40,7 @@ describe("LessonCard", () => {
 
     expect(markup).toContain("video-thumb.jpg");
     expect(markup).not.toContain("course-cover.webp");
+    expect(markup).toContain("aspect-video");
     expect(markup).toContain("object-cover");
     expect(markup).toContain("object-center");
   });

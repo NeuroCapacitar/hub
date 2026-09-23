@@ -91,7 +91,7 @@ export function FreeCourseEnrollmentDialog({
         triggerKind === "card" ? (
           <Button
             aria-label={`Abrir resumo do Curso ${title}`}
-            className="absolute inset-0 z-10 h-full w-full rounded-xl bg-transparent p-0 opacity-0 hover:bg-transparent focus-visible:opacity-100"
+            className="absolute inset-0 z-10 h-full w-full rounded-surface bg-transparent p-0 opacity-0 hover:bg-transparent focus-visible:opacity-100"
             type="button"
             variant="ghost"
           >
