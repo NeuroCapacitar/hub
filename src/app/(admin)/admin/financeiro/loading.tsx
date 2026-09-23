@@ -9,11 +9,15 @@ export default function Loading(): React.JSX.Element {
 
   return (
     <PageContainer>
-      <div aria-busy="true" className="flex flex-col gap-16">
+      <div aria-busy="true" className="flex flex-col gap-8">
         <span className="sr-only" role="status">
           Carregando Financeiro…
         </span>
-        <div className="flex min-w-0 items-center justify-between gap-3 border-b">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-9 w-40" />
+        </div>
+        <div className="flex min-w-0 items-center gap-3 border-b">
           <div className="min-w-0 flex-1 overflow-x-auto">
             <div className="flex min-w-max gap-1">
               {["overview", "orders", "analysis"].map((key) => (
@@ -21,7 +25,6 @@ export default function Loading(): React.JSX.Element {
               ))}
             </div>
           </div>
-          <Skeleton className="h-9 w-10 shrink-0" />
         </div>
 
         {getFinancialTabLoading(activeTab)}

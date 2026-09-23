@@ -56,6 +56,8 @@ describe("SupportCourseStudentsPage", () => {
 
     expect(markup).toContain("student@example.test");
     expect(markup).toContain("Consultar");
+    expect(markup).toContain("1 matrícula ativa de 1 no total neste Curso.");
+    expect(markup).not.toContain("Alunos matriculadas");
     expect(markup).not.toContain("Gerenciar Curso");
     expect(dependencies.getSupportCourseStudents).toHaveBeenCalledWith(
       "course-1",

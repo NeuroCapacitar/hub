@@ -335,101 +335,105 @@ export default async function AdminOperationsPage({
   return (
     <PageContainer>
       <div className="flex flex-col gap-16">
-        <PageHeader title="Operações e recuperação" />
+        <div className="flex flex-col gap-8">
+          <PageHeader title="Operações e recuperação" />
 
-        <Card className="min-w-0">
-          <CardHeader className="border-b pb-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-1">
-                  <CardTitle as="h2" className="text-base">
-                    Alertas operacionais
-                  </CardTitle>
-                  <FinanceHelp
-                    description="Esta página mostra o estado atual das filas locais e as ações de recuperação autorizadas."
-                    details={[
-                      "A idade indica há quanto tempo o item mais antigo aguarda uma transição local.",
-                      "Webhook é uma entrada recebida do Asaas; Outbox é uma intenção local de efeito externo.",
-                      "Reprocessar exige motivo e deve ser feito somente depois de conferir o agregado relacionado.",
-                    ]}
-                    title="Como usar Operações"
-                  />
-                </div>
-                <CardDescription className="mt-1">
-                  Cada alerta aponta para a fila responsável pela próxima
-                  verificação.
-                </CardDescription>
-              </div>
-              <Badge
-                className="shrink-0 tabular-nums"
-                variant={backlog.alerts.length > 0 ? "destructive" : "success"}
-              >
-                {backlog.alerts.length.toLocaleString("pt-BR")}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
-            {backlog.alerts.length > 0 ? (
-              backlog.alerts.map((alert) => {
-                const presentation = ALERT_PRESENTATION[alert.code];
-                const severity = SEVERITY_PRESENTATION[alert.severity];
-                const context = getAlertContext(alert.code, backlog);
-
-                return (
-                  <div
-                    className={cn(
-                      "grid gap-3 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
-                      SEVERITY_SURFACE_CLASS[alert.severity]
-                    )}
-                    key={alert.code}
-                    role={
-                      severity.alertVariant === "destructive"
-                        ? "alert"
-                        : "status"
-                    }
-                  >
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-sm">
-                          {presentation.title}
-                        </span>
-                        <Badge variant={severity.badgeVariant}>
-                          {severity.label}
-                        </Badge>
-                      </div>
-                      <p className="mt-1 text-muted-foreground text-xs leading-relaxed">
-                        {presentation.description}
-                      </p>
-                      <p className="mt-2 text-xs">
-                        <span className="font-medium tabular-nums">
-                          {context.count.toLocaleString("pt-BR")}
-                        </span>{" "}
-                        item{context.count === 1 ? "" : "s"} · mais antigo:{" "}
-                        {formatAge(context.oldestAt, now)}
-                        {context.oldestAt
-                          ? ` · ${formatDateTime(context.oldestAt)}`
-                          : ""}
-                      </p>
-                    </div>
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={route(presentation.href)}>Abrir fila</Link>
-                    </Button>
+          <Card className="min-w-0">
+            <CardHeader className="border-b pb-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-1">
+                    <CardTitle as="h2" className="text-base">
+                      Alertas operacionais
+                    </CardTitle>
+                    <FinanceHelp
+                      description="Esta página mostra o estado atual das filas locais e as ações de recuperação autorizadas."
+                      details={[
+                        "A idade indica há quanto tempo o item mais antigo aguarda uma transição local.",
+                        "Webhook é uma entrada recebida do Asaas; Outbox é uma intenção local de efeito externo.",
+                        "Reprocessar exige motivo e deve ser feito somente depois de conferir o agregado relacionado.",
+                      ]}
+                      title="Como usar Operações"
+                    />
                   </div>
-                );
-              })
-            ) : (
-              <Empty className="col-span-full border-0 py-8">
-                <EmptyHeader>
-                  <EmptyTitle as="h3">Nenhum alerta ativo</EmptyTitle>
-                  <EmptyDescription>
-                    As filas estão dentro dos limiares definidos no runbook de
-                    observabilidade.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            )}
-          </CardContent>
-        </Card>
+                  <CardDescription className="mt-1">
+                    Cada alerta aponta para a fila responsável pela próxima
+                    verificação.
+                  </CardDescription>
+                </div>
+                <Badge
+                  className="shrink-0 tabular-nums"
+                  variant={
+                    backlog.alerts.length > 0 ? "destructive" : "success"
+                  }
+                >
+                  {backlog.alerts.length.toLocaleString("pt-BR")}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+              {backlog.alerts.length > 0 ? (
+                backlog.alerts.map((alert) => {
+                  const presentation = ALERT_PRESENTATION[alert.code];
+                  const severity = SEVERITY_PRESENTATION[alert.severity];
+                  const context = getAlertContext(alert.code, backlog);
+
+                  return (
+                    <div
+                      className={cn(
+                        "grid gap-3 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
+                        SEVERITY_SURFACE_CLASS[alert.severity]
+                      )}
+                      key={alert.code}
+                      role={
+                        severity.alertVariant === "destructive"
+                          ? "alert"
+                          : "status"
+                      }
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-sm">
+                            {presentation.title}
+                          </span>
+                          <Badge variant={severity.badgeVariant}>
+                            {severity.label}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-muted-foreground text-xs leading-relaxed">
+                          {presentation.description}
+                        </p>
+                        <p className="mt-2 text-xs">
+                          <span className="font-medium tabular-nums">
+                            {context.count.toLocaleString("pt-BR")}
+                          </span>{" "}
+                          item{context.count === 1 ? "" : "s"} · mais antigo:{" "}
+                          {formatAge(context.oldestAt, now)}
+                          {context.oldestAt
+                            ? ` · ${formatDateTime(context.oldestAt)}`
+                            : ""}
+                        </p>
+                      </div>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={route(presentation.href)}>Abrir fila</Link>
+                      </Button>
+                    </div>
+                  );
+                })
+              ) : (
+                <Empty className="col-span-full border-0 py-8">
+                  <EmptyHeader>
+                    <EmptyTitle as="h3">Nenhum alerta ativo</EmptyTitle>
+                    <EmptyDescription>
+                      As filas estão dentro dos limiares definidos no runbook de
+                      observabilidade.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         <section aria-labelledby="jmvstream-health-title" id="jmvstream">
           <Card className="min-w-0">

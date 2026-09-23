@@ -36,12 +36,10 @@ const TAB_QUERY_KEYS: Record<FinancialTab, readonly string[]> = {
 
 export function FinancialTabs({
   analysis,
-  actions,
   orders,
   overview,
   visibleTabs,
 }: {
-  actions?: ReactNode;
   analysis: ReactNode;
   orders: ReactNode;
   overview: ReactNode;
@@ -81,22 +79,19 @@ export function FinancialTabs({
 
   return (
     <Tabs className="gap-6" onValueChange={changeTab} value={activeTab}>
-      <div className="flex min-w-0 items-center justify-between gap-3 pb-1">
-        <div className="min-w-0 flex-1 overflow-x-auto">
-          <TabsList
-            aria-label="Seções do financeiro"
-            className="min-w-max flex-nowrap"
-          >
-            {FINANCIAL_TABS.filter(
-              (tab) => effectiveVisibleTabs[tab.value]
-            ).map((tab) => (
+      <div className="min-w-0 overflow-x-auto pb-1">
+        <TabsList
+          aria-label="Seções do financeiro"
+          className="min-w-max flex-nowrap"
+        >
+          {FINANCIAL_TABS.filter((tab) => effectiveVisibleTabs[tab.value]).map(
+            (tab) => (
               <TabsTrigger key={tab.value} value={tab.value}>
                 {tab.label}
               </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
-        {actions ? <div className="shrink-0 pb-1">{actions}</div> : null}
+            )
+          )}
+        </TabsList>
       </div>
       <TabsContent className="flex flex-col gap-12" value="overview">
         {overview}

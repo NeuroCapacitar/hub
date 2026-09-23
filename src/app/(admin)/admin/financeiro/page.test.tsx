@@ -310,6 +310,11 @@ describe("AdminFinancePage", () => {
     ).toHaveBeenCalledOnce();
     expect(pageDependencies.getAdminFinancialOrdersData).not.toHaveBeenCalled();
     expect(markup).toContain("Visão geral");
+    const actionIndex = markup.indexOf("Ações financeiras");
+    const tabsIndex = markup.indexOf('aria-label="Seções do financeiro"');
+    expect(actionIndex).toBeGreaterThanOrEqual(0);
+    expect(tabsIndex).toBeGreaterThanOrEqual(0);
+    expect(actionIndex).toBeLessThan(tabsIndex);
     expect(markup).not.toContain("Receita sem alerta");
     expect(markup).toContain("Pagos");
     expect(markup).toContain("Tudo em ordem");

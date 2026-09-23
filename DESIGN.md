@@ -204,7 +204,20 @@ Os fatos abaixo são comprovados por `src/app/layout.tsx`,
 - `PanelLayout` fornece sidebar, cabeçalho autenticado, skip link e região
   principal;
 - `PageContainer` usa largura máxima de 1344px e padding responsivo;
-- `PageHeader` centraliza `h1`, descrição, status e ações;
+- `PageHeader` apresenta um `h1` visível por padrão, com descrição opcional,
+  status e ações. A descrição só deve acrescentar contexto útil; não deve
+  repetir o título ou o conteúdo da primeira seção. Use `visibleHeading={false}`
+  nas páginas compactas que priorizam o conteúdo, como o Painel, e registre com
+  `PanelPageTitle visibleHeading` quando um cabeçalho específico da página já
+  fornece o `h1` visível;
+- `PanelBreadcrumb` é navegação hierárquica secundária: quando há `h1` visível,
+  apresenta somente os ancestrais, sem repetir a página atual. Sem ancestrais,
+  não ocupa espaço no shell. Páginas compactas sem título local podem manter o
+  nome atual no shell;
+- ações de página pertencem ao `PageHeader`; ações limitadas a uma aba, filtro,
+  formulário ou linha permanecem junto ao conteúdo que afetam. Um `h2` deve
+  nomear uma seção ou conjunto de dados distinto; não repita nele a descrição
+  geral já explicada pelo `PageHeader`;
 - os primitives reutilizáveis ficam em `src/components/ui`.
 
 Não introduza uma biblioteca visual, design system paralelo, CSS externo ou

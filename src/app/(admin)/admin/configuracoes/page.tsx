@@ -81,7 +81,7 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-16">
+      <div className="flex flex-col gap-8">
         <PageHeader title="Configurações globais" />
 
         <div className="grid grid-cols-1 gap-14 md:grid-cols-[220px_1fr] lg:grid-cols-[240px_1fr]">

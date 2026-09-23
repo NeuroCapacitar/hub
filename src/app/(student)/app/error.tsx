@@ -3,6 +3,7 @@
 import { captureException } from "@sentry/nextjs";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { PanelPageTitle } from "@/components/panel-page-title";
 import {
   SystemStateShell,
   SystemStateSupportReference,
@@ -35,29 +36,35 @@ export default function StudentAreaError({
   }, [correlationId, error]);
 
   return (
-    <SystemStateShell variant="embedded">
-      <Badge variant="destructive">Área temporariamente indisponível</Badge>
-      <h1 className="type-page-title mt-4" ref={headingRef} tabIndex={-1}>
-        Não foi possível carregar seus cursos.
-      </h1>
-      <p className="type-body-sm mt-4 max-w-xl text-muted-foreground">
-        Tente novamente. Se o problema continuar, informe o código abaixo ao
-        suporte.
-      </p>
-      <div className="mt-6 flex flex-wrap gap-3">
-        <Button onClick={unstable_retry} type="button">
-          Tentar novamente
-        </Button>
-        <Button asChild variant="outline">
-          <Link href={route("/app")}>Voltar aos meus cursos</Link>
-        </Button>
-      </div>
-      <div className="mt-6">
-        <SystemStateSupportReference
-          correlationId={correlationId}
-          {...(error.digest ? { digest: error.digest } : {})}
-        />
-      </div>
-    </SystemStateShell>
+    <>
+      <PanelPageTitle
+        title="Não foi possível carregar seus cursos."
+        visibleHeading
+      />
+      <SystemStateShell variant="embedded">
+        <Badge variant="destructive">Área temporariamente indisponível</Badge>
+        <h1 className="type-page-title mt-4" ref={headingRef} tabIndex={-1}>
+          Não foi possível carregar seus cursos.
+        </h1>
+        <p className="type-body-sm mt-4 max-w-xl text-muted-foreground">
+          Tente novamente. Se o problema continuar, informe o código abaixo ao
+          suporte.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Button onClick={unstable_retry} type="button">
+            Tentar novamente
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={route("/app")}>Voltar aos meus cursos</Link>
+          </Button>
+        </div>
+        <div className="mt-6">
+          <SystemStateSupportReference
+            correlationId={correlationId}
+            {...(error.digest ? { digest: error.digest } : {})}
+          />
+        </div>
+      </SystemStateShell>
+    </>
   );
 }

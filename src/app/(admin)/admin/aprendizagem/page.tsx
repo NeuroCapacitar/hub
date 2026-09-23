@@ -90,7 +90,7 @@ export default async function LearningAnalyticsPage({
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-16">
+      <div className="flex flex-col gap-8">
         <PageHeader title="Aprendizagem" />
 
         {selectedCourse ? (

@@ -54,7 +54,7 @@ export default async function AdminCoursesPage(): Promise<React.JSX.Element> {
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-16">
+      <div className="flex flex-col gap-8">
         <PageHeader title="Cursos" />
 
         <section className={COURSE_CARD_GRID_CLASS}>

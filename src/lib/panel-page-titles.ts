@@ -6,6 +6,7 @@ export interface PanelBreadcrumb {
 export interface PanelRouteMeta {
   readonly ancestors: readonly PanelBreadcrumb[];
   readonly title: string;
+  readonly visibleHeading: boolean;
 }
 
 const PAGE_TITLES: Readonly<Record<string, string>> = {
@@ -29,6 +30,7 @@ const PAGE_TITLES: Readonly<Record<string, string>> = {
 };
 
 const TRAILING_SLASHES = /\/+$/;
+const COMPACT_PAGE_TITLES = new Set(["/admin", "/app"]);
 
 const DYNAMIC_PAGE_TITLES = [
   [
@@ -67,24 +69,32 @@ export function getPanelRouteMeta(pathname: string): PanelRouteMeta {
   const exactTitle = PAGE_TITLES[normalizedPath];
 
   if (exactTitle) {
-    return { ancestors: [], title: exactTitle };
+    return {
+      ancestors: [],
+      title: exactTitle,
+      visibleHeading: !COMPACT_PAGE_TITLES.has(normalizedPath),
+    };
   }
 
   for (const [pattern, title, ancestors] of DYNAMIC_PAGE_TITLES) {
     if (pattern.test(normalizedPath)) {
-      return { ancestors, title };
+      return { ancestors, title, visibleHeading: true };
     }
   }
 
   if (normalizedPath.startsWith("/admin")) {
-    return { ancestors: [], title: "Administração" };
+    return { ancestors: [], title: "Administração", visibleHeading: false };
   }
 
   if (normalizedPath.startsWith("/app")) {
-    return { ancestors: [], title: "Aprendizagem" };
+    return { ancestors: [], title: "Aprendizagem", visibleHeading: false };
   }
 
-  return { ancestors: [], title: "NeuroCapacitar Hub" };
+  return {
+    ancestors: [],
+    title: "NeuroCapacitar Hub",
+    visibleHeading: false,
+  };
 }
 
 export function getPanelPageTitle(pathname: string): string {

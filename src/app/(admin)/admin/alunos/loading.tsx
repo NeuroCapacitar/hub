@@ -7,15 +7,18 @@ export default function Loading(): React.JSX.Element {
       <div aria-busy="true" className="flex flex-col gap-16" role="status">
         <span className="sr-only">Carregando a lista de Alunos…</span>
 
-        <section>
-          <Skeleton className="mb-6 h-5 w-36" />
-          <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
-            <Skeleton className="h-[126px] rounded-xl" />
-            <Skeleton className="h-[126px] rounded-xl" />
-            <Skeleton className="h-[126px] rounded-xl" />
-            <Skeleton className="h-[126px] rounded-xl" />
-          </div>
-        </section>
+        <div className="flex flex-col gap-8">
+          <Skeleton className="h-8 w-64" />
+          <section>
+            <Skeleton className="mb-6 h-5 w-36" />
+            <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
+              <Skeleton className="h-[126px] rounded-xl" />
+              <Skeleton className="h-[126px] rounded-xl" />
+              <Skeleton className="h-[126px] rounded-xl" />
+              <Skeleton className="h-[126px] rounded-xl" />
+            </div>
+          </section>
+        </div>
 
         <section className="grid gap-6">
           <div className="grid gap-1.5">

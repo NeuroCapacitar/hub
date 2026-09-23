@@ -283,7 +283,7 @@ export default async function AdminCourseDetailPage({
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-16">
+      <div className="flex flex-col gap-8">
         <PageHeader title={course.title} />
 
         <CourseManagementTabs

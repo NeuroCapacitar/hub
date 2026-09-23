@@ -64,52 +64,54 @@ export default async function AdminStudentsPage({
   return (
     <PageContainer>
       <div className="flex flex-col gap-16">
-        <PageHeader title="Alunos e matrículas" />
+        <div className="flex flex-col gap-8">
+          <PageHeader title="Alunos e matrículas" />
 
-        <section aria-labelledby="students-summary-title">
-          <div className="mb-6 flex items-center gap-1">
-            <h2 className="type-section-title" id="students-summary-title">
-              Resumo de acesso
-            </h2>
-            <FinanceHelp
-              description="Este resumo é global e não muda quando a tabela é pesquisada ou paginada."
-              details={[
-                "Acesso ativo considera uma Matrícula vigente em um Curso ativo e publicado, com a plataforma desbloqueada.",
-                "Sem acesso ativo inclui Alunos sem Matrícula efetiva ou com o acesso geral bloqueado.",
-                "Expirando em breve considera o próximo acesso efetivo que termina nos próximos 30 dias.",
-              ]}
-              title="Resumo de acesso"
-            />
-          </div>
-          <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
-            <AdminMetricCard
-              helper="Global; não muda com busca ou página."
-              icon={UserGroupIcon}
-              label="Alunos cadastrados"
-              value={formatCount(data.accessSummary.totalStudents)}
-            />
-            <AdminMetricCard
-              helper="Matrícula efetiva em Curso publicado."
-              icon={UserCircleIcon}
-              label="Com acesso ativo"
-              value={formatCount(data.accessSummary.activeStudents)}
-            />
-            <AdminMetricCard
-              helper="Sem Matrícula efetiva ou plataforma bloqueada."
-              icon={UserBlock01Icon}
-              label="Sem acesso ativo"
-              value={formatCount(
-                data.accessSummary.withoutActiveAccessStudents
-              )}
-            />
-            <AdminMetricCard
-              helper="Próximo acesso vence em até 30 dias."
-              icon={Time02Icon}
-              label="Expirando em breve"
-              value={formatCount(data.accessSummary.expiringSoonStudents)}
-            />
-          </div>
-        </section>
+          <section aria-labelledby="students-summary-title">
+            <div className="mb-6 flex items-center gap-1">
+              <h2 className="type-section-title" id="students-summary-title">
+                Resumo de acesso
+              </h2>
+              <FinanceHelp
+                description="Este resumo é global e não muda quando a tabela é pesquisada ou paginada."
+                details={[
+                  "Acesso ativo considera uma Matrícula vigente em um Curso ativo e publicado, com a plataforma desbloqueada.",
+                  "Sem acesso ativo inclui Alunos sem Matrícula efetiva ou com o acesso geral bloqueado.",
+                  "Expirando em breve considera o próximo acesso efetivo que termina nos próximos 30 dias.",
+                ]}
+                title="Resumo de acesso"
+              />
+            </div>
+            <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
+              <AdminMetricCard
+                helper="Global; não muda com busca ou página."
+                icon={UserGroupIcon}
+                label="Alunos cadastrados"
+                value={formatCount(data.accessSummary.totalStudents)}
+              />
+              <AdminMetricCard
+                helper="Matrícula efetiva em Curso publicado."
+                icon={UserCircleIcon}
+                label="Com acesso ativo"
+                value={formatCount(data.accessSummary.activeStudents)}
+              />
+              <AdminMetricCard
+                helper="Sem Matrícula efetiva ou plataforma bloqueada."
+                icon={UserBlock01Icon}
+                label="Sem acesso ativo"
+                value={formatCount(
+                  data.accessSummary.withoutActiveAccessStudents
+                )}
+              />
+              <AdminMetricCard
+                helper="Próximo acesso vence em até 30 dias."
+                icon={Time02Icon}
+                label="Expirando em breve"
+                value={formatCount(data.accessSummary.expiringSoonStudents)}
+              />
+            </div>
+          </section>
+        </div>
 
         <section
           aria-labelledby="students-table-title"

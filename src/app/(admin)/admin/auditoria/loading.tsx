@@ -22,12 +22,16 @@ const AUDIT_ROW_SKELETON_KEYS = [
 export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
-      <div aria-busy="true" className="flex flex-col gap-16" role="status">
+      <div aria-busy="true" className="flex flex-col gap-8" role="status">
         <span className="sr-only">Carregando a auditoria administrativa…</span>
-        <section className="grid gap-6">
-          <div>
+        <div className="grid gap-2">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-full max-w-[460px]" />
+        </div>
+        <section className="grid gap-4">
+          <div className="flex items-center gap-2">
             <Skeleton className="h-6 w-48" />
-            <Skeleton className="mt-2 h-4 w-full max-w-[460px]" />
+            <Skeleton className="size-8 rounded-full" />
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
             {AUDIT_FILTER_SKELETON_KEYS.map((key) => (

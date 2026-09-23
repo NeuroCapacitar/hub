@@ -83,8 +83,9 @@ describe("MyCertificatesPage", () => {
   it("renders the certificate library without decorative metrics", async () => {
     const markup = await renderPage([readyCertificate]);
 
-    expect(markup).toContain("Curso de teste");
+    expect(markup.match(/<h1\b/g)).toHaveLength(1);
     expect(markup).toContain("Suas conquistas");
+    expect(markup).toContain("Curso de teste");
     expect(markup).toContain("Cada certificado guarda um passo");
     expect(markup).toContain('data-certificate-code="CERT-001"');
     expect(markup).not.toContain("Emitidos");

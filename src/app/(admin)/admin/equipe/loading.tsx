@@ -4,17 +4,25 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
-      <div aria-busy="true" className="flex flex-col gap-16" role="status">
+      <div aria-busy="true" className="flex flex-col gap-8" role="status">
         <span className="sr-only">Carregando a Equipe…</span>
-        <section className="grid gap-6">
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <Skeleton className="h-6 w-64" />
-            <Skeleton className="h-4 w-full max-w-[620px]" />
-            <Skeleton className="h-4 w-full max-w-[540px]" />
-            <div className="flex flex-wrap justify-end gap-2 sm:col-start-2 sm:row-span-3 sm:row-start-1">
-              <Skeleton className="h-10 w-24" />
-              <Skeleton className="h-10 w-40" />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="grid min-w-0 flex-1 gap-2">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-24" />
+              <Skeleton className="size-8 rounded-full" />
             </div>
+            <Skeleton className="h-4 w-full max-w-xl" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-10 w-40" />
+            <Skeleton className="h-10 w-24" />
+          </div>
+        </div>
+        <section className="grid gap-6">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-6 w-64" />
+            <Skeleton className="size-8 rounded-full" />
           </div>
           <div className="overflow-x-auto rounded-lg border">
             <div className="min-w-[900px]">

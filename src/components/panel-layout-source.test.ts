@@ -22,7 +22,7 @@ describe("PanelLayout", () => {
     expect(source).toContain("<BrandLogo");
   });
 
-  it("renders the current page title in the shared shell header", async () => {
+  it("keeps a shell title for compact pages and uses ancestor breadcrumbs for headed pages", async () => {
     const source = await readFile(
       new URL("./panel-layout.tsx", import.meta.url),
       "utf8"
@@ -30,6 +30,8 @@ describe("PanelLayout", () => {
 
     expect(source).toContain("getPanelRouteMeta(pathname)");
     expect(source).toContain("<PanelBreadcrumb");
-    expect(source).toContain("{pageMeta.title}");
+    expect(source).toContain("hasVisiblePageHeading");
+    expect(source).toContain("currentTitle: pageMeta.title");
+    expect(source).toContain('<h1 className="sr-only">{pageMeta.title}</h1>');
   });
 });

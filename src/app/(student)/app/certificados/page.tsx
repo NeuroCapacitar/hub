@@ -3,7 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageContainer } from "@/components/page-container";
-import { PageHeader } from "@/components/page-header";
+import { PanelPageTitle } from "@/components/panel-page-title";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -48,10 +48,9 @@ export default async function MyCertificatesPage(): Promise<React.JSX.Element> {
 
   return (
     <PageContainer className="min-h-screen bg-background text-foreground">
+      <PanelPageTitle title="Seus certificados" visibleHeading />
       {hasPendingCertificate ? <PendingCertificateRefresh enabled /> : null}
       <div className="flex flex-col gap-8">
-        <PageHeader title="Seus certificados" />
-
         <header className="flex max-w-6xl flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
             <div
@@ -65,9 +64,9 @@ export default async function MyCertificatesPage(): Promise<React.JSX.Element> {
               />
             </div>
             <div>
-              <h2 className="type-section-title" id="certificates-intro-title">
+              <h1 className="type-section-title" id="certificates-intro-title">
                 Suas conquistas
-              </h2>
+              </h1>
               <p className="mt-1.5 text-muted-foreground text-sm leading-6">
                 Cada certificado guarda um passo que você construiu. Consulte,
                 baixe ou compartilhe quando quiser.

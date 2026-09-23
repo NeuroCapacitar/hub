@@ -175,9 +175,12 @@ function PanelLayoutInner({
     [pathname]
   );
   const [pageMeta, setPageMeta] = useState(fallbackPageMeta);
-  const [hasVisiblePageHeading, setHasVisiblePageHeading] = useState(false);
+  const [hasVisiblePageHeading, setHasVisiblePageHeading] = useState(
+    fallbackPageMeta.visibleHeading
+  );
   useEffect(() => {
     setPageMeta(fallbackPageMeta);
+    setHasVisiblePageHeading(fallbackPageMeta.visibleHeading);
   }, [fallbackPageMeta]);
   const setPanelTitle = useCallback(
     (title: string, ancestors?: readonly PanelBreadcrumbItem[]) => {
@@ -195,7 +198,7 @@ function PanelLayoutInner({
           return current;
         }
 
-        return { ancestors: nextAncestors, title };
+        return { ...current, ancestors: nextAncestors, title };
       });
     },
     [fallbackPageMeta]
@@ -358,7 +361,9 @@ function PanelLayoutInner({
                 )}
                 <PanelBreadcrumb
                   ancestors={pageMeta.ancestors}
-                  currentTitle={pageMeta.title}
+                  {...(hasVisiblePageHeading
+                    ? {}
+                    : { currentTitle: pageMeta.title })}
                 />
               </div>
 

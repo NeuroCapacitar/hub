@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
-      <div className="flex flex-col gap-16">
+      <div className="flex flex-col gap-8">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-9 w-36" />

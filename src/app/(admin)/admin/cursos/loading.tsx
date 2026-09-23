@@ -8,7 +8,8 @@ import {
 export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
-      <div className="flex flex-col gap-16">
+      <div className="flex flex-col gap-8">
+        <Skeleton className="h-8 w-24" />
         <section className={COURSE_CARD_GRID_CLASS}>
           <Skeleton className="min-h-48 rounded-surface border border-dashed" />
           {Array.from({ length: 6 }).map((_, i) => (

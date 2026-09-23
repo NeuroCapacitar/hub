@@ -18,7 +18,19 @@ describe("getPanelPageTitle", () => {
         { href: "/admin/cursos", label: "Cursos" },
         { label: "Curso" },
       ],
+      visibleHeading: true,
       title: "Aula",
     });
+  });
+
+  it("keeps dashboards compact while preparing headings for content pages", () => {
+    expect(getPanelRouteMeta("/admin").visibleHeading).toBe(false);
+    expect(getPanelRouteMeta("/app").visibleHeading).toBe(false);
+    expect(getPanelRouteMeta("/app/perguntas-frequentes").visibleHeading).toBe(
+      true
+    );
+    expect(getPanelRouteMeta("/admin/cursos/course-1").visibleHeading).toBe(
+      true
+    );
   });
 });
