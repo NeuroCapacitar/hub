@@ -62,7 +62,7 @@ export function CourseCardLayout({
         </div>
 
         {actions ? (
-          <div className="mt-auto min-w-0 px-3 pt-3 pb-3">{actions}</div>
+          <div className="mt-auto min-w-0 px-2 pt-3 pb-3">{actions}</div>
         ) : null}
       </article>
     </div>

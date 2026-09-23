@@ -32,6 +32,10 @@ describe("CourseCardLayout", () => {
     expect(markup).not.toMatch(CONTAINER_ON_ARTICLE_RE);
     expect(markup).toMatch(CARD_FILL_HEIGHT_RE);
     expect(markup).toContain("p-2");
+    expect(markup).toContain(
+      'class="flex min-w-0 flex-1 flex-col px-3 pt-3 pb-0"'
+    );
+    expect(markup).toContain('class="mt-auto min-w-0 px-2 pt-3 pb-3"');
     expect(markup).toContain("aspect-video");
     expect(markup).toContain(
       'class="pointer-events-none absolute top-2 left-2 z-20"'

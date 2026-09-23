@@ -214,10 +214,16 @@ function ContinueLearningActions({
     hasNextLesson,
     progressPercent: course.progressPercent,
   });
+  const actionContainerClassName = hasNextLesson
+    ? "grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-3"
+    : "flex items-center gap-3";
+  const responsiveButtonClassName = hasNextLesson
+    ? "w-full min-w-0 whitespace-normal sm:w-auto sm:whitespace-nowrap"
+    : undefined;
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <Button asChild>
+    <div className={actionContainerClassName}>
+      <Button asChild className={responsiveButtonClassName}>
         <Link href={primaryHref}>
           {hasNextLesson ? (
             <HugeiconsIcon
@@ -231,7 +237,12 @@ function ContinueLearningActions({
         </Link>
       </Button>
       {hasNextLesson ? (
-        <Button asChild size="sm" variant="outline">
+        <Button
+          asChild
+          className={responsiveButtonClassName}
+          size="sm"
+          variant="outline"
+        >
           <Link href={courseHref}>
             <HugeiconsIcon
               aria-hidden="true"

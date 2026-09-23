@@ -123,6 +123,12 @@ describe("Student dashboard availability", () => {
     expect(continueCard).toContain("aspect-video");
     expect(continueCard).toContain("rounded-media");
     expect(continueCard).toContain("group-hover:scale-[1.04]");
+    expect(continueCard).toContain(
+      'class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-3"'
+    );
+    expect(
+      continueCard.match(/w-full min-w-0 whitespace-normal/g)
+    ).toHaveLength(2);
   });
 
   it("applies the shared cover zoom to Continue Learning media", async () => {
@@ -199,7 +205,15 @@ describe("Student dashboard availability", () => {
     expect(statusBadgePosition).toBeGreaterThan(-1);
     expect(statusBadgePosition).toBeLessThan(activeCardMarkup.indexOf("<h3"));
     expect(activeCardMarkup).toContain("group-hover:scale-[1.04]");
+    expect(activeCardMarkup).toContain('class="grid w-full grid-cols-2 gap-2"');
+    expect(activeCardMarkup).toContain("w-full min-w-0 justify-center");
     expect(activeCardMarkup).toContain("0/0 obrigatórias");
+    expect(activeCardMarkup).toContain(
+      'class="flex min-w-0 flex-1 flex-col gap-2"'
+    );
+    expect(
+      activeCardMarkup.indexOf('class="flex min-w-0 flex-1 flex-col gap-2"')
+    ).toBeLessThan(activeCardMarkup.indexOf('role="progressbar"'));
     expect(activeCardMarkup.indexOf("0/0 obrigatórias")).toBeLessThan(
       activeCardMarkup.indexOf("Continuar")
     );

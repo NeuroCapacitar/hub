@@ -457,7 +457,7 @@ function CourseCard({
       overlay={offerCardTrigger}
     >
       <div className="flex min-h-full min-w-0 flex-1 flex-col gap-3">
-        <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
           <h3 className="line-clamp-2 font-bold text-lg leading-6">
             {shouldLinkCardTitle ? (
               <Link className="before:absolute before:inset-0" href={cardHref}>
@@ -480,25 +480,25 @@ function CourseCard({
               {formatCourseWorkloadHours(course.workloadHours)}
             </p>
           ) : null}
-          {hasActiveAccess ? (
-            <div>
-              <div className="mb-2 flex items-center justify-between text-card-foreground/60 text-xs">
-                <span>
-                  {course.completedCount}/{course.totalCount} obrigatórias
-                </span>
-                <span className="font-semibold text-card-foreground">
-                  {course.progressPercent}%
-                </span>
-              </div>
-              <Progress
-                aria-label={`Progresso no curso ${course.title}: ${course.progressPercent}%`}
-                className="h-1"
-                tone={course.progressPercent >= 100 ? "complete" : "active"}
-                value={course.progressPercent}
-              />
-            </div>
-          ) : null}
         </div>
+        {hasActiveAccess ? (
+          <div>
+            <div className="mb-2 flex items-center justify-between text-card-foreground/60 text-xs">
+              <span>
+                {course.completedCount}/{course.totalCount} obrigatórias
+              </span>
+              <span className="font-semibold text-card-foreground">
+                {course.progressPercent}%
+              </span>
+            </div>
+            <Progress
+              aria-label={`Progresso no curso ${course.title}: ${course.progressPercent}%`}
+              className="h-1"
+              tone={course.progressPercent >= 100 ? "complete" : "active"}
+              value={course.progressPercent}
+            />
+          </div>
+        ) : null}
       </div>
     </CourseCardLayout>
   );
@@ -517,10 +517,10 @@ function CourseAccessControls({
 }): React.JSX.Element {
   if (hasActiveAccess) {
     return (
-      <div className="flex @sm/course-card:flex-row flex-col gap-2">
+      <div className="grid w-full grid-cols-2 gap-2">
         <Button
           asChild
-          className="flex-1 justify-start @sm/course-card:justify-center"
+          className="w-full min-w-0 justify-center whitespace-normal"
           size="sm"
         >
           <Link href={primaryHref}>
@@ -539,7 +539,7 @@ function CourseAccessControls({
         </Button>
         <Button
           asChild
-          className="flex-1 justify-start @sm/course-card:justify-center"
+          className="w-full min-w-0 justify-center whitespace-normal"
           size="sm"
           variant="secondary"
         >
