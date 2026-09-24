@@ -72,7 +72,12 @@ describe("lesson focus mode UI state", () => {
     );
 
     expect(source).toContain('module.releaseState === "time_locked"');
-    expect(source).toContain("Continue a sequência");
+    expect(source).toContain("getModuleLockTooltip(module)");
+    expect(source).toContain("getModuleCompletionTooltip(label)");
+    expect(source).toContain(
+      "Conclua as aulas obrigatórias anteriores para liberar a sequência."
+    );
+    expect(source).not.toContain("<span>Continue a sequência</span>");
     expect(source).toContain("formatLessonReleaseDate(module.availableAt)");
     expect(source).not.toContain("<span>Em breve</span>");
     expect(source).not.toContain("Disponível em ${formatLessonReleaseDate");

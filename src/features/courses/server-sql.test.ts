@@ -828,11 +828,17 @@ describe("student experience reads", () => {
     expect(syncJmvstreamLessonPlayer).not.toHaveBeenCalled();
   });
 
-  it("marks the immediate next lesson as unavailable until the current lesson is completed", async () => {
+  it("keeps the next required lesson locked across modules until the prior one is completed", async () => {
     query.mockResolvedValue({
       rows: [
         createLessonRow({ lessonId: "lesson-1", lessonSortOrder: 1 }),
-        createLessonRow({ lessonId: "lesson-2", lessonSortOrder: 2 }),
+        createLessonRow({
+          lessonId: "lesson-2",
+          lessonSortOrder: 1,
+          moduleId: "module-2",
+          moduleSortOrder: 2,
+          moduleTitle: "Module two",
+        }),
       ],
     });
 
@@ -846,11 +852,17 @@ describe("student experience reads", () => {
       kind: "available",
     });
     expect(
-      workspace.kind === "available" ? workspace.data.modules[0]?.lessons : []
+      workspace.kind === "available"
+        ? workspace.data.modules.flatMap((module) => module.lessons)
+        : []
     ).toMatchObject([
       { id: "lesson-1", isAvailable: true },
       { id: "lesson-2", isAvailable: false },
     ]);
+    const workspaceQuery = query.mock.calls
+      .map(([sql]) => String(sql))
+      .find((sql) => sql.includes("from target_course tc"));
+    expect(workspaceQuery).toContain("completed_module.course_id = c.id");
   });
 
   it("releases optional and later required lessons after the previous required lesson", async () => {
@@ -891,6 +903,131 @@ describe("student experience reads", () => {
       { id: "lesson-4", isAvailable: true },
       { id: "lesson-5", isAvailable: false },
     ]);
+  });
+
+  it("projects required completion totals at course and module levels", async () => {
+    const completedAt = new Date("2026-01-01T00:00:00.000Z");
+    query.mockResolvedValue({
+      rows: [
+        createLessonRow({
+          completedAt,
+          lessonId: "module-one-required",
+          lessonSortOrder: 1,
+          moduleId: "module-one",
+          moduleSortOrder: 1,
+          moduleTitle: "Módulo 1",
+        }),
+        createLessonRow({
+          isRequired: false,
+          lessonId: "module-one-optional-pending",
+          lessonSortOrder: 2,
+          moduleId: "module-one",
+          moduleSortOrder: 1,
+          moduleTitle: "Módulo 1",
+        }),
+        createLessonRow({
+          completedAt,
+          isRequired: false,
+          lessonId: "optional-only-completed",
+          lessonSortOrder: 1,
+          moduleId: "module-optional-only",
+          moduleSortOrder: 2,
+          moduleTitle: "Módulo opcional",
+        }),
+        createLessonRow({
+          completedAt,
+          lessonId: "module-three-required-completed",
+          lessonSortOrder: 1,
+          moduleId: "module-three",
+          moduleSortOrder: 3,
+          moduleTitle: "Módulo 3",
+        }),
+        createLessonRow({
+          lessonId: "module-three-required-pending",
+          lessonSortOrder: 2,
+          moduleId: "module-three",
+          moduleSortOrder: 3,
+          moduleTitle: "Módulo 3",
+        }),
+      ],
+    });
+
+    const workspace = await getStudentLessonWorkspace({
+      lessonId: "module-one-required",
+      viewer: { role: "student", userId: "student-1" },
+    });
+
+    expect(workspace).toMatchObject({
+      data: {
+        requiredLessonProgress: {
+          completedCount: 2,
+          percent: 67,
+          totalCount: 3,
+        },
+        modules: [
+          {
+            completedRequiredLessonCount: 1,
+            id: "module-one",
+            pendingOptionalLessonCount: 1,
+            requiredLessonCount: 1,
+          },
+          {
+            completedRequiredLessonCount: 0,
+            id: "module-optional-only",
+            pendingOptionalLessonCount: 0,
+            requiredLessonCount: 0,
+          },
+          {
+            completedRequiredLessonCount: 1,
+            id: "module-three",
+            pendingOptionalLessonCount: 0,
+            requiredLessonCount: 2,
+          },
+        ],
+      },
+      kind: "available",
+    });
+  });
+
+  it("keeps the required progress denominator empty for all-optional courses", async () => {
+    query.mockResolvedValue({
+      rows: [
+        createLessonRow({
+          isRequired: false,
+          lessonId: "optional-pending",
+          lessonSortOrder: 1,
+        }),
+        createLessonRow({
+          completedAt: new Date("2026-01-01T00:00:00.000Z"),
+          isRequired: false,
+          lessonId: "optional-completed",
+          lessonSortOrder: 2,
+        }),
+      ],
+    });
+
+    const workspace = await getStudentLessonWorkspace({
+      lessonId: "optional-pending",
+      viewer: { role: "student", userId: "student-1" },
+    });
+
+    expect(workspace).toMatchObject({
+      data: {
+        modules: [
+          {
+            completedRequiredLessonCount: 0,
+            pendingOptionalLessonCount: 1,
+            requiredLessonCount: 0,
+          },
+        ],
+        requiredLessonProgress: {
+          completedCount: 0,
+          percent: 0,
+          totalCount: 0,
+        },
+      },
+      kind: "available",
+    });
   });
 
   it("chooses a pending optional lesson after all required lessons are complete", async () => {
@@ -1112,6 +1249,11 @@ describe("student experience reads", () => {
         nextLessonId: null,
         previousLessonId: "lesson-1",
         progressPercent: 0,
+        requiredLessonProgress: {
+          completedCount: 0,
+          percent: 0,
+          totalCount: 2,
+        },
       },
     });
     expect(
@@ -1120,6 +1262,13 @@ describe("student experience reads", () => {
       { id: "lesson-1", isAvailable: true },
       { id: "lesson-2", isAvailable: true },
     ]);
+    expect(
+      workspace.kind === "available" ? workspace.data.modules[0] : null
+    ).toMatchObject({
+      completedRequiredLessonCount: 0,
+      pendingOptionalLessonCount: 0,
+      requiredLessonCount: 2,
+    });
   });
 });
 

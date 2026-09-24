@@ -8,11 +8,11 @@ import {
 } from "@/features/comments/actions";
 import type { LessonCommentView } from "@/features/comments/rules";
 import { formatDateTime } from "@/lib/formatters";
+import { VerifiedBadge } from "./custom icons/verified-badge";
 import { LessonCommentsSubmitButton } from "./lesson-comments-submit-button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { Textarea } from "./ui/textarea";
-import { VerifiedBadge } from "./ui/verified-badge";
 
 export function LessonCommentsSection({
   canComment,

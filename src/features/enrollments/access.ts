@@ -82,15 +82,19 @@ export const resolveLessonAccess = async ({
           join lessons completed_lesson
             on completed_lesson.id = lp.lesson_id
            and completed_lesson.curriculum_key = l.curriculum_key
+          join modules completed_module
+            on completed_module.id = completed_lesson.module_id
+           and completed_module.course_id = c.id
           where lp.user_id = e.user_id
         ) as is_completed
         ,not exists (
           select 1
           from lessons prior_lesson
           join modules prior_module on prior_module.id = prior_lesson.module_id
-          where prior_lesson.course_publication_id = cp.id
-            and prior_lesson.status = 'active'
-            and prior_module.status = 'active'
+           where prior_lesson.course_publication_id = cp.id
+             and prior_lesson.status = 'active'
+             and prior_lesson.is_required = true
+             and prior_module.status = 'active'
             and (
               prior_module.sort_order < m.sort_order
               or (
@@ -101,10 +105,13 @@ export const resolveLessonAccess = async ({
             and not exists (
               select 1
               from lesson_progress prior_progress
-              join lessons completed_prior
-                on completed_prior.id = prior_progress.lesson_id
-               and completed_prior.curriculum_key = prior_lesson.curriculum_key
-              where prior_progress.user_id = e.user_id
+               join lessons completed_prior
+                 on completed_prior.id = prior_progress.lesson_id
+                and completed_prior.curriculum_key = prior_lesson.curriculum_key
+               join modules completed_prior_module
+                 on completed_prior_module.id = completed_prior.module_id
+                and completed_prior_module.course_id = c.id
+               where prior_progress.user_id = e.user_id
             )
         ) as sequence_available
       from lessons l

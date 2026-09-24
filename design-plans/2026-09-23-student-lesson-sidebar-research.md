@@ -1,0 +1,40 @@
+# Pesquisa: navegação de cursos, aulas e conclusão visível
+
+**Pesquisa realizada em:** 23/09/2026 (America/Sao_Paulo)
+
+**Escopo:** contratos funcionais descritos em documentação oficial de plataformas e padrões W3C/WAI. Os achados abaixo tratam de estados e regras; não propõem copiar interfaces.
+
+## Fatos documentados
+
+- **Canvas/Instructure distingue estados de módulo.** A documentação da visão do instrutor descreve módulos como `in progress`, `locked`, `complete` e `unlocked`; “in progress” significa iniciado sem conclusão, enquanto “locked” indica requisitos ou pré-requisitos pendentes. Isso sustenta separar conclusão de acesso, sem importar a regra Canvas de considerar módulo sem requisitos como completo nem presumir que a visão de instrutor é idêntica ao sidebar do Aluno. [Instructure Community: View module progress](https://community.instructure.com/en/kb/articles/660912-how-do-i-use-modules-to-view-the-progress-of-students-in-a-course)
+
+- **Moodle define conclusão por atividade a partir de critérios explícitos.** Os critérios podem incluir visualizar, atingir uma nota ou marcar a atividade como concluída; a pessoa estudante também pode consultar uma lista “To do” com o que falta para completar aquele item. [MoodleDocs 5.2: Activity completion, revisado em 18/06/2026](https://docs.moodle.org/502/en/Activity_completion)
+- **O índice de Curso do Moodle usa marcadores claros de conclusão.** A documentação informa que os indicadores do Course index distinguem atividades que ainda precisam ser concluídas das que já estão completas; as completas aparecem com um círculo verde. Isso valida a ideia de um sinal breve e consistente na lista, não a cópia literal da cor ou do desenho. [MoodleDocs 5.2: Using Activity completion, revisado em 19/06/2026](https://docs.moodle.org/502/en/Using_Activity_completion)
+
+- **Teachable expõe progresso geral, estado de aula e bloqueio como informações diferentes.** A barra do curso mostra percentual; a lista apresenta seções e aulas; “Start next lecture” busca a próxima aula não concluída, enquanto outra aula pode ser aberta diretamente. A conclusão ocorre por uma ação própria, passa a ter marca de concluída e aumenta o percentual; aulas concluídas continuam acessíveis para revisão. Quando há ordem sequencial, a interface identifica aulas/seções bloqueadas e elas são liberadas após os requisitos. [Teachable: Navigate and View Course Content](https://support.teachable.com/en/articles/11682425-navigate-and-view-course-content)
+
+- **WCAG proíbe transmitir informação somente por cor.** A distinção precisa de outra indicação visual, como texto ou forma; fornecer informação apenas à tecnologia assistiva não substitui uma alternativa visual para pessoas que não distinguem cores. [W3C WAI: WCAG 2.2, critério 1.4.1 Use of Color](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color)
+
+- **WAI-ARIA dá semântica para estado atual e estado desabilitado, não para “concluído”.** `aria-current` identifica o item atual de uma coleção ou sequência e deve ser aplicado a apenas um item atual por conjunto. `aria-disabled` comunica que um elemento é perceptível, mas não operável; a especificação também recomenda uma aparência visual que indique o estado. Em links, o atributo sozinho não impede a ativação: a implementação precisa realmente bloquear a ação. [WAI-ARIA 1.2: `aria-current`](https://www.w3.org/TR/wai-aria-1.2/#aria-current) · [WAI-ARIA 1.2: `aria-disabled`](https://www.w3.org/TR/wai-aria-1.2/#aria-disabled)
+
+## Inferências e aplicação ao Hub
+
+O contrato vigente do Hub calcula o progresso do Curso sobre Aulas obrigatórias ativas; Aulas opcionais não entram no denominador. A projeção do overview de Curso também informa progresso por Módulo, mas a rota de Aula usa `ModuleWithLessons`, que hoje não inclui `isRequired` nem contagens obrigatórias. Portanto, o sidebar não pode indicar corretamente conclusão de Módulo apenas com a projeção atual; essa informação deve vir do servidor, calculada sobre o conjunto curricular completo antes de qualquer filtro visual. A sequência depende de Aulas obrigatórias anteriores pendentes, e a disponibilidade temporal do Módulo é avaliada antes da sequência. A conclusão do Curso é um registro histórico separado do percentual corrente. Aulas bloqueadas aparecem sem link e sem foco. [Guia de domínio: Conteúdo, aprendizagem e progresso](../docs/domain/learning-content-and-progress.md) · [ADR-0011: sequência com Aulas opcionais não bloqueadoras](../docs/adr/0011-optional-lesson-progression.md) · [ADR-0010: liberação temporal relativa por Módulo](../docs/adr/0010-relative-module-content-release.md)
+
+Disso decorrem as recomendações funcionais abaixo:
+
+1. **Manter dimensões independentes.** “Obrigatória/Opcional” descreve o papel curricular; “Pendente/Concluída” descreve o progresso salvo; “Em andamento” descreve a Aula aberta; “Bloqueada” descreve disponibilidade. Uma Aula pode estar ativa e ainda pendente. Uma Aula concluída pode continuar acessível para revisão. Não usar “concluída” como sinônimo de “atual” ou “desbloqueada”.
+
+2. **Tornar o denominador explícito.** Se o progresso do Curso for resumido em número ou percentual, comunicar que se refere às Aulas obrigatórias ativas, por exemplo “4 de 9 obrigatórias”. Um contador de todas as Aulas ou um indicador de Módulo não substitui essa regra. A conclusão histórica do Curso deve continuar identificável como histórica, pois a publicação de uma nova Aula obrigatória pode reduzir o percentual corrente sem apagar a conclusão já registrada.
+
+3. **Tratar progresso de Módulo como resumo, salvo regra explícita de acesso.** O Hub expõe progresso por Módulo, mas sua regra de sequência é baseada em Aulas obrigatórias anteriores; o atraso temporal também é configurado por Módulo. Portanto, um percentual local de Módulo não deve, por si só, ser apresentado como a condição que libera o seguinte. Mostrar o motivo de bloqueio que o servidor efetivamente aplicou.
+
+4. **Explicar bloqueios com causa e próximo passo.** Distinguir liberação futura (com data ou prazo, quando disponível) de pré-requisito pedagógico pendente (identificar a Aula obrigatória). Como o contrato do Hub já prevê item bloqueado estático, sem link nem foco, apresentar o rótulo e a explicação em texto junto ao título; `aria-disabled` só é pertinente se o componente continuar sendo uma ação interativa que precisa ser exposta como desabilitada. Não anunciar um requisito de assistir ao vídeo para concluir: no Hub, a conclusão manual continua disponível, e a conclusão automática do vídeo segue uma regra própria de reprodução validada. [ADR-0012: progresso linear validado em vídeo](../docs/adr/0012-linear-validated-video-progress.md)
+
+5. **Marcar a Aula atual sem confundi-la com progresso.** Na navegação, usar `aria-current="page"` para a Aula aberta e um sinal visível além da cor, como o texto “Em andamento” ou um marcador de forma/borda. Aplicar apenas a um item atual do conjunto. Para conclusão, usar um sinal visual e textual como “Concluída”; não reaproveitar `aria-current` nem `aria-disabled` para esse significado. O estado deve continuar claro em escala de cinza e na leitura assistiva. [W3C WAI: Use of Color](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color) · [WAI-ARIA 1.2](https://www.w3.org/TR/wai-aria-1.2/)
+
+6. **Oferecer retomada sem retirar navegação permitida.** Uma ação “Continuar” pode levar à primeira Aula pendente disponível na ordem do Curso; a lista deve continuar permitindo abrir qualquer Aula que o contrato atual torna acessível, inclusive Aulas concluídas e opcionais liberadas. Isso aproveita o padrão de retomada encontrado nas plataformas sem importar políticas de sequência que o Hub não adotou.
+
+## Limite da pesquisa
+
+A busca direcionada na documentação oficial do Coursera não localizou, nesta rodada, uma página suficientemente específica sobre navegação de aulas, critérios de conclusão e bloqueio. Não foram usadas fontes secundárias nem feitas afirmações sobre o contrato do Coursera.

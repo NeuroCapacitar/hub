@@ -125,6 +125,7 @@ export interface FaqItem {
 
 export interface ModuleWithLessons {
   availableAt: Date | null;
+  completedRequiredLessonCount: number;
   id: string;
   lessons: Array<{
     id: string;
@@ -134,7 +135,9 @@ export interface ModuleWithLessons {
     isCompleted: boolean;
     isAvailable: boolean;
   }>;
+  pendingOptionalLessonCount: number;
   releaseState: "available" | "invalid" | "time_locked";
+  requiredLessonCount: number;
   sortOrder: number;
   title: string;
 }
@@ -232,6 +235,11 @@ export interface StudentLessonData {
   nextLessonId: string | null;
   previousLessonId: string | null;
   progressPercent: number;
+  requiredLessonProgress: {
+    completedCount: number;
+    percent: number;
+    totalCount: number;
+  };
 }
 
 export type StudentLessonWorkspaceResult =
@@ -346,6 +354,20 @@ const COMPATIBLE_LESSON_WATCH_PROGRESS_JOIN = `
       ) lwp on true
 `;
 
+const getCourseScopedLessonCompletionJoin = (
+  userIdReference: "e.user_id" | "$1"
+): string => `
+      left join lateral (
+        select min(lp.completed_at) as completed_at
+        from lesson_progress lp
+        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
+        join modules completed_module on completed_module.id = completed_lesson.module_id
+        where lp.user_id = ${userIdReference}
+          and completed_module.course_id = c.id
+          and completed_lesson.curriculum_key = l.curriculum_key
+      ) lp on true
+`;
+
 type StudentCourseModuleAggregate = StudentCourseModule & {
   completedLessonIds: string[];
   lessonIds: string[];
@@ -457,12 +479,24 @@ const mapModules = (rows: LessonRow[]): ModuleWithLessons[] => {
     const existingModule = modules.get(row.module_id);
     const moduleData = existingModule ?? {
       availableAt: null,
+      completedRequiredLessonCount: 0,
       id: row.module_id,
+      pendingOptionalLessonCount: 0,
       releaseState: "available" as const,
+      requiredLessonCount: 0,
       title: row.module_title,
       sortOrder: row.module_sort_order,
       lessons: [],
     };
+
+    if (row.is_required !== false) {
+      moduleData.requiredLessonCount += 1;
+      if (row.completed_at) {
+        moduleData.completedRequiredLessonCount += 1;
+      }
+    } else if (!row.completed_at) {
+      moduleData.pendingOptionalLessonCount += 1;
+    }
 
     moduleData.lessons.push({
       id: row.lesson_id,
@@ -529,13 +563,7 @@ export const getStudentCourses = async (
       left join lessons l on l.module_id = m.id
         and l.course_publication_id = cp.id
         and l.status = 'active'
-      left join lateral (
-        select min(lp.completed_at) as completed_at
-        from lesson_progress lp
-        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
-        where lp.user_id = e.user_id
-          and completed_lesson.curriculum_key = l.curriculum_key
-      ) lp on true
+      ${getCourseScopedLessonCompletionJoin("e.user_id")}
       where e.user_id = $1
         and e.status = 'active'
         and e.starts_at <= now()
@@ -844,13 +872,7 @@ export const getStudentCourseCatalog = async (
       left join lessons l on l.module_id = m.id
         and l.course_publication_id = cv.id
         and l.status = 'active'
-      left join lateral (
-        select min(lp.completed_at) as completed_at
-        from lesson_progress lp
-        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
-        where lp.user_id = $1
-          and completed_lesson.curriculum_key = l.curriculum_key
-      ) lp on true
+      ${getCourseScopedLessonCompletionJoin("$1")}
       where c.catalog_visibility = 'listed'
          or (
            c.status = 'active'
@@ -1460,13 +1482,7 @@ const getEnrolledCourseOverview = async ({
       left join lessons l on l.module_id = m.id
         and l.course_publication_id = cp.id
         and l.status = 'active'
-      left join lateral (
-        select min(lp.completed_at) as completed_at
-        from lesson_progress lp
-        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
-        where lp.user_id = e.user_id
-          and completed_lesson.curriculum_key = l.curriculum_key
-      ) lp on true
+      ${getCourseScopedLessonCompletionJoin("e.user_id")}
       ${COMPATIBLE_LESSON_WATCH_PROGRESS_JOIN}
       where e.user_id = $1
         and c.id = $2
@@ -1939,13 +1955,7 @@ const getEnrolledLessonWorkspace = async ({
       join lessons l on l.module_id = m.id
         and l.course_publication_id = cp.id
         and l.status = 'active'
-      left join lateral (
-        select min(lp.completed_at) as completed_at
-        from lesson_progress lp
-        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
-        where lp.user_id = e.user_id
-          and completed_lesson.curriculum_key = l.curriculum_key
-      ) lp on true
+      ${getCourseScopedLessonCompletionJoin("e.user_id")}
       ${COMPATIBLE_LESSON_WATCH_PROGRESS_JOIN}
       where e.status = 'active'
         and e.starts_at <= now()
@@ -2039,6 +2049,7 @@ const getEnrolledLessonWorkspace = async ({
       },
       modules: visibleModules,
       progressPercent: progress.percent,
+      requiredLessonProgress: progress,
       nextLessonId: visibleLessonIds[lessonIndex + 1] ?? null,
       previousLessonId: visibleLessonIds[lessonIndex - 1] ?? null,
     },
@@ -2113,7 +2124,15 @@ const getPreviewLessonWorkspace = async ({
   }
 
   const lessonIds = rows.map((row) => row.lesson_id);
+  const requiredLessonIds = rows
+    .filter((row) => row.is_required !== false)
+    .map((row) => row.lesson_id);
   const lessonIndex = lessonIds.indexOf(lessonId);
+  const requiredLessonProgress = calculateCourseProgress({
+    completedLessonIds: [],
+    lessonIds,
+    requiredLessonIds,
+  });
   const video = await resolveStudentLessonVideo(activeLesson);
 
   return {
@@ -2151,6 +2170,7 @@ const getPreviewLessonWorkspace = async ({
         })),
       })),
       progressPercent: 0,
+      requiredLessonProgress,
       nextLessonId: lessonIds[lessonIndex + 1] ?? null,
       previousLessonId: lessonIds[lessonIndex - 1] ?? null,
     },
@@ -2288,13 +2308,7 @@ const completeLessonInTransaction = async ({
       join lessons l on l.module_id = m.id
         and l.course_publication_id = cp.id
         and l.status = 'active'
-      left join lateral (
-        select min(lp.completed_at) as completed_at
-        from lesson_progress lp
-        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
-        where lp.user_id = e.user_id
-          and completed_lesson.curriculum_key = l.curriculum_key
-      ) lp on true
+      ${getCourseScopedLessonCompletionJoin("e.user_id")}
       left join certificates cert on cert.user_id = e.user_id
         and cert.course_id = c.id
       where c.id = $2
