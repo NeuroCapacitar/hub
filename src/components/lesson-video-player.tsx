@@ -9,6 +9,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import { toast } from "sonner";
 import {
   recordLessonWatchProgressAction,
   startLessonWatchSessionAction,
@@ -29,11 +30,39 @@ const SYNC_MESSAGE = JSON.stringify({ public_event: "jmvplayer-sync" });
 const SYNC_INTERVAL_MS = 1500;
 const WATCH_PROGRESS_INTERVAL_MS = 10_000;
 const WATCH_PROGRESS_PERCENT_STEP = 5;
+const LINEAR_PROGRESS_SKIP_TOAST_DURATION_MS = 7000;
+
+const showBlockedLinearProgressToast = (lessonId: string): void => {
+  toast.info(
+    "Para concluir automaticamente, volte ao começo do trecho pulado e reproduza dali.",
+    {
+      duration: LINEAR_PROGRESS_SKIP_TOAST_DURATION_MS,
+      id: `lesson-video-linear-progress-${lessonId}`,
+    }
+  );
+};
+
+const showBlockedLinearProgressToastForSkip = ({
+  eventName,
+  isBlocked,
+  isForwardSkip,
+  lessonId,
+}: {
+  eventName: JmvstreamPlayerEvent["eventName"];
+  isBlocked: boolean;
+  isForwardSkip: boolean;
+  lessonId: string;
+}): void => {
+  if (eventName !== "jmvplayerout-skip" || !isBlocked || !isForwardSkip) {
+    return;
+  }
+
+  showBlockedLinearProgressToast(lessonId);
+};
 
 export function LessonVideoPlayer({
   children,
   durationSeconds,
-  initialLinearProgressBlocked = false,
   initialPositionSeconds,
   initialWatchedPercent,
   isPreview,
@@ -45,7 +74,6 @@ export function LessonVideoPlayer({
 }: {
   children: React.ReactNode;
   durationSeconds: number;
-  initialLinearProgressBlocked?: boolean;
   initialPositionSeconds: number;
   initialWatchedPercent: number;
   isPreview: boolean;
@@ -73,9 +101,6 @@ export function LessonVideoPlayer({
   const [displayDurationSeconds, setDisplayDurationSeconds] =
     useState(durationSeconds);
   const [progressSaveError, setProgressSaveError] = useState(false);
-  const [linearProgressBlocked, setLinearProgressBlocked] = useState(
-    initialLinearProgressBlocked
-  );
   const [watchedPercent, setWatchedPercent] = useState(initialWatchedPercent);
   const automaticCompletionUnavailable =
     videoProvider === "jmvstream" && videoDurationSeconds <= 0;
@@ -141,7 +166,11 @@ export function LessonVideoPlayer({
   );
 
   const handlePlayerEvent = useCallback(
-    (playerEvent: JmvstreamPlayerEvent, forceSync = false) => {
+    (
+      playerEvent: JmvstreamPlayerEvent,
+      forceSync = false,
+      isForwardSkip = false
+    ) => {
       const now = Date.now();
       if (isPreview) {
         setWatchedPercent((currentPercent) =>
@@ -187,12 +216,18 @@ export function LessonVideoPlayer({
             trackingSessionId,
           });
 
-          setLinearProgressBlocked(result.linearProgressBlocked);
           if (!result.trackingSessionActive) {
             isTrackingSessionInactiveRef.current = true;
             setProgressSaveError(false);
             return;
           }
+
+          showBlockedLinearProgressToastForSkip({
+            eventName: playerEvent.eventName,
+            isBlocked: result.linearProgressBlocked,
+            isForwardSkip,
+            lessonId,
+          });
 
           setWatchedPercent((currentPercent) =>
             Math.max(currentPercent, result.watchedPercent)
@@ -254,10 +289,13 @@ export function LessonVideoPlayer({
           return;
         }
 
+        if (session.isLinearProgressBlocked) {
+          showBlockedLinearProgressToast(lessonId);
+        }
+
         resumePositionSecondsRef.current = session.resumePositionSeconds;
         trackingSessionIdRef.current = session.trackingSessionId;
         eventSequenceRef.current = 0;
-        setLinearProgressBlocked(session.isLinearProgressBlocked);
         setWatchedPercent((currentPercent) =>
           Math.max(currentPercent, session.watchedPercent)
         );
@@ -346,6 +384,13 @@ export function LessonVideoPlayer({
       }
 
       if (playerEvent) {
+        const previousPositionSeconds =
+          latestPlayerEventRef.current?.currentSeconds ??
+          resumePositionSecondsRef.current;
+        const isForwardSkip =
+          playerEvent.eventName === "jmvplayerout-skip" &&
+          playerEvent.currentSeconds > previousPositionSeconds;
+
         latestPlayerEventRef.current = playerEvent;
         restorePlayerPosition();
         if (isRestoringPositionRef.current) {
@@ -353,7 +398,7 @@ export function LessonVideoPlayer({
           return;
         }
 
-        handlePlayerEvent(playerEvent);
+        handlePlayerEvent(playerEvent, false, isForwardSkip);
       }
     };
 
@@ -394,13 +439,6 @@ export function LessonVideoPlayer({
           ? "Não foi possível salvar o progresso agora. Continuaremos tentando enquanto você assiste."
           : ""}
       </p>
-
-      {linearProgressBlocked ? (
-        <p className="mx-auto w-full max-w-5xl px-5 pb-3 text-muted-foreground text-sm sm:px-8 lg:px-0">
-          Para concluir automaticamente, volte ao início e reproduza o trecho
-          sem avançar. Você também pode concluir a aula manualmente.
-        </p>
-      ) : null}
 
       {automaticCompletionUnavailable ? (
         <p className="mx-auto w-full max-w-5xl px-5 pb-3 text-muted-foreground text-sm sm:px-8 lg:px-0">

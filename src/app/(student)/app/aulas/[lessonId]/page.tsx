@@ -314,9 +314,6 @@ function LessonMainContent({
       <div className="flex flex-col">
         <LessonVideoPlayer
           durationSeconds={data.lesson.durationSeconds}
-          initialLinearProgressBlocked={
-            data.lesson.watchProgress?.isLinearProgressBlocked ?? false
-          }
           initialPositionSeconds={
             data.lesson.watchProgress?.resumePositionSeconds ?? 0
           }
