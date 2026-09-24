@@ -12,6 +12,14 @@ describe("getPanelPageTitle", () => {
     expect(getPanelPageTitle("/app/aulas/lesson-1")).toBe("Aula");
   });
 
+  it("uses Ajuda as the canonical student support page title", () => {
+    expect(getPanelRouteMeta("/app/ajuda")).toEqual({
+      ancestors: [],
+      title: "Ajuda",
+      visibleHeading: true,
+    });
+  });
+
   it("provides short ancestors for nested routes", () => {
     expect(getPanelRouteMeta("/admin/cursos/course-1/aulas/lesson-1")).toEqual({
       ancestors: [
@@ -34,9 +42,7 @@ describe("getPanelPageTitle", () => {
   it("keeps dashboards compact while preparing headings for content pages", () => {
     expect(getPanelRouteMeta("/admin").visibleHeading).toBe(false);
     expect(getPanelRouteMeta("/app").visibleHeading).toBe(false);
-    expect(getPanelRouteMeta("/app/perguntas-frequentes").visibleHeading).toBe(
-      true
-    );
+    expect(getPanelRouteMeta("/app/ajuda").visibleHeading).toBe(true);
     expect(getPanelRouteMeta("/admin/cursos/course-1").visibleHeading).toBe(
       true
     );

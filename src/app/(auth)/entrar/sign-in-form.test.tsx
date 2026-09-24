@@ -136,4 +136,40 @@ describe("SignInForm", () => {
     );
     expect(dependencies.assign).toHaveBeenCalledWith(COURSE_RETURN_TO);
   });
+
+  it("offers the configured support email when access is blocked", async () => {
+    dependencies.fetch.mockReset();
+    dependencies.fetch.mockResolvedValueOnce(
+      jsonResponse({ user: { id: "student-1" } })
+    );
+    dependencies.fetch.mockResolvedValueOnce(
+      new Response(null, { status: 403 })
+    );
+    dependencies.fetch.mockResolvedValueOnce(
+      new Response(null, { status: 200 })
+    );
+
+    act(() =>
+      root.render(
+        <SignInForm
+          returnTo={COURSE_RETURN_TO}
+          supportEmail="support@example.test"
+        />
+      )
+    );
+    fillCredentials(container);
+
+    await act(async () => {
+      getForm(container).requestSubmit();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const supportLink =
+      container.querySelector<HTMLAnchorElement>('a[href^="mailto:"]');
+    expect(supportLink?.getAttribute("href")).toContain(
+      "mailto:support@example.test"
+    );
+    expect(supportLink?.textContent).toContain("support@example.test");
+  });
 });

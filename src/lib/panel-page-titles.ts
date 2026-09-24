@@ -26,7 +26,7 @@ const PAGE_TITLES: Readonly<Record<string, string>> = {
   "/app/certificados": "Seus certificados",
   "/app/checkout/sucesso": "Seu acesso está sendo liberado",
   "/app/configuracoes": "Configurações",
-  "/app/perguntas-frequentes": "Perguntas frequentes",
+  "/app/ajuda": "Ajuda",
 };
 
 const TRAILING_SLASHES = /\/+$/;

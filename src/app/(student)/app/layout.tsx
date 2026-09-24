@@ -8,7 +8,6 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { redirect } from "next/navigation";
 import { PanelLayout } from "@/components/panel-layout";
-import { SupportSidebarItem } from "@/components/support-sidebar-item";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -136,19 +135,15 @@ function StudentNav({
         <SidebarGroupLabel>Suporte</SidebarGroupLabel>
         <SidebarGroupContent>
           <SidebarMenu>
-            <SupportSidebarItem />
             <SidebarMenuItem>
-              <SidebarMenuLink
-                href={route("/app/perguntas-frequentes")}
-                tooltip="Perguntas frequentes"
-              >
+              <SidebarMenuLink href={route("/app/ajuda")} tooltip="Ajuda">
                 <HugeiconsIcon
                   aria-hidden="true"
                   icon={HelpCircleIcon}
                   size={18}
                   strokeWidth={1.5}
                 />
-                <span>Perguntas frequentes</span>
+                <span>Ajuda</span>
               </SidebarMenuLink>
             </SidebarMenuItem>
           </SidebarMenu>

@@ -59,6 +59,8 @@ export interface AdminMutationFormProps {
   getFieldErrors?: ((error: unknown) => Record<string, string>) | undefined;
   id?: string;
   onSuccess?: (() => void | Promise<void>) | undefined;
+  pendingMessage?: string;
+  successMessage?: string;
 }
 
 const AdminMutationPendingContext = createContext(false);
@@ -94,6 +96,8 @@ export function AdminMutationForm({
   getFieldErrors,
   id,
   onSuccess,
+  pendingMessage = "Salvando…",
+  successMessage = "Salvo com sucesso!",
 }: AdminMutationFormProps): React.JSX.Element {
   const closeRef = useRef<HTMLButtonElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,14 +115,14 @@ export function AdminMutationForm({
     setFieldErrors({});
     setIsPending(true);
 
-    const toastId = toast.loading("Salvando…");
+    const toastId = toast.loading(pendingMessage);
 
     try {
       await action(formData);
       await onSuccess?.();
       discardDialog?.setDirty(false);
       setFieldErrors({});
-      toast.success("Salvo com sucesso!", { id: toastId });
+      toast.success(successMessage, { id: toastId });
       if (closeOnSuccess) {
         closeRef.current?.click();
       }
