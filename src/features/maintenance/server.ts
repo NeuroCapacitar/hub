@@ -1,9 +1,11 @@
 import { getPool } from "@/db";
+import { reconcileDashboardBannerStorage } from "@/features/admin/banner-storage-reconciliation";
 import { reconcileAuthMediaStorage } from "@/features/auth-media/storage";
 import { reconcileRevokedCertificateArtifacts } from "@/features/certificates/artifact-reconciliation";
 import { reconcileCertificateTemplateAssets } from "@/features/certificates/template-asset-cleanup";
 import { pruneEmailDeliveryRecords } from "@/features/email-delivery/server";
 import { sanitizeExpiredAsaasWebhookPayloads } from "@/features/payments/asaas-webhook-inbox";
+import { reconcileCourseCoverStorage } from "@/features/storage/course-cover-reconciliation";
 import { reconcileExpiredLessonResourceUploads } from "@/features/storage/lesson-resource-upload-cleanup";
 import { reconcileStagedAdminImageUploads } from "@/features/storage/staged-image-reconciliation";
 import {
@@ -16,6 +18,8 @@ interface MaintenanceResult {
   authMediaObjectsReconciled: number;
   certificateTemplateAssetsRemoved: number;
   checkoutReservationsRemoved: number;
+  courseCoverObjectsReconciled: number;
+  dashboardBannerObjectsReconciled: number;
   deadlineReached: boolean;
   emailDeliveryEventsRemoved: number;
   emailDeliveryMessagesRemoved: number;
@@ -35,6 +39,8 @@ const emptyMaintenanceResult = (): MaintenanceResult => ({
   authMediaObjectsReconciled: 0,
   certificateTemplateAssetsRemoved: 0,
   checkoutReservationsRemoved: 0,
+  courseCoverObjectsReconciled: 0,
+  dashboardBannerObjectsReconciled: 0,
   deadlineReached: false,
   expiredRateLimitsRemoved: 0,
   expiredSessionsRemoved: 0,
@@ -223,6 +229,19 @@ export const runMaintenance = async ({
     return result;
   }
   result.authMediaObjectsReconciled = await reconcileAuthMediaStorage({
+    shouldContinue: canContinue,
+  });
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  result.dashboardBannerObjectsReconciled =
+    await reconcileDashboardBannerStorage({ shouldContinue: canContinue });
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  result.courseCoverObjectsReconciled = await reconcileCourseCoverStorage({
     shouldContinue: canContinue,
   });
 

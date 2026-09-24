@@ -43,4 +43,27 @@ describe("GET /api/banners/[bannerId]/image", () => {
     expect(dependencies.query).not.toHaveBeenCalled();
     expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();
   });
+
+  it("uses private browser cache for the signed admin preview", async () => {
+    dependencies.requirePermission.mockResolvedValue(undefined);
+    dependencies.query.mockResolvedValue({
+      rows: [{ image_url: "banners/banner-1.webp" }],
+    });
+    dependencies.createR2ObjectReadUrl.mockResolvedValue(
+      "https://private.example.test/signed"
+    );
+
+    const response = await GET(
+      new Request("https://hub.example.test/api/banners/banner-1/image"),
+      { params: Promise.resolve({ bannerId: "banner-1" }) }
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("cache-control")).toBe("private, max-age=240");
+    expect(response.headers.get("vary")).toBe("Cookie");
+    expect(dependencies.createR2ObjectReadUrl).toHaveBeenCalledWith({
+      key: "banners/banner-1.webp",
+      responseCacheControl: "private, max-age=240",
+    });
+  });
 });

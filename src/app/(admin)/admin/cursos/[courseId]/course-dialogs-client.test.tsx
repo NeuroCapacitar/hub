@@ -9,6 +9,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const saveCourseActionMock = vi.hoisted(() => vi.fn());
 
+vi.mock("@/components/course-cover-upload-field", async () => {
+  const React = await import("react");
+  return {
+    CourseCoverUploadField: ({
+      className,
+      onUploadingChange,
+    }: {
+      className?: string;
+      onUploadingChange?: (isUploading: boolean) => void;
+    }) =>
+      React.createElement(
+        "div",
+        { className },
+        React.createElement(
+          "button",
+          {
+            onClick: () => onUploadingChange?.(true),
+            type: "button",
+          },
+          "Enviar capa"
+        )
+      ),
+  };
+});
+
 vi.mock("@/features/admin/actions", () => ({
   saveCourseAction: saveCourseActionMock,
 }));
@@ -368,6 +393,17 @@ describe("course payment settings", () => {
     expect(options.at(8)?.textContent).toBe("9x");
     expect(options.at(8)?.getAttribute("data-disabled")).toBeNull();
     expect(options.at(9)?.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("blocks settings save while the course cover is still uploading", async () => {
+    renderCourseSettingsForm();
+    act(() => findButton("Enviar capa").click());
+
+    expect(findButton("Salvar configurações").disabled).toBe(true);
+
+    await submitSettingsForm();
+
+    expect(saveCourseActionMock).not.toHaveBeenCalled();
   });
 
   it("saves an equivalent price without opening confirmation", async () => {

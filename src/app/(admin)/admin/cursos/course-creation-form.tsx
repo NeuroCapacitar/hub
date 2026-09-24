@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { DialogBody, DialogClose, DialogFooter } from "@/components/ui/dialog";
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -124,12 +123,10 @@ function FieldHelp({
 
 function CourseCreationFields({
   aggregateId,
-  isCoverUploading,
   priceFieldId,
   onCoverUploadingChange,
 }: {
   aggregateId: string;
-  isCoverUploading: boolean;
   onCoverUploadingChange: (isUploading: boolean) => void;
   priceFieldId: string;
 }): React.JSX.Element {
@@ -170,7 +167,7 @@ function CourseCreationFields({
             <FieldTitle className="items-center">
               <span>Capa do curso</span>
               <FieldHelp label="Ajuda sobre a capa do curso">
-                Opcional. Envie PNG, JPG ou WebP de até 4 MB e ajuste o
+                Opcional. Envie PNG, JPG ou WebP de até 4 MiB e ajuste o
                 enquadramento em 16:9.
               </FieldHelp>
             </FieldTitle>
@@ -179,11 +176,6 @@ function CourseCreationFields({
               className="mx-auto max-w-[224px] md:mx-0 md:w-[224px]"
               onUploadingChange={onCoverUploadingChange}
             />
-            {isCoverUploading ? (
-              <FieldDescription aria-live="polite" role="status">
-                Enviando a capa…
-              </FieldDescription>
-            ) : null}
           </Field>
 
           <div className="grid min-w-0 gap-5">
@@ -292,7 +284,6 @@ export function CourseCreationForm({
           <FieldGroup className="gap-6">
             <CourseCreationFields
               aggregateId={aggregateId}
-              isCoverUploading={isCoverUploading}
               onCoverUploadingChange={setIsCoverUploading}
               priceFieldId={priceFieldId}
             />

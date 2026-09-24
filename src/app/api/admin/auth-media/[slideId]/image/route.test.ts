@@ -50,5 +50,11 @@ describe("GET /api/admin/auth-media/[slideId]/image", () => {
     expect(response.headers.get("location")).toBe(
       "https://private.example.test/signed"
     );
+    expect(response.headers.get("cache-control")).toBe("private, max-age=240");
+    expect(response.headers.get("vary")).toBe("Cookie");
+    expect(dependencies.createR2ObjectReadUrl).toHaveBeenCalledWith({
+      key: expect.stringContaining("auth-media/"),
+      responseCacheControl: "private, max-age=240",
+    });
   });
 });

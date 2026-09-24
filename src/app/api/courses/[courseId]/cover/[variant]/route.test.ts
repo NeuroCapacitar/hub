@@ -81,6 +81,7 @@ describe("course cover delivery", () => {
     expect(response.headers.get("location")).toBe(
       "https://media.example/card.webp"
     );
+    expect(response.headers.get("cache-control")).toBe("public, max-age=3600");
     expect(dependencies.requirePermission).not.toHaveBeenCalled();
   });
 
@@ -94,6 +95,12 @@ describe("course cover delivery", () => {
     expect(response.headers.get("location")).toBe(
       "https://private.example/card.webp"
     );
+    expect(response.headers.get("cache-control")).toBe("private, max-age=240");
+    expect(response.headers.get("vary")).toBe("Cookie");
+    expect(dependencies.createR2ObjectReadUrl).toHaveBeenCalledWith({
+      key: "courses/course-1/cover/card.webp",
+      responseCacheControl: "private, max-age=240",
+    });
     expect(dependencies.requirePermission).toHaveBeenCalledWith(
       "manageCourseDetails"
     );

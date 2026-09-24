@@ -27,6 +27,7 @@ import {
   parseAuthoringUuidList,
   readAuthoringUuid,
 } from "@/features/admin/authoring-input";
+import { persistDashboardBannerObjects } from "@/features/admin/banner-storage-lifecycle";
 import type { CertificateTemplateActionState } from "@/features/admin/certificate-template-action-state";
 import {
   getExpectedCertificateTemplateActionMessage,
@@ -68,12 +69,7 @@ import {
   retryJmvstreamAssetDelete,
   syncJmvstreamLessonPlayer,
 } from "@/features/jmvstream/server";
-import {
-  deletePublicR2Objects,
-  deleteR2Objects,
-  publishR2Object,
-  uploadDashboardBannerFile,
-} from "@/features/storage/r2";
+import { uploadDashboardBannerFile } from "@/features/storage/r2";
 import {
   parseStagedAdminImageReference,
   type StagedAdminImageReference,
@@ -1636,33 +1632,6 @@ const assertBannerLink = ({
   }
 };
 
-const synchronizeBannerObjects = async ({
-  isActive,
-  nextImageKey,
-  previousImageKey,
-}: {
-  isActive: boolean;
-  nextImageKey: string | null;
-  previousImageKey: string | null;
-}): Promise<void> => {
-  if (!nextImageKey) {
-    throw new Error("Imagem do banner indisponível.");
-  }
-
-  if (isActive) {
-    await publishR2Object(nextImageKey);
-  } else {
-    await deletePublicR2Objects([nextImageKey]);
-  }
-
-  if (previousImageKey && previousImageKey !== nextImageKey) {
-    await Promise.all([
-      deleteR2Objects([previousImageKey]),
-      deletePublicR2Objects([previousImageKey]),
-    ]);
-  }
-};
-
 const parseOptionalStagedImageUpload = (
   value: string
 ): StagedAdminImageReference | null => {
@@ -1709,8 +1678,13 @@ const persistDashboardBanner = async ({
   let bannerId = existingBannerId || newBannerId;
   let previousBlurDataUrl: string | null = null;
   let previousImageKey: string | null = null;
+  let previousIsActive = false;
+  let previousButtonText: string | null = null;
+  let previousLinkUrl: string | null = null;
+  let previousSortOrder: number | null = null;
   let nextBlurDataUrl: string | null = null;
   let nextImageKey: string | null = null;
+  let nextSortOrder: number | null = null;
   let auditBefore: Record<string, AuditMetadataValue> = {};
   let auditAfter: Record<string, AuditMetadataValue> = {};
   let auditTargetLabelBefore: string | null = null;
@@ -1729,7 +1703,11 @@ const persistDashboardBanner = async ({
     );
     const previousBanner = previous.rows[0];
     previousImageKey = previousBanner?.image_url ?? null;
+    previousIsActive = previousBanner?.is_active ?? false;
     previousBlurDataUrl = previousBanner?.blur_data_url ?? null;
+    previousButtonText = previousBanner?.button_text ?? null;
+    previousLinkUrl = previousBanner?.link_url ?? null;
+    previousSortOrder = previousBanner?.sort_order ?? null;
 
     if (!previousImageKey) {
       throw new Error("Banner inválido.");
@@ -1750,24 +1728,9 @@ const persistDashboardBanner = async ({
       });
       nextImageKey = uploadedBanner.key;
       nextBlurDataUrl = uploadedBanner.blurDataUrl;
-      await pool.query(
-        "update dashboard_banners set image_url = $1, blur_data_url = $2, link_url = $3, button_text = $4, is_active = $5, updated_at = now() where id = $6",
-        [
-          nextImageKey,
-          nextBlurDataUrl,
-          linkUrl,
-          buttonText,
-          isActive,
-          existingBannerId,
-        ]
-      );
     } else {
       nextImageKey = previousImageKey;
       nextBlurDataUrl = previousBlurDataUrl;
-      await pool.query(
-        "update dashboard_banners set link_url = $1, button_text = $2, is_active = $3, updated_at = now() where id = $4",
-        [linkUrl, buttonText, isActive, existingBannerId]
-      );
     }
     auditAfter = {
       buttonText,
@@ -1796,25 +1759,7 @@ const persistDashboardBanner = async ({
     const maxSortRes = await pool.query(
       "select coalesce(max(sort_order), 0) as max_sort from dashboard_banners"
     );
-    const nextSortOrder = Number(maxSortRes.rows[0].max_sort) + 1;
-
-    const insertRes = await pool.query(
-      `
-        insert into dashboard_banners (id, image_url, blur_data_url, link_url, button_text, is_active, sort_order)
-        values ($1, $2, $3, $4, $5, $6, $7)
-        returning id
-      `,
-      [
-        newBannerId,
-        nextImageKey,
-        nextBlurDataUrl,
-        linkUrl,
-        buttonText,
-        isActive,
-        nextSortOrder,
-      ]
-    );
-    bannerId = insertRes.rows[0].id;
+    nextSortOrder = Number(maxSortRes.rows[0].max_sort) + 1;
     auditBefore = {
       buttonText: null,
       isActive: null,
@@ -1829,10 +1774,61 @@ const persistDashboardBanner = async ({
     };
   }
 
-  await synchronizeBannerObjects({
+  if (!nextImageKey) {
+    throw new Error("Imagem do banner indisponível.");
+  }
+
+  await persistDashboardBannerObjects({
     isActive,
+    newImageUploaded:
+      !existingBannerId || Boolean(imageFile && imageFile.size > 0),
     nextImageKey,
+    persist: async () => {
+      if (existingBannerId) {
+        const updatedBanner = await pool.query(
+          "update dashboard_banners set image_url = $1, blur_data_url = $2, link_url = $3, button_text = $4, is_active = $5, updated_at = now() where id = $6 and image_url = $7 and blur_data_url is not distinct from $8 and link_url is not distinct from $9 and button_text is not distinct from $10 and is_active = $11 and sort_order = $12",
+          [
+            nextImageKey,
+            nextBlurDataUrl,
+            linkUrl,
+            buttonText,
+            isActive,
+            existingBannerId,
+            previousImageKey,
+            previousBlurDataUrl,
+            previousLinkUrl,
+            previousButtonText,
+            previousIsActive,
+            previousSortOrder,
+          ]
+        );
+        if (updatedBanner.rowCount !== 1) {
+          return false;
+        }
+        return true;
+      }
+
+      const insertRes = await pool.query<{ id: string }>(
+        `
+          insert into dashboard_banners (id, image_url, blur_data_url, link_url, button_text, is_active, sort_order)
+          values ($1, $2, $3, $4, $5, $6, $7)
+          returning id
+        `,
+        [
+          newBannerId,
+          nextImageKey,
+          nextBlurDataUrl,
+          linkUrl,
+          buttonText,
+          isActive,
+          nextSortOrder,
+        ]
+      );
+      bannerId = insertRes.rows[0]?.id ?? newBannerId;
+      return true;
+    },
     previousImageKey,
+    previousIsActive,
   });
 
   await audit({
@@ -1916,10 +1912,7 @@ export const deleteBannerAction = async (formData: FormData): Promise<void> => {
   }
 
   await pool.query("delete from dashboard_banners where id = $1", [bannerId]);
-  await Promise.all([
-    deleteR2Objects([imageKey]),
-    deletePublicR2Objects([imageKey]),
-  ]);
+  // Keep the cache target during the grace window; daily reconciliation removes it.
   await audit({
     action: "banner.deleted",
     actorUserId: session.user.id,

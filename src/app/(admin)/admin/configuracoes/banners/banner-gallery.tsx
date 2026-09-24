@@ -9,21 +9,21 @@ import {
 import { AlertCircleIcon, CloudUploadIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   createSortableAccessibility,
   useSortableSensors,
 } from "@/components/sortable-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   ResourceDropzoneEmpty,
-  ResourceItemSkeleton,
   ResourceListBody,
   ResourceListContainer,
   ResourceListHeader,
 } from "@/components/ui/resource-list";
+import { UploadProgressStatus } from "@/components/ui/upload-progress-status";
 import {
   deleteBannerAction,
   reorderBannersAction,
@@ -33,9 +33,16 @@ import type { AdminBanner } from "@/features/admin/server";
 import { BannerCropDialog } from "@/features/banners/banner-crop-dialog";
 import {
   BANNER_ACCEPT,
+  MAX_BANNER_BYTES,
   validateBannerUploadRequest,
 } from "@/features/storage/banner-image";
 import { uploadStagedAdminImage } from "@/features/storage/staged-image-upload-client";
+import {
+  isUploadAbortedError,
+  type UploadStatusPhase,
+  type UploadTransferProgress,
+} from "@/features/storage/xhr-upload";
+import { createObjectUrlRegistry } from "@/lib/object-url-registry";
 import { cn } from "@/lib/utils";
 import { BannerEditModal } from "./banner-edit-modal";
 import { readBannerFileSelection } from "./banner-file-selection";
@@ -45,6 +52,114 @@ interface BannerGalleryProps {
   initialBanners: AdminBanner[];
   readOnly?: boolean;
 }
+
+interface UploadingBanner {
+  errorMessage?: string | undefined;
+  file: File;
+  id: string;
+  phase: UploadStatusPhase;
+  progress?: UploadTransferProgress | null | undefined;
+  retryable?: boolean | undefined;
+  status?: "error" | undefined;
+  targetBannerId?: string;
+}
+
+interface BannerUploadResult {
+  bannerId?: string;
+  error?: string;
+  uploadId?: string;
+}
+
+const getBannerUploadError = (
+  file: File,
+  currentCount: number,
+  maxCount: number
+): string | null => {
+  if (!file.type.startsWith("image/")) {
+    return "O arquivo deve ser uma imagem.";
+  }
+  try {
+    validateBannerUploadRequest({
+      contentType: file.type,
+      sizeBytes: file.size,
+    });
+  } catch (error) {
+    return error instanceof Error ? error.message : "Banner não permitido.";
+  }
+  return currentCount >= maxCount
+    ? `Limite de ${maxCount} banners atingido.`
+    : null;
+};
+
+const uploadAndSaveBanner = async ({
+  bannerId,
+  file,
+  onSaving,
+  onStatus,
+  signal,
+}: {
+  bannerId: string;
+  file: File;
+  onSaving: () => void;
+  onStatus: (status: {
+    phase: UploadStatusPhase;
+    progress?: UploadTransferProgress;
+  }) => void;
+  signal: AbortSignal;
+}): Promise<{ bannerId?: string }> => {
+  const newBannerId = bannerId;
+  const imageUpload = await uploadStagedAdminImage({
+    aggregateId: newBannerId,
+    file,
+    onStatus,
+    purpose: "dashboard-banner",
+    signal,
+  });
+  onSaving();
+  const formData = new FormData();
+  formData.append("newBannerId", newBannerId);
+  formData.append("imageUpload", JSON.stringify(imageUpload));
+  formData.append("isActive", "on");
+  return (await saveBannerAction(formData)) ?? {};
+};
+
+const patchUploadingBanner = (
+  current: UploadingBanner[],
+  id: string,
+  patch: Partial<UploadingBanner>
+): UploadingBanner[] =>
+  current.map((upload) =>
+    upload.id === id ? { ...upload, ...patch } : upload
+  );
+
+const getBannerUploadErrorMessage = (
+  error: unknown,
+  phase: UploadStatusPhase
+): string => {
+  if (phase === "saving") {
+    return "Não foi possível confirmar se o banner foi salvo. Atualize a lista antes de tentar novamente.";
+  }
+  return error instanceof Error ? error.message : "Erro ao enviar banner.";
+};
+
+const uploadBannerBatch = async (
+  files: File[],
+  uploadFile: (file: File) => Promise<BannerUploadResult>
+): Promise<{ errors: string[]; firstBannerId: string | null }> => {
+  const errors: string[] = [];
+  let firstBannerId: string | null = null;
+
+  for (const file of files) {
+    const result = await uploadFile(file);
+    if (result.error && !result.uploadId) {
+      errors.push(`${file.name}: ${result.error}`);
+    } else if (result.bannerId && !firstBannerId) {
+      firstBannerId = result.bannerId;
+    }
+  }
+
+  return { errors, firstBannerId };
+};
 
 export function BannerGallery({
   initialBanners,
@@ -57,10 +172,24 @@ export function BannerGallery({
   const [isPending, startTransition] = useTransition();
   const [editingBanner, setEditingBanner] = useState<AdminBanner | null>(null);
   const [autoOpenBannerId, setAutoOpenBannerId] = useState<string | null>(null);
-  const [uploadingFiles, setUploadingFiles] = useState<
-    { id: string; file: File }[]
-  >([]);
+  const [uploadingFiles, setUploadingFiles] = useState<UploadingBanner[]>([]);
+  const uploadAbortControllersRef = useRef(new Map<string, AbortController>());
+  const optimisticBannerPreviewsRef = useRef(
+    new Map<string, { banner: AdminBanner; url: string }>()
+  );
+  const objectUrlRegistryRef = useRef<ReturnType<
+    typeof createObjectUrlRegistry
+  > | null>(null);
+  if (!objectUrlRegistryRef.current) {
+    objectUrlRegistryRef.current = createObjectUrlRegistry();
+  }
+  const objectUrlRegistry = objectUrlRegistryRef.current;
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false);
+  const isProcessingFilesRef = useRef(false);
   const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
+  const activeUploadCount = uploadingFiles.filter(
+    (upload) => upload.status !== "error"
+  ).length;
 
   // Auto-open modal when a new banner finishes uploading and is available in props
   useEffect(() => {
@@ -74,8 +203,41 @@ export function BannerGallery({
   }, [banners, autoOpenBannerId]);
 
   useEffect(() => {
-    setBanners(initialBanners);
-  }, [initialBanners]);
+    const persistedBannerIds = new Set(initialBanners.map(({ id }) => id));
+    for (const [id, preview] of optimisticBannerPreviewsRef.current) {
+      if (persistedBannerIds.has(id)) {
+        objectUrlRegistry.revoke(preview.url);
+        optimisticBannerPreviewsRef.current.delete(id);
+      }
+    }
+    setUploadingFiles((current) =>
+      current.filter(
+        (upload) =>
+          !(
+            upload.status === "error" &&
+            upload.targetBannerId &&
+            persistedBannerIds.has(upload.targetBannerId)
+          )
+      )
+    );
+    const pendingOptimisticBanners = Array.from(
+      optimisticBannerPreviewsRef.current.values(),
+      ({ banner }) => banner
+    );
+    setBanners([...initialBanners, ...pendingOptimisticBanners]);
+  }, [initialBanners, objectUrlRegistry]);
+
+  useEffect(
+    () => () => {
+      for (const controller of uploadAbortControllersRef.current.values()) {
+        controller.abort();
+      }
+      uploadAbortControllersRef.current.clear();
+      objectUrlRegistry.revokeAll();
+      optimisticBannerPreviewsRef.current.clear();
+    },
+    [objectUrlRegistry]
+  );
 
   const sensors = useSortableSensors();
   const accessibility = createSortableAccessibility((id) => {
@@ -86,10 +248,8 @@ export function BannerGallery({
   });
 
   const maxFiles = 5;
-  const maxSize = 5 * 1024 * 1024; // 5MB
-
   const handleDragEnd = (event: DragEndEvent) => {
-    if (readOnly || isPending) {
+    if (readOnly || isPending || activeUploadCount > 0) {
       return;
     }
 
@@ -119,67 +279,126 @@ export function BannerGallery({
   };
 
   const uploadFile = useCallback(
-    async (file: File) => {
-      if (!file.type.startsWith("image/")) {
-        return { error: "O arquivo deve ser uma imagem." };
-      }
-      if (file.size > maxSize) {
-        return { error: "A imagem não pode ter mais de 5MB." };
-      }
-      if (banners.length >= maxFiles) {
-        return { error: "Limite de 5 banners atingido." };
+    async (file: File, retryUploadId?: string): Promise<BannerUploadResult> => {
+      const validationError = getBannerUploadError(
+        file,
+        banners.length,
+        maxFiles
+      );
+      if (validationError) {
+        return { error: validationError };
       }
 
-      const toastId = toast.loading("Enviando banner…");
-      const tempId = `temp-${Date.now()}`;
-      setUploadingFiles((prev) => [...prev, { id: tempId, file }]);
+      const tempId = retryUploadId ?? crypto.randomUUID();
+      if (uploadAbortControllersRef.current.has(tempId)) {
+        return {};
+      }
+      const abortController = new AbortController();
+      uploadAbortControllersRef.current.set(tempId, abortController);
+      let currentPhase: UploadStatusPhase = "preparing";
+      setUploadingFiles((current) => {
+        const retrying = current.some((upload) => upload.id === tempId);
+        return retrying
+          ? current.map((upload) =>
+              upload.id === tempId
+                ? {
+                    ...upload,
+                    errorMessage: undefined,
+                    phase: currentPhase,
+                    progress: undefined,
+                    retryable: false,
+                    status: undefined,
+                  }
+                : upload
+            )
+          : [...current, { file, id: tempId, phase: currentPhase }];
+      });
+      let keepErrorRow = false;
 
       try {
-        const bannerId = crypto.randomUUID();
-        const imageUpload = await uploadStagedAdminImage({
-          aggregateId: bannerId,
+        const result = await uploadAndSaveBanner({
+          bannerId: tempId,
           file,
-          purpose: "dashboard-banner",
+          onSaving: () => {
+            currentPhase = "saving";
+            setUploadingFiles((current) =>
+              patchUploadingBanner(current, tempId, {
+                errorMessage: undefined,
+                phase: currentPhase,
+                progress: undefined,
+                retryable: false,
+                status: undefined,
+              })
+            );
+            uploadAbortControllersRef.current.delete(tempId);
+          },
+          onStatus: (status) => {
+            currentPhase = status.phase;
+            setUploadingFiles((current) =>
+              patchUploadingBanner(current, tempId, {
+                errorMessage: undefined,
+                phase: status.phase,
+                progress: status.progress,
+                retryable: false,
+                status: undefined,
+              })
+            );
+          },
+          signal: abortController.signal,
         });
-        const formData = new FormData();
-        formData.append("newBannerId", bannerId);
-        formData.append("imageUpload", JSON.stringify(imageUpload));
-        formData.append("isActive", "on");
-        const res = await saveBannerAction(formData);
 
-        if (res?.bannerId) {
+        if (result.bannerId) {
+          const previewUrl = objectUrlRegistry.create(file);
           const optimisticBanner: AdminBanner = {
             blurDataUrl: null,
-            id: res.bannerId,
-            imageUrl: URL.createObjectURL(file),
+            id: result.bannerId,
+            imageUrl: previewUrl,
             isActive: true,
             linkUrl: null,
             buttonText: null,
             sortOrder: banners.length + 1,
           };
+          optimisticBannerPreviewsRef.current.set(result.bannerId, {
+            banner: optimisticBanner,
+            url: previewUrl,
+          });
           setBanners((prev) => [...prev, optimisticBanner]);
         }
 
-        toast.success("Banner enviado com sucesso.", { id: toastId });
-        setUploadingFiles((prev) => prev.filter((f) => f.id !== tempId));
-
-        if (res?.bannerId) {
-          return { bannerId: res.bannerId };
-        }
+        toast.success("Banner enviado com sucesso.");
+        return result;
       } catch (error: unknown) {
-        setUploadingFiles((prev) => prev.filter((f) => f.id !== tempId));
-        toast.error(
-          error instanceof Error ? error.message : "Erro ao enviar banner.",
-          { id: toastId }
+        if (isUploadAbortedError(error, abortController.signal)) {
+          return {};
+        }
+        const message = getBannerUploadErrorMessage(error, currentPhase);
+        keepErrorRow = true;
+        setUploadingFiles((current) =>
+          patchUploadingBanner(current, tempId, {
+            errorMessage: message,
+            phase: currentPhase,
+            progress: undefined,
+            retryable: currentPhase !== "saving",
+            status: "error",
+            targetBannerId: tempId,
+          })
         );
         return {
-          error:
-            error instanceof Error ? error.message : "Erro ao enviar banner.",
+          error: message,
+          uploadId: tempId,
         };
+      } finally {
+        if (uploadAbortControllersRef.current.get(tempId) === abortController) {
+          uploadAbortControllersRef.current.delete(tempId);
+        }
+        if (!keepErrorRow) {
+          setUploadingFiles((current) =>
+            current.filter((upload) => upload.id !== tempId)
+          );
+        }
       }
-      return {};
     },
-    [banners.length]
+    [banners.length, objectUrlRegistry]
   );
 
   const handleFiles = useCallback(
@@ -187,41 +406,75 @@ export function BannerGallery({
       if (readOnly) {
         return;
       }
-      const newErrors: string[] = [];
+      if (isProcessingFilesRef.current) {
+        setErrors([
+          "Aguarde o envio atual terminar antes de adicionar banners.",
+        ]);
+        return;
+      }
       const filesArray = Array.from(files);
 
-      if (banners.length + filesArray.length > maxFiles) {
+      if (banners.length + activeUploadCount + filesArray.length > maxFiles) {
         setErrors(["Você só pode adicionar até 5 banners no total."]);
         return;
       }
 
+      isProcessingFilesRef.current = true;
+      setIsProcessingFiles(true);
       setErrors([]);
-      let firstNewBannerId: string | null = null;
-      for (const file of filesArray) {
-        const result = await uploadFile(file);
-        if (typeof result === "object" && result?.error) {
-          newErrors.push(`${file.name}: ${result.error}`);
-        } else if (
-          typeof result === "object" &&
-          result?.bannerId &&
-          !firstNewBannerId
-        ) {
-          firstNewBannerId = result.bannerId;
+      try {
+        const result = await uploadBannerBatch(filesArray, uploadFile);
+
+        if (result.errors.length > 0) {
+          setErrors(result.errors);
         }
-      }
 
-      if (newErrors.length > 0) {
-        setErrors(newErrors);
-      }
+        router.refresh();
 
-      router.refresh();
-
-      if (firstNewBannerId) {
-        setAutoOpenBannerId(firstNewBannerId);
+        if (result.firstBannerId) {
+          setAutoOpenBannerId(result.firstBannerId);
+        }
+      } finally {
+        isProcessingFilesRef.current = false;
+        setIsProcessingFiles(false);
       }
     },
-    [banners.length, readOnly, uploadFile, router]
+    [activeUploadCount, banners.length, readOnly, uploadFile, router]
   );
+
+  const retryBannerUpload = async (uploadId: string): Promise<void> => {
+    if (isProcessingFilesRef.current || activeUploadCount > 0) {
+      return;
+    }
+    const upload = uploadingFiles.find(
+      (candidate) => candidate.id === uploadId && candidate.status === "error"
+    );
+    if (
+      !(upload?.retryable && upload.errorMessage) ||
+      uploadAbortControllersRef.current.has(uploadId)
+    ) {
+      return;
+    }
+
+    try {
+      const result = await uploadFile(upload.file, upload.id);
+      if (result.error && !result.uploadId) {
+        setErrors([`${upload.file.name}: ${result.error}`]);
+      }
+      if (result.bannerId) {
+        router.refresh();
+        setAutoOpenBannerId(result.bannerId);
+      }
+    } catch {
+      setErrors([`${upload.file.name}: Não foi possível retomar o envio.`]);
+    }
+  };
+
+  const discardBannerUpload = (uploadId: string): void => {
+    setUploadingFiles((current) =>
+      current.filter((upload) => upload.id !== uploadId)
+    );
+  };
 
   const onDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -232,6 +485,12 @@ export function BannerGallery({
   const handleFileSelection = useCallback(
     (files: FileList | File[]) => {
       if (readOnly) {
+        return;
+      }
+      if (isProcessingFilesRef.current || pendingCropFile) {
+        setErrors([
+          "Conclua o envio ou recorte atual antes de adicionar outro banner.",
+        ]);
         return;
       }
       try {
@@ -250,7 +509,7 @@ export function BannerGallery({
         ]);
       }
     },
-    [readOnly]
+    [pendingCropFile, readOnly]
   );
 
   const handleCropComplete = useCallback(
@@ -287,6 +546,11 @@ export function BannerGallery({
     startTransition(async () => {
       try {
         await deleteBannerAction(formData);
+        const optimisticPreview = optimisticBannerPreviewsRef.current.get(id);
+        if (optimisticPreview) {
+          objectUrlRegistry.revoke(optimisticPreview.url);
+          optimisticBannerPreviewsRef.current.delete(id);
+        }
         toast.success("Banner excluído.", { id: toastId });
       } catch {
         toast.error("Erro ao excluir o banner.", { id: toastId });
@@ -298,11 +562,7 @@ export function BannerGallery({
     <div className="w-full">
       <div>
         <ResourceListContainer
-          className={cn(
-            isDragging ? "border-primary bg-primary/5" : "",
-            (uploadingFiles.length > 0 || isPending) &&
-              "pointer-events-none opacity-50"
-          )}
+          className={cn(isDragging ? "border-primary bg-primary/5" : "")}
           onDragEnter={onDragEnter}
           onDragLeave={onDragLeave}
           onDragOver={(e: React.DragEvent) => {
@@ -313,13 +573,19 @@ export function BannerGallery({
         >
           <ResourceListHeader
             actions={
-              !readOnly &&
-              banners.length < maxFiles && (
-                <div className="relative">
+              !(readOnly || isProcessingFiles || pendingCropFile) &&
+              activeUploadCount === 0 &&
+              banners.length + activeUploadCount < maxFiles && (
+                <label
+                  className={cn(
+                    buttonVariants({ size: "sm", variant: "outline" }),
+                    "h-8 cursor-pointer px-3 focus-within:border-focus focus-within:outline-2 focus-within:outline-focus focus-within:outline-offset-2 focus-within:ring-2 focus-within:ring-background data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50"
+                  )}
+                >
                   <input
                     accept={BANNER_ACCEPT}
-                    aria-label="Selecionar banner"
-                    className="absolute inset-0 cursor-pointer opacity-0"
+                    className="sr-only"
+                    disabled={isProcessingFiles || activeUploadCount > 0}
                     onChange={(event) => {
                       const files = event.currentTarget.files;
                       if (files && files.length > 0) {
@@ -327,26 +593,20 @@ export function BannerGallery({
                       }
                       event.currentTarget.value = "";
                     }}
-                    title="Enviar arquivo"
                     type="file"
                   />
-                  <Button
-                    className="pointer-events-none h-8 px-3"
-                    size="sm"
-                    variant="outline"
-                  >
-                    <HugeiconsIcon
-                      aria-hidden="true"
-                      className="-ms-0.5 mr-1.5 opacity-60"
-                      icon={CloudUploadIcon}
-                      size={14}
-                    />
-                    Adicionar banner
-                  </Button>
-                </div>
+                  <HugeiconsIcon
+                    aria-hidden="true"
+                    className="-ms-0.5 mr-1.5 opacity-60"
+                    icon={CloudUploadIcon}
+                    size={14}
+                  />
+                  Adicionar banner
+                </label>
               )
             }
             count={banners.length}
+            description={`Até ${maxFiles} imagens · proporção 4:1 · JPG, PNG ou WebP · até ${Math.round(MAX_BANNER_BYTES / (1024 * 1024))} MiB por banner.`}
             title="Banners cadastrados"
           />
 
@@ -357,7 +617,9 @@ export function BannerGallery({
                 collisionDetection={closestCenter}
                 id="banner-gallery-dnd"
                 onDragEnd={handleDragEnd}
-                sensors={readOnly ? [] : sensors}
+                sensors={
+                  readOnly || isPending || activeUploadCount > 0 ? [] : sensors
+                }
               >
                 <SortableContext
                   items={banners}
@@ -375,8 +637,37 @@ export function BannerGallery({
                 </SortableContext>
               </DndContext>
 
-              {uploadingFiles.map((f) => (
-                <ResourceItemSkeleton key={f.id} />
+              {uploadingFiles.map((upload) => (
+                <UploadProgressStatus
+                  errorMessage={
+                    upload.status === "error" ? upload.errorMessage : undefined
+                  }
+                  fileName={upload.file.name}
+                  key={upload.id}
+                  onCancel={
+                    upload.status === "error" || upload.phase === "saving"
+                      ? undefined
+                      : () =>
+                          uploadAbortControllersRef.current
+                            .get(upload.id)
+                            ?.abort()
+                  }
+                  onDiscard={
+                    upload.status === "error"
+                      ? () => discardBannerUpload(upload.id)
+                      : undefined
+                  }
+                  onRetry={
+                    upload.status === "error" &&
+                    upload.retryable &&
+                    !isProcessingFiles &&
+                    activeUploadCount === 0
+                      ? () => retryBannerUpload(upload.id)
+                      : undefined
+                  }
+                  phase={upload.phase}
+                  progress={upload.progress}
+                />
               ))}
             </ResourceListBody>
           ) : (

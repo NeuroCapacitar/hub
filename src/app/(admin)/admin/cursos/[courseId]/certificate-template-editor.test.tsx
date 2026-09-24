@@ -442,6 +442,136 @@ describe("CertificateTemplateEditor", () => {
     expect(container.textContent).toContain("arte-certificado.webp");
   });
 
+  it("cancels the active background upload and restores the prior template state", async () => {
+    let uploadSignal: AbortSignal | undefined;
+    stagedUploadMock.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) => {
+        uploadSignal = signal;
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true }
+          );
+        });
+      }
+    );
+    act(() => {
+      root.render(
+        <CertificateTemplateEditor
+          certificateEnabled={false}
+          courseId="course-1"
+          issuerConfigured
+          templates={[]}
+        />
+      );
+    });
+    selectBackground(container);
+    const input = container.querySelector<HTMLInputElement>(
+      'input[data-upload-kind="background"]'
+    );
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["image"], "original.png", { type: "image/png" })],
+    });
+    act(() => input?.dispatchEvent(new Event("change", { bubbles: true })));
+    const confirmButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Confirmar recorte"
+    );
+    await act(async () => {
+      confirmButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(
+      container.querySelector('[data-certificate-upload-target="background"]')
+    ).not.toBeNull();
+    const cancelButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Cancelar"
+    );
+    expect(cancelButton).toBeDefined();
+    act(() => cancelButton?.click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(uploadSignal?.aborted).toBe(true);
+    expect(container.textContent).not.toContain("arte-certificado.webp");
+    expect(actionMocks.save).not.toHaveBeenCalled();
+  });
+
+  it("keeps template edits made during a failed image upload saveable", async () => {
+    let rejectUpload: (error: Error) => void = () => undefined;
+    stagedUploadMock.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectUpload = reject;
+        })
+    );
+    act(() => {
+      root.render(
+        <CertificateTemplateEditor
+          certificateEnabled={false}
+          courseId="course-1"
+          issuerConfigured
+          templates={[]}
+        />
+      );
+    });
+    selectBackground(container);
+    const input = container.querySelector<HTMLInputElement>(
+      'input[data-upload-kind="background"]'
+    );
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["image"], "original.png", { type: "image/png" })],
+    });
+    act(() => input?.dispatchEvent(new Event("change", { bubbles: true })));
+    const confirmButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Confirmar recorte"
+    );
+    await act(async () => {
+      confirmButton?.click();
+      await Promise.resolve();
+    });
+
+    const studentNameField = selectField(container, "studentName");
+    const specInput =
+      container.querySelector<HTMLInputElement>('input[name="spec"]');
+    const initialX = JSON.parse(specInput?.value ?? "{}").fields.find(
+      (field: { field: string }) => field.field === "studentName"
+    ).x;
+    act(() =>
+      studentNameField.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "ArrowRight",
+        })
+      )
+    );
+    const editedX = JSON.parse(specInput?.value ?? "{}").fields.find(
+      (field: { field: string }) => field.field === "studentName"
+    ).x;
+    expect(editedX).not.toBe(initialX);
+
+    await act(async () => {
+      rejectUpload(new Error("network failure"));
+      await Promise.resolve();
+    });
+
+    const saveButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.includes("Salvar rascunho")
+    );
+    const savedSpec = JSON.parse(specInput?.value ?? "{}");
+    const savedX = savedSpec.fields.find(
+      (field: { field: string }) => field.field === "studentName"
+    ).x;
+
+    expect(saveButton?.disabled).toBe(false);
+    expect(savedX).toBe(editedX);
+  });
+
   it("keeps signer and signature values in FormData while another field is selected", () => {
     act(() => {
       root.render(

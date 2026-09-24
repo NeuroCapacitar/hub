@@ -5,6 +5,7 @@ const dependencies = vi.hoisted(() => ({
   prepareCertificateTemplateAssetReferences: vi.fn(),
   queueCertificateTemplateAssetCleanup: vi.fn(),
   scheduleCertificateTemplateAssetCleanup: vi.fn(),
+  requirePermission: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -14,6 +15,9 @@ vi.mock("@/features/storage/r2", () => ({
   uploadPrivateR2Object: vi.fn(),
 }));
 vi.mock("@/lib/session", () => ({ requireRole: vi.fn() }));
+vi.mock("@/lib/auth-permissions", () => ({
+  requirePermission: dependencies.requirePermission,
+}));
 vi.mock("./template-asset-cleanup", () => ({
   prepareCertificateTemplateAssetReferences:
     dependencies.prepareCertificateTemplateAssetReferences,
@@ -24,9 +28,11 @@ vi.mock("./template-asset-cleanup", () => ({
 }));
 
 import { CertificateTemplateDomainError } from "./template-errors";
+import { createDefaultCertificateTemplateFields } from "./template-rules";
 import {
   disableCertificateForCourse,
   enableCertificateForCourse,
+  getCertificateTemplatesForCourse,
   publishCertificateTemplate,
   runCertificateTemplateAssetMutation,
   saveCertificateTemplateDraft,
@@ -82,6 +88,39 @@ describe("certificate template asset lifecycle", () => {
         },
       })
     ).rejects.toThrow("connection lost after commit");
+  });
+});
+
+describe("certificate template editor image URLs", () => {
+  it("returns stable versioned same-origin URLs instead of fresh signed URLs", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          background_key: "certificates/templates/course-1/bg.webp",
+          id: "template-1",
+          signer_name: null,
+          signer_role: null,
+          signature_key: "certificates/templates/course-1/signature.webp",
+          spec: {
+            backgroundKey: "certificates/templates/course-1/bg.webp",
+            fields: createDefaultCertificateTemplateFields(),
+          },
+          status: "draft",
+          version: 2,
+        },
+      ],
+    });
+    dependencies.getPool.mockReturnValue({ query });
+
+    const [template] = await getCertificateTemplatesForCourse("course-1");
+
+    expect(template?.backgroundUrl).toBe(
+      "/api/admin/courses/course-1/certificate-templates/template-1/assets/background?v=certificates%2Ftemplates%2Fcourse-1%2Fbg.webp"
+    );
+    expect(template?.signatureUrl).toBe(
+      "/api/admin/courses/course-1/certificate-templates/template-1/assets/signature?v=certificates%2Ftemplates%2Fcourse-1%2Fsignature.webp"
+    );
+    expect(dependencies.requirePermission).toHaveBeenCalledWith("viewCourses");
   });
 });
 

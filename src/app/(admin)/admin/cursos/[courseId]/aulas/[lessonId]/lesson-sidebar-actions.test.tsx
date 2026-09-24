@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   saveLesson: vi.fn(),
+  toastDismiss: vi.fn(),
   toastError: vi.fn(),
   toastLoading: vi.fn(() => "toast-1"),
   toastSuccess: vi.fn(),
@@ -20,13 +21,18 @@ vi.mock("@/features/admin/actions", () => ({
 vi.mock("@hugeicons/react", () => ({ HugeiconsIcon: () => null }));
 vi.mock("sonner", () => ({
   toast: {
+    dismiss: dependencies.toastDismiss,
     error: dependencies.toastError,
     loading: dependencies.toastLoading,
     success: dependencies.toastSuccess,
   },
 }));
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, ...props }: ComponentProps<"button">) => (
+  Button: ({
+    children,
+    loading: _loading,
+    ...props
+  }: ComponentProps<"button"> & { loading?: boolean }) => (
     <button {...props}>{children}</button>
   ),
 }));
@@ -52,11 +58,15 @@ describe("LessonSidebarActions", () => {
   let container: HTMLDivElement;
   let root: Root;
 
-  const renderActions = (): void => {
+  const renderActions = (resourceUploadPending = false): void => {
     act(() => {
       root.render(
         <>
-          <form id="lesson-form" />
+          <form id="lesson-form">
+            {resourceUploadPending ? (
+              <input name="resourceUploadPending" type="hidden" value="on" />
+            ) : null}
+          </form>
           <LessonSidebarActions
             coursePublicationStatus="draft"
             formId="lesson-form"
@@ -74,7 +84,6 @@ describe("LessonSidebarActions", () => {
     if (!button) {
       throw new Error("Expected lesson save button");
     }
-
     act(() => button.click());
     await act(async () => undefined);
   };
@@ -84,7 +93,6 @@ describe("LessonSidebarActions", () => {
     if (!form) {
       throw new Error("Expected lesson form");
     }
-
     act(() => {
       form.dispatchEvent(
         new SubmitEvent("submit", { bubbles: true, cancelable: true })
@@ -119,9 +127,8 @@ describe("LessonSidebarActions", () => {
 
     await clickSave();
 
-    expect(dependencies.toastError).toHaveBeenCalledWith(message, {
-      id: "toast-1",
-    });
+    expect(dependencies.toastDismiss).toHaveBeenCalledWith("toast-1");
+    expect(dependencies.toastError).not.toHaveBeenCalled();
     expect(container.querySelector('[role="alert"]')?.textContent).toBe(
       message
     );
@@ -158,6 +165,21 @@ describe("LessonSidebarActions", () => {
     expect(dependencies.toastSuccess).toHaveBeenCalledWith(
       "Aula salva com sucesso!",
       { id: "toast-1" }
+    );
+  });
+
+  it("does not save a lesson while an attachment is still uploading", async () => {
+    renderActions(true);
+
+    await clickSave();
+
+    expect(dependencies.saveLesson).not.toHaveBeenCalled();
+    expect(dependencies.toastError).toHaveBeenCalledWith(
+      "Aguarde o fim dos uploads de anexos antes de salvar."
+    );
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.textContent).not.toContain(
+      "Aguarde o fim dos uploads de anexos antes de salvar."
     );
   });
 });

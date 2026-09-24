@@ -11,6 +11,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { buildAuthMediaObjectKey } from "@/features/auth-media/contract";
+import { BANNER_STORAGE_PREFIX } from "@/features/storage/banner-image";
 import type { CourseCoverImage } from "@/features/storage/course-cover";
 import type { CourseCoverFile } from "@/features/storage/course-cover-upload";
 import type {
@@ -38,6 +39,8 @@ import { getServerEnv } from "@/lib/env";
 export const R2_UPLOAD_URL_EXPIRES_SECONDS = 10 * 60;
 const DOWNLOAD_URL_EXPIRES_SECONDS = 5 * 60;
 const DELETE_OBJECTS_BATCH_SIZE = 1000;
+const PRIVATE_MEDIA_CACHE_CONTROL = "private, max-age=240";
+const PUBLIC_VERSIONED_MEDIA_CACHE_CONTROL = "public, max-age=3600, immutable";
 
 interface R2Config {
   accessKeyId: string;
@@ -409,6 +412,7 @@ export const uploadCourseCoverFile = async ({
       new PutObjectCommand({
         Body: object.body,
         Bucket: config.bucketName,
+        CacheControl: PRIVATE_MEDIA_CACHE_CONTROL,
         ContentType: object.contentType,
         Key: config.namespace.toPhysicalKey(object.key),
       })
@@ -421,9 +425,11 @@ export const uploadCourseCoverFile = async ({
 export const createR2ObjectReadUrl = async ({
   key,
   responseContentDisposition,
+  responseCacheControl,
 }: {
   key: string;
   responseContentDisposition?: "attachment" | "inline";
+  responseCacheControl?: string;
 }): Promise<string> => {
   const config = getR2Config();
 
@@ -432,6 +438,9 @@ export const createR2ObjectReadUrl = async ({
     new GetObjectCommand({
       Bucket: config.bucketName,
       Key: config.namespace.toPhysicalKey(key),
+      ...(responseCacheControl
+        ? { ResponseCacheControl: responseCacheControl }
+        : {}),
       ...(responseContentDisposition
         ? { ResponseContentDisposition: responseContentDisposition }
         : {}),
@@ -454,6 +463,7 @@ export const uploadPrivateR2Object = async ({
     new PutObjectCommand({
       Body: body,
       Bucket: config.bucketName,
+      CacheControl: PRIVATE_MEDIA_CACHE_CONTROL,
       ContentType: contentType,
       Key: config.namespace.toPhysicalKey(key),
     })
@@ -672,12 +682,27 @@ export const checkR2ObjectStorage = async (): Promise<void> => {
 export const publishR2Object = async (key: string): Promise<void> => {
   const config = getPublicR2Config();
   const physicalKey = config.namespace.toPhysicalKey(key);
+  const client = getR2Client(config);
+  const sourceMetadata = await client.send(
+    new HeadObjectCommand({
+      Bucket: config.bucketName,
+      Key: physicalKey,
+    })
+  );
 
-  await getR2Client(config).send(
+  await client.send(
     new CopyObjectCommand({
       Bucket: config.publicBucketName,
+      CacheControl: PUBLIC_VERSIONED_MEDIA_CACHE_CONTROL,
       CopySource: `/${config.bucketName}/${encodeURIComponent(physicalKey)}`,
+      ContentDisposition: sourceMetadata.ContentDisposition,
+      ContentEncoding: sourceMetadata.ContentEncoding,
+      ContentLanguage: sourceMetadata.ContentLanguage,
+      ContentType: sourceMetadata.ContentType ?? "application/octet-stream",
+      Expires: sourceMetadata.Expires,
       Key: physicalKey,
+      Metadata: sourceMetadata.Metadata,
+      MetadataDirective: "REPLACE",
     })
   );
 };
@@ -837,12 +862,13 @@ export const uploadDashboardBannerFile = async ({
     file.arrayBuffer(),
   ]);
   const extension = file.name.split(".").pop()?.toLowerCase() || "webp";
-  const key = `banners/${randomUUID()}.${extension}`;
+  const key = `${BANNER_STORAGE_PREFIX}${randomUUID()}.${extension}`;
 
   await client.send(
     new PutObjectCommand({
       Body: Buffer.from(buffer),
       Bucket: config.bucketName,
+      CacheControl: PRIVATE_MEDIA_CACHE_CONTROL,
       ContentType: file.type,
       Key: config.namespace.toPhysicalKey(key),
     })
@@ -872,7 +898,7 @@ export const uploadAuthMediaFile = async ({
     new PutObjectCommand({
       Body: Buffer.from(buffer),
       Bucket: config.bucketName,
-      CacheControl: "public, max-age=31536000, immutable",
+      CacheControl: PRIVATE_MEDIA_CACHE_CONTROL,
       ContentType: "image/webp",
       Key: config.namespace.toPhysicalKey(key),
     })

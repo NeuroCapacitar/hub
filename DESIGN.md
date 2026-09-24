@@ -540,6 +540,16 @@ mapa visual local para o mesmo estado.
 `Progress` comunica progresso mensurável e recebe `aria-label` contextual.
 Não use a cor do indicador como único significado.
 
+Uploads mostram o arquivo e a etapa em andamento junto ao seletor/lista. Mostre
+percentual somente quando o transporte reportar bytes mensuráveis; preparação,
+confirmação e fallback usam estado indeterminado, sem inventar progresso.
+Cancelamento deve abortar a requisição e não iniciar retry/fallback. Falhas
+recuperáveis permanecem junto ao arquivo com Retry/Descartar; não duplique a
+mesma falha em um toast. Toast fica para sucesso e falhas finais sem estado
+persistente no item.
+Limites binários devem ser escritos como `MiB`; não altere o limite em bytes ao
+uniformizar a unidade visível.
+
 `Toast`, `role="status"`, `aria-live="polite"` e `role="alert"` têm papéis
 distintos:
 

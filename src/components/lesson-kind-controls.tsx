@@ -21,13 +21,12 @@ import {
   FileImageIcon,
   FileLinkIcon,
   Link04Icon,
-  Loading03Icon,
   Pdf01Icon,
   PencilEdit01Icon,
   RefreshIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { JmvstreamDurationDetector } from "@/components/jmvstream-duration-detector";
 import {
@@ -47,7 +46,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
   DialogBody,
@@ -58,6 +57,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   ResourceDeleteAction,
   ResourceDropzoneEmpty,
@@ -70,6 +70,7 @@ import {
   ResourceListContainer,
   ResourceListHeader,
 } from "@/components/ui/resource-list";
+import { getUploadStatusLabel } from "@/components/ui/upload-progress-status";
 import { resolveLessonVideoPreviewUrl } from "@/features/admin/lesson-video-form";
 import type { LessonResource } from "@/features/courses/lesson-content";
 import {
@@ -80,12 +81,24 @@ import {
 import { JMVSTREAM_PORTAL_URL } from "@/features/jmvstream/portal";
 import {
   type LessonResourceUploadPreview,
+  type LessonResourceUploadReference,
   uploadLessonResource,
 } from "@/features/storage/lesson-resource-upload-client";
 import {
   LESSON_ATTACHMENT_ACCEPT,
   LESSON_RESOURCE_IMAGE_PREVIEW,
+  MAX_LESSON_ATTACHMENT_BYTES,
+  MAX_LESSON_R2_RESOURCES_BYTES,
+  MAX_LESSON_RESOURCES,
+  validateLessonAttachmentUpload,
 } from "@/features/storage/r2-objects";
+import {
+  isUploadAbortedError,
+  UploadAbortedError,
+  type UploadStatusPhase,
+  type UploadTransferProgress,
+} from "@/features/storage/xhr-upload";
+import { createObjectUrlRegistry } from "@/lib/object-url-registry";
 import { cn } from "@/lib/utils";
 import {
   createSortableAccessibility,
@@ -453,10 +466,12 @@ function getUploadFileIcon(file: File) {
 }
 
 function LessonResourceUploadItem({
+  onCancel,
   onDiscard,
   onRetry,
   upload,
 }: {
+  onCancel: () => void;
   onDiscard: () => void;
   onRetry: () => void;
   upload: LessonResourceUpload;
@@ -492,19 +507,27 @@ function LessonResourceUploadItem({
             {upload.error ?? "Não foi possível concluir o upload."}
           </p>
         ) : (
-          <p
-            aria-live="polite"
-            className="flex items-center gap-1 text-muted-foreground text-xs"
-          >
-            <HugeiconsIcon
-              aria-hidden="true"
-              className="animate-spin"
-              icon={Loading03Icon}
-              size={13}
-              strokeWidth={2}
-            />
-            Enviando anexo…
-          </p>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2 text-muted-foreground text-xs">
+              <span aria-live="polite" role="status">
+                {getUploadStatusLabel(upload.phase ?? "preparing")}
+              </span>
+              {upload.progress?.percentage !== null &&
+              upload.progress?.percentage !== undefined &&
+              upload.phase === "uploading" ? (
+                <span>{upload.progress.percentage}%</span>
+              ) : null}
+            </div>
+            {upload.phase === "uploading" &&
+            upload.progress?.percentage !== null &&
+            upload.progress?.percentage !== undefined ? (
+              <Progress
+                aria-label={`Progresso do envio de ${upload.file.name}`}
+                className="h-1.5"
+                value={upload.progress.percentage}
+              />
+            ) : null}
+          </div>
         )}
       </ResourceItemContent>
 
@@ -525,7 +548,19 @@ function LessonResourceUploadItem({
             />
             Tentar novamente
           </Button>
-        ) : null}
+        ) : (
+          <Button
+            aria-label={`Cancelar envio de ${upload.file.name}`}
+            className="size-10 text-muted-foreground hover:text-foreground"
+            onClick={onCancel}
+            size="icon"
+            title="Cancelar envio"
+            type="button"
+            variant="outline"
+          >
+            <HugeiconsIcon aria-hidden="true" icon={Cancel01Icon} size={16} />
+          </Button>
+        )}
         {isError ? (
           <Button
             aria-label={`Remover upload de ${upload.file.name}`}
@@ -855,18 +890,47 @@ export function LessonResourcesFields({
   const [uploadingFiles, setUploadingFiles] = useState<LessonResourceUpload[]>(
     []
   );
+  const uploadAbortControllersRef = useRef(new Map<string, AbortController>());
+  const objectUrlRegistryRef = useRef<ReturnType<
+    typeof createObjectUrlRegistry
+  > | null>(null);
+  if (!objectUrlRegistryRef.current) {
+    objectUrlRegistryRef.current = createObjectUrlRegistry();
+  }
+  const objectUrlRegistry = objectUrlRegistryRef.current;
   const [isFileDragActive, setIsFileDragActive] = useState(false);
   const [editingResourceId, setEditingResourceId] = useState<string | null>(
     null
   );
+  const resourceLimitReached =
+    resources.length + uploadingFiles.length >= MAX_LESSON_RESOURCES;
+
+  useEffect(
+    () => () => {
+      for (const controller of uploadAbortControllersRef.current.values()) {
+        controller.abort();
+      }
+      uploadAbortControllersRef.current.clear();
+      objectUrlRegistry.revokeAll();
+    },
+    [objectUrlRegistry]
+  );
 
   const addResource = (): void => {
+    if (resourceLimitReached) {
+      toast.error(`Cada aula pode ter até ${MAX_LESSON_RESOURCES} materiais.`);
+      return;
+    }
     const newResource = createEmptyExternalResource();
     setResources((current) => [...current, newResource]);
     setEditingResourceId(newResource.id);
   };
 
   const removeResource = (id: string): void => {
+    const resource = resources.find((item) => item.id === id);
+    if (resource?.storage === "r2" && resource.localPreviewUrl) {
+      objectUrlRegistry.revoke(resource.localPreviewUrl);
+    }
     setResources((current) => current.filter((resource) => resource.id !== id));
   };
 
@@ -891,58 +955,79 @@ export function LessonResourcesFields({
       toast.error("Salve a aula antes de enviar anexos.");
       return;
     }
-
-    const toastId = toast.loading("Enviando anexo…");
-    setUploadingFiles((prev) => {
-      const existing = prev.some((upload) => upload.id === uploadId);
-      if (existing) {
-        return prev.map((upload) =>
-          upload.id === uploadId
-            ? { file: upload.file, id: upload.id, status: "uploading" }
-            : upload
-        );
-      }
-      return [...prev, { file, id: uploadId, status: "uploading" }];
+    const validationMessage = getLessonResourceUploadValidationMessage({
+      file,
+      resources,
+      uploadId,
+      uploadingFiles,
     });
+    if (validationMessage) {
+      toast.error(validationMessage);
+      return;
+    }
+
+    const abortController = new AbortController();
+    uploadAbortControllersRef.current.set(uploadId, abortController);
+    setUploadingFiles((current) =>
+      upsertLessonResourceUpload(current, file, uploadId)
+    );
 
     try {
-      const preview = await createImagePreview(file);
-      const reference = await uploadLessonResource({
+      const { preview, reference } = await createAndUploadLessonResource({
         file,
         lessonId,
-        preview,
+        onProgress: (progress) => {
+          setUploadingFiles((current) =>
+            patchLessonResourceUpload(current, uploadId, {
+              progress,
+            })
+          );
+        },
+        onStatus: (phase) => {
+          setUploadingFiles((current) =>
+            patchLessonResourceUpload(current, uploadId, {
+              phase,
+              ...(phase === "retrying" || phase === "uploading"
+                ? { progress: undefined }
+                : {}),
+            })
+          );
+        },
+        signal: abortController.signal,
       });
 
       const newResource = toEditableResource(reference);
       if (newResource.storage === "r2" && preview) {
-        newResource.localPreviewUrl = URL.createObjectURL(preview.blob);
+        newResource.localPreviewUrl = objectUrlRegistry.create(preview.blob);
       }
 
       setResources((current) => [...current, newResource]);
       setEditingResourceId(newResource.id);
-      setUploadingFiles((prev) =>
-        prev.filter((upload) => upload.id !== uploadId)
+      setUploadingFiles((current) =>
+        removeLessonResourceUpload(current, uploadId)
       );
-      toast.success("Anexo enviado. Salve a aula para publicar o material.", {
-        id: toastId,
-      });
+      toast.success("Anexo enviado. Salve a aula para publicar o material.");
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Não foi possível enviar.";
-      setUploadingFiles((prev) =>
-        prev.map((upload) =>
-          upload.id === uploadId
-            ? { ...upload, error: message, status: "error" }
-            : upload
-        )
-      );
-      toast.error(message, { id: toastId });
+      handleLessonResourceUploadFailure({
+        error,
+        signal: abortController.signal,
+        uploadId,
+        setUploadingFiles,
+      });
+    } finally {
+      if (uploadAbortControllersRef.current.get(uploadId) === abortController) {
+        uploadAbortControllersRef.current.delete(uploadId);
+      }
     }
+  };
+
+  const cancelUpload = (uploadId: string): void => {
+    uploadAbortControllersRef.current.get(uploadId)?.abort();
   };
 
   const discardUpload = (uploadId: string): void => {
     setUploadingFiles((current) =>
-      current.filter((upload) => upload.id !== uploadId)
+      removeLessonResourceUpload(current, uploadId)
     );
   };
 
@@ -1017,19 +1102,38 @@ export function LessonResourcesFields({
       onDragOver={handleFileDragOver}
       onDrop={handleFileDrop}
     >
+      <input
+        {...formProps}
+        name="resourceUploadPending"
+        type="hidden"
+        value={
+          uploadingFiles.some((upload) => upload.status === "uploading")
+            ? "on"
+            : ""
+        }
+      />
       <ResourceEditModal
         onClose={() => setEditingResourceId(null)}
         onUpdate={updateResource}
         open={!!editingResourceId}
-        resource={resources.find((r) => r.id === editingResourceId)}
+        resource={resources.find(
+          (resource) => resource.id === editingResourceId
+        )}
       />
       <ResourceListHeader
         actions={
           <>
-            <div className="relative">
+            <label
+              className={cn(
+                buttonVariants({ size: "sm", variant: "outline" }),
+                "h-8 cursor-pointer px-3 focus-within:border-focus focus-within:outline-2 focus-within:outline-focus focus-within:outline-offset-2 focus-within:ring-2 focus-within:ring-background data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50"
+              )}
+              data-disabled={resourceLimitReached}
+            >
               <input
                 accept={LESSON_ATTACHMENT_ACCEPT}
-                className="absolute inset-0 cursor-pointer opacity-0"
+                className="sr-only"
+                disabled={resourceLimitReached}
                 onChange={(event) => {
                   const file = event.currentTarget.files?.[0];
                   if (file) {
@@ -1037,25 +1141,19 @@ export function LessonResourcesFields({
                   }
                   event.currentTarget.value = "";
                 }}
-                title="Enviar arquivo"
                 type="file"
               />
-              <Button
-                className="pointer-events-none h-8 px-3"
-                size="sm"
-                variant="outline"
-              >
-                <HugeiconsIcon
-                  aria-hidden="true"
-                  className="-ms-0.5 mr-1.5 opacity-60"
-                  icon={CloudUploadIcon}
-                  size={14}
-                />
-                Upload
-              </Button>
-            </div>
+              <HugeiconsIcon
+                aria-hidden="true"
+                className="-ms-0.5 mr-1.5 opacity-60"
+                icon={CloudUploadIcon}
+                size={14}
+              />
+              Upload
+            </label>
             <Button
               className="h-8 px-3"
+              disabled={resourceLimitReached}
               onClick={addResource}
               size="sm"
               type="button"
@@ -1072,7 +1170,7 @@ export function LessonResourcesFields({
           </>
         }
         count={resources.length}
-        description="A ordem será salva ao salvar a aula."
+        description={`PDF, imagens e documentos · até ${Math.round(MAX_LESSON_ATTACHMENT_BYTES / (1024 * 1024))} MiB por arquivo · ${MAX_LESSON_RESOURCES} itens e ${Math.round(MAX_LESSON_R2_RESOURCES_BYTES / (1024 * 1024))} MiB por aula. A ordem é salva junto com a aula.`}
         title="Anexos"
       />
 
@@ -1104,6 +1202,7 @@ export function LessonResourcesFields({
           {uploadingFiles.map((upload) => (
             <LessonResourceUploadItem
               key={upload.id}
+              onCancel={() => cancelUpload(upload.id)}
               onDiscard={() => discardUpload(upload.id)}
               onRetry={() => {
                 uploadResource(upload.file, upload.id).catch(() => undefined);
@@ -1151,8 +1250,156 @@ interface LessonResourceUpload {
   error?: string;
   file: File;
   id: string;
+  phase?: UploadStatusPhase;
+  progress?: UploadTransferProgress | null | undefined;
   status: "error" | "uploading";
 }
+
+const getLessonResourceUploadValidationMessage = ({
+  file,
+  resources,
+  uploadId,
+  uploadingFiles,
+}: {
+  file: File;
+  resources: EditableLessonResource[];
+  uploadId: string;
+  uploadingFiles: LessonResourceUpload[];
+}): string | null => {
+  try {
+    validateLessonAttachmentUpload({
+      contentType: file.type,
+      fileName: file.name,
+      sizeBytes: file.size,
+    });
+  } catch (error) {
+    return error instanceof Error ? error.message : "Arquivo não permitido.";
+  }
+
+  const isRetryingExistingUpload = uploadingFiles.some(
+    (upload) => upload.id === uploadId
+  );
+  if (
+    !isRetryingExistingUpload &&
+    resources.length + uploadingFiles.length >= MAX_LESSON_RESOURCES
+  ) {
+    return `Cada aula pode ter até ${MAX_LESSON_RESOURCES} materiais.`;
+  }
+
+  const storedBytes = resources.reduce(
+    (total, resource) =>
+      resource.storage === "r2" ? total + resource.sizeBytes : total,
+    0
+  );
+  const pendingBytes = uploadingFiles.reduce(
+    (total, upload) =>
+      upload.id === uploadId ? total : total + upload.file.size,
+    0
+  );
+  if (storedBytes + pendingBytes + file.size > MAX_LESSON_R2_RESOURCES_BYTES) {
+    return "O total de arquivos da aula não pode exceder 750 MiB.";
+  }
+
+  return null;
+};
+
+const upsertLessonResourceUpload = (
+  current: LessonResourceUpload[],
+  file: File,
+  id: string
+): LessonResourceUpload[] => {
+  if (current.some((upload) => upload.id === id)) {
+    return current.map((upload) =>
+      upload.id === id
+        ? {
+            file: upload.file,
+            id: upload.id,
+            phase: "preparing",
+            progress: null,
+            status: "uploading",
+          }
+        : upload
+    );
+  }
+
+  return [...current, { file, id, phase: "preparing", status: "uploading" }];
+};
+
+const patchLessonResourceUpload = (
+  current: LessonResourceUpload[],
+  id: string,
+  patch: Partial<LessonResourceUpload>
+): LessonResourceUpload[] =>
+  current.map((upload) =>
+    upload.id === id ? { ...upload, ...patch } : upload
+  );
+
+const removeLessonResourceUpload = (
+  current: LessonResourceUpload[],
+  id: string
+): LessonResourceUpload[] => current.filter((upload) => upload.id !== id);
+
+const handleLessonResourceUploadFailure = ({
+  error,
+  setUploadingFiles,
+  signal,
+  uploadId,
+}: {
+  error: unknown;
+  setUploadingFiles: React.Dispatch<
+    React.SetStateAction<LessonResourceUpload[]>
+  >;
+  signal: AbortSignal;
+  uploadId: string;
+}): void => {
+  if (isUploadAbortedError(error, signal)) {
+    setUploadingFiles((current) =>
+      removeLessonResourceUpload(current, uploadId)
+    );
+    return;
+  }
+
+  const message =
+    error instanceof Error ? error.message : "Não foi possível enviar.";
+  setUploadingFiles((current) =>
+    patchLessonResourceUpload(current, uploadId, {
+      error: message,
+      status: "error",
+    })
+  );
+};
+
+const createAndUploadLessonResource = async ({
+  file,
+  lessonId,
+  onProgress,
+  onStatus,
+  signal,
+}: {
+  file: File;
+  lessonId: string;
+  onProgress: (progress: UploadTransferProgress) => void;
+  onStatus: (phase: UploadStatusPhase) => void;
+  signal: AbortSignal;
+}): Promise<{
+  preview: LessonResourceUploadPreview | null;
+  reference: LessonResourceUploadReference;
+}> => {
+  const preview = await createImagePreview(file, signal);
+  if (signal.aborted) {
+    throw new UploadAbortedError();
+  }
+
+  const reference = await uploadLessonResource({
+    file,
+    lessonId,
+    onProgress,
+    onStatus,
+    preview,
+    signal,
+  });
+  return { preview, reference };
+};
 
 const createEmptyExternalResource = (): EditableLessonResource => ({
   id: `resource-${crypto.randomUUID()}`,
@@ -1200,13 +1447,17 @@ const normalizeExternalUrl = (value: string): string | null => {
 const imagePreviewTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 const createImagePreview = async (
-  file: File
+  file: File,
+  signal?: AbortSignal
 ): Promise<LessonResourceUploadPreview | null> => {
   if (!imagePreviewTypes.has(file.type)) {
     return null;
   }
 
-  const image = await readImage(file);
+  const image = await readImage(file, signal);
+  if (signal?.aborted) {
+    throw new UploadAbortedError();
+  }
   const { height, width } = LESSON_RESOURCE_IMAGE_PREVIEW;
   const sourceRatio = image.naturalWidth / image.naturalHeight;
   const targetRatio = width / height;
@@ -1241,27 +1492,57 @@ const createImagePreview = async (
     height
   );
 
+  const blob = await canvasToBlob(canvas);
+  if (signal?.aborted) {
+    throw new UploadAbortedError();
+  }
+
   return {
-    blob: await canvasToBlob(canvas),
+    blob,
     contentType: "image/webp",
     height,
     width,
   };
 };
 
-const readImage = async (file: File): Promise<HTMLImageElement> =>
-  await new Promise((resolve, reject) => {
+const readImage = async (
+  file: File,
+  signal?: AbortSignal
+): Promise<HTMLImageElement> =>
+  await new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     const url = URL.createObjectURL(file);
+    let settled = false;
+    const cleanup = (): void => {
+      signal?.removeEventListener("abort", abort);
+      image.onload = null;
+      image.onerror = null;
+      URL.revokeObjectURL(url);
+    };
+    const finish = (error?: Error): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      if (error) {
+        reject(error);
+      } else {
+        resolve(image);
+      }
+    };
+    const abort = (): void => {
+      image.src = "";
+      finish(new UploadAbortedError());
+    };
 
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Não foi possível ler a imagem."));
-    };
+    if (signal?.aborted) {
+      finish(new UploadAbortedError());
+      return;
+    }
+    image.onload = () => finish();
+    image.onerror = () => finish(new Error("Não foi possível ler a imagem."));
+    signal?.addEventListener("abort", abort, { once: true });
     image.src = url;
   });
 

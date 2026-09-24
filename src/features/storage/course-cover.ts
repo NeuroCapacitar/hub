@@ -2,6 +2,7 @@ import { sanitizeR2FileName } from "@/features/storage/r2-objects";
 
 export const COURSE_COVER_CARD_WIDTH = 1280;
 export const COURSE_COVER_CARD_HEIGHT = 720;
+export const COURSE_COVER_STORAGE_PREFIX = "courses/";
 export const COURSE_COVER_ASPECT_RATIO =
   COURSE_COVER_CARD_WIDTH / COURSE_COVER_CARD_HEIGHT;
 
@@ -18,8 +19,18 @@ export type CourseCoverVariant = CourseCoverOutputVariant | "thumb";
 export const COURSE_COVER_ACCEPT = ".jpg,.jpeg,.png,.webp";
 
 export const MAX_COURSE_COVER_UPLOAD_BYTES = 4 * 1024 * 1024;
-const ALLOWED_UPLOAD_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+export const COURSE_COVER_ALLOWED_CONTENT_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+const ALLOWED_UPLOAD_TYPES = new Set<string>(
+  COURSE_COVER_ALLOWED_CONTENT_TYPES
+);
 const ALLOWED_UPLOAD_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
+
+export const isCourseCoverUploadContentType = (value: string): boolean =>
+  ALLOWED_UPLOAD_TYPES.has(value);
 
 export interface CourseCoverOriginal {
   contentType: string;
@@ -89,7 +100,13 @@ export const buildCourseCoverObjectKey = ({
   nonce: string;
   variant: CourseCoverOutputVariant;
 }): string =>
-  `courses/${courseId}/cover/${nonce}-${variant}.${sanitizeR2FileName(extension).replaceAll(".", "")}`;
+  `${COURSE_COVER_STORAGE_PREFIX}${courseId}/cover/${nonce}-${variant}.${sanitizeR2FileName(extension).replaceAll(".", "")}`;
+
+export const isCourseCoverStorageKey = (key: string): boolean =>
+  key.startsWith(COURSE_COVER_STORAGE_PREFIX) &&
+  key.includes("/cover/") &&
+  !key.includes("..") &&
+  !key.includes("\\");
 
 const validateCourseCoverUpload = (
   upload: CourseCoverUploadRequest["upload"]
@@ -113,7 +130,7 @@ const validateCourseCoverUpload = (
   }
 
   if (upload.sizeBytes > MAX_COURSE_COVER_UPLOAD_BYTES) {
-    throw new Error("Imagem maior que 4 MB.");
+    throw new Error("Imagem maior que 4 MiB.");
   }
 };
 

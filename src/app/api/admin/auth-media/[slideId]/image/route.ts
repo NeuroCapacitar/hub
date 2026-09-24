@@ -16,6 +16,12 @@ export async function GET(
     return new NextResponse("Not Found", { status: 404 });
   }
 
-  const signedUrl = await createR2ObjectReadUrl({ key: imageKey });
-  return NextResponse.redirect(signedUrl);
+  const signedUrl = await createR2ObjectReadUrl({
+    key: imageKey,
+    responseCacheControl: "private, max-age=240",
+  });
+  const response = NextResponse.redirect(signedUrl);
+  response.headers.set("Cache-Control", "private, max-age=240");
+  response.headers.set("Vary", "Cookie");
+  return response;
 }

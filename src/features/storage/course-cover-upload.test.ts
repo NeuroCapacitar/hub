@@ -59,7 +59,7 @@ describe("course cover upload", () => {
     });
 
     expect(() => readCourseCoverFile(oversized)).toThrow(
-      "Imagem maior que 4 MB."
+      "Imagem maior que 4 MiB."
     );
 
     const invalidExtension = await createImageFile({

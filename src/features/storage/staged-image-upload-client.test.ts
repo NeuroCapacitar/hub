@@ -1,4 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { uploadBlobWithProgressMock } = vi.hoisted(() => ({
+  uploadBlobWithProgressMock: vi.fn(),
+}));
+
+vi.mock("./xhr-upload", () => ({
+  isUploadAbortedError: (error: unknown, signal?: AbortSignal) =>
+    signal?.aborted === true ||
+    (error instanceof Error && error.name === "AbortError"),
+  UploadAbortedError: class UploadAbortedError extends Error {
+    constructor() {
+      super("O envio foi cancelado.");
+      this.name = "AbortError";
+    }
+  },
+  uploadBlobWithProgress: uploadBlobWithProgressMock,
+}));
+
 import { uploadStagedAdminImage } from "./staged-image-upload-client";
 
 const reference = {
@@ -13,6 +31,7 @@ const reference = {
 describe("uploadStagedAdminImage", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    uploadBlobWithProgressMock.mockReset();
   });
 
   it("prepares an actor-scoped upload and sends the binary directly to R2", async () => {
@@ -24,15 +43,17 @@ describe("uploadStagedAdminImage", () => {
           uploadUrl: "https://r2.example.test/signed-upload",
         })
       )
-      .mockResolvedValueOnce(new Response(null, { status: 200 }))
       .mockResolvedValueOnce(Response.json({ reference }));
     vi.stubGlobal("fetch", fetchMock);
+    uploadBlobWithProgressMock.mockResolvedValue(undefined);
     const file = new File(["capa"], "capa.png", { type: "image/png" });
+    const onStatus = vi.fn();
 
     await expect(
       uploadStagedAdminImage({
         aggregateId: reference.aggregateId,
         file,
+        onStatus,
         purpose: "course-cover",
       })
     ).resolves.toEqual(reference);
@@ -51,13 +72,20 @@ describe("uploadStagedAdminImage", () => {
         method: "POST",
       })
     );
+    expect(uploadBlobWithProgressMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: file,
+        headers: { "content-type": "image/png" },
+        url: "https://r2.example.test/signed-upload",
+      })
+    );
+    expect(onStatus.mock.calls.map(([status]) => status.phase)).toEqual([
+      "preparing",
+      "uploading",
+      "confirming",
+    ]);
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "https://r2.example.test/signed-upload",
-      expect.objectContaining({ body: file, method: "PUT" })
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
       "/api/admin/uploads/images/confirm",
       expect.objectContaining({
         body: JSON.stringify({ reference }),
@@ -93,9 +121,11 @@ describe("uploadStagedAdminImage", () => {
           uploadUrl: "https://r2.example.test/signed-upload",
         })
       )
-      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
       .mockResolvedValueOnce(Response.json({ reference }));
     vi.stubGlobal("fetch", fetchMock);
+    uploadBlobWithProgressMock.mockRejectedValueOnce(
+      new TypeError("Failed to fetch")
+    );
     const file = new File(["capa"], "capa.png", { type: "image/png" });
 
     await expect(
@@ -106,14 +136,38 @@ describe("uploadStagedAdminImage", () => {
       })
     ).resolves.toEqual(reference);
 
-    const fallbackRequest = fetchMock.mock.calls[2]?.[1] as RequestInit;
+    const fallbackRequest = fetchMock.mock.calls[1]?.[1] as RequestInit;
     const formData = fallbackRequest.body as FormData;
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      2,
       "/api/admin/uploads/images/upload",
       expect.objectContaining({ method: "POST" })
     );
     expect(formData.get("file")).toBe(file);
     expect(formData.get("reference")).toBe(JSON.stringify(reference));
+  });
+
+  it("never falls back to the server after cancellation", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      Response.json({
+        reference,
+        uploadUrl: "https://r2.example.test/signed-upload",
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+    uploadBlobWithProgressMock.mockRejectedValueOnce(
+      new (await import("./xhr-upload")).UploadAbortedError()
+    );
+
+    await expect(
+      uploadStagedAdminImage({
+        aggregateId: reference.aggregateId,
+        file: new File(["capa"], "capa.png", { type: "image/png" }),
+        purpose: "course-cover",
+        signal: controller.signal,
+      })
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -15,6 +15,33 @@ describe("admin actions and schema", () => {
     expect(bannerSection).not.toContain('requireRole(["admin", "support"])');
   });
 
+  it("uses the prior banner row snapshot as an optimistic write guard", async () => {
+    const source = await readFile(
+      new URL("./actions.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(source).toContain(
+      "where id = $6 and image_url = $7 and blur_data_url is not distinct from $8"
+    );
+    expect(source).toContain("updatedBanner.rowCount !== 1");
+    expect(source).toContain("return false;");
+  });
+
+  it("defers banner object deletion until cache-safe reconciliation", async () => {
+    const source = await readFile(
+      new URL("./actions.ts", import.meta.url),
+      "utf8"
+    );
+    const deleteBannerSection = source.slice(
+      source.indexOf("export const deleteBannerAction"),
+      source.indexOf("export const reorderBannersAction")
+    );
+
+    expect(deleteBannerSection).not.toContain("deleteR2Objects");
+    expect(deleteBannerSection).not.toContain("deletePublicR2Objects");
+  });
+
   it("returns retry delete failures as action state instead of throwing a server error", async () => {
     const source = await readFile(
       new URL("./actions.ts", import.meta.url),

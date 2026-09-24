@@ -179,13 +179,70 @@ describe("CourseCoverUploadField", () => {
     );
     await act(async () => undefined);
 
-    expect(stagedUploadMock).toHaveBeenCalledWith({
-      aggregateId,
-      file: expect.objectContaining({
-        name: "cropped.webp",
-        type: "image/webp",
-      }),
-      purpose: "course-cover",
+    expect(stagedUploadMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aggregateId,
+        file: expect.objectContaining({
+          name: "cropped.webp",
+          type: "image/webp",
+        }),
+        purpose: "course-cover",
+      })
+    );
+  });
+
+  it("aborts a selected cover upload and restores the persisted preview", async () => {
+    let uploadSignal: AbortSignal | undefined;
+    stagedUploadMock.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) => {
+        uploadSignal = signal;
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true }
+          );
+        });
+      }
+    );
+
+    act(() => {
+      root.render(
+        <CourseCoverUploadField
+          aggregateId={aggregateId}
+          defaultThumbnailUrl="https://media.example/persisted.webp"
+        />
+      );
     });
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["source"], "source.png", { type: "image/png" })],
+    });
+    act(() => input?.dispatchEvent(new Event("change", { bubbles: true })));
+    act(() =>
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent === "Confirmar recorte")
+        ?.click()
+    );
+    await act(async () => undefined);
+
+    expect(uploadSignal?.aborted).toBe(false);
+    act(() =>
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent === "Cancelar")
+        ?.click()
+    );
+
+    expect(uploadSignal?.aborted).toBe(true);
+    expect(
+      container.querySelector<HTMLInputElement>(
+        'input[name="coverUploadPending"]'
+      )?.value
+    ).toBe("");
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(
+      "https://media.example/persisted.webp"
+    );
   });
 });

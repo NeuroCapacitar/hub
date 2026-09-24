@@ -1406,31 +1406,6 @@ const recalculateCourseWorkloadForTransaction = async (
   }
 };
 
-const getCourseR2ObjectKeys = async (courseId: string): Promise<string[]> => {
-  const [courseResult, lessonResult] = await Promise.all([
-    getPool().query<{ cover_image_json: unknown }>(
-      "select cover_image_json from courses where id = $1 limit 1",
-      [courseId]
-    ),
-    getPool().query<{ content_json: unknown }>(
-      `
-        select l.content_json
-        from lessons l
-        join modules m on m.id = l.module_id
-        where m.course_id = $1
-      `,
-      [courseId]
-    ),
-  ]);
-
-  return [
-    ...getCourseCoverStorageKeys(courseResult.rows[0]?.cover_image_json),
-    ...lessonResult.rows.flatMap((row) =>
-      getLessonContentStorageKeys(row.content_json)
-    ),
-  ];
-};
-
 const deleteRemovedR2Objects = async ({
   lessonId,
   nextKeys,
@@ -1906,14 +1881,12 @@ const updateExistingCourse = async ({
   courseId,
   coverFile,
   formData,
-  previousCoverKeys,
   values,
 }: {
   actorUserId: string;
   courseId: string;
   coverFile: CourseCoverFile | null;
   formData: FormData;
-  previousCoverKeys: string[];
   values: CourseFormValues;
 }): Promise<void> => {
   const { coverImage: expectedPreviousCoverImage, shouldPublish } =
@@ -1950,15 +1923,6 @@ const updateExistingCourse = async ({
     ]);
     throw error;
   }
-
-  const nextCoverKeys = getCourseCoverStorageKeys(nextCoverImage);
-  const removedKeys = previousCoverKeys.filter(
-    (key) => !nextCoverKeys.includes(key)
-  );
-  await Promise.all([
-    deleteR2Objects(removedKeys),
-    deletePublicR2Objects(removedKeys),
-  ]);
 };
 
 const createNewCourse = async ({
@@ -2111,12 +2075,6 @@ export const saveCourse = async ({
     throw new Error("Upload temporario de capa invalido.");
   }
   const savedCourseId = courseId || coverUpload?.aggregateId || randomUUID();
-  const previousCoverKeys = courseId
-    ? (await getCourseR2ObjectKeys(courseId)).filter((key) =>
-        key.includes("/cover/")
-      )
-    : [];
-
   const persistCourse = async (
     coverFile: CourseCoverFile | null
   ): Promise<void> => {
@@ -2126,7 +2084,6 @@ export const saveCourse = async ({
         courseId,
         coverFile,
         formData,
-        previousCoverKeys,
         values,
       });
       return;

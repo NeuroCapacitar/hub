@@ -216,6 +216,7 @@ function CourseSettingsEditor({
   course: CourseData;
 }): React.JSX.Element {
   const [isPending, startTransition] = useTransition();
+  const [isCoverUploading, setIsCoverUploading] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingPriceChange, setPendingPriceChange] =
@@ -260,6 +261,9 @@ function CourseSettingsEditor({
   );
 
   const saveCourseSettings = (formData: FormData): void => {
+    if (isCoverUploading) {
+      return;
+    }
     setErrorMessage(null);
     const toastId = toast.loading("Salvando configurações…");
 
@@ -282,6 +286,9 @@ function CourseSettingsEditor({
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
+    if (isCoverUploading) {
+      return;
+    }
     const formData = new FormData(e.currentTarget);
 
     try {
@@ -333,6 +340,7 @@ function CourseSettingsEditor({
                     className="sm:w-[208px]"
                     defaultCoverImage={course.coverImage}
                     defaultThumbnailUrl={course.thumbnailUrl}
+                    onUploadingChange={setIsCoverUploading}
                   />
                 </Field>
                 <div className="grid gap-5">
@@ -517,7 +525,7 @@ function CourseSettingsEditor({
           </div>
 
           <div className="flex justify-end border-t pt-6">
-            <Button loading={isPending} type="submit">
+            <Button loading={isPending || isCoverUploading} type="submit">
               {isPending ? null : (
                 <HugeiconsIcon
                   aria-hidden="true"

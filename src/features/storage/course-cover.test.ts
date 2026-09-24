@@ -1,17 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCourseCoverObjectKey,
+  COURSE_COVER_ALLOWED_CONTENT_TYPES,
   COURSE_COVER_ASPECT_RATIO,
   COURSE_COVER_CARD_HEIGHT,
   COURSE_COVER_CARD_WIDTH,
   getCourseCoverPublicStorageKeys,
   getCourseCoverStorageKeys,
   getCourseCoverVariantPath,
+  isCourseCoverUploadContentType,
+  MAX_COURSE_COVER_UPLOAD_BYTES,
   parseCourseCoverImage,
   validateCourseCoverUploadRequest,
 } from "./course-cover";
 
 describe("course cover storage", () => {
+  it("shares the supported upload formats and byte limit with the client field", () => {
+    expect(COURSE_COVER_ALLOWED_CONTENT_TYPES).toEqual([
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ]);
+    expect(isCourseCoverUploadContentType("image/webp")).toBe(true);
+    expect(isCourseCoverUploadContentType("image/svg+xml")).toBe(false);
+    expect(MAX_COURSE_COVER_UPLOAD_BYTES).toBe(4 * 1024 * 1024);
+  });
+
   it("defines the single course cover image as 1280x720 at 16:9", () => {
     expect(COURSE_COVER_CARD_WIDTH).toBe(1280);
     expect(COURSE_COVER_CARD_HEIGHT).toBe(720);
@@ -84,7 +98,7 @@ describe("course cover storage", () => {
         },
         variants: [],
       })
-    ).toThrow("Imagem maior que 4 MB.");
+    ).toThrow("Imagem maior que 4 MiB.");
 
     expect(() =>
       validateCourseCoverUploadRequest({

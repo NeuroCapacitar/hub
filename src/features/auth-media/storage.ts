@@ -4,19 +4,15 @@ import {
   AUTH_MEDIA_PUBLIC_PREFIX,
   isAuthMediaObjectKey,
 } from "@/features/auth-media/contract";
+import { reconcileUnreferencedR2Objects } from "@/features/storage/orphan-reconciliation";
 import {
   deletePublicR2Objects,
   deleteR2Objects,
-  listPrivateR2Objects,
-  listPublicR2Objects,
   publishR2Object,
-  type R2ObjectSummary,
 } from "@/features/storage/r2";
 
 const AUTH_MEDIA_STORAGE_MAX_ATTEMPTS = 3;
 const AUTH_MEDIA_STORAGE_RETRY_DELAYS_MS = [100, 250] as const;
-const AUTH_MEDIA_CLEANUP_GRACE_MS = 24 * 60 * 60 * 1000;
-const AUTH_MEDIA_CLEANUP_LIMIT = 100;
 
 type Wait = (durationMs: number) => Promise<void>;
 
@@ -114,54 +110,19 @@ export const reconcileAuthMediaStorage = async ({
     return reconciled;
   }
 
-  let privateObjects: R2ObjectSummary[] = [];
-  let publicObjects: R2ObjectSummary[] = [];
-  try {
-    [privateObjects, publicObjects] = await Promise.all([
-      listPrivateR2Objects(AUTH_MEDIA_PUBLIC_PREFIX),
-      listPublicR2Objects(AUTH_MEDIA_PUBLIC_PREFIX),
-    ]);
-  } catch {
-    return reconciled;
-  }
-
   const referencedKeys = new Set(
     activeRows.rows
       .map((row) => row.image_url)
       .filter((key) => isAuthMediaObjectKey(key))
   );
-  const latestObjectTimes = new Map<string, number>();
-  for (const object of [...privateObjects, ...publicObjects]) {
-    if (!isAuthMediaObjectKey(object.key) || referencedKeys.has(object.key)) {
-      continue;
-    }
+  const orphanedObjectsRemoved = await reconcileUnreferencedR2Objects({
+    isEligibleKey: isAuthMediaObjectKey,
+    now,
+    prefix: AUTH_MEDIA_PUBLIC_PREFIX,
+    referencedKeys,
+    removeObject: removeAuthMediaObject,
+    shouldContinue,
+  });
 
-    latestObjectTimes.set(
-      object.key,
-      Math.max(
-        latestObjectTimes.get(object.key) ?? Number.NEGATIVE_INFINITY,
-        object.lastModified.getTime()
-      )
-    );
-  }
-
-  const olderThan = now.getTime() - AUTH_MEDIA_CLEANUP_GRACE_MS;
-  const staleKeys = [...latestObjectTimes.entries()]
-    .filter(([, lastModified]) => lastModified < olderThan)
-    .map(([key]) => key)
-    .slice(0, AUTH_MEDIA_CLEANUP_LIMIT);
-
-  for (const key of staleKeys) {
-    if (!(await shouldContinue())) {
-      break;
-    }
-    try {
-      await removeAuthMediaObject(key);
-      reconciled += 1;
-    } catch {
-      // Keep the key for the next maintenance retry.
-    }
-  }
-
-  return reconciled;
+  return reconciled + orphanedObjectsRemoved;
 };

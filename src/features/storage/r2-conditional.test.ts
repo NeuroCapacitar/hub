@@ -44,6 +44,8 @@ import {
 
 describe("uploadPrivateR2ObjectIfAbsent", () => {
   beforeEach(() => {
+    dependencies.send.mockReset();
+    dependencies.getSignedUrl.mockReset();
     vi.stubEnv("R2_ACCESS_KEY_ID", "access-key");
     vi.stubEnv("R2_ACCOUNT_ID", "account");
     vi.stubEnv("R2_BUCKET_NAME", "private");
@@ -172,10 +174,16 @@ describe("uploadPrivateR2ObjectIfAbsent", () => {
 
   it("uses physical Staging keys for lesson checks and publication", async () => {
     vi.stubEnv("R2_OBJECT_PREFIX", "staging");
-    dependencies.send.mockResolvedValue({
-      ContentLength: 100,
-      ContentType: "application/pdf",
-    });
+    dependencies.send
+      .mockResolvedValueOnce({
+        ContentLength: 100,
+        ContentType: "application/pdf",
+      })
+      .mockResolvedValueOnce({
+        ContentType: "image/webp",
+        Metadata: { uploadedBy: "admin" },
+      })
+      .mockResolvedValueOnce({});
 
     await confirmLessonResourceUpload({
       contentType: "application/pdf",
@@ -196,8 +204,20 @@ describe("uploadPrivateR2ObjectIfAbsent", () => {
       2,
       expect.objectContaining({
         input: expect.objectContaining({
-          CopySource: "/private/staging%2Fcourses%2Fcourse-1%2Fcover.webp",
           Key: "staging/courses/course-1/cover.webp",
+        }),
+      })
+    );
+    expect(dependencies.send).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        input: expect.objectContaining({
+          CopySource: "/private/staging%2Fcourses%2Fcourse-1%2Fcover.webp",
+          CacheControl: "public, max-age=3600, immutable",
+          ContentType: "image/webp",
+          Key: "staging/courses/course-1/cover.webp",
+          MetadataDirective: "REPLACE",
+          Metadata: { uploadedBy: "admin" },
         }),
       })
     );

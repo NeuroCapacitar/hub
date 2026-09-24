@@ -44,6 +44,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { UploadProgressStatus } from "@/components/ui/upload-progress-status";
 import {
   publishCertificateTemplateFormAction,
   saveCertificateTemplateDraftFormAction,
@@ -63,6 +64,11 @@ import {
 } from "@/features/certificates/template-rules";
 import type { StagedAdminImageReference } from "@/features/storage/staged-image-upload";
 import { uploadStagedAdminImage } from "@/features/storage/staged-image-upload-client";
+import {
+  isUploadAbortedError,
+  type UploadStatusPhase,
+  type UploadTransferProgress,
+} from "@/features/storage/xhr-upload";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useOwnedObjectUrl } from "@/hooks/use-owned-object-url";
 import { certificateTemplateFieldLabels } from "./certificate-template-field-labels";
@@ -302,12 +308,21 @@ const CertificateTemplateInspector = ({
   children,
   disabled,
   hasPublishableChanges,
+  imageUploadStatus,
+  onCancelImageUpload,
   overlaps,
   templateFieldError,
 }: {
   children: React.ReactNode;
   disabled: boolean;
   hasPublishableChanges: boolean;
+  imageUploadStatus: {
+    fileName: string;
+    phase: UploadStatusPhase;
+    progress?: UploadTransferProgress | null | undefined;
+    target: "background" | "signature";
+  } | null;
+  onCancelImageUpload: () => void;
   overlaps: ReturnType<typeof findCertificateTemplateOverlaps>;
   templateFieldError: string | undefined;
 }): React.JSX.Element => (
@@ -321,6 +336,19 @@ const CertificateTemplateInspector = ({
         />
       </div>
     ) : null}
+    {imageUploadStatus ? (
+      <div
+        className="mb-3"
+        data-certificate-upload-target={imageUploadStatus.target}
+      >
+        <UploadProgressStatus
+          fileName={imageUploadStatus.fileName}
+          onCancel={onCancelImageUpload}
+          phase={imageUploadStatus.phase}
+          progress={imageUploadStatus.progress}
+        />
+      </div>
+    ) : null}
     <fieldset className="flex min-w-0 flex-col gap-3" disabled={disabled}>
       {children}
     </fieldset>
@@ -329,16 +357,16 @@ const CertificateTemplateInspector = ({
 
 const selectBackgroundFile = ({
   file,
+  markDirty,
   setBackgroundFile,
   setBackgroundRemoved,
   setCropSource,
-  setIsDirty,
 }: {
   file: File | null;
+  markDirty: () => void;
   setBackgroundFile: (file: File | null) => void;
   setBackgroundRemoved: (removed: boolean) => void;
   setCropSource: (file: File | null) => void;
-  setIsDirty: (dirty: boolean) => void;
 }): void => {
   if (file) {
     setCropSource(file);
@@ -346,23 +374,45 @@ const selectBackgroundFile = ({
   }
   setBackgroundFile(null);
   setBackgroundRemoved(true);
-  setIsDirty(true);
+  markDirty();
 };
 
 const selectSignatureFile = ({
   file,
-  setIsDirty,
+  markDirty,
   setSignatureFile,
   setSignatureRemoved,
 }: {
   file: File | null;
-  setIsDirty: (dirty: boolean) => void;
+  markDirty: () => void;
   setSignatureFile: (file: File | null) => void;
   setSignatureRemoved: (removed: boolean) => void;
 }): void => {
   setSignatureFile(file);
   setSignatureRemoved(!file);
-  setIsDirty(true);
+  markDirty();
+};
+
+const handleCertificateImageUploadFailure = ({
+  error,
+  fallback,
+  isCurrent,
+  restore,
+  signal,
+}: {
+  error: unknown;
+  fallback: string;
+  isCurrent: boolean;
+  restore: () => void;
+  signal: AbortSignal;
+}): void => {
+  if (!isCurrent) {
+    return;
+  }
+  restore();
+  if (!isUploadAbortedError(error, signal)) {
+    toast.error(error instanceof Error ? error.message : fallback);
+  }
 };
 
 const notifyTemplateAction = ({
@@ -404,6 +454,11 @@ export function CertificateTemplateForm({
   const isCompact = useMediaQuery("(max-width: 1023px)");
   const backgroundUploadRequestIdRef = useRef(0);
   const signatureUploadRequestIdRef = useRef(0);
+  const activeImageUploadRef = useRef<{
+    controller: AbortController;
+    requestId: number;
+    target: "background" | "signature";
+  } | null>(null);
   const [fields, setFields] = useState<CertificateTemplateField[]>(() =>
     template?.spec.fields
       ? ensureCertificateTemplateFields(template.spec.fields)
@@ -436,8 +491,20 @@ export function CertificateTemplateForm({
     useState<StagedAdminImageReference | null>(null);
   const [signatureRemoved, setSignatureRemoved] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const dirtyRevisionRef = useRef(0);
+  const markDirty = useCallback((): void => {
+    dirtyRevisionRef.current += 1;
+    setIsDirty(true);
+  }, []);
   const [lastAction, setLastAction] = useState<"save" | "publish" | null>(null);
   const [pendingImageUploads, setPendingImageUploads] = useState(0);
+  const [imageUploadStatus, setImageUploadStatus] = useState<{
+    fileName: string;
+    phase: UploadStatusPhase;
+    progress?: UploadTransferProgress | null | undefined;
+    requestId: number;
+    target: "background" | "signature";
+  } | null>(null);
   const [signerName, setSignerName] = useState(template?.signerName ?? "");
   const [signerRole, setSignerRole] = useState(template?.signerRole ?? "");
   const backgroundObjectUrl = useOwnedObjectUrl(backgroundFile);
@@ -465,6 +532,23 @@ export function CertificateTemplateForm({
   } | null>(null);
   const [publishConfirmationOpen, setPublishConfirmationOpen] = useState(false);
   const pendingPublishFormDataRef = useRef<FormData | null>(null);
+
+  useEffect(
+    () => () => {
+      const activeUpload = activeImageUploadRef.current;
+      if (!activeUpload) {
+        return;
+      }
+      if (activeUpload.target === "background") {
+        backgroundUploadRequestIdRef.current += 1;
+      } else {
+        signatureUploadRequestIdRef.current += 1;
+      }
+      activeUpload.controller.abort();
+      activeImageUploadRef.current = null;
+    },
+    []
+  );
 
   const selectField = useCallback(
     (field: CertificateField | null): void => {
@@ -617,7 +701,7 @@ export function CertificateTemplateForm({
         fieldHistoryRef.current.push(currentFields);
         setUndoCount(fieldHistoryRef.current.length);
       }
-      setIsDirty(true);
+      markDirty();
       applyFields(
         currentFields.map((field) => {
           if (field.field !== name) {
@@ -636,7 +720,7 @@ export function CertificateTemplateForm({
         })
       );
     },
-    [applyFields]
+    [applyFields, markDirty]
   );
   const updateFieldPosition = useCallback(
     (
@@ -644,7 +728,9 @@ export function CertificateTemplateForm({
       position: Pick<CertificateTemplateField, "x" | "y">
     ): void => {
       const currentFields = fieldsRef.current;
-      setIsDirty(true);
+      if (!fieldInteractionSnapshotRef.current) {
+        markDirty();
+      }
       applyFields(
         currentFields.map((field) =>
           field.field === name
@@ -653,7 +739,7 @@ export function CertificateTemplateForm({
         )
       );
     },
-    [applyFields]
+    [applyFields, markDirty]
   );
   const updateFieldGeometry = useCallback(
     (
@@ -661,14 +747,16 @@ export function CertificateTemplateForm({
       geometry: Pick<CertificateTemplateField, "height" | "width" | "x" | "y">
     ): void => {
       const currentFields = fieldsRef.current;
-      setIsDirty(true);
+      if (!fieldInteractionSnapshotRef.current) {
+        markDirty();
+      }
       applyFields(
         currentFields.map((field) =>
           field.field === name ? { ...field, ...geometry } : field
         )
       );
     },
-    [applyFields]
+    [applyFields, markDirty]
   );
   const beginFieldInteraction = useCallback((): void => {
     if (fieldInteractionSnapshotRef.current) {
@@ -690,9 +778,10 @@ export function CertificateTemplateForm({
         return;
       }
       fieldHistoryRef.current.push(snapshot);
+      markDirty();
       setUndoCount(fieldHistoryRef.current.length);
     },
-    [applyFields]
+    [applyFields, markDirty]
   );
   const undoLastFieldInteraction = useCallback((): void => {
     const previousFields = fieldHistoryRef.current.pop();
@@ -700,9 +789,9 @@ export function CertificateTemplateForm({
       return;
     }
     applyFields(previousFields);
-    setIsDirty(true);
+    markDirty();
     setUndoCount(fieldHistoryRef.current.length);
-  }, [applyFields]);
+  }, [applyFields, markDirty]);
 
   useEffect(() => {
     if (undoCount === 0) {
@@ -733,14 +822,21 @@ export function CertificateTemplateForm({
 
   const handleSignatureFileSelect = useCallback(
     async (file: File | null): Promise<void> => {
+      if (file && activeImageUploadRef.current) {
+        toast.error(
+          "Aguarde ou cancele o envio atual antes de trocar a imagem."
+        );
+        return;
+      }
       const requestId = signatureUploadRequestIdRef.current + 1;
       signatureUploadRequestIdRef.current = requestId;
       const previousSignatureFile = signatureFile;
       const previousSignatureRemoved = signatureRemoved;
       const previousSignatureUpload = signatureUpload;
+      const previousIsDirty = isDirty;
       selectSignatureFile({
         file,
-        setIsDirty,
+        markDirty,
         setSignatureFile,
         setSignatureRemoved,
       });
@@ -748,57 +844,101 @@ export function CertificateTemplateForm({
       if (!file) {
         return;
       }
+      const dirtyRevisionAtUploadStart = dirtyRevisionRef.current;
 
+      const controller = new AbortController();
+      activeImageUploadRef.current = {
+        controller,
+        requestId,
+        target: "signature",
+      };
+      setImageUploadStatus({
+        fileName: file.name,
+        phase: "preparing",
+        requestId,
+        target: "signature",
+      });
       setPendingImageUploads((current) => current + 1);
       try {
         const upload = await uploadStagedAdminImage({
           aggregateId: courseId,
           file,
+          onStatus: ({ phase, progress }) =>
+            setImageUploadStatus((current) =>
+              current?.requestId === requestId
+                ? { ...current, phase, progress }
+                : current
+            ),
           purpose: "certificate-signature",
+          signal: controller.signal,
         });
         if (signatureUploadRequestIdRef.current !== requestId) {
           return;
         }
         setSignatureUpload(upload);
       } catch (error) {
-        if (signatureUploadRequestIdRef.current !== requestId) {
-          return;
-        }
-        setSignatureFile(previousSignatureFile);
-        setSignatureRemoved(previousSignatureRemoved);
-        setSignatureUpload(previousSignatureUpload);
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível enviar a assinatura."
-        );
+        handleCertificateImageUploadFailure({
+          error,
+          fallback: "Não foi possível enviar a assinatura.",
+          isCurrent: signatureUploadRequestIdRef.current === requestId,
+          restore: () => {
+            setSignatureFile(previousSignatureFile);
+            setSignatureRemoved(previousSignatureRemoved);
+            setSignatureUpload(previousSignatureUpload);
+            setIsDirty(
+              previousIsDirty ||
+                dirtyRevisionRef.current !== dirtyRevisionAtUploadStart
+            );
+          },
+          signal: controller.signal,
+        });
       } finally {
-        setPendingImageUploads((current) => Math.max(0, current - 1));
+        if (activeImageUploadRef.current?.controller === controller) {
+          activeImageUploadRef.current = null;
+          setImageUploadStatus(null);
+          setPendingImageUploads((current) => Math.max(0, current - 1));
+        }
       }
     },
-    [courseId, signatureFile, signatureRemoved, signatureUpload]
+    [
+      courseId,
+      isDirty,
+      markDirty,
+      signatureFile,
+      signatureRemoved,
+      signatureUpload,
+    ]
   );
-  const handleSignerNameChange = useCallback((value: string): void => {
-    setSignerName(value);
-    setIsDirty(true);
-  }, []);
-  const handleSignerRoleChange = useCallback((value: string): void => {
-    setSignerRole(value);
-    setIsDirty(true);
-  }, []);
-  const handleBackgroundFileSelect = useCallback((file: File | null): void => {
-    if (!file) {
-      backgroundUploadRequestIdRef.current += 1;
-      setBackgroundUpload(null);
-    }
-    selectBackgroundFile({
-      file,
-      setBackgroundFile,
-      setBackgroundRemoved,
-      setCropSource,
-      setIsDirty,
-    });
-  }, []);
+  const handleSignerNameChange = useCallback(
+    (value: string): void => {
+      setSignerName(value);
+      markDirty();
+    },
+    [markDirty]
+  );
+  const handleSignerRoleChange = useCallback(
+    (value: string): void => {
+      setSignerRole(value);
+      markDirty();
+    },
+    [markDirty]
+  );
+  const handleBackgroundFileSelect = useCallback(
+    (file: File | null): void => {
+      if (!file) {
+        backgroundUploadRequestIdRef.current += 1;
+        setBackgroundUpload(null);
+      }
+      selectBackgroundFile({
+        file,
+        setBackgroundFile,
+        setBackgroundRemoved,
+        setCropSource,
+        markDirty,
+      });
+    },
+    [markDirty]
+  );
   const isBusy = isSaving || isPublishing || pendingImageUploads > 0;
   const hasPublishableChanges = isDirty || template?.status === "draft";
   const selectedFieldConfig = selectedField
@@ -853,6 +993,10 @@ export function CertificateTemplateForm({
     <CertificateTemplateInspector
       disabled={isBusy}
       hasPublishableChanges={hasPublishableChanges}
+      imageUploadStatus={imageUploadStatus}
+      onCancelImageUpload={() =>
+        activeImageUploadRef.current?.controller.abort()
+      }
       overlaps={overlaps}
       templateFieldError={templateFieldError}
     >
@@ -914,41 +1058,76 @@ export function CertificateTemplateForm({
           file={cropSource}
           onCancel={() => setCropSource(null)}
           onComplete={async (file) => {
+            if (activeImageUploadRef.current) {
+              toast.error(
+                "Aguarde ou cancele o envio atual antes de trocar a imagem."
+              );
+              return;
+            }
             const requestId = backgroundUploadRequestIdRef.current + 1;
             backgroundUploadRequestIdRef.current = requestId;
             const previousBackgroundFile = backgroundFile;
             const previousBackgroundRemoved = backgroundRemoved;
             const previousBackgroundUpload = backgroundUpload;
+            const previousIsDirty = isDirty;
             setBackgroundFile(file);
             setBackgroundRemoved(false);
             setCropSource(null);
-            setIsDirty(true);
+            markDirty();
+            const dirtyRevisionAtUploadStart = dirtyRevisionRef.current;
             setBackgroundUpload(null);
+            const controller = new AbortController();
+            activeImageUploadRef.current = {
+              controller,
+              requestId,
+              target: "background",
+            };
+            setImageUploadStatus({
+              fileName: file.name,
+              phase: "preparing",
+              requestId,
+              target: "background",
+            });
             setPendingImageUploads((current) => current + 1);
             try {
               const upload = await uploadStagedAdminImage({
                 aggregateId: courseId,
                 file,
+                onStatus: ({ phase, progress }) =>
+                  setImageUploadStatus((current) =>
+                    current?.requestId === requestId
+                      ? { ...current, phase, progress }
+                      : current
+                  ),
                 purpose: "certificate-background",
+                signal: controller.signal,
               });
               if (backgroundUploadRequestIdRef.current !== requestId) {
                 return;
               }
               setBackgroundUpload(upload);
             } catch (error) {
-              if (backgroundUploadRequestIdRef.current !== requestId) {
-                return;
-              }
-              setBackgroundFile(previousBackgroundFile);
-              setBackgroundRemoved(previousBackgroundRemoved);
-              setBackgroundUpload(previousBackgroundUpload);
-              toast.error(
-                error instanceof Error
-                  ? error.message
-                  : "Não foi possível enviar a arte."
-              );
+              handleCertificateImageUploadFailure({
+                error,
+                fallback: "Não foi possível enviar a arte.",
+                isCurrent: backgroundUploadRequestIdRef.current === requestId,
+                restore: () => {
+                  setBackgroundFile(previousBackgroundFile);
+                  setBackgroundRemoved(previousBackgroundRemoved);
+                  setBackgroundUpload(previousBackgroundUpload);
+                  setIsDirty(
+                    previousIsDirty ||
+                      dirtyRevisionRef.current !== dirtyRevisionAtUploadStart
+                  );
+                },
+                signal: controller.signal,
+              });
             } finally {
-              setPendingImageUploads((current) => Math.max(0, current - 1));
+              if (activeImageUploadRef.current?.controller === controller) {
+                activeImageUploadRef.current = null;
+                setImageUploadStatus(null);
+                setPendingImageUploads((current) => Math.max(0, current - 1));
+              }
             }
           }}
         />

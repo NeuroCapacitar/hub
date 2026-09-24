@@ -1,10 +1,7 @@
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { getPool } from "@/db";
-import {
-  createR2ObjectReadUrl,
-  uploadPrivateR2Object,
-} from "@/features/storage/r2";
+import { uploadPrivateR2Object } from "@/features/storage/r2";
 import { requirePermission } from "@/lib/auth-permissions";
 import { parseCertificateTemplateDraft } from "./render-snapshot";
 import {
@@ -239,13 +236,13 @@ export const getCertificateTemplatesForCourse = async (
   return await Promise.all(
     rows.map(async (row) => ({
       backgroundKey: row.background_key,
-      backgroundUrl: await createR2ObjectReadUrl({ key: row.background_key }),
+      backgroundUrl: `/api/admin/courses/${courseId}/certificate-templates/${row.id}/assets/background?v=${encodeURIComponent(row.background_key)}`,
       id: row.id,
       signerName: row.signer_name,
       signerRole: row.signer_role,
       signatureKey: row.signature_key,
       signatureUrl: row.signature_key
-        ? await createR2ObjectReadUrl({ key: row.signature_key })
+        ? `/api/admin/courses/${courseId}/certificate-templates/${row.id}/assets/signature?v=${encodeURIComponent(row.signature_key)}`
         : null,
       spec: parseCertificateTemplateDraft(row.spec),
       status: row.status,

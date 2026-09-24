@@ -10,14 +10,22 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { UploadProgressStatus } from "@/components/ui/upload-progress-status";
 import { CourseCoverCropDialog } from "@/features/courses/course-cover-crop-dialog";
 import {
   COURSE_COVER_ACCEPT,
   COURSE_COVER_CARD_HEIGHT,
   COURSE_COVER_CARD_WIDTH,
+  isCourseCoverUploadContentType,
+  MAX_COURSE_COVER_UPLOAD_BYTES,
   parseCourseCoverImage,
 } from "@/features/storage/course-cover";
 import { uploadStagedAdminImage } from "@/features/storage/staged-image-upload-client";
+import {
+  UploadAbortedError,
+  type UploadStatusPhase,
+  type UploadTransferProgress,
+} from "@/features/storage/xhr-upload";
 import { cn } from "@/lib/utils";
 
 interface CourseCoverUploadFieldProps {
@@ -28,17 +36,14 @@ interface CourseCoverUploadFieldProps {
   onUploadingChange?: ((isUploading: boolean) => void) | undefined;
 }
 
-const MAX_COVER_BYTES = 4 * 1024 * 1024;
-const ALLOWED_COVER_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-
 const isValidCoverFile = (file: File): boolean => {
-  if (!ALLOWED_COVER_TYPES.has(file.type)) {
+  if (!isCourseCoverUploadContentType(file.type)) {
     toast.error("Por favor, envie uma imagem JPG, PNG ou WebP.");
     return false;
   }
 
-  if (file.size > MAX_COVER_BYTES) {
-    toast.error("A imagem deve ter no máximo 4 MB.");
+  if (file.size > MAX_COURSE_COVER_UPLOAD_BYTES) {
+    toast.error("A imagem deve ter no máximo 4 MiB.");
     return false;
   }
 
@@ -59,6 +64,11 @@ export function CourseCoverUploadField({
   );
   const [coverUploadJson, setCoverUploadJson] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadFileName, setUploadFileName] = useState("");
+  const [uploadStatus, setUploadStatus] = useState<{
+    phase: UploadStatusPhase;
+    progress?: UploadTransferProgress;
+  } | null>(null);
   const [previewUrl, setPreviewUrl] = useState(defaultThumbnailUrl ?? "");
   const [previewBlurDataUrl, setPreviewBlurDataUrl] = useState(
     parsedCover?.blurDataUrl ?? null
@@ -69,6 +79,7 @@ export function CourseCoverUploadField({
   const inputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
   const uploadRequestIdRef = useRef(0);
+  const uploadAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     onUploadingChange?.(isUploading);
@@ -76,6 +87,9 @@ export function CourseCoverUploadField({
 
   useEffect(
     () => () => {
+      uploadRequestIdRef.current += 1;
+      uploadAbortControllerRef.current?.abort();
+      uploadAbortControllerRef.current = null;
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
       }
@@ -106,7 +120,10 @@ export function CourseCoverUploadField({
 
   const clearSelectedFile = (): void => {
     uploadRequestIdRef.current += 1;
+    uploadAbortControllerRef.current?.abort();
+    uploadAbortControllerRef.current = null;
     setIsUploading(false);
+    setUploadStatus(null);
     setPendingCropFile(null);
     setCoverUploadJson("");
     setPreviewBlurDataUrl(null);
@@ -121,6 +138,15 @@ export function CourseCoverUploadField({
     if (inputRef.current) {
       inputRef.current.value = "";
     }
+  };
+
+  const cancelUpload = (): void => {
+    uploadRequestIdRef.current += 1;
+    uploadAbortControllerRef.current?.abort();
+    uploadAbortControllerRef.current = null;
+    setIsUploading(false);
+    setUploadStatus(null);
+    restorePersistedPreview();
   };
 
   const restorePersistedPreview = (): void => {
@@ -147,21 +173,33 @@ export function CourseCoverUploadField({
 
     const requestId = uploadRequestIdRef.current + 1;
     uploadRequestIdRef.current = requestId;
+    uploadAbortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    uploadAbortControllerRef.current = abortController;
     setCoverUploadJson("");
     setIsUploading(true);
+    setUploadFileName(file.name);
+    setUploadStatus({ phase: "preparing" });
     try {
       const reference = await uploadStagedAdminImage({
         aggregateId,
         file,
+        onStatus: setUploadStatus,
         purpose: "course-cover",
+        signal: abortController.signal,
       });
       if (uploadRequestIdRef.current !== requestId) {
         return;
       }
       setCoverUploadJson(JSON.stringify(reference));
+      setUploadStatus(null);
       toast.success("Capa enviada. Salve o curso para aplicar.");
     } catch (error) {
       if (uploadRequestIdRef.current !== requestId) {
+        return;
+      }
+      if (error instanceof UploadAbortedError) {
+        restorePersistedPreview();
         return;
       }
       restorePersistedPreview();
@@ -172,7 +210,9 @@ export function CourseCoverUploadField({
       );
     } finally {
       if (uploadRequestIdRef.current === requestId) {
+        uploadAbortControllerRef.current = null;
         setIsUploading(false);
+        setUploadStatus(null);
       }
     }
   };
@@ -327,7 +367,7 @@ export function CourseCoverUploadField({
               </p>
               <p className="text-[11px] text-muted-foreground leading-4">
                 {COURSE_COVER_CARD_WIDTH} × {COURSE_COVER_CARD_HEIGHT} · 16:9 ·
-                PNG/JPG/WebP · 4 MB
+                PNG/JPG/WebP · 4 MiB
               </p>
             </div>
           )}
@@ -362,6 +402,14 @@ export function CourseCoverUploadField({
           </div>
         )}
       </div>
+      {isUploading && uploadStatus ? (
+        <UploadProgressStatus
+          fileName={uploadFileName || "Capa do curso"}
+          onCancel={cancelUpload}
+          phase={uploadStatus.phase}
+          progress={uploadStatus.progress}
+        />
+      ) : null}
       <CourseCoverCropDialog
         file={pendingCropFile}
         onCancel={cancelCrop}
