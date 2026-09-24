@@ -115,7 +115,10 @@ export function AuthMediaCarousel({
   };
 
   return (
-    <div className="relative h-full w-full">
+    <div
+      className="relative h-full w-full overflow-hidden rounded-media bg-muted ring-1 ring-white/10 ring-inset"
+      data-auth-media-viewport
+    >
       <Carousel
         aria-label="Mídia da tela de acesso"
         className="h-full w-full [&>[data-slot=carousel-content]]:h-full"
@@ -127,32 +130,30 @@ export function AuthMediaCarousel({
         plugins={displaySlides.length > 1 ? [autoplay] : []}
         setApi={handleApi}
       >
-        <CarouselContent className="h-full">
+        <CarouselContent className="ml-0 h-full">
           {displaySlides.map((slide) => (
-            <CarouselItem className="relative h-full min-h-full" key={slide.id}>
-              <div className="absolute inset-0 overflow-hidden rounded-media bg-muted ring-1 ring-white/10 ring-inset">
-                {slide.id === FALLBACK_SLIDE_ID && fallbackFailed ? (
-                  <div
-                    aria-hidden="true"
-                    className="absolute inset-0 bg-muted"
-                  />
-                ) : (
-                  <Image
-                    alt=""
-                    className="object-cover object-center"
-                    fill
-                    onError={() => handleImageError(slide)}
-                    placeholder={slide.blurDataUrl ? "blur" : "empty"}
-                    {...(slide.blurDataUrl
-                      ? { blurDataURL: slide.blurDataUrl }
-                      : {})}
-                    quality={90}
-                    sizes="(min-width: 1024px) 56vw, 100vw"
-                    src={slide.imageUrl}
-                    unoptimized={slide.id !== FALLBACK_SLIDE_ID}
-                  />
-                )}
-              </div>
+            <CarouselItem
+              className="relative h-full min-h-full pl-0"
+              key={slide.id}
+            >
+              {slide.id === FALLBACK_SLIDE_ID && fallbackFailed ? (
+                <div aria-hidden="true" className="absolute inset-0 bg-muted" />
+              ) : (
+                <Image
+                  alt=""
+                  className="object-cover object-center"
+                  fill
+                  onError={() => handleImageError(slide)}
+                  placeholder={slide.blurDataUrl ? "blur" : "empty"}
+                  {...(slide.blurDataUrl
+                    ? { blurDataURL: slide.blurDataUrl }
+                    : {})}
+                  quality={90}
+                  sizes="(min-width: 1024px) 56vw, 100vw"
+                  src={slide.imageUrl}
+                  unoptimized={slide.id !== FALLBACK_SLIDE_ID}
+                />
+              )}
             </CarouselItem>
           ))}
         </CarouselContent>
