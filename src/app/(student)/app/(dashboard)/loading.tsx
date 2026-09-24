@@ -5,7 +5,10 @@ export default function StudentAreaLoading(): React.JSX.Element {
   return (
     <PageContainer className="min-h-screen bg-background text-foreground">
       <div className="flex flex-col gap-8">
-        <div className="flex flex-col gap-12 pt-4">
+        <div className="pt-4 md:hidden">
+          <Skeleton className="h-8 w-56 max-w-full rounded-md" />
+        </div>
+        <div className="flex flex-col gap-12">
           <section>
             <div className="mb-5">
               <Skeleton className="h-6 w-48" />

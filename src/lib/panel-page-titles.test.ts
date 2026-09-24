@@ -47,4 +47,31 @@ describe("getPanelPageTitle", () => {
       true
     );
   });
+
+  it("uses a student greeting only as the compact home route title", () => {
+    const studentDashboardGreeting = "Boa tarde, Júnior.";
+
+    expect(getPanelRouteMeta("/app", { studentDashboardGreeting })).toEqual({
+      ancestors: [],
+      compactTitle: "Início",
+      mobilePageHeading: true,
+      title: studentDashboardGreeting,
+      visibleHeading: false,
+    });
+    expect(
+      getPanelRouteMeta("/app/ajuda", { studentDashboardGreeting }).title
+    ).toBe("Ajuda");
+  });
+
+  it("does not apply the student greeting to another compact route", () => {
+    expect(
+      getPanelRouteMeta("/admin", {
+        studentDashboardGreeting: "Boa tarde, Júnior.",
+      })
+    ).toEqual({
+      ancestors: [],
+      title: "Operação diária",
+      visibleHeading: false,
+    });
+  });
 });

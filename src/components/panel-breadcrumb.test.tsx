@@ -28,6 +28,21 @@ describe("PanelBreadcrumb", () => {
     expect(markup).toContain('aria-current="page"');
   });
 
+  it("uses a shorter current label on narrow screens when provided", () => {
+    const markup = renderToStaticMarkup(
+      <PanelBreadcrumb
+        ancestors={[]}
+        compactCurrentTitle="Início"
+        currentTitle="Bom dia, Júnior."
+      />
+    );
+
+    expect(markup).toContain(
+      'class="hidden md:inline">Bom dia, Júnior.</span>'
+    );
+    expect(markup).toContain('class="md:hidden">Início</span>');
+  });
+
   it("omits the breadcrumb when a root page has its own visible heading", () => {
     const markup = renderToStaticMarkup(<PanelBreadcrumb ancestors={[]} />);
 

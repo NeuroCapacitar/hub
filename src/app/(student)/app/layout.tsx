@@ -20,6 +20,7 @@ import { isPreviewRole } from "@/features/courses/preview";
 import { getStudentCourses } from "@/features/courses/server";
 import { route } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
+import { getStudentDashboardGreeting } from "@/lib/student-dashboard-greeting";
 
 export default async function StudentLayout({
   children,
@@ -32,10 +33,15 @@ export default async function StudentLayout({
 
   const courses =
     session.role === "student" ? await getStudentCourses(session.user.id) : [];
+  const studentDashboardGreeting =
+    session.role === "student"
+      ? getStudentDashboardGreeting(session.user.name)
+      : undefined;
 
   return (
     <PanelLayout
       navContent={<StudentNav courses={courses} />}
+      {...(studentDashboardGreeting ? { studentDashboardGreeting } : {})}
       userEmail={session.user.email}
       userImage={(session.user as { image?: string | null }).image ?? null}
       userName={session.user.name}

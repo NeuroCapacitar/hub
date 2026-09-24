@@ -5,8 +5,14 @@ export interface PanelBreadcrumb {
 
 export interface PanelRouteMeta {
   readonly ancestors: readonly PanelBreadcrumb[];
+  readonly compactTitle?: string | undefined;
+  readonly mobilePageHeading?: boolean | undefined;
   readonly title: string;
   readonly visibleHeading: boolean;
+}
+
+interface PanelRouteMetaOptions {
+  readonly studentDashboardGreeting?: string | undefined;
 }
 
 const PAGE_TITLES: Readonly<Record<string, string>> = {
@@ -69,13 +75,23 @@ const DYNAMIC_PAGE_TITLES = [
   readonly PanelBreadcrumb[],
 ])[];
 
-export function getPanelRouteMeta(pathname: string): PanelRouteMeta {
+export function getPanelRouteMeta(
+  pathname: string,
+  { studentDashboardGreeting }: PanelRouteMetaOptions = {}
+): PanelRouteMeta {
   const normalizedPath = pathname.replace(TRAILING_SLASHES, "") || "/";
-  const exactTitle = PAGE_TITLES[normalizedPath];
+  const isStudentDashboardGreeting =
+    normalizedPath === "/app" && Boolean(studentDashboardGreeting);
+  const exactTitle = isStudentDashboardGreeting
+    ? studentDashboardGreeting
+    : PAGE_TITLES[normalizedPath];
 
   if (exactTitle) {
     return {
       ancestors: PAGE_ANCESTORS[normalizedPath] ?? [],
+      ...(isStudentDashboardGreeting
+        ? { compactTitle: "Início", mobilePageHeading: true }
+        : {}),
       title: exactTitle,
       visibleHeading: !COMPACT_PAGE_TITLES.has(normalizedPath),
     };

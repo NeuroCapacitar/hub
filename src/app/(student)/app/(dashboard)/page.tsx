@@ -41,6 +41,7 @@ import type { StudentCatalogCourseCard } from "@/features/courses/server";
 import { getStudentCourseCatalog } from "@/features/courses/server";
 import { route } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
+import { getStudentDashboardGreeting } from "@/lib/student-dashboard-greeting";
 import { cn } from "@/lib/utils";
 import { ContinueLearningCard } from "./continue-learning-card";
 import { CoursePurchaseDialog } from "./course-purchase-dialog";
@@ -69,6 +70,10 @@ export default async function StudentDashboardPage(): Promise<React.JSX.Element>
   const courses = await getStudentCourseCatalog(session.user.id);
   const groups = groupStudentCatalogCourses(courses);
   const { banners } = await getActiveBannersData();
+  const dashboardTitle =
+    session.role === "student"
+      ? getStudentDashboardGreeting(session.user.name)
+      : "Seu espaço de aprendizagem";
 
   const featuredActiveCourse =
     groups.active.length === 1 &&
@@ -96,9 +101,15 @@ export default async function StudentDashboardPage(): Promise<React.JSX.Element>
       <div className="flex flex-col gap-8">
         {banners.length > 0 && <StudentBannersCarousel banners={banners} />}
 
-        <PageHeader title="Seu espaço de aprendizagem" visibleHeading={false} />
+        <PageHeader title={dashboardTitle} visibleHeading={false} />
 
-        <div className="flex flex-col gap-12 pt-4">
+        {session.role === "student" ? (
+          <header className="pt-4 md:hidden">
+            <h1 className="type-page-title text-balance">{dashboardTitle}</h1>
+          </header>
+        ) : null}
+
+        <div className="flex flex-col gap-12">
           {courses.length === 0 ? (
             <EmptyCoursesState />
           ) : (

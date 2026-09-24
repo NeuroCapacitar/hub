@@ -1,6 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const STUDENT_DASHBOARD_GREETING_PATTERN =
+  /<header class="pt-4 md:hidden"><h1[^>]*>(?:Bom dia|Boa tarde|Boa noite|Olá), Júnior\.<\/h1><\/header>/;
+
 const dependencies = vi.hoisted(() => ({
   getActiveBannersData: vi.fn(),
   getStudentCourseCatalog: vi.fn(),
@@ -129,6 +132,18 @@ describe("Student dashboard availability", () => {
     expect(
       continueCard.match(/w-full min-w-0 whitespace-normal/g)
     ).toHaveLength(2);
+  });
+
+  it("shows the full greeting in the mobile dashboard content", async () => {
+    dependencies.requireSession.mockResolvedValue({
+      role: "student",
+      user: { id: "student-1", name: "Júnior da Silva" },
+    });
+    dependencies.getStudentCourseCatalog.mockResolvedValue([]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+
+    expect(markup).toMatch(STUDENT_DASHBOARD_GREETING_PATTERN);
   });
 
   it("applies the shared cover zoom to Continue Learning media", async () => {

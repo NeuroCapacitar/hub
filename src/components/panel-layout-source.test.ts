@@ -28,10 +28,12 @@ describe("PanelLayout", () => {
       "utf8"
     );
 
-    expect(source).toContain("getPanelRouteMeta(pathname)");
+    expect(source).toContain("getPanelRouteMeta(pathname,");
+    expect(source).toContain("studentDashboardGreeting");
     expect(source).toContain("<PanelBreadcrumb");
     expect(source).toContain("hasVisiblePageHeading");
     expect(source).toContain("currentTitle: pageMeta.title");
-    expect(source).toContain('<h1 className="sr-only">{pageMeta.title}</h1>');
+    expect(source).toContain("pageMeta.mobilePageHeading");
+    expect(source).toContain("{pageMeta.title}");
   });
 });

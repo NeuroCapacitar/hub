@@ -26,6 +26,7 @@ const MAX_VISIBLE_ITEMS = 3;
 
 interface PanelBreadcrumbProps {
   readonly ancestors: readonly PanelBreadcrumbItem[];
+  readonly compactCurrentTitle?: string | undefined;
   readonly currentTitle?: string;
 }
 
@@ -80,9 +81,11 @@ function collapseBreadcrumbs(
 function BreadcrumbItemContent({
   item,
   isCurrent,
+  compactLabel,
 }: {
   readonly isCurrent: boolean;
   readonly item: PanelBreadcrumbItem;
+  readonly compactLabel?: string | undefined;
 }): React.JSX.Element {
   const className = cn(
     "block min-w-0 truncate",
@@ -94,11 +97,18 @@ function BreadcrumbItemContent({
   if (isCurrent) {
     return (
       <BreadcrumbPage
-        aria-label={item.label}
+        aria-label={compactLabel ? undefined : item.label}
         className={className}
         title={item.label}
       >
-        {item.label}
+        {compactLabel ? (
+          <>
+            <span className="hidden md:inline">{item.label}</span>
+            <span className="md:hidden">{compactLabel}</span>
+          </>
+        ) : (
+          item.label
+        )}
       </BreadcrumbPage>
     );
   }
@@ -158,6 +168,7 @@ function CollapsedBreadcrumb({
 
 export function PanelBreadcrumb({
   ancestors,
+  compactCurrentTitle,
   currentTitle,
 }: PanelBreadcrumbProps): React.JSX.Element | null {
   const items = collapseBreadcrumbs(ancestors, currentTitle);
@@ -196,6 +207,9 @@ export function PanelBreadcrumb({
                 <BreadcrumbItemContent
                   isCurrent={entry.isCurrent}
                   item={entry.item}
+                  {...(entry.isCurrent && compactCurrentTitle
+                    ? { compactLabel: compactCurrentTitle }
+                    : {})}
                 />
               </BreadcrumbItem>
             )}
