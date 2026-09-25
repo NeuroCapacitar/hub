@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: b226ee5
+last_verified_commit: c10f0d2
 ---
 
 # Certificados e dados técnicos
