@@ -35,11 +35,18 @@ import { createDefaultCertificateTemplateFields } from "./template-rules";
 import {
   disableCertificateForCourse,
   enableCertificateForCourse,
+  getCertificateIssuerProfileForPreview,
   getCertificateTemplatesForCourse,
   publishCertificateTemplate,
   runCertificateTemplateAssetMutation,
   saveCertificateTemplateDraft,
 } from "./templates";
+
+const completeIssuerProfile = {
+  cnpj: "04.252.011/0001-10",
+  display_name: "Instituto Protea Educação Profissional",
+  legal_name: "Protea Educação Profissional Ltda.",
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -91,6 +98,48 @@ describe("certificate template asset lifecycle", () => {
         },
       })
     ).rejects.toThrow("connection lost after commit");
+  });
+});
+
+describe("certificate issuer profile preview data", () => {
+  it("returns normalized saved issuer data only when the profile is complete", async () => {
+    dependencies.getPool.mockReturnValue({
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            ...completeIssuerProfile,
+            cnpj: "04252011000110",
+          },
+        ],
+      }),
+    });
+
+    await expect(getCertificateIssuerProfileForPreview()).resolves.toEqual({
+      cnpj: "04.252.011/0001-10",
+      configured: true,
+      displayName: "Instituto Protea Educação Profissional",
+    });
+    expect(dependencies.requirePermission).toHaveBeenCalledWith("viewSettings");
+  });
+
+  it("does not mark an invalid or incomplete stored profile ready", async () => {
+    dependencies.getPool.mockReturnValue({
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            cnpj: "00.000.000/0000-00",
+            display_name: " ",
+            legal_name: "Protea Educação Profissional Ltda.",
+          },
+        ],
+      }),
+    });
+
+    await expect(getCertificateIssuerProfileForPreview()).resolves.toEqual({
+      cnpj: null,
+      configured: false,
+      displayName: null,
+    });
   });
 });
 
@@ -415,6 +464,9 @@ describe("certificate course activation", () => {
           rows: [
             {
               id: "template-1",
+              issuer_cnpj: completeIssuerProfile.cnpj,
+              issuer_display_name: completeIssuerProfile.display_name,
+              issuer_legal_name: completeIssuerProfile.legal_name,
               signer_name: "Dra. Maria",
               signer_role: "Especialista",
             },
@@ -438,6 +490,37 @@ describe("certificate course activation", () => {
     );
   });
 
+  it("does not activate a published template with an incomplete issuer profile", async () => {
+    const query = vi.fn((statement: string) => {
+      if (statement.includes("from certificate_templates")) {
+        return Promise.resolve({
+          rows: [
+            {
+              id: "template-1",
+              issuer_cnpj: "00.000.000/0000-00",
+              issuer_display_name: "Instituto Protea",
+              issuer_legal_name: "Protea Educação Profissional Ltda.",
+              signer_name: "Dra. Maria",
+              signer_role: "Especialista",
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ rows: [], rowCount: 1 });
+    });
+    dependencies.getPool.mockReturnValue({
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    });
+
+    await expect(
+      enableCertificateForCourse("course-1", "admin-1")
+    ).rejects.toThrow("perfil emissor");
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("update courses"),
+      expect.anything()
+    );
+  });
+
   it("audits disabling a course in the same transaction", async () => {
     const query = vi.fn().mockResolvedValue({ rowCount: 1, rows: [] });
     const release = vi.fn();
@@ -457,7 +540,7 @@ describe("certificate course activation", () => {
   it("audits publication after enabling the course", async () => {
     const query = vi.fn((statement: string) => {
       if (statement.includes("certificate_issuer_profiles")) {
-        return Promise.resolve({ rows: [{ id: "issuer-global" }] });
+        return Promise.resolve({ rows: [completeIssuerProfile] });
       }
       if (statement.includes("status = 'draft'")) {
         return Promise.resolve({
@@ -501,6 +584,9 @@ describe("certificate course activation", () => {
           rows: [
             {
               id: "template-1",
+              issuer_cnpj: completeIssuerProfile.cnpj,
+              issuer_display_name: completeIssuerProfile.display_name,
+              issuer_legal_name: completeIssuerProfile.legal_name,
               signer_name: "Dra. Maria",
               signer_role: null,
             },
@@ -525,7 +611,7 @@ describe("certificate course activation", () => {
   it("does not publish a draft without both course signatory fields", async () => {
     const query = vi.fn((statement: string) => {
       if (statement.includes("certificate_issuer_profiles")) {
-        return Promise.resolve({ rows: [{ id: "issuer-global" }] });
+        return Promise.resolve({ rows: [completeIssuerProfile] });
       }
       if (statement.includes("status = 'draft'")) {
         return Promise.resolve({
@@ -559,6 +645,36 @@ describe("certificate course activation", () => {
     );
     expect(query).not.toHaveBeenCalledWith(
       expect.stringContaining("insert into audit_logs"),
+      expect.anything()
+    );
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("does not publish a draft when the stored issuer profile is incomplete", async () => {
+    const query = vi.fn((statement: string) => {
+      if (statement.includes("certificate_issuer_profiles")) {
+        return Promise.resolve({
+          rows: [
+            {
+              cnpj: "00.000.000/0000-00",
+              display_name: "Instituto Protea",
+              legal_name: "Protea Educação Profissional Ltda.",
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ rows: [], rowCount: 1 });
+    });
+    const release = vi.fn();
+    dependencies.getPool.mockReturnValue({
+      connect: vi.fn().mockResolvedValue({ query, release }),
+    });
+
+    await expect(
+      publishCertificateTemplate("course-1", "admin-1")
+    ).rejects.toThrow("perfil emissor");
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("set status = 'published'"),
       expect.anything()
     );
     expect(release).toHaveBeenCalledOnce();

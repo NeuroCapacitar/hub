@@ -215,6 +215,57 @@ const PreviewToolbarTooltip = ({
   </Tooltip>
 );
 
+const CertificateTemplatePreviewUnavailable = ({
+  issuerConfigured,
+  signatoryConfigured,
+}: {
+  issuerConfigured: boolean;
+  signatoryConfigured: boolean;
+}): React.JSX.Element => (
+  <div
+    className="grid h-full min-h-72 place-content-center px-6 py-8"
+    data-preview-blocked="true"
+    role="status"
+  >
+    <div className="mx-auto max-w-sm space-y-3 text-center">
+      <h4 className="font-medium text-sm">Prévia indisponível</h4>
+      <p className="text-muted-foreground text-sm">
+        Complete os dados de emissão para visualizar o certificado com as
+        informações corretas.
+      </p>
+      <ul className="mx-auto w-fit space-y-2 text-left text-sm">
+        {issuerConfigured ? null : (
+          <li>Perfil emissor completo em Admin &gt; Configurações</li>
+        )}
+        {signatoryConfigured ? null : (
+          <li>Nome e cargo em Configurações do curso</li>
+        )}
+      </ul>
+    </div>
+  </div>
+);
+
+const CertificateTemplatePreviewContent = ({
+  children,
+  issuerConfigured,
+  signatoryConfigured,
+}: {
+  children: React.ReactNode;
+  issuerConfigured: boolean;
+  signatoryConfigured: boolean;
+}): React.JSX.Element => (
+  <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-0">
+    {issuerConfigured && signatoryConfigured ? (
+      children
+    ) : (
+      <CertificateTemplatePreviewUnavailable
+        issuerConfigured={issuerConfigured}
+        signatoryConfigured={signatoryConfigured}
+      />
+    )}
+  </div>
+);
+
 const TemplateVersionBadges = ({
   template,
 }: {
@@ -450,9 +501,12 @@ const notifyTemplateAction = ({
 export function CertificateTemplateForm({
   children,
   courseId,
+  courseTitle,
   courseWorkloadHours,
   hasPublishedTemplate,
+  issuerCnpj,
   issuerConfigured,
+  issuerDisplayName,
   signerName,
   signerRole,
   status,
@@ -460,9 +514,12 @@ export function CertificateTemplateForm({
 }: {
   children?: React.ReactNode;
   courseId: string;
+  courseTitle: string;
   courseWorkloadHours: number;
   hasPublishedTemplate: boolean;
+  issuerCnpj: string | null;
   issuerConfigured: boolean;
+  issuerDisplayName: string | null;
   signerName: string | null;
   signerRole: string | null;
   status: CertificateTemplateEditorStatus;
@@ -542,9 +599,6 @@ export function CertificateTemplateForm({
   const signaturePreviewUrl = signatureRemoved
     ? null
     : (signatureObjectUrl ?? defaultSignatureUrl);
-  const [previewVariant, setPreviewVariant] = useState<"long" | "short">(
-    "short"
-  );
   const fitRequestIdRef = useRef(0);
   const [fitContentRequest, setFitContentRequest] = useState<{
     field: CertificateField;
@@ -1273,30 +1327,21 @@ export function CertificateTemplateForm({
                     onFieldSelect={selectField}
                     overlapFields={overlapFields}
                   />
-                  <Button
-                    aria-pressed={previewVariant === "long"}
-                    className="h-11 lg:h-6"
-                    data-preview-sample-toggle="true"
-                    onClick={() =>
-                      setPreviewVariant((current) =>
-                        current === "short" ? "long" : "short"
-                      )
-                    }
-                    size="xs"
-                    type="button"
-                    variant="ghost"
-                  >
-                    Dados {previewVariant === "long" ? "longos" : "curtos"}
-                  </Button>
                 </div>
               </header>
-              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-0">
+              <CertificateTemplatePreviewContent
+                issuerConfigured={issuerConfigured}
+                signatoryConfigured={signatoryConfigured}
+              >
                 <CertificateTemplatePreview
                   backgroundSelected={backgroundSelected}
                   backgroundUrl={backgroundPreviewUrl}
+                  courseTitle={courseTitle}
                   courseWorkloadHours={courseWorkloadHours}
                   fields={fields}
                   fitContentRequest={fitContentRequest}
+                  issuerCnpj={issuerCnpj ?? ""}
+                  issuerDisplayName={issuerDisplayName ?? ""}
                   onBackgroundSelect={selectBackground}
                   onFieldGeometryChange={updateFieldGeometry}
                   onFieldInteractionEnd={endFieldInteraction}
@@ -1309,9 +1354,8 @@ export function CertificateTemplateForm({
                   signatureUrl={signaturePreviewUrl}
                   signerName={signerName ?? ""}
                   signerRole={signerRole ?? ""}
-                  variant={previewVariant}
                 />
-              </div>
+              </CertificateTemplatePreviewContent>
             </section>
 
             {isCompact ? (

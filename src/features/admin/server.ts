@@ -2690,7 +2690,7 @@ const readSettings = async (): Promise<AdminSettings> => {
   );
   const row = rows[0];
   const issuerProfileIssues: AdminIssuerProfileIssue[] = [];
-  if (!row?.legal_name) {
+  if (!row?.legal_name?.trim()) {
     issuerProfileIssues.push("legal_name_missing");
   }
   if (!row?.cnpj) {
@@ -2698,7 +2698,7 @@ const readSettings = async (): Promise<AdminSettings> => {
   } else if (!isValidCnpj(row.cnpj)) {
     issuerProfileIssues.push("cnpj_invalid");
   }
-  if (!row?.display_name) {
+  if (!row?.display_name?.trim()) {
     issuerProfileIssues.push("display_name_missing");
   }
 

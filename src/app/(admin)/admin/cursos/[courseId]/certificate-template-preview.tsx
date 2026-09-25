@@ -22,31 +22,12 @@ import {
   getCertificatePreviewTextStyle,
 } from "./certificate-template-preview-layout";
 
-const samples = {
-  long: {
-    completedAt: "22 de julho de 2026",
-    courseTitle: "Especialização em Técnicas Avançadas de Harmonização Facial",
-    issuedAt: "22 de julho de 2026",
-    issuerCnpj: "12.345.678/0001-90",
-    issuerName: "Instituto Protea Educação Profissional",
-    signerName: "Dra. Maria Fernanda de Albuquerque",
-    signerRole: "Responsável técnica",
-    studentName: "Ana Carolina de Souza e Silva",
-    validationCode: "PRT-12345678",
-    workloadHours: "120 horas",
-  },
-  short: {
-    completedAt: "22/07/2026",
-    courseTitle: "Botox",
-    issuedAt: "22/07/2026",
-    issuerCnpj: "12.345.678/0001-90",
-    issuerName: "Protea",
-    signerName: "Dra. Ana",
-    signerRole: "Especialista",
-    studentName: "Ana",
-    validationCode: "PRT-123",
-    workloadHours: "8 horas",
-  },
+const dynamicPreviewSamples = {
+  completedAt: "22 de julho de 2026",
+  issuedAt: "22 de julho de 2026",
+  studentName: "Ana Carolina de Souza e Silva",
+  validationCode: "PRT-12345678",
+  workloadHours: "120 horas",
 } as const;
 
 interface CertificateFieldDirection {
@@ -183,6 +164,7 @@ const measureTextContent = (
 
 export function CertificateTemplatePreview({
   backgroundUrl,
+  courseTitle,
   courseWorkloadHours,
   fields,
   fitContentRequest,
@@ -195,13 +177,15 @@ export function CertificateTemplatePreview({
   onOverflowFieldsChange,
   overlapFields,
   signatureUrl,
+  issuerCnpj,
+  issuerDisplayName,
   signerName,
   signerRole,
   selectedField,
   backgroundSelected,
-  variant,
 }: {
   backgroundUrl: string | null;
+  courseTitle: string;
   courseWorkloadHours?: number;
   fields: CertificateTemplateField[];
   fitContentRequest?: {
@@ -222,12 +206,13 @@ export function CertificateTemplatePreview({
   onBackgroundSelect?: () => void;
   onOverflowFieldsChange?: (fields: CertificateField[]) => void;
   overlapFields: ReadonlySet<CertificateTemplateField["field"]>;
+  issuerCnpj: string;
+  issuerDisplayName: string;
   signatureUrl: string | null;
   signerName: string;
   signerRole: string;
   selectedField?: CertificateTemplateField["field"] | null;
   backgroundSelected?: boolean;
-  variant: "long" | "short";
 }): React.JSX.Element {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [renderedWidth, setRenderedWidth] = useState(0);
@@ -237,15 +222,25 @@ export function CertificateTemplatePreview({
   const pageRef = useRef<HTMLDivElement>(null);
   const values = useMemo(
     () => ({
-      ...samples[variant],
+      ...dynamicPreviewSamples,
+      courseTitle,
+      issuerCnpj,
+      issuerName: issuerDisplayName,
       workloadHours:
         courseWorkloadHours === undefined
-          ? samples[variant].workloadHours
+          ? dynamicPreviewSamples.workloadHours
           : `${courseWorkloadHours} horas`,
-      signerName: signerName.trim() || samples[variant].signerName,
-      signerRole: signerRole.trim() || samples[variant].signerRole,
+      signerName: signerName.trim(),
+      signerRole: signerRole.trim(),
     }),
-    [courseWorkloadHours, signerName, signerRole, variant]
+    [
+      courseTitle,
+      courseWorkloadHours,
+      issuerCnpj,
+      issuerDisplayName,
+      signerName,
+      signerRole,
+    ]
   );
 
   useEffect(() => {

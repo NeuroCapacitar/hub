@@ -26,8 +26,8 @@ import {
   parseAdminCourseStudentAction,
 } from "@/features/admin/student-navigation";
 import {
+  getCertificateIssuerProfileForPreview,
   getCertificateTemplatesForCourse,
-  hasCertificateIssuerProfile,
 } from "@/features/certificates/templates";
 import { resolveCourseAvailability } from "@/features/courses/availability";
 import { getCoursePurchaseLink } from "@/features/payments/course-purchase-link";
@@ -255,7 +255,7 @@ export default async function AdminCourseDetailPage({
     data.tab === "certificate" && canManageCourseCertificate
       ? await Promise.all([
           getCertificateTemplatesForCourse(courseId),
-          hasCertificateIssuerProfile(),
+          getCertificateIssuerProfileForPreview(),
         ])
       : null;
   let certificateContent: React.JSX.Element | null = null;
@@ -264,8 +264,11 @@ export default async function AdminCourseDetailPage({
       <CertificateTemplateEditor
         certificateEnabled={course.certificateEnabled}
         courseId={course.id}
+        courseTitle={course.title}
         courseWorkloadHours={getEffectiveCourseWorkloadHours(course)}
-        issuerConfigured={certificateData[1]}
+        issuerCnpj={certificateData[1].cnpj}
+        issuerConfigured={certificateData[1].configured}
+        issuerDisplayName={certificateData[1].displayName}
         pendingCertificateReconciliationCount={
           course.pendingCertificateReconciliationCount
         }

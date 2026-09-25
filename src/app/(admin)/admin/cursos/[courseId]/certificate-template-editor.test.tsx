@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import type { ComponentProps } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -76,7 +77,36 @@ vi.mock("@/features/certificates/template-crop-dialog", () => ({
 }));
 
 import { createDefaultCertificateTemplateFields } from "@/features/certificates/template-rules";
-import { CertificateTemplateEditor } from "./certificate-template-editor";
+import { CertificateTemplateEditor as CertificateTemplateEditorView } from "./certificate-template-editor";
+
+type CertificateTemplateEditorTestProps = Omit<
+  ComponentProps<typeof CertificateTemplateEditorView>,
+  "courseTitle" | "issuerCnpj" | "issuerDisplayName"
+> &
+  Partial<
+    Pick<
+      ComponentProps<typeof CertificateTemplateEditorView>,
+      "courseTitle" | "issuerCnpj" | "issuerDisplayName"
+    >
+  >;
+
+const CertificateTemplateEditor = ({
+  courseTitle = "Curso de Desenvolvimento",
+  issuerCnpj = "04.252.011/0001-10",
+  issuerDisplayName = "Instituto Protea Educação Profissional",
+  signerName = "Dra. Maria Fernanda de Albuquerque",
+  signerRole = "Responsável técnica",
+  ...props
+}: CertificateTemplateEditorTestProps): React.JSX.Element => (
+  <CertificateTemplateEditorView
+    courseTitle={courseTitle}
+    issuerCnpj={issuerCnpj}
+    issuerDisplayName={issuerDisplayName}
+    signerName={signerName}
+    signerRole={signerRole}
+    {...props}
+  />
+);
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -344,8 +374,8 @@ describe("CertificateTemplateEditor", () => {
     );
   });
 
-  it("explains the issuer prerequisite and prevents premature publication", () => {
-    act(() => {
+  it("blocks preview editing while the issuer profile is incomplete", async () => {
+    await act(async () => {
       root.render(
         <CertificateTemplateEditor
           certificateEnabled={false}
@@ -354,10 +384,24 @@ describe("CertificateTemplateEditor", () => {
           templates={[]}
         />
       );
+      await Promise.resolve();
     });
 
     expect(container.textContent).toContain("Perfil emissor pendente");
-    expect(container.textContent).toContain("Dados curtos");
+    expect(container.textContent).not.toContain("Dados curtos");
+    expect(
+      container.querySelector('[data-preview-sample-toggle="true"]')
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-preview-blocked="true"]')
+    ).not.toBeNull();
+    expect(container.querySelector("[data-certificate-page]")).toBeNull();
+    expect(container.querySelector("[data-editor-field]")).toBeNull();
+    expect(container.textContent).toContain("Salvar rascunho");
+    selectField(container, "studentName");
+    expect(
+      container.querySelector('[data-field-inspector="studentName"]')
+    ).not.toBeNull();
     const publishButton = [...container.querySelectorAll("button")].find(
       (button) =>
         button.textContent?.toLocaleLowerCase().includes("publicar") &&
@@ -385,6 +429,13 @@ describe("CertificateTemplateEditor", () => {
       "Responsável pelo certificado pendente"
     );
     expect(container.textContent).toContain("nome e cargo");
+    expect(
+      container.querySelector('[data-preview-blocked="true"]')
+    ).not.toBeNull();
+    expect(container.querySelector("[data-certificate-page]")).toBeNull();
+    expect(
+      container.querySelector('[data-preview-sample-toggle="true"]')
+    ).toBeNull();
     const publishButton = [...container.querySelectorAll("button")].find(
       (button) => button.textContent?.includes("Salvar e publicar")
     );
@@ -736,27 +787,63 @@ describe("CertificateTemplateEditor", () => {
     ).not.toBeNull();
   });
 
-  it("toggles the preview between short and long sample data", () => {
-    act(() => {
+  it("uses saved certificate details with one deterministic long preview sample", async () => {
+    await act(async () => {
       root.render(
         <CertificateTemplateEditor
           certificateEnabled
           courseId="course-1"
+          courseTitle="Formação em Segurança do Trabalho"
+          issuerCnpj="04.252.011/0001-10"
           issuerConfigured
-          templates={[draftTemplate]}
+          issuerDisplayName="Instituto Protea Educação Profissional"
+          signerName="Dra. Fernanda Albuquerque"
+          signerRole="Responsável técnica"
+          templates={[
+            {
+              ...draftTemplate,
+              spec: {
+                ...draftTemplate.spec,
+                fields: draftTemplate.spec.fields.map((field) =>
+                  field.field === "signerName" || field.field === "signerRole"
+                    ? { ...field, visible: true }
+                    : field
+                ),
+              },
+            },
+          ]}
         />
       );
+      await Promise.resolve();
     });
-    expect(container.textContent).toContain("Botox");
-    const toggle = container.querySelector<HTMLButtonElement>(
-      '[data-preview-sample-toggle="true"]'
-    );
-    expect(toggle?.textContent).toContain("Dados curtos");
-    act(() => toggle?.click());
-    expect(toggle?.textContent).toContain("Dados longos");
-    expect(container.textContent).toContain(
-      "Especialização em Técnicas Avançadas"
-    );
+
+    expect(
+      container.querySelector('[data-preview-sample-toggle="true"]')
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-preview-text-field="courseTitle"]')
+        ?.textContent
+    ).toBe("Formação em Segurança do Trabalho");
+    expect(
+      container.querySelector('[data-preview-text-field="issuerName"]')
+        ?.textContent
+    ).toBe("Instituto Protea Educação Profissional");
+    expect(
+      container.querySelector('[data-preview-text-field="issuerCnpj"]')
+        ?.textContent
+    ).toBe("04.252.011/0001-10");
+    expect(
+      container.querySelector('[data-preview-text-field="signerName"]')
+        ?.textContent
+    ).toBe("Dra. Fernanda Albuquerque");
+    expect(
+      container.querySelector('[data-preview-text-field="signerRole"]')
+        ?.textContent
+    ).toBe("Responsável técnica");
+    expect(
+      container.querySelector('[data-preview-text-field="studentName"]')
+        ?.textContent
+    ).toBe("Ana Carolina de Souza e Silva");
   });
 
   it("warns about clipped content without blocking draft save and confirms publication", async () => {

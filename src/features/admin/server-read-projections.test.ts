@@ -179,6 +179,28 @@ describe("admin read projections", () => {
     });
   });
 
+  it("treats whitespace-only issuer names as incomplete", async () => {
+    query.mockResolvedValue({
+      rows: [
+        {
+          cnpj: "04.252.011/0001-10",
+          display_name: "  ",
+          legal_name: " \t",
+          last_changed_actor_email: null,
+          last_changed_actor_name: null,
+          last_changed_at: null,
+        },
+      ],
+    });
+
+    await expect(getAdminSettingsData()).resolves.toMatchObject({
+      settings: {
+        issuerProfileComplete: false,
+        issuerProfileIssues: ["legal_name_missing", "display_name_missing"],
+      },
+    });
+  });
+
   it("keeps overview aggregates global", async () => {
     query.mockResolvedValue({
       rows: [

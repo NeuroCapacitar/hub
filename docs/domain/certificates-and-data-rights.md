@@ -22,6 +22,14 @@ modelo controla o layout dos campos e mantém a imagem visual opcional da
 assinatura. Não há fallback global de signatário, HTML livre, campos arbitrários
 ou inferência automática de posicionamento.
 
+A prévia interativa do editor fica indisponível até que o perfil emissor esteja
+completo e o Curso tenha nome e cargo do responsável. O editor continua
+permitindo salvar rascunhos e selecionar campos pela lista enquanto esses dados
+são corrigidos; erros de layout não bloqueiam a prévia, pois ela é necessária
+para corrigir o próprio layout. Quando liberada, a prévia usa os dados salvos do
+emissor, do Curso e do responsável. Nome do Aluno, datas, código e QR de
+validação são exemplos determinísticos, nunca dados de Alunos reais.
+
 O perfil emissor global é administrado em **Admin > Configurações**. Razão social
 e CNPJ são uma unidade: estado parcial é rejeitado antes da transação. O salvamento
 de `certificate_issuer_profiles` é atômico e registra `settings.updated` com os

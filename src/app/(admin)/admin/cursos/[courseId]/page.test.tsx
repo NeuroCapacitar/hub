@@ -7,8 +7,8 @@ const dependencies = vi.hoisted(() => ({
   getAdminCourseContentSignal: vi.fn(),
   getAdminCourseOperationalState: vi.fn(),
   getCertificateTemplatesForCourse: vi.fn(),
+  getCertificateIssuerProfileForPreview: vi.fn(),
   getServerEnv: vi.fn(),
-  hasCertificateIssuerProfile: vi.fn(),
   requirePermission: vi.fn(),
 }));
 
@@ -47,7 +47,8 @@ vi.mock("@/features/admin/server", () => ({
 vi.mock("@/features/certificates/templates", () => ({
   getCertificateTemplatesForCourse:
     dependencies.getCertificateTemplatesForCourse,
-  hasCertificateIssuerProfile: dependencies.hasCertificateIssuerProfile,
+  getCertificateIssuerProfileForPreview:
+    dependencies.getCertificateIssuerProfileForPreview,
 }));
 vi.mock("@/lib/env", () => ({ getServerEnv: dependencies.getServerEnv }));
 vi.mock("@/lib/auth-permissions", () => ({
@@ -56,14 +57,26 @@ vi.mock("@/lib/auth-permissions", () => ({
 vi.mock("@/lib/auth-policy", () => ({ canPerform: () => true }));
 vi.mock("./certificate-template-editor", () => ({
   CertificateTemplateEditor: ({
+    courseTitle,
     courseWorkloadHours,
+    issuerCnpj,
+    issuerConfigured,
+    issuerDisplayName,
     pendingCertificateReconciliationCount,
   }: {
+    courseTitle: string;
     courseWorkloadHours: number;
+    issuerCnpj: string | null;
+    issuerConfigured: boolean;
+    issuerDisplayName: string | null;
     pendingCertificateReconciliationCount: number;
   }) => (
     <div
+      data-course-title={courseTitle}
       data-course-workload-hours={courseWorkloadHours}
+      data-issuer-cnpj={issuerCnpj}
+      data-issuer-configured={issuerConfigured}
+      data-issuer-display-name={issuerDisplayName}
       data-pending-certificate-reconciliation={
         pendingCertificateReconciliationCount
       }
@@ -267,7 +280,11 @@ beforeEach(() => {
     label: "Curso publicado",
     tone: "healthy",
   });
-  dependencies.hasCertificateIssuerProfile.mockResolvedValue(false);
+  dependencies.getCertificateIssuerProfileForPreview.mockResolvedValue({
+    cnpj: null,
+    configured: false,
+    displayName: null,
+  });
   dependencies.getServerEnv.mockReturnValue({
     NEXT_PUBLIC_APP_URL: "https://hub.example/base",
     PAYMENTS_CHECKOUT_MODE: "public",
@@ -378,6 +395,11 @@ describe("AdminCourseDetailPage overview", () => {
 
 describe("AdminCourseDetailPage certificate", () => {
   it("passes the effective workload to the certificate preview", async () => {
+    dependencies.getCertificateIssuerProfileForPreview.mockResolvedValueOnce({
+      cnpj: "04.252.011/0001-10",
+      configured: true,
+      displayName: "Instituto Protea Educação Profissional",
+    });
     dependencies.getAdminCourseTabData.mockResolvedValue({
       tab: "certificate",
       course: {
@@ -403,6 +425,12 @@ describe("AdminCourseDetailPage certificate", () => {
     );
 
     expect(markup).toContain('data-course-workload-hours="20"');
+    expect(markup).toContain('data-course-title="Curso publico"');
+    expect(markup).toContain('data-issuer-configured="true"');
+    expect(markup).toContain('data-issuer-cnpj="04.252.011/0001-10"');
+    expect(markup).toContain(
+      'data-issuer-display-name="Instituto Protea Educação Profissional"'
+    );
   });
 });
 

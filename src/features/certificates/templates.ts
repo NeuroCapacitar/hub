@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { getPool } from "@/db";
 import { uploadPrivateR2Object } from "@/features/storage/r2";
 import { requirePermission } from "@/lib/auth-permissions";
+import { normalizeCnpj } from "@/lib/cnpj";
 import { parseCertificateTemplateDraft } from "./render-snapshot";
 import {
   prepareCertificateTemplateAssetReferences,
@@ -235,13 +236,44 @@ export const getCertificateTemplatesForCourse = async (
   );
 };
 
-export const hasCertificateIssuerProfile = async (): Promise<boolean> => {
-  await requirePermission("viewSettings");
-  const result = await getPool().query<{ id: string }>(
-    "select id from certificate_issuer_profiles where id = 'global' limit 1"
-  );
+interface CertificateIssuerProfileRow {
+  cnpj: string | null;
+  display_name: string | null;
+  legal_name: string | null;
+}
 
-  return Boolean(result.rows[0]);
+const isCertificateIssuerProfileComplete = (
+  profile: CertificateIssuerProfileRow | undefined
+): boolean => {
+  if (!profile) {
+    return false;
+  }
+  return Boolean(
+    profile.legal_name?.trim() &&
+      profile.display_name?.trim() &&
+      normalizeCnpj(profile.cnpj ?? "")
+  );
+};
+
+export const getCertificateIssuerProfileForPreview = async (): Promise<{
+  cnpj: string | null;
+  configured: boolean;
+  displayName: string | null;
+}> => {
+  await requirePermission("viewSettings");
+  const result = await getPool().query<CertificateIssuerProfileRow>(
+    `select cnpj, display_name, legal_name
+     from certificate_issuer_profiles
+     where id = 'global'
+     limit 1`
+  );
+  const profile = result.rows[0];
+
+  return {
+    cnpj: profile ? normalizeCnpj(profile.cnpj ?? "") : null,
+    configured: isCertificateIssuerProfileComplete(profile),
+    displayName: profile?.display_name?.trim() || null,
+  };
 };
 
 export const publishCertificateTemplate = async (
@@ -255,10 +287,13 @@ export const publishCertificateTemplate = async (
       "select pg_advisory_xact_lock(hashtextextended($1, 0))",
       [courseId]
     );
-    const issuer = await client.query<{ id: string }>(
-      "select id from certificate_issuer_profiles where id = 'global' for share"
+    const issuer = await client.query<CertificateIssuerProfileRow>(
+      `select cnpj, display_name, legal_name
+       from certificate_issuer_profiles
+       where id = 'global'
+       for share`
     );
-    if (!issuer.rows[0]) {
+    if (!isCertificateIssuerProfileComplete(issuer.rows[0])) {
       throw new CertificateTemplateDomainError(
         "Preencha o perfil emissor em Configuracoes antes de publicar o certificado."
       );
@@ -379,13 +414,19 @@ export const enableCertificateForCourse = async (
     );
     const prerequisite = await client.query<{
       id: string;
+      issuer_cnpj: string | null;
+      issuer_display_name: string | null;
+      issuer_legal_name: string | null;
       signer_name: string | null;
       signer_role: string | null;
     }>(
       `
         select template.id,
                course.certificate_signer_name as signer_name,
-               course.certificate_signer_role as signer_role
+               course.certificate_signer_role as signer_role,
+               issuer.cnpj as issuer_cnpj,
+               issuer.display_name as issuer_display_name,
+               issuer.legal_name as issuer_legal_name
         from certificate_templates template
         join courses course on course.id = template.course_id
         join certificate_issuer_profiles issuer on issuer.id = 'global'
@@ -400,6 +441,17 @@ export const enableCertificateForCourse = async (
     if (!publishedTemplate) {
       throw new CertificateTemplateDomainError(
         "Publique um template e configure o perfil emissor antes de ligar certificados."
+      );
+    }
+    if (
+      !isCertificateIssuerProfileComplete({
+        cnpj: publishedTemplate.issuer_cnpj,
+        display_name: publishedTemplate.issuer_display_name,
+        legal_name: publishedTemplate.issuer_legal_name,
+      })
+    ) {
+      throw new CertificateTemplateDomainError(
+        "Preencha o perfil emissor em Configuracoes antes de ligar certificados."
       );
     }
     if (

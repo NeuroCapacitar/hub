@@ -180,8 +180,11 @@ const PendingCertificateReconciliation = ({
 export function CertificateTemplateEditor({
   certificateEnabled,
   courseId,
+  courseTitle,
   courseWorkloadHours = 0,
+  issuerCnpj,
   issuerConfigured,
+  issuerDisplayName,
   pendingCertificateReconciliationCount = 0,
   signerName,
   signerRole,
@@ -189,8 +192,11 @@ export function CertificateTemplateEditor({
 }: {
   certificateEnabled: boolean;
   courseId: string;
+  courseTitle: string;
   courseWorkloadHours?: number;
+  issuerCnpj: string | null;
   issuerConfigured: boolean;
+  issuerDisplayName: string | null;
   pendingCertificateReconciliationCount?: number;
   signerName?: string | null;
   signerRole?: string | null;
@@ -233,9 +239,12 @@ export function CertificateTemplateEditor({
       />
       <CertificateTemplateForm
         courseId={courseId}
+        courseTitle={courseTitle}
         courseWorkloadHours={courseWorkloadHours}
         hasPublishedTemplate={Boolean(active)}
+        issuerCnpj={issuerCnpj}
         issuerConfigured={issuerConfigured}
+        issuerDisplayName={issuerDisplayName}
         signerName={signerName ?? null}
         signerRole={signerRole ?? null}
         status={status}
