@@ -26,6 +26,7 @@ const REMOTE_LOCK_OBSERVATION_TIMEOUT_MS = 30_000;
 
 const dependencies = vi.hoisted(() => ({
   createR2ObjectReadUrl: vi.fn(),
+  deleteR2Objects: vi.fn(),
   getPool: vi.fn(),
   renderCertificatePdf: vi.fn(),
   resolveLessonAccess: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock("@/features/certificates/rendering", () => ({
 }));
 vi.mock("@/features/storage/r2", () => ({
   createR2ObjectReadUrl: dependencies.createR2ObjectReadUrl,
+  deleteR2Objects: dependencies.deleteR2Objects,
   uploadPrivateR2ObjectIfAbsent: dependencies.uploadPrivateR2ObjectIfAbsent,
 }));
 vi.mock("@/lib/env", () => ({
@@ -351,6 +353,7 @@ describe("emissao concorrente de certificado", () => {
     dependencies.createR2ObjectReadUrl.mockImplementation(
       async ({ key }: { key: string }) => `https://r2.test/${key}`
     );
+    dependencies.deleteR2Objects.mockResolvedValue(undefined);
     dependencies.renderCertificatePdf.mockResolvedValue({
       pdf: Buffer.from("stable-pdf"),
       sha256: "a".repeat(64),
@@ -737,11 +740,12 @@ describe("emissao concorrente de certificado", () => {
     const history = await getTestPool().query<{
       code: string;
       id: string;
+      preview_purged_at: Date | null;
       render_snapshot: unknown;
       replaces_certificate_id: string | null;
       status: "revoked" | "valid";
     }>(
-      `select id, code, render_snapshot, replaces_certificate_id, status
+      `select id, code, render_snapshot, preview_purged_at, replaces_certificate_id, status
        from certificates
        where course_id = $1 and user_id = $2
        order by issued_at, id`,
@@ -756,6 +760,7 @@ describe("emissao concorrente de certificado", () => {
         code: predecessor.code,
         render_snapshot: predecessor.render_snapshot,
         replaces_certificate_id: null,
+        preview_purged_at: expect.any(Date),
         status: "revoked",
       }
     );

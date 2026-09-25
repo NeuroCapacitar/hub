@@ -33,12 +33,15 @@ const runCertificateAction = async ({
   operation,
   successMessage,
 }: {
-  operation: () => Promise<void>;
+  operation: () => Promise<string | undefined>;
   successMessage: string;
 }): Promise<CertificateActionState> => {
   try {
-    await operation();
-    return { message: successMessage, status: "success" };
+    const operationMessage = await operation();
+    return {
+      message: operationMessage ?? successMessage,
+      status: "success",
+    };
   } catch (error) {
     const message = getExpectedCertificateActionMessage(error);
     if (!message) {
@@ -62,6 +65,7 @@ export const issueManualCertificateAction = async (
         ...input,
       });
       scheduleOutboxDrainAfterResponse();
+      return;
     },
     successMessage: "Certificado emitido.",
   });
@@ -75,10 +79,14 @@ export const revokeCertificateAction = async (
       const session = await requirePermission("manageCertificates");
       const { confirmed: _confirmed, ...input } =
         parseChangeCertificateInput(formData);
-      await revokeCertificate({
+      const result = await revokeCertificate({
         actorUserId: session.user.id,
         ...input,
       });
+      if (!result.previewPurged) {
+        return "Certificado revogado. A prévia será removida automaticamente.";
+      }
+      return;
     },
     successMessage: "Certificado revogado.",
   });
@@ -95,12 +103,16 @@ export const reissueCertificateAction = async (
       }
       const { confirmed: _confirmed, ...input } =
         parseChangeCertificateInput(formData);
-      await reissueCertificate({
+      const result = await reissueCertificate({
         actorRole: session.role,
         actorUserId: session.user.id,
         ...input,
       });
       scheduleOutboxDrainAfterResponse();
+      if (!result.previousPreviewPurged) {
+        return "Certificado reemitido. A prévia anterior será removida automaticamente.";
+      }
+      return;
     },
     successMessage: "Certificado reemitido.",
   });

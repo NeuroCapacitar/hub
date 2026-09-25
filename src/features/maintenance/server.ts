@@ -29,7 +29,7 @@ interface MaintenanceResult {
   learningAnalyticsAggregated: number;
   learningAnalyticsEventsRemoved: number;
   leaseLost: boolean;
-  revokedCertificateArtifactsReconciled: number;
+  revokedCertificateCleanupItemsReconciled: number;
   stagedAdminImagesRemoved: number;
   supportRequestsRemoved: number;
   webhookPayloadsSanitized: number;
@@ -50,7 +50,7 @@ const emptyMaintenanceResult = (): MaintenanceResult => ({
   learningAnalyticsAggregated: 0,
   learningAnalyticsEventsRemoved: 0,
   leaseLost: false,
-  revokedCertificateArtifactsReconciled: 0,
+  revokedCertificateCleanupItemsReconciled: 0,
   stagedAdminImagesRemoved: 0,
   supportRequestsRemoved: 0,
   webhookPayloadsSanitized: 0,
@@ -209,7 +209,7 @@ export const runMaintenance = async ({
   if (!(await canContinue())) {
     return result;
   }
-  result.revokedCertificateArtifactsReconciled =
+  result.revokedCertificateCleanupItemsReconciled =
     await reconcileRevokedCertificateArtifacts({ shouldContinue: canContinue });
 
   if (!(await canContinue())) {

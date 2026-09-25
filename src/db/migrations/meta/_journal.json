@@ -638,6 +638,27 @@
       "when": 1790293747010,
       "tag": "0090_course_certificate_signatory",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1790362493778,
+      "tag": "0091_certificate_artifact_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1790367309223,
+      "tag": "0092_certificate_revocation_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1790368854411,
+      "tag": "0093_certificate_issuance_guard",
+      "breakpoints": true
     }
   ]
 }

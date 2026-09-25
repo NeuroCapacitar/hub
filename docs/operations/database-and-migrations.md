@@ -1,10 +1,10 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
-current_migration_tag: 0090_course_certificate_signatory
-migration_entry_count: 91
-schema_table_count: 50
+last_verified_commit: b226ee5
+current_migration_tag: 0093_certificate_issuance_guard
+migration_entry_count: 94
+schema_table_count: 51
 ---
 
 # Banco e migrations
@@ -197,6 +197,18 @@ priorizando o publicado. Não consulta nem copia os padrões globais de
 `app_settings`; Cursos sem valores explícitos continuam pendentes para revisão.
 As colunas antigas de nome/cargo em `certificate_templates` e `app_settings`
 permanecem temporariamente para rollback e não são usadas pelo runtime novo.
+
+A migration `0091_certificate_artifact_retention` adiciona os marcadores de
+remoção de PDF e prévia de Certificados revogados. A `0092_certificate_revocation_retention`
+cria o armazenamento mínimo de hashes de códigos revogados e permite limpar o
+digest do PDF junto com sua chave. A `0093_certificate_issuance_guard` adiciona
+`course_completions.certificate_ever_issued` e backfilla o bloqueio para os
+Certificados existentes. O runtime retém PDF e dados detalhados por até 60 dias
+após `revoked_at`; então apaga os artefatos, a linha do Certificado, os registros
+de auditoria e as mensagens de outbox. Uma transação grava o hash do código e a
+data de revogação como tombstone público. A conclusão mantém somente o marcador
+booleano necessário para impedir emissão automática/manual duplicada. Nenhuma
+dessas migrations foi aplicada a Staging ou Production nesta alteração.
 
 O runner de Development aplicou `0085` em 2026-09-17. A auditoria read-only
 confirmou o check `allowlist refinada e grants configuráveis limpos` e nenhum

@@ -82,8 +82,8 @@ describe("getCertificatePreviewReadUrl", () => {
       "certificates/certificate-1/certificate-preview.png",
     ]);
     expect(dependencies.uploadPrivateR2Object).toHaveBeenCalled();
-    expect(dependencies.query).toHaveBeenCalledWith(
-      expect.stringContaining("update certificates set preview_sha256"),
+    expect(dependencies.query).toHaveBeenLastCalledWith(
+      expect.stringContaining("preview_sha256 = $2"),
       ["certificate-1", "new-hash"]
     );
   });
@@ -98,10 +98,26 @@ describe("getCertificatePreviewReadUrl", () => {
     expect(dependencies.verifyPrivateR2ObjectSha256).not.toHaveBeenCalled();
     expect(dependencies.deleteR2Objects).not.toHaveBeenCalled();
     expect(dependencies.uploadPrivateR2Object).toHaveBeenCalled();
-    expect(dependencies.query).toHaveBeenCalledWith(
-      expect.stringContaining("update certificates set preview_sha256"),
+    expect(dependencies.query).toHaveBeenLastCalledWith(
+      expect.stringContaining("preview_sha256 = $2"),
       ["certificate-1", "new-hash"]
     );
+  });
+
+  it("does not leave a preview behind when the certificate is revoked during regeneration", async () => {
+    dependencies.query
+      .mockResolvedValueOnce({
+        rows: [{ ...CERTIFICATE, preview_sha256: null }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(getCertificatePreviewReadUrl("PRT-001")).resolves.toBeNull();
+
+    expect(dependencies.uploadPrivateR2Object).toHaveBeenCalledOnce();
+    expect(dependencies.deleteR2Objects).toHaveBeenCalledWith([
+      "certificates/certificate-1/certificate-preview.png",
+    ]);
+    expect(dependencies.createR2ObjectReadUrl).toHaveBeenCalledTimes(1);
   });
 
   it("fails closed when storage verification is unavailable", async () => {

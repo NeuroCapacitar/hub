@@ -2,9 +2,11 @@ import "server-only";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { getPool } from "@/db";
+import { purgeRevokedCertificatePreview } from "@/features/certificates/artifact-reconciliation";
 import {
   CERTIFICATE_CODE_RANDOM_BYTE_LENGTH,
   encodeCertificateCode,
+  hashCertificateVerificationCode,
 } from "@/features/certificates/certificate-code";
 import {
   type CertificateReasonCode,
@@ -16,7 +18,10 @@ import {
   parseCertificateTemplateDraft,
 } from "@/features/certificates/render-snapshot";
 import { renderCertificatePdf } from "@/features/certificates/rendering";
-import { CERTIFICATE_RENDER_CLAIM_LEASE_MINUTES } from "@/features/certificates/rules";
+import {
+  CERTIFICATE_RENDER_CLAIM_LEASE_MINUTES,
+  REVOKED_CERTIFICATE_DATA_RETENTION_DAYS,
+} from "@/features/certificates/rules";
 import { lockEnrollmentAggregate } from "@/features/enrollments/enrollment-aggregate-lock";
 import { createCertificateRenderMessage } from "@/features/outbox/rules";
 import { enqueueOutboxMessage } from "@/features/outbox/server";
@@ -194,6 +199,13 @@ export const tryIssueAutomaticCompletionCertificate = async ({
     try {
       const certificate = await client.query<{ code: string }>(
         `
+          with certificate_completion as (
+            update course_completions
+            set certificate_ever_issued = true,
+                updated_at = now()
+            where user_id = $1 and course_id = $2
+            returning id
+          )
           insert into certificates (
             user_id,
             course_id,
@@ -205,7 +217,8 @@ export const tryIssueAutomaticCompletionCertificate = async ({
             certificate_template_id,
             render_snapshot
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+          select $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb
+          from certificate_completion
           on conflict (user_id, course_id) where status = 'valid' do nothing
           returning code
         `,
@@ -500,6 +513,13 @@ const issueCertificate = async ({
     try {
       const certificate = await client.query<{ id: string }>(
         `
+          with certificate_completion as (
+            update course_completions
+            set certificate_ever_issued = true,
+                updated_at = now()
+            where user_id = $1 and course_id = $2
+            returning id
+          )
           insert into certificates (
             user_id,
             course_id,
@@ -512,7 +532,8 @@ const issueCertificate = async ({
             certificate_template_id,
             render_snapshot
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
+          select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb
+          from certificate_completion
           returning id
         `,
         [
@@ -621,6 +642,7 @@ export const reconcileHistoricalCourseCertificates = async ({
             from certificate_issuer_profiles issuer
             where issuer.id = 'global'
           )
+          and completion.certificate_ever_issued = false
           and not exists (
             select 1
             from certificates certificate
@@ -686,6 +708,7 @@ export const reconcileHistoricalCourseCertificates = async ({
             from certificate_issuer_profiles issuer
             where issuer.id = 'global'
           )
+          and completion.certificate_ever_issued = false
           and not exists (
             select 1
             from certificates certificate
@@ -786,9 +809,12 @@ export const issueManualCertificate = async ({
       `,
       [userId, courseId, publishedCoursePublicationId]
     );
-    const completion = await client.query<{ course_publication_id: string }>(
+    const completion = await client.query<{
+      certificate_ever_issued: boolean;
+      course_publication_id: string;
+    }>(
       `
-        select course_publication_id
+        select course_publication_id, certificate_ever_issued
         from course_completions
         where user_id = $1 and course_id = $2
         limit 1
@@ -798,6 +824,11 @@ export const issueManualCertificate = async ({
     const coursePublicationId = completion.rows[0]?.course_publication_id;
     if (!coursePublicationId) {
       throw new CertificateDomainError("Conclusao do curso nao localizada.");
+    }
+    if (completion.rows[0]?.certificate_ever_issued) {
+      throw new CertificateDomainError(
+        "Já houve uma emissão de certificado para essa conclusão. Não é possível emitir outra via pelo fluxo manual."
+      );
     }
     const certificate = await issueCertificate({
       actorUserId,
@@ -828,7 +859,7 @@ export const revokeCertificate = async ({
   certificateId: string;
   reasonCategory: string;
   reasonDetail: string;
-}): Promise<void> => {
+}): Promise<{ previewPurged: boolean }> => {
   const category = requireCertificateReason({ reasonCategory, reasonDetail });
 
   const pool = getPool();
@@ -869,6 +900,13 @@ export const revokeCertificate = async ({
   } finally {
     client.release();
   }
+
+  return {
+    previewPurged: await purgeRevokedCertificatePreview({
+      actorUserId,
+      certificateId,
+    }),
+  };
 };
 
 export const reissueCertificate = async ({
@@ -883,11 +921,12 @@ export const reissueCertificate = async ({
   certificateId: string;
   reasonCategory: string;
   reasonDetail: string;
-}): Promise<{ id: string }> => {
+}): Promise<{ id: string; previousPreviewPurged: boolean }> => {
   const category = requireCertificateReason({ reasonCategory, reasonDetail });
 
   const pool = getPool();
   const client = await pool.connect();
+  let replacement: { id: string } | null = null;
   try {
     await client.query("begin");
     const previousResult = await client.query<{
@@ -995,7 +1034,7 @@ export const reissueCertificate = async ({
         },
       });
     }
-    const replacement = await issueCertificate({
+    replacement = await issueCertificate({
       actorUserId,
       client,
       courseId: lockedPreviousCertificate.course_id,
@@ -1006,13 +1045,22 @@ export const reissueCertificate = async ({
       userId: lockedPreviousCertificate.user_id,
     });
     await client.query("commit");
-    return replacement;
   } catch (error) {
     await client.query("rollback");
     throw error;
   } finally {
     client.release();
   }
+
+  if (!replacement) {
+    throw new Error("A reemissão não retornou o novo certificado.");
+  }
+
+  const previousPreviewPurged = await purgeRevokedCertificatePreview({
+    actorUserId,
+    certificateId,
+  });
+  return { ...replacement, previousPreviewPurged };
 };
 
 export const getCertificateByCode = async (
@@ -1052,9 +1100,13 @@ export const getCertificateByCode = async (
         status
       from certificates
       where code = $1
+        and (
+          status <> 'revoked'
+          or revoked_at > now() - ($2 * interval '1 day')
+        )
       limit 1
     `,
-    [code]
+    [code, REVOKED_CERTIFICATE_DATA_RETENTION_DAYS]
   );
   const row = rows[0];
 
@@ -1080,6 +1132,35 @@ export const getCertificateByCode = async (
     renderStatus: row.render_status,
     status: row.status,
   };
+};
+
+export interface RevokedCertificateTombstone {
+  revokedAt: Date;
+}
+
+export const getRevokedCertificateTombstoneByCode = async (
+  code: string
+): Promise<RevokedCertificateTombstone | null> => {
+  const { rows } = await getPool().query<{ revoked_at: Date }>(
+    `select revoked_at
+     from certificates
+     where code = $1
+       and status = 'revoked'
+       and revoked_at <= now() - ($2 * interval '1 day')
+     union all
+     select revoked_at
+     from certificate_revocation_tombstones
+     where code_hash = $3
+     limit 1`,
+    [
+      code,
+      REVOKED_CERTIFICATE_DATA_RETENTION_DAYS,
+      hashCertificateVerificationCode(code),
+    ]
+  );
+  const row = rows[0];
+
+  return row ? { revokedAt: row.revoked_at } : null;
 };
 
 export const getCertificatesForUser = async (

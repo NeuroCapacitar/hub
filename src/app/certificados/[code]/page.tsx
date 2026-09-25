@@ -6,10 +6,26 @@ import { BrandLogo } from "@/components/brand-logo";
 import { PageContainer } from "@/components/page-container";
 import { CERTIFICATE_PREVIEW_DIMENSIONS } from "@/features/certificates/preview";
 import { consumePublicCertificateLookup } from "@/features/certificates/public-rate-limit";
-import { getCertificateByCode } from "@/features/certificates/server";
+import {
+  type CertificateRecord,
+  getCertificateByCode,
+  getRevokedCertificateTombstoneByCode,
+} from "@/features/certificates/server";
 import { CertificatePublicActions } from "./certificate-public-actions";
 import { CertificatePublicCode } from "./certificate-public-code";
 import { CertificatePublicStatus } from "./certificate-public-status";
+
+const getUnavailableDocumentMessage = (
+  certificate: CertificateRecord | null
+): string => {
+  if (certificate?.status === "revoked") {
+    return "A prévia e o download deste certificado não estão mais disponíveis porque ele foi revogado.";
+  }
+  if (certificate?.renderStatus === "failed") {
+    return "Não foi possível preparar o documento. Entre em contato com o Suporte.";
+  }
+  return "O documento ficará disponível quando o certificado estiver pronto.";
+};
 
 export const dynamic = "force-dynamic";
 
@@ -29,15 +45,27 @@ export default async function CertificateValidationPage({
     notFound();
   }
   const certificate = await getCertificateByCode(code);
+  const tombstone = certificate
+    ? null
+    : await getRevokedCertificateTombstoneByCode(code);
 
-  if (!certificate) {
+  if (!(certificate || tombstone)) {
     notFound();
   }
 
-  const pdfHref = `/certificados/${encodeURIComponent(certificate.code)}/pdf`;
-  const previewHref = `/certificados/${encodeURIComponent(certificate.code)}/preview`;
+  const publicCode = certificate?.code ?? code;
+  const pdfHref = `/certificados/${encodeURIComponent(publicCode)}/pdf`;
+  const previewHref = `/certificados/${encodeURIComponent(publicCode)}/preview`;
   const isReady =
-    certificate.status === "valid" && certificate.renderStatus === "ready";
+    certificate?.status === "valid" && certificate.renderStatus === "ready";
+  const revokedAt = certificate?.revokedAt ?? tombstone?.revokedAt ?? null;
+  const formattedRevokedAt = revokedAt
+    ? new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "long",
+        timeZone: "America/Sao_Paulo",
+      }).format(revokedAt)
+    : null;
+  const unavailableDocumentMessage = getUnavailableDocumentMessage(certificate);
 
   return (
     <PageContainer
@@ -65,20 +93,32 @@ export default async function CertificateValidationPage({
             className="order-first min-w-0 lg:border-border/60 lg:border-r lg:pr-10"
             data-certificate-panel="true"
           >
-            <div>
-              <p className="text-muted-foreground text-sm">Emitido para</p>
-              <p className="mt-2 font-heading font-semibold text-xl">
-                {certificate.studentName}
-              </p>
-              <p className="mt-3 text-muted-foreground text-sm leading-6">
-                Curso{" "}
-                <strong className="font-semibold text-foreground">
-                  {certificate.courseTitle}
-                </strong>
-              </p>
-            </div>
+            {certificate ? (
+              <div>
+                <p className="text-muted-foreground text-sm">Emitido para</p>
+                <p className="mt-2 font-heading font-semibold text-xl">
+                  {certificate.studentName}
+                </p>
+                <p className="mt-3 text-muted-foreground text-sm leading-6">
+                  Curso{" "}
+                  <strong className="font-semibold text-foreground">
+                    {certificate.courseTitle}
+                  </strong>
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-muted-foreground text-sm">
+                  Consulta pública
+                </p>
+                <p className="mt-2 text-muted-foreground text-sm leading-6">
+                  Os dados pessoais e do curso não são exibidos após o prazo de
+                  retenção.
+                </p>
+              </div>
+            )}
 
-            <CertificatePublicCode code={certificate.code} />
+            <CertificatePublicCode code={publicCode} />
           </aside>
 
           <section
@@ -92,36 +132,55 @@ export default async function CertificateValidationPage({
                 className="font-heading font-semibold text-xl"
                 id="certificate-pdf-heading"
               >
-                Certificado de conclusão
+                {certificate
+                  ? "Certificado de conclusão"
+                  : "Status do certificado"}
               </h2>
               <CertificatePublicStatus
-                renderStatus={certificate.renderStatus}
-                status={certificate.status}
+                renderStatus={certificate?.renderStatus ?? "ready"}
+                status={certificate?.status ?? "revoked"}
               />
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/30 p-2 sm:p-3">
-              {isReady ? (
-                <Image
-                  alt="Prévia do certificado"
-                  className="h-auto w-full rounded-lg bg-card object-contain outline outline-1 outline-white/10 -outline-offset-1"
-                  height={CERTIFICATE_PREVIEW_DIMENSIONS.height}
-                  priority
-                  src={previewHref}
-                  unoptimized
-                  width={CERTIFICATE_PREVIEW_DIMENSIONS.width}
-                />
-              ) : (
-                <div className="flex min-h-[22rem] items-center justify-center rounded-lg border border-border/70 border-dashed bg-background px-6 text-center">
-                  <p className="max-w-sm text-muted-foreground text-sm">
-                    O documento ficará disponível quando o certificado estiver
-                    pronto.
+            {certificate ? (
+              <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/30 p-2 sm:p-3">
+                {isReady ? (
+                  <Image
+                    alt="Prévia do certificado"
+                    className="h-auto w-full rounded-lg bg-card object-contain outline outline-1 outline-white/10 -outline-offset-1"
+                    height={CERTIFICATE_PREVIEW_DIMENSIONS.height}
+                    priority
+                    src={previewHref}
+                    unoptimized
+                    width={CERTIFICATE_PREVIEW_DIMENSIONS.width}
+                  />
+                ) : (
+                  <div className="flex min-h-[22rem] items-center justify-center rounded-lg border border-border/70 border-dashed bg-background px-6 text-center">
+                    <p className="max-w-sm text-muted-foreground text-sm">
+                      {unavailableDocumentMessage}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex min-h-[22rem] items-center justify-center rounded-xl border border-destructive/25 bg-destructive/5 px-6 py-10 text-center">
+                <div className="max-w-md space-y-3">
+                  <h3 className="font-heading font-semibold text-destructive text-lg">
+                    Este certificado foi revogado
+                  </h3>
+                  <p className="text-muted-foreground text-sm leading-6">
+                    {formattedRevokedAt
+                      ? `A revogação ocorreu em ${formattedRevokedAt}.`
+                      : "O certificado foi revogado."}{" "}
+                    O documento e os dados associados foram removidos após 60
+                    dias. Esta página mantém somente a confirmação do status
+                    pelo código.
                   </p>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            {isReady ? (
+            {certificate && isReady ? (
               <CertificatePublicActions
                 code={certificate.code}
                 pdfHref={pdfHref}

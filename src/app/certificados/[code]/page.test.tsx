@@ -4,19 +4,24 @@ import { describe, expect, it, vi } from "vitest";
 const dependencies = vi.hoisted(() => ({
   consumePublicCertificateLookup: vi.fn(),
   getCertificateByCode: vi.fn(),
+  getRevokedCertificateTombstoneByCode: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
   headers: vi.fn().mockResolvedValue(new Headers()),
 }));
 vi.mock("next/navigation", () => ({
-  notFound: vi.fn(),
+  notFound: vi.fn(() => {
+    throw new Error("NEXT_NOT_FOUND");
+  }),
 }));
 vi.mock("@/features/certificates/public-rate-limit", () => ({
   consumePublicCertificateLookup: dependencies.consumePublicCertificateLookup,
 }));
 vi.mock("@/features/certificates/server", () => ({
   getCertificateByCode: dependencies.getCertificateByCode,
+  getRevokedCertificateTombstoneByCode:
+    dependencies.getRevokedCertificateTombstoneByCode,
 }));
 
 import CertificateValidationPage, { metadata } from "./page";
@@ -106,6 +111,9 @@ describe("CertificateValidationPage", () => {
     expect(markup).toContain('data-certificate-code="true"');
     expect(markup).not.toContain('alt="Prévia do certificado"');
     expect(markup).not.toContain("Baixar PDF");
+    expect(markup).toContain(
+      "O documento ficará disponível quando o certificado estiver pronto."
+    );
   });
 
   it("shows a revoked certificate as invalid without preview or download", async () => {
@@ -137,6 +145,38 @@ describe("CertificateValidationPage", () => {
     expect(markup).toContain('data-certificate-code="true"');
     expect(markup).not.toContain('alt="Prévia do certificado"');
     expect(markup).not.toContain("Baixar PDF");
+    expect(markup).toContain(
+      "A prévia e o download deste certificado não estão mais disponíveis porque ele foi revogado."
+    );
+    expect(markup).not.toContain(
+      "O documento ficará disponível quando o certificado estiver pronto."
+    );
+  });
+
+  it("keeps only the revocation status visible after personal certificate data is purged", async () => {
+    dependencies.consumePublicCertificateLookup.mockResolvedValue("allowed");
+    dependencies.getCertificateByCode.mockResolvedValue(null);
+    dependencies.getRevokedCertificateTombstoneByCode.mockResolvedValue({
+      revokedAt: new Date("2026-07-22T12:00:00.000Z"),
+    });
+
+    const markup = renderToStaticMarkup(
+      await CertificateValidationPage({
+        params: Promise.resolve({ code: "PRT-REVOKED-EXPIRED" }),
+      })
+    );
+
+    expect(markup).toContain("Certificado revogado");
+    expect(markup).toContain("Código do certificado");
+    expect(markup).toContain("2026");
+    expect(markup).not.toContain("Emitido para");
+    expect(markup).not.toContain("Aluno Teste");
+    expect(markup).not.toContain("Curso confidencial");
+    expect(markup).not.toContain('alt="Prévia do certificado"');
+    expect(markup).not.toContain("Baixar PDF");
+    expect(
+      dependencies.getRevokedCertificateTombstoneByCode
+    ).toHaveBeenCalledWith("PRT-REVOKED-EXPIRED");
   });
 
   it("shows a failed certificate with a recovery message without preview or download", async () => {

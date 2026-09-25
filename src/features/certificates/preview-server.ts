@@ -22,7 +22,7 @@ const regeneratePreview = async ({
   certificate: { render_snapshot: unknown };
   certificateId: string;
   removeStaleObject: boolean;
-}): Promise<void> => {
+}): Promise<boolean> => {
   const key = previewKeyForCertificate(certificateId);
   if (removeStaleObject) {
     await deleteR2Objects([key]);
@@ -63,10 +63,23 @@ const regeneratePreview = async ({
     contentType: "image/png",
     key,
   });
-  await getPool().query(
-    "update certificates set preview_sha256 = $2, updated_at = now() where id = $1",
+  const persisted = await getPool().query<{ id: string }>(
+    `update certificates
+     set preview_sha256 = $2,
+         updated_at = now()
+     where id = $1
+       and status = 'valid'
+       and render_status = 'ready'
+       and preview_purged_at is null
+     returning id`,
     [certificateId, preview.sha256]
   );
+  if (!persisted.rows[0]) {
+    await deleteR2Objects([key]);
+    return false;
+  }
+
+  return true;
 };
 
 export const getCertificatePreviewReadUrl = async (
@@ -112,20 +125,26 @@ export const getCertificatePreviewReadUrl = async (
     if (status === "unavailable") {
       throw new Error("certificate_preview_storage_unavailable");
     }
-    await regeneratePreview({
+    const regenerated = await regeneratePreview({
       certificate,
       certificateId: certificate.id,
       removeStaleObject: true,
     });
+    if (!regenerated) {
+      return null;
+    }
     return readUrl();
   }
 
   // Legacy previews have no canonical digest recorded; regenerate once and
   // persist the hash so later reads become verifiable.
-  await regeneratePreview({
+  const regenerated = await regeneratePreview({
     certificate,
     certificateId: certificate.id,
     removeStaleObject: false,
   });
+  if (!regenerated) {
+    return null;
+  }
   return readUrl();
 };
