@@ -36,7 +36,7 @@ import { canPerform } from "@/lib/auth-policy";
 import { getServerEnv } from "@/lib/env";
 import { route } from "@/lib/routes";
 import { CertificateTemplateEditor } from "./certificate-template-editor";
-import { CourseAvailabilityForm } from "./course-availability-form";
+import { CourseRiskZone } from "./course-availability-form";
 import { CourseContentPanel } from "./course-content-panel";
 import { CourseSettingsForm } from "./course-dialogs-client";
 import { CourseEnrollmentsTable } from "./course-enrollments-table";
@@ -269,6 +269,8 @@ export default async function AdminCourseDetailPage({
         pendingCertificateReconciliationCount={
           course.pendingCertificateReconciliationCount
         }
+        signerName={course.certificateSignerName}
+        signerRole={course.certificateSignerRole}
         templates={certificateData[0]}
       />
     ) : (
@@ -318,7 +320,7 @@ export default async function AdminCourseDetailPage({
           }
           settings={
             data.tab === "settings" && purchaseLink && publicCourseUrl ? (
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-8">
                 <Card>
                   <CardHeader className="border-b">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -327,8 +329,8 @@ export default async function AdminCourseDetailPage({
                           Configurações do curso
                         </CardTitle>
                         <CardDescription>
-                          Dados que aparecem para o aluno e conectam o Curso à
-                          página pública de aquisição.
+                          Identidade, acesso, condições comerciais e
+                          disponibilidade deste Curso.
                         </CardDescription>
                       </div>
                       <CoursePurchaseLink
@@ -337,30 +339,33 @@ export default async function AdminCourseDetailPage({
                       />
                     </div>
                   </CardHeader>
-                  <CardContent className="py-2 sm:py-4">
+                  <CardContent className="flex flex-col gap-8 py-4">
                     <CourseSettingsForm
+                      availabilityReadOnly={!canManageCourseAvailability}
                       course={course}
                       readOnly={!canManageCourseDetails}
+                      signatoryReadOnly={!canManageCourseCertificate}
                     />
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardHeader className="border-b py-4">
-                    <CardTitle as="h2" className="text-lg">
-                      Disponibilidade
-                    </CardTitle>
-                    <CardDescription>
-                      Controle vitrine e novas vendas. Matrículas existentes não
-                      são alteradas.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="py-4">
-                    <CourseAvailabilityForm
-                      course={course}
-                      readOnly={!canManageCourseAvailability}
-                    />
-                  </CardContent>
-                </Card>
+                {canManageCourseAvailability && course.status !== "archived" ? (
+                  <Card className="bg-destructive/10 py-0 ring-destructive/30">
+                    <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0 space-y-1">
+                        <CardTitle as="h2" className="text-destructive text-lg">
+                          Zona de risco
+                        </CardTitle>
+                        <CardDescription className="text-foreground/80">
+                          Arquivar interrompe vendas e bloqueia o acesso dos
+                          alunos até uma restauração.
+                        </CardDescription>
+                      </div>
+                      <div className="self-end sm:shrink-0 sm:self-auto">
+                        <CourseRiskZone course={course} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : null}
               </div>
             ) : null
           }

@@ -7,6 +7,9 @@ const dependencies = vi.hoisted(() => ({
   scheduleCertificateTemplateAssetCleanup: vi.fn(),
   requirePermission: vi.fn(),
 }));
+const TEMPLATE_MUTATION_STATEMENT_PATTERN =
+  /(?:insert into|update) certificate_templates/i;
+const LEGACY_TEMPLATE_SIGNER_COLUMN_PATTERN = /signer_name|signer_role/i;
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/db", () => ({ getPool: dependencies.getPool }));
@@ -98,8 +101,6 @@ describe("certificate template editor image URLs", () => {
         {
           background_key: "certificates/templates/course-1/bg.webp",
           id: "template-1",
-          signer_name: null,
-          signer_role: null,
           signature_key: "certificates/templates/course-1/signature.webp",
           spec: {
             backgroundKey: "certificates/templates/course-1/bg.webp",
@@ -142,8 +143,6 @@ describe("certificate template draft serialization", () => {
         actorUserId: "admin-1",
         courseId: "course-1",
         signatureKey: null,
-        signerName: null,
-        signerRole: null,
         spec: {
           backgroundKey: "templates/background.webp",
           fields: [
@@ -192,8 +191,6 @@ describe("certificate template draft serialization", () => {
       actorUserId: "admin-1",
       courseId: "course-1",
       signatureKey: null,
-      signerName: null,
-      signerRole: null,
       spec: {
         backgroundKey: "templates/background.webp",
         fields: [
@@ -259,8 +256,6 @@ describe("certificate template draft serialization", () => {
         actorUserId: "admin-1",
         courseId: "course-1",
         signatureKey: "templates/new-signature.webp",
-        signerName: null,
-        signerRole: null,
         spec: {
           backgroundKey: "templates/new-background.webp",
           fields: [
@@ -320,8 +315,8 @@ describe("certificate template draft serialization", () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
-  it("audits draft changes in the same transaction", async () => {
-    const query = vi.fn((statement: string) => {
+  it("keeps course signatory data out of certificate template persistence", async () => {
+    const query = vi.fn((statement: string, _values?: unknown[]) => {
       if (statement.includes("from certificate_templates")) {
         return { rows: [] };
       }
@@ -336,8 +331,6 @@ describe("certificate template draft serialization", () => {
       actorUserId: "admin-1",
       courseId: "course-1",
       signatureKey: null,
-      signerName: null,
-      signerRole: null,
       spec: {
         backgroundKey: "templates/background.webp",
         fields: [
@@ -363,7 +356,7 @@ describe("certificate template draft serialization", () => {
           y: index * 10,
         })),
       },
-    } as Parameters<typeof saveCertificateTemplateDraft>[0]);
+    });
 
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("insert into audit_logs"),
@@ -381,6 +374,14 @@ describe("certificate template draft serialization", () => {
     );
     expect(auditIndex).toBeGreaterThanOrEqual(0);
     expect(auditIndex).toBeLessThan(commitIndex);
+    const persistedTemplateStatements = query.mock.calls
+      .map(([statement]) => String(statement))
+      .filter((statement) =>
+        TEMPLATE_MUTATION_STATEMENT_PATTERN.test(statement)
+      );
+    expect(persistedTemplateStatements.join(" ")).not.toMatch(
+      LEGACY_TEMPLATE_SIGNER_COLUMN_PATTERN
+    );
   });
 });
 
@@ -410,7 +411,15 @@ describe("certificate course activation", () => {
   it("activates the course when every publication prerequisite exists", async () => {
     const query = vi.fn((statement: string) => {
       if (statement.includes("from certificate_templates")) {
-        return Promise.resolve({ rows: [{ id: "template-1" }] });
+        return Promise.resolve({
+          rows: [
+            {
+              id: "template-1",
+              signer_name: "Dra. Maria",
+              signer_role: "Especialista",
+            },
+          ],
+        });
       }
       if (statement.includes("update courses")) {
         return Promise.resolve({ rowCount: 1, rows: [] });
@@ -451,7 +460,19 @@ describe("certificate course activation", () => {
         return Promise.resolve({ rows: [{ id: "issuer-global" }] });
       }
       if (statement.includes("status = 'draft'")) {
-        return Promise.resolve({ rows: [{ id: "template-draft" }] });
+        return Promise.resolve({
+          rows: [{ id: "template-draft" }],
+        });
+      }
+      if (statement.includes("from courses")) {
+        return Promise.resolve({
+          rows: [
+            {
+              certificate_signer_name: "Dra. Maria",
+              certificate_signer_role: "Especialista",
+            },
+          ],
+        });
       }
       return Promise.resolve({ rows: [], rowCount: 1 });
     });
@@ -469,6 +490,76 @@ describe("certificate course activation", () => {
         "certificate.template_published",
         "course-1",
       ])
+    );
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("does not enable a published template missing course signatory data", async () => {
+    const query = vi.fn((statement: string) => {
+      if (statement.includes("from certificate_templates")) {
+        return Promise.resolve({
+          rows: [
+            {
+              id: "template-1",
+              signer_name: "Dra. Maria",
+              signer_role: null,
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ rows: [], rowCount: 1 });
+    });
+    dependencies.getPool.mockReturnValue({
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    });
+
+    await expect(
+      enableCertificateForCourse("course-1", "admin-1")
+    ).rejects.toThrow("Informe nome e cargo do responsável");
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("update courses"),
+      expect.anything()
+    );
+  });
+
+  it("does not publish a draft without both course signatory fields", async () => {
+    const query = vi.fn((statement: string) => {
+      if (statement.includes("certificate_issuer_profiles")) {
+        return Promise.resolve({ rows: [{ id: "issuer-global" }] });
+      }
+      if (statement.includes("status = 'draft'")) {
+        return Promise.resolve({
+          rows: [{ id: "template-draft" }],
+        });
+      }
+      if (statement.includes("from courses")) {
+        return Promise.resolve({
+          rows: [
+            {
+              certificate_signer_name: "Dra. Maria",
+              certificate_signer_role: "  ",
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ rows: [], rowCount: 1 });
+    });
+    const release = vi.fn();
+    dependencies.getPool.mockReturnValue({
+      connect: vi.fn().mockResolvedValue({ query, release }),
+    });
+
+    await expect(
+      publishCertificateTemplate("course-1", "admin-1")
+    ).rejects.toThrow("Informe nome e cargo do responsável");
+
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("set status = 'published'"),
+      expect.anything()
+    );
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("insert into audit_logs"),
+      expect.anything()
     );
     expect(release).toHaveBeenCalledOnce();
   });

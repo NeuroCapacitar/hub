@@ -120,8 +120,6 @@ describe("admin read projections", () => {
     query.mockResolvedValue({
       rows: [
         {
-          certificate_signer_name: "Responsável",
-          certificate_signer_role: "Diretora",
           cnpj: "04.252.011/0001-10",
           display_name: "Empresa",
           legal_name: "Empresa LTDA",
@@ -134,8 +132,6 @@ describe("admin read projections", () => {
 
     await expect(getAdminSettingsData()).resolves.toEqual({
       settings: {
-        certificateSignerName: "Responsável",
-        certificateSignerRole: "Diretora",
         issuerCnpj: "04.252.011/0001-10",
         issuerDisplayName: "Empresa",
         issuerLegalName: "Empresa LTDA",
@@ -148,7 +144,10 @@ describe("admin read projections", () => {
     expect(requirePermission).toHaveBeenCalledWith("viewSettings");
     expect(query).toHaveBeenCalledOnce();
     expect(String(query.mock.calls[0]?.[0]).toLowerCase()).toContain(
-      "full outer join"
+      "from certificate_issuer_profiles"
+    );
+    expect(String(query.mock.calls[0]?.[0]).toLowerCase()).not.toContain(
+      "app_settings"
     );
   });
 
@@ -157,8 +156,6 @@ describe("admin read projections", () => {
     query.mockResolvedValue({
       rows: [
         {
-          certificate_signer_name: null,
-          certificate_signer_role: null,
           cnpj: "04.252.011/0001-11",
           display_name: null,
           legal_name: "Empresa LTDA",

@@ -103,12 +103,17 @@ vi.mock("./course-content-panel", () => ({
   ),
 }));
 vi.mock("./course-dialogs-client", () => ({
-  CourseSettingsForm: () => <div>settings-form</div>,
+  CourseSettingsForm: () => (
+    <div data-course-settings-form="true">
+      settings-form <span>Disponibilidade</span>
+    </div>
+  ),
 }));
 vi.mock("./course-enrollments-table", () => ({
   CourseEnrollmentsTable: () => null,
 }));
 vi.mock("./course-management-tabs", () => ({
+  useCourseTabDirty: vi.fn(),
   CourseManagementTabs: ({
     certificate,
     content,
@@ -194,7 +199,11 @@ vi.mock("./course-purchase-link", () => ({
   ),
 }));
 vi.mock("./course-availability-form", () => ({
-  CourseAvailabilityForm: () => <div data-availability-form />,
+  CourseRiskZone: () => (
+    <div data-course-risk-zone="true">
+      <button type="button">Arquivar curso</button>
+    </div>
+  ),
 }));
 
 import AdminCourseDetailPage from "./page";
@@ -522,6 +531,19 @@ describe("AdminCourseDetailPage purchase link", () => {
     expect(markup.match(/data-slot="card"/g)).toHaveLength(2);
     expect(markup).toContain("Disponibilidade");
     expect(markup).toContain("Configurações do curso");
+    expect(markup).not.toContain("Responsável pelo certificado");
+    expect(markup).toContain('data-course-risk-zone="true"');
+    expect(markup).toContain("bg-destructive/10");
+    expect(markup).toContain("sm:flex-row");
+    expect(markup.indexOf("Configurações do curso")).toBeLessThan(
+      markup.indexOf("Disponibilidade")
+    );
+    expect(markup.indexOf("Disponibilidade")).toBeLessThan(
+      markup.indexOf("Zona de risco")
+    );
+    expect(markup.indexOf("Arquivar interrompe vendas")).toBeLessThan(
+      markup.indexOf("Arquivar curso")
+    );
   });
 
   it("passes an unavailable state instead of a false link for an unpublished course", async () => {

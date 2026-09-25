@@ -328,6 +328,8 @@ export interface AdminCourse {
   calculatedWorkloadHours?: number;
   catalogVisibility: "hidden" | "listed";
   certificateEnabled: boolean;
+  certificateSignerName: string | null;
+  certificateSignerRole: string | null;
   coverImage: unknown;
   description: string | null;
   hasCommercialHistory: boolean;
@@ -649,8 +651,6 @@ export interface AdminFinancialOrdersData {
 }
 
 export interface AdminSettings {
-  certificateSignerName: string | null;
-  certificateSignerRole: string | null;
   issuerCnpj: string | null;
   issuerDisplayName: string | null;
   issuerLegalName: string | null;
@@ -1367,6 +1367,8 @@ const readCourses = async (
     access_duration_months: number;
     catalog_visibility: "hidden" | "listed";
     certificate_enabled: boolean;
+    certificate_signer_name: string | null;
+    certificate_signer_role: string | null;
     description: string | null;
     has_commercial_history: boolean;
     id: string;
@@ -1478,6 +1480,8 @@ const readCourses = async (
       calculatedWorkloadHours,
       catalogVisibility: row.catalog_visibility,
       certificateEnabled: row.certificate_enabled,
+      certificateSignerName: row.certificate_signer_name ?? null,
+      certificateSignerRole: row.certificate_signer_role ?? null,
       description: row.description,
       hasCommercialHistory: row.has_commercial_history,
       id: row.id,
@@ -2647,8 +2651,6 @@ const readFaqs = async (): Promise<AdminFaq[]> => {
 const readSettings = async (): Promise<AdminSettings> => {
   const { rows } = await getPool().query<{
     cnpj: string | null;
-    certificate_signer_name: string | null;
-    certificate_signer_role: string | null;
     display_name: string | null;
     legal_name: string | null;
     last_changed_actor_email: string | null;
@@ -2657,21 +2659,14 @@ const readSettings = async (): Promise<AdminSettings> => {
   }>(
     `
       select
-        settings.certificate_signer_name,
-        settings.certificate_signer_role,
         issuer.cnpj,
         issuer.display_name,
         issuer.legal_name,
         last_change.created_at as last_changed_at,
         last_change.actor_email as last_changed_actor_email,
         last_change.actor_name as last_changed_actor_name
-      from (
-        select certificate_signer_name, certificate_signer_role
-        from app_settings
-        where id = 'global'
-        limit 1
-      ) settings
-      full outer join (
+      from (select 1) singleton
+      left join (
         select cnpj, display_name, legal_name
         from certificate_issuer_profiles
         where id = 'global'
@@ -2708,8 +2703,6 @@ const readSettings = async (): Promise<AdminSettings> => {
   }
 
   return {
-    certificateSignerName: row?.certificate_signer_name ?? null,
-    certificateSignerRole: row?.certificate_signer_role ?? null,
     issuerCnpj: row?.cnpj ?? null,
     issuerDisplayName: row?.display_name ?? null,
     issuerLegalName: row?.legal_name ?? null,

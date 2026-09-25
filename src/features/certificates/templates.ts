@@ -15,7 +15,11 @@ import {
   normalizeCertificateSignature,
 } from "./template-image";
 import type { CertificateTemplateSpec } from "./template-rules";
-import { validateCertificateTemplate } from "./template-rules";
+import {
+  CERTIFICATE_SIGNATORY_REQUIRED_MESSAGE,
+  isCertificateSignatoryConfigured,
+  validateCertificateTemplate,
+} from "./template-rules";
 
 export const runCertificateTemplateAssetMutation = async <Result>({
   courseId,
@@ -83,15 +87,11 @@ export const uploadCertificateSignature = async ({
 export const saveCertificateTemplateDraft = async ({
   actorUserId,
   courseId,
-  signerName,
-  signerRole,
   signatureKey,
   spec,
 }: {
   actorUserId: string;
   courseId: string;
-  signerName: string | null;
-  signerRole: string | null;
   signatureKey: string | null;
   spec: CertificateTemplateSpec;
 }): Promise<string[]> => {
@@ -139,29 +139,20 @@ export const saveCertificateTemplateDraft = async ({
       await client.query(
         `update certificate_templates
          set background_key = $2, spec = $3::jsonb,
-             signer_name = $4, signer_role = $5, signature_key = $6, updated_at = now()
+             signature_key = $4, updated_at = now()
          where id = $1`,
         [
           previousDraft.id,
           spec.backgroundKey,
           JSON.stringify(spec),
-          signerName,
-          signerRole,
           signatureKey,
         ]
       );
     } else {
       await client.query(
-        `insert into certificate_templates (course_id, version, status, background_key, spec, signer_name, signer_role, signature_key)
-         values ($1, coalesce((select max(version) + 1 from certificate_templates where course_id = $1), 1), 'draft', $2, $3::jsonb, $4, $5, $6)`,
-        [
-          courseId,
-          spec.backgroundKey,
-          JSON.stringify(spec),
-          signerName,
-          signerRole,
-          signatureKey,
-        ]
+        `insert into certificate_templates (course_id, version, status, background_key, spec, signature_key)
+         values ($1, coalesce((select max(version) + 1 from certificate_templates where course_id = $1), 1), 'draft', $2, $3::jsonb, $4)`,
+        [courseId, spec.backgroundKey, JSON.stringify(spec), signatureKey]
       );
     }
 
@@ -205,8 +196,6 @@ export interface CertificateTemplateSummary {
   id: string;
   signatureKey: string | null;
   signatureUrl: string | null;
-  signerName: string | null;
-  signerRole: string | null;
   spec: CertificateTemplateSpec;
   status: "draft" | "published" | "superseded";
   version: number;
@@ -219,15 +208,12 @@ export const getCertificateTemplatesForCourse = async (
   const { rows } = await getPool().query<{
     background_key: string;
     id: string;
-    signer_name: string | null;
-    signer_role: string | null;
     signature_key: string | null;
     spec: unknown;
     status: "draft" | "published" | "superseded";
     version: number;
   }>(
-    `select id, version, status, background_key, spec,
-            signer_name, signer_role, signature_key
+    `select id, version, status, background_key, spec, signature_key
      from certificate_templates
      where course_id = $1
      order by version desc`,
@@ -238,8 +224,6 @@ export const getCertificateTemplatesForCourse = async (
       backgroundKey: row.background_key,
       backgroundUrl: `/api/admin/courses/${courseId}/certificate-templates/${row.id}/assets/background?v=${encodeURIComponent(row.background_key)}`,
       id: row.id,
-      signerName: row.signer_name,
-      signerRole: row.signer_role,
       signatureKey: row.signature_key,
       signatureUrl: row.signature_key
         ? `/api/admin/courses/${courseId}/certificate-templates/${row.id}/assets/signature?v=${encodeURIComponent(row.signature_key)}`
@@ -280,12 +264,39 @@ export const publishCertificateTemplate = async (
       );
     }
     const draft = await client.query<{ id: string }>(
-      "select id from certificate_templates where course_id = $1 and status = 'draft' for update",
+      `select id
+       from certificate_templates
+       where course_id = $1 and status = 'draft'
+       for update`,
       [courseId]
     );
     if (!draft.rows[0]) {
       throw new CertificateTemplateDomainError(
         "Crie e salve um rascunho de certificado antes de publicar."
+      );
+    }
+    const signatory = await client.query<{
+      certificate_signer_name: string | null;
+      certificate_signer_role: string | null;
+    }>(
+      `select certificate_signer_name, certificate_signer_role
+       from courses
+       where id = $1
+       for share`,
+      [courseId]
+    );
+    const course = signatory.rows[0];
+    if (!course) {
+      throw new CertificateTemplateDomainError("Curso não encontrado.");
+    }
+    if (
+      !isCertificateSignatoryConfigured(
+        course.certificate_signer_name,
+        course.certificate_signer_role
+      )
+    ) {
+      throw new CertificateTemplateDomainError(
+        CERTIFICATE_SIGNATORY_REQUIRED_MESSAGE
       );
     }
     await client.query(
@@ -366,10 +377,17 @@ export const enableCertificateForCourse = async (
       "select pg_advisory_xact_lock(hashtextextended($1, 0))",
       [courseId]
     );
-    const prerequisite = await client.query<{ id: string }>(
+    const prerequisite = await client.query<{
+      id: string;
+      signer_name: string | null;
+      signer_role: string | null;
+    }>(
       `
-        select template.id
+        select template.id,
+               course.certificate_signer_name as signer_name,
+               course.certificate_signer_role as signer_role
         from certificate_templates template
+        join courses course on course.id = template.course_id
         join certificate_issuer_profiles issuer on issuer.id = 'global'
         where template.course_id = $1
           and template.status = 'published'
@@ -378,9 +396,20 @@ export const enableCertificateForCourse = async (
       [courseId]
     );
 
-    if (!prerequisite.rows[0]) {
+    const publishedTemplate = prerequisite.rows[0];
+    if (!publishedTemplate) {
       throw new CertificateTemplateDomainError(
         "Publique um template e configure o perfil emissor antes de ligar certificados."
+      );
+    }
+    if (
+      !isCertificateSignatoryConfigured(
+        publishedTemplate.signer_name,
+        publishedTemplate.signer_role
+      )
+    ) {
+      throw new CertificateTemplateDomainError(
+        CERTIFICATE_SIGNATORY_REQUIRED_MESSAGE
       );
     }
 

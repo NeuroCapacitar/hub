@@ -47,6 +47,10 @@ import {
   type LessonSaveActionResult,
 } from "@/features/admin/lesson-authoring-errors";
 import { buildAdminLessonEditPath } from "@/features/admin/lesson-drafts";
+import {
+  normalizeCourseCertificateSignatory,
+  saveCourseCertificateSignatory,
+} from "@/features/certificates/course-signatory";
 import { parseCertificateTemplateSubmission } from "@/features/certificates/render-snapshot";
 import { CertificateTemplateDomainError } from "@/features/certificates/template-errors";
 import {
@@ -58,6 +62,8 @@ import {
   uploadCertificateBackground,
   uploadCertificateSignature,
 } from "@/features/certificates/templates";
+import type { CourseAvailabilityPreset } from "@/features/courses/availability";
+import { setCourseAvailability } from "@/features/courses/availability-server";
 import { lockCourseContentRelease } from "@/features/courses/content-release-lock";
 import type { ExpirationChangeResult } from "@/features/enrollments/server";
 import {
@@ -69,6 +75,7 @@ import {
   retryJmvstreamAssetDelete,
   syncJmvstreamLessonPlayer,
 } from "@/features/jmvstream/server";
+import { scheduleOutboxDrainAfterResponse } from "@/features/outbox/background-drain";
 import { uploadDashboardBannerFile } from "@/features/storage/r2";
 import {
   parseStagedAdminImageReference,
@@ -79,6 +86,7 @@ import {
   consumeStagedAdminImageUploads,
 } from "@/features/storage/staged-image-upload-registry";
 import { requirePermission } from "@/lib/auth-permissions";
+import { canPerform } from "@/lib/auth-policy";
 import { normalizeCnpj } from "@/lib/cnpj";
 import {
   CORRELATION_ID_HEADER,
@@ -280,6 +288,190 @@ export const saveCourseAction = async (formData: FormData): Promise<void> => {
   });
   revalidateAdmin();
   revalidatePath(`/app/cursos/${courseId}`);
+};
+
+export type CourseSettingsSaveResult =
+  | {
+      checkoutCancellationsEnqueued: number;
+      notificationsEnqueued: number;
+      ok: true;
+    }
+  | { message: string; ok: false; partial: boolean };
+
+const COURSE_SETTINGS_AVAILABILITY_PRESETS: readonly CourseAvailabilityPreset[] =
+  ["available", "coming_soon", "draft", "sales_paused"];
+
+interface CourseSettingsSaveCommand {
+  availability: {
+    launchDate: string | null;
+    launchLandingUrl: string | null;
+    preset: CourseAvailabilityPreset;
+    showInCatalog: boolean;
+  } | null;
+  courseId: string;
+  responsible: ReturnType<typeof normalizeCourseCertificateSignatory> | null;
+  saveDetails: boolean;
+}
+
+const getCourseSettingsSaveCommand = ({
+  formData,
+  session,
+}: {
+  formData: FormData;
+  session: Awaited<ReturnType<typeof requirePermission>>;
+}): CourseSettingsSaveCommand => {
+  const courseId = readAuthoringUuid({ field: "courseId", formData });
+  if (!courseId) {
+    throw new Error("Curso inválido.");
+  }
+
+  const saveDetails = formData.get("saveCourseDetails") === "on";
+  const saveResponsible = formData.get("saveCourseResponsible") === "on";
+  const saveAvailability = formData.get("saveCourseAvailability") === "on";
+  if (!(saveDetails || saveResponsible || saveAvailability)) {
+    throw new Error("Nenhuma configuração editável foi enviada.");
+  }
+  if (saveDetails && !canPerform(session, "manageCourseDetails")) {
+    throw new Error("Você não pode editar os dados gerais deste Curso.");
+  }
+  if (saveResponsible && !canPerform(session, "manageCourseCertificate")) {
+    throw new Error("Você não pode editar o responsável deste Curso.");
+  }
+  if (saveAvailability && !canPerform(session, "manageCourseAvailability")) {
+    throw new Error("Você não pode editar a disponibilidade deste Curso.");
+  }
+
+  const availabilityPreset = readString(formData, "preset");
+  if (
+    saveAvailability &&
+    !COURSE_SETTINGS_AVAILABILITY_PRESETS.includes(
+      availabilityPreset as CourseAvailabilityPreset
+    )
+  ) {
+    throw new Error("Disponibilidade do Curso inválida.");
+  }
+
+  return {
+    availability: saveAvailability
+      ? {
+          launchDate: readString(formData, "launchDate") || null,
+          launchLandingUrl: readString(formData, "launchLandingUrl") || null,
+          preset: availabilityPreset as CourseAvailabilityPreset,
+          showInCatalog: formData.get("showInCatalog") === "on",
+        }
+      : null,
+    courseId,
+    responsible: saveResponsible
+      ? normalizeCourseCertificateSignatory({
+          signerName: readString(formData, "responsibleName"),
+          signerRole: readString(formData, "responsibleTitle"),
+        })
+      : null,
+    saveDetails,
+  };
+};
+
+const revalidateCourseSettings = (courseId: string): void => {
+  revalidateAdmin();
+  revalidatePath(`/admin/cursos/${courseId}`);
+  revalidatePath(`/app/cursos/${courseId}`);
+  revalidatePath("/comprar/[slug]", "page");
+};
+
+const persistCourseSettingsCommand = async ({
+  actorUserId,
+  command,
+  formData,
+}: {
+  actorUserId: string;
+  command: CourseSettingsSaveCommand;
+  formData: FormData;
+}): Promise<CourseSettingsSaveResult> => {
+  const savedGroups: string[] = [];
+  let notificationsEnqueued = 0;
+  let checkoutCancellationsEnqueued = 0;
+  try {
+    if (command.saveDetails) {
+      const result = await saveCourse({ actorUserId, formData });
+      if (result.courseId !== command.courseId) {
+        throw new Error("O Curso salvo não corresponde ao Curso aberto.");
+      }
+      savedGroups.push("os dados gerais");
+    }
+
+    if (command.responsible) {
+      await saveCourseCertificateSignatory({
+        actorUserId,
+        courseId: command.courseId,
+        signerName: command.responsible.signerName ?? "",
+        signerRole: command.responsible.signerRole ?? "",
+      });
+      savedGroups.push("o responsável");
+    }
+
+    if (command.availability) {
+      const result = await setCourseAvailability({
+        actorUserId,
+        courseId: command.courseId,
+        launchDate: command.availability.launchDate,
+        launchLandingUrl: command.availability.launchLandingUrl,
+        preset: command.availability.preset,
+        showInCatalog: command.availability.showInCatalog,
+      });
+      notificationsEnqueued = result.notificationsEnqueued;
+      checkoutCancellationsEnqueued = result.checkoutCancellationsEnqueued;
+      savedGroups.push("a disponibilidade");
+      if (notificationsEnqueued > 0 || checkoutCancellationsEnqueued > 0) {
+        scheduleOutboxDrainAfterResponse({ aggregateId: command.courseId });
+      }
+    }
+
+    revalidateCourseSettings(command.courseId);
+    return {
+      checkoutCancellationsEnqueued,
+      notificationsEnqueued,
+      ok: true,
+    };
+  } catch (error) {
+    if (savedGroups.length > 0) {
+      revalidateCourseSettings(command.courseId);
+    }
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Não foi possível salvar as configurações.";
+    return {
+      message:
+        savedGroups.length > 0
+          ? `Já foram salvos: ${savedGroups.join(", ")}. As outras alterações não foram concluídas. ${message}`
+          : message,
+      ok: false,
+      partial: savedGroups.length > 0,
+    };
+  }
+};
+
+export const saveCourseSettingsAction = async (
+  formData: FormData
+): Promise<CourseSettingsSaveResult> => {
+  const session = await requirePermission("viewCourses");
+  try {
+    const command = getCourseSettingsSaveCommand({ formData, session });
+    return await persistCourseSettingsCommand({
+      actorUserId: session.user.id,
+      command,
+      formData,
+    });
+  } catch (error) {
+    return {
+      message:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar as configurações.",
+      ok: false,
+      partial: false,
+    };
+  }
 };
 
 export type CoursePublicationActionResult =
@@ -1036,10 +1228,6 @@ export const reorderFaqsAction = async (
 export const saveSettingsAction = async (formData: FormData): Promise<void> => {
   const session = await requirePermission("manageCertificateIssuerProfile");
 
-  const certificateSignerName =
-    readString(formData, "certificateSignerName") || null;
-  const certificateSignerRole =
-    readString(formData, "certificateSignerRole") || null;
   const legalName = readString(formData, "issuerLegalName");
   const displayName = readString(formData, "issuerDisplayName");
   const cnpjInput = readString(formData, "issuerCnpj");
@@ -1064,17 +1252,6 @@ export const saveSettingsAction = async (formData: FormData): Promise<void> => {
   try {
     await client.query("BEGIN");
 
-    const settingsResult = await client.query<{
-      certificate_signer_name: string | null;
-      certificate_signer_role: string | null;
-    }>(
-      `
-        select certificate_signer_name, certificate_signer_role
-        from app_settings
-        where id = 'global'
-        for update
-      `
-    );
     const issuerResult = await client.query<{
       cnpj: string;
       display_name: string;
@@ -1088,31 +1265,12 @@ export const saveSettingsAction = async (formData: FormData): Promise<void> => {
       `
     );
 
-    const currentSettings = settingsResult.rows[0];
     const currentIssuer = issuerResult.rows[0];
     const before = {
-      certificateSignerName: currentSettings?.certificate_signer_name ?? null,
-      certificateSignerRole: currentSettings?.certificate_signer_role ?? null,
       issuerCnpj: maskCnpjForAudit(currentIssuer?.cnpj ?? null),
       issuerDisplayName: currentIssuer?.display_name ?? null,
       issuerLegalName: currentIssuer?.legal_name ?? null,
     };
-
-    await client.query(
-      `
-        insert into app_settings (
-          id,
-          certificate_signer_name,
-          certificate_signer_role
-        )
-        values ('global', $1, $2)
-        on conflict (id) do update set
-          certificate_signer_name = excluded.certificate_signer_name,
-          certificate_signer_role = excluded.certificate_signer_role,
-          updated_at = now()
-      `,
-      [certificateSignerName, certificateSignerRole]
-    );
 
     await client.query(
       `
@@ -1133,8 +1291,6 @@ export const saveSettingsAction = async (formData: FormData): Promise<void> => {
     );
 
     const after = {
-      certificateSignerName,
-      certificateSignerRole,
       issuerCnpj: maskCnpjForAudit(cnpj || null),
       issuerDisplayName: displayName || legalName,
       issuerLegalName: legalName,
@@ -1232,8 +1388,6 @@ const persistCertificateTemplateDraft = async ({
         return await saveCertificateTemplateDraft({
           actorUserId,
           courseId,
-          signerName: readString(formData, "signerName") || null,
-          signerRole: readString(formData, "signerRole") || null,
           signatureKey: nextSignatureKey,
           spec,
         });
@@ -1296,6 +1450,32 @@ export const saveCertificateTemplateDraftFormAction = async (
       message,
       status: "error",
     };
+  }
+};
+
+export const saveCourseCertificateSignatoryAction = async (
+  formData: FormData
+): Promise<CertificateTemplateActionState> => {
+  try {
+    const session = await requirePermission("manageCourseCertificate");
+    const courseId = readAuthoringUuid({ field: "courseId", formData });
+    if (!courseId) {
+      throw new CertificateTemplateDomainError("Curso inválido.");
+    }
+    await saveCourseCertificateSignatory({
+      actorUserId: session.user.id,
+      courseId,
+      signerName: readString(formData, "signerName"),
+      signerRole: readString(formData, "signerRole"),
+    });
+    revalidatePath(`/admin/cursos/${courseId}`);
+    return { message: "Responsável salvo.", status: "success" };
+  } catch (error) {
+    const message = getExpectedCertificateTemplateActionMessage(error);
+    if (!message) {
+      throw error;
+    }
+    return { message, status: "error" };
   }
 };
 

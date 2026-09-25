@@ -34,6 +34,7 @@ const sourceLabels = {
   course: "Curso",
   emission: "Emissão",
   issuer: "Emissor",
+  template: "Modelo",
   validation: "Validação",
 } as const;
 

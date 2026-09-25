@@ -325,6 +325,23 @@ Admin-only, impede autoalteração e protege o último Admin.
 Qualquer necessidade futura de expiração, aprovação, escopo ou lifecycle por grant
 exige nova decisão.
 
+## DEC-DISC-019
+
+**Tema:** propriedade e requisitos do signatário do Certificado.
+**Estado:** aprovado pelo produto em 2026-09-24 e implementado.
+
+Razão social, marca e CNPJ permanecem no perfil global da organização emissora.
+Nome e cargo/função de quem assina devem ser definidos em Configurações do
+Curso; ambos são obrigatórios para publicar ou ativar a emissão. O template
+continua responsável pelo layout e pela imagem visual opcional da assinatura.
+Campo vazio não herda um valor global. Cursos legados sem valores locais não
+emitem até que o responsável seja revisado e configurado; depois de salvar não
+é necessário republicar o template, e as Conclusões pendentes podem ser
+reconciliadas. A migration preserva valores que já estavam gravados no template,
+mas não copia o padrão global. Snapshots já emitidos permanecem imutáveis. Não
+será criado cadastro reutilizável de signatários sem necessidade operacional
+comprovada.
+
 ## Outras ratificações necessárias
 
 - tratamento de compra pública com e-mail já pertencente a Admin/Suporte;

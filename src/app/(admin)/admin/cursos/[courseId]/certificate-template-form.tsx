@@ -61,6 +61,7 @@ import {
   createDefaultCertificateTemplateFields,
   ensureCertificateTemplateFields,
   findCertificateTemplateOverlaps,
+  isCertificateSignatoryConfigured,
 } from "@/features/certificates/template-rules";
 import type { StagedAdminImageReference } from "@/features/storage/staged-image-upload";
 import { uploadStagedAdminImage } from "@/features/storage/staged-image-upload-client";
@@ -113,8 +114,6 @@ export interface CertificateTemplateEditorTemplate {
   backgroundUrl: string;
   signatureKey: string | null;
   signatureUrl: string | null;
-  signerName: string | null;
-  signerRole: string | null;
   spec: CertificateTemplateSpec;
   status: "draft" | "published" | "superseded";
   version: number;
@@ -144,6 +143,7 @@ const TemplateFormNotices = ({
   overflowFields,
   publishState,
   saveState,
+  signatoryConfigured,
 }: {
   hasPublishedTemplate: boolean;
   lastAction: "save" | "publish" | null;
@@ -151,6 +151,7 @@ const TemplateFormNotices = ({
   overflowFields: readonly CertificateField[];
   publishState: CertificateTemplateActionState;
   saveState: CertificateTemplateActionState;
+  signatoryConfigured: boolean;
 }): React.JSX.Element => {
   const actionError = getTemplateActionError(
     saveState,
@@ -171,6 +172,16 @@ const TemplateFormNotices = ({
           <AlertDescription>
             Cadastre razão social, nome de marca e CNPJ em Configurações antes
             de publicar.
+          </AlertDescription>
+        </Alert>
+      )}
+      {signatoryConfigured ? null : (
+        <Alert role="status" variant="warning">
+          <AlertTitle>Responsável pelo certificado pendente</AlertTitle>
+          <AlertDescription>
+            Informe nome e cargo em Configurações do curso. Ao salvar, novas
+            emissões podem ser retomadas sem republicar o modelo; conclusões
+            pendentes podem ser reconciliadas depois.
           </AlertDescription>
         </Alert>
       )}
@@ -224,6 +235,7 @@ interface CertificateTemplateSessionHeaderProps {
   isSaving: boolean;
   issuerConfigured: boolean;
   onPublish: (formData: FormData) => void;
+  signatoryConfigured: boolean;
   status: CertificateTemplateEditorStatus;
   template: CertificateTemplateEditorTemplate | undefined;
 }
@@ -237,6 +249,7 @@ const CertificateTemplateSessionHeader = ({
   isPublishing,
   isSaving,
   issuerConfigured,
+  signatoryConfigured,
   onPublish,
   status,
   template,
@@ -269,6 +282,7 @@ const CertificateTemplateSessionHeader = ({
         disabled={
           !(
             issuerConfigured &&
+            signatoryConfigured &&
             backgroundPreviewUrl &&
             hasPublishableChanges
           ) || isBusy
@@ -439,6 +453,8 @@ export function CertificateTemplateForm({
   courseWorkloadHours,
   hasPublishedTemplate,
   issuerConfigured,
+  signerName,
+  signerRole,
   status,
   template,
 }: {
@@ -447,6 +463,8 @@ export function CertificateTemplateForm({
   courseWorkloadHours: number;
   hasPublishedTemplate: boolean;
   issuerConfigured: boolean;
+  signerName: string | null;
+  signerRole: string | null;
   status: CertificateTemplateEditorStatus;
   template: CertificateTemplateEditorTemplate | undefined;
 }): React.JSX.Element {
@@ -505,8 +523,10 @@ export function CertificateTemplateForm({
     requestId: number;
     target: "background" | "signature";
   } | null>(null);
-  const [signerName, setSignerName] = useState(template?.signerName ?? "");
-  const [signerRole, setSignerRole] = useState(template?.signerRole ?? "");
+  const signatoryConfigured = isCertificateSignatoryConfigured(
+    signerName,
+    signerRole
+  );
   const backgroundObjectUrl = useOwnedObjectUrl(backgroundFile);
   const signatureObjectUrl = useOwnedObjectUrl(signatureFile);
   const backgroundImageName = template?.spec.backgroundKey?.split("/").at(-1);
@@ -909,20 +929,6 @@ export function CertificateTemplateForm({
       signatureUpload,
     ]
   );
-  const handleSignerNameChange = useCallback(
-    (value: string): void => {
-      setSignerName(value);
-      markDirty();
-    },
-    [markDirty]
-  );
-  const handleSignerRoleChange = useCallback(
-    (value: string): void => {
-      setSignerRole(value);
-      markDirty();
-    },
-    [markDirty]
-  );
   const handleBackgroundFileSelect = useCallback(
     (file: File | null): void => {
       if (!file) {
@@ -1013,14 +1019,10 @@ export function CertificateTemplateForm({
         onFieldInteractionStart={beginFieldInteraction}
         onFieldSelect={selectField}
         onSignatureFileSelect={handleSignatureFileSelect}
-        onSignerNameChange={handleSignerNameChange}
-        onSignerRoleChange={handleSignerRoleChange}
         selectedField={selectedField}
         signatureFile={signatureFile}
         signatureImageName={signatureImageName}
         signaturePreviewUrl={signaturePreviewUrl}
-        signerName={signerName}
-        signerRole={signerRole}
       />
     </CertificateTemplateInspector>
   );
@@ -1036,6 +1038,7 @@ export function CertificateTemplateForm({
         isSaving={isSaving}
         issuerConfigured={issuerConfigured}
         onPublish={publishTemplate}
+        signatoryConfigured={signatoryConfigured}
         status={status}
         template={template}
       >
@@ -1141,6 +1144,7 @@ export function CertificateTemplateForm({
               overflowFields={overflowFields}
               publishState={publishState}
               saveState={saveState}
+              signatoryConfigured={signatoryConfigured}
             />
           </div>
           <div
@@ -1303,8 +1307,8 @@ export function CertificateTemplateForm({
                   overlapFields={overlapFields}
                   selectedField={selectedField}
                   signatureUrl={signaturePreviewUrl}
-                  signerName={signerName}
-                  signerRole={signerRole}
+                  signerName={signerName ?? ""}
+                  signerRole={signerRole ?? ""}
                   variant={previewVariant}
                 />
               </div>

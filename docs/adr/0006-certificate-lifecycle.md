@@ -67,6 +67,27 @@ O e-mail de emissão aponta para a página pública canônica, não para o arqui
 
 ## Estado
 
+### Emenda aprovada em 2026-09-24
+
+O perfil da organização emissora permanece global. O nome e o cargo/função do
+signatário pertencem ao Curso e são obrigatórios para publicar ou ativar a
+emissão; a imagem visual opcional e o layout dos campos permanecem no template.
+Não existe fallback global. Cursos publicados legados sem nome ou cargo não
+podem originar novas emissões automáticas, manuais, reemissões ou reconciliações
+até os dados serem preenchidos em Configurações do curso. Depois de salvar, não
+é necessário republicar o template. Conclusões sem Certificado podem ser
+reconciliadas após a correção; snapshots já emitidos permanecem imutáveis.
+
+A migration transfere valores locais que já estavam gravados no template,
+priorizando o publicado, mas nunca copia o padrão global de `app_settings`.
+Cursos sem valor local permanecem pendentes para revisão explícita.
+
+As colunas legadas de signatário em `app_settings` ficam sem uso pelo runtime e
+são retidas temporariamente para rollback compatível; sua remoção física exige
+uma etapa posterior de limpeza após a janela de compatibilidade.
+As antigas colunas de nome/cargo em `certificate_templates` seguem a mesma
+política de retenção; `courses` é a fonte canônica a partir desta emenda.
+
 Implementado por `issueManualCertificate`, `revokeCertificate`, `reissueCertificate` e `reconcileHistoricalCourseCertificates`. A política
 de que revogação bloqueia nova emissão automática, exigindo reemissão manual, foi ratificada em
 2026-07-20. Autoridade, motivos e informação pública foram ratificados em 2026-07-21; veja

@@ -4,12 +4,15 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/features/admin/course-availability-actions", () => ({
   archiveCourseAction: vi.fn(),
   restoreCourseAction: vi.fn(),
-  saveCourseAvailabilityAction: vi.fn(),
 }));
 
-import { CourseAvailabilityForm } from "./course-availability-form";
+import {
+  CourseAvailabilityFields,
+  CourseRiskZone,
+  getCourseAvailabilityPreset,
+} from "./course-availability-form";
 
-const course = {
+const course: Parameters<typeof getCourseAvailabilityPreset>[0] = {
   catalogVisibility: "listed" as const,
   id: "course-1",
   hasCommercialHistory: true,
@@ -23,14 +26,27 @@ const course = {
   status: "active",
 };
 
-describe("CourseAvailabilityForm", () => {
-  it("shows paused visibility and aggregate interest controls", () => {
-    const markup = renderToStaticMarkup(
-      <CourseAvailabilityForm course={course} />
-    );
+const renderAvailabilityFields = (
+  courseToRender = course,
+  readOnly = false
+): string =>
+  renderToStaticMarkup(
+    <CourseAvailabilityFields
+      course={courseToRender}
+      onPresetChange={() => undefined}
+      onShowInCatalogChange={() => undefined}
+      preset={getCourseAvailabilityPreset(courseToRender)}
+      readOnly={readOnly}
+      showInCatalog={courseToRender.catalogVisibility === "listed"}
+    />
+  );
+
+describe("CourseAvailabilityFields", () => {
+  it("shows paused visibility and aggregate interest information", () => {
+    const markup = renderAvailabilityFields();
 
     expect(markup).toContain("Exibir na vitrine");
-    expect(markup).toContain("Zona de risco");
+    expect(markup).not.toContain("Zona de risco");
     expect(markup).not.toContain("Atual:");
     expect(markup).toContain(
       "Rascunho e Em breve estão indisponíveis porque este Curso já possui histórico comercial."
@@ -39,17 +55,20 @@ describe("CourseAvailabilityForm", () => {
     expect(markup).toContain("1 cancelamento pendente");
   });
 
-  it("shows launch fields for coming soon", () => {
-    const markup = renderToStaticMarkup(
-      <CourseAvailabilityForm
-        course={{
-          ...course,
-          launchDate: "2026-10-01",
-          salesStatus: "closed",
-          status: "draft",
-        }}
-      />
-    );
+  it("keeps archiving controls in the separate risk zone", () => {
+    const markup = renderToStaticMarkup(<CourseRiskZone course={course} />);
+
+    expect(markup).toContain("Arquivar curso");
+    expect(markup).not.toContain("Disponibilidade");
+  });
+
+  it("shows launch fields for a coming-soon course", () => {
+    const markup = renderAvailabilityFields({
+      ...course,
+      launchDate: "2026-10-01",
+      salesStatus: "closed",
+      status: "draft",
+    });
 
     expect(markup).toContain("Data prevista");
     expect(markup).toContain("Landing externa");
@@ -58,39 +77,30 @@ describe("CourseAvailabilityForm", () => {
   });
 
   it("shows the external landing field while sales are paused", () => {
-    const markup = renderToStaticMarkup(
-      <CourseAvailabilityForm
-        course={{
-          ...course,
-          launchLandingUrl: "https://landing.example/curso-pausado",
-        }}
-      />
-    );
+    const markup = renderAvailabilityFields({
+      ...course,
+      launchLandingUrl: "https://landing.example/curso-pausado",
+    });
 
     expect(markup).toContain("Landing externa");
     expect(markup).toContain("https://landing.example/curso-pausado");
   });
 
-  it("renders a consultation view without mutation controls", () => {
-    const markup = renderToStaticMarkup(
-      <CourseAvailabilityForm course={course} readOnly />
-    );
+  it("renders consultation details without save controls", () => {
+    const markup = renderAvailabilityFields(course, true);
 
     expect(markup).toContain("somente para consulta");
     expect(markup).not.toContain("Salvar disponibilidade");
-    expect(markup).not.toContain("Arquivar curso");
+    expect(markup).not.toContain("<form");
   });
 
-  it("separates restore from ordinary availability changes", () => {
-    const markup = renderToStaticMarkup(
-      <CourseAvailabilityForm
-        course={{
-          ...course,
-          catalogVisibility: "hidden",
-          status: "archived",
-        }}
-      />
-    );
+  it("keeps restore separate from ordinary availability changes", () => {
+    const archivedCourse = {
+      ...course,
+      catalogVisibility: "hidden" as const,
+      status: "archived",
+    };
+    const markup = renderAvailabilityFields(archivedCourse);
 
     expect(markup).toContain("Curso arquivado");
     expect(markup).toContain("Restaurar curso");

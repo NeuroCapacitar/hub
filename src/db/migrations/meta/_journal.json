@@ -631,6 +631,13 @@
       "when": 1789854066801,
       "tag": "0089_reconcile_legacy_profile_support_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1790293747010,
+      "tag": "0090_course_certificate_signatory",
+      "breakpoints": true
     }
   ]
 }

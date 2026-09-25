@@ -9,12 +9,14 @@ export const getCertificateEditorStatus = ({
   certificateEnabled,
   hasDraft,
   hasPublished,
+  signatoryConfigured,
 }: {
   certificateEnabled: boolean;
   hasDraft: boolean;
   hasPublished: boolean;
+  signatoryConfigured: boolean;
 }): CertificateEditorStatus => {
-  if (certificateEnabled && !hasPublished) {
+  if (certificateEnabled && !(hasPublished && signatoryConfigured)) {
     return { label: "Configuração incompleta", tone: "outline" };
   }
   if (certificateEnabled && hasDraft) {

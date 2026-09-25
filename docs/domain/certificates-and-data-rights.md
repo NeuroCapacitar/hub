@@ -16,14 +16,17 @@ temporária; o servidor confirma tipo e tamanho, decodifica e normaliza a imagem
 em WebP. Fundo e assinatura aceitam, respectivamente, até 10 MiB e 2 MiB.
 Rascunho e publicação são separados; publicar substitui a versão ativa apenas
 para emissões futuras. O perfil emissor global, com razão social, marca e CNPJ,
-é obrigatório para publicar; responsável e assinatura visual são opcionais por
-Curso. Não há HTML livre, campos arbitrários ou inferência automática de
-posicionamento.
+é obrigatório para publicar. O nome e o cargo/função do signatário devem ser
+configurados em **Configurações do curso** e são obrigatórios para publicar; o
+modelo controla o layout dos campos e mantém a imagem visual opcional da
+assinatura. Não há fallback global de signatário, HTML livre, campos arbitrários
+ou inferência automática de posicionamento.
 
 O perfil emissor global é administrado em **Admin > Configurações**. Razão social
 e CNPJ são uma unidade: estado parcial é rejeitado antes da transação. O salvamento
-de `app_settings` e `certificate_issuer_profiles` é atômico e registra
-`settings.updated` com os valores anterior e novo; o CNPJ é mascarado na auditoria.
+de `certificate_issuer_profiles` é atômico e registra `settings.updated` com os
+valores anterior e novo; o CNPJ é mascarado na auditoria. Nome e cargo do
+signatário pertencem ao Curso, não ao modelo nem às Configurações globais.
 O CNPJ pode ser informado com ou sem máscara, mas precisa conter 14 dígitos,
 passar pelos dígitos verificadores e é normalizado para o formato brasileiro
 antes de ser salvo. A tela informa quais dados impedem o perfil de ficar pronto.
@@ -126,13 +129,30 @@ Novas emissões usam código no
 formato `PRT-` seguido de 32 caracteres hexadecimais; o lookup continua
 compatível com códigos legados.
 
-O signatário do template do Curso tem precedência sobre
-`app_settings.certificate_signer_name` e
-`app_settings.certificate_signer_role`. Quando o template não define o valor,
-o default global é resolvido na emissão e congelado no `render_snapshot`.
-Salvar rascunho, publicar, habilitar e desabilitar template registram ator,
-alvo e metadados em `audit_logs` na mesma transação da mutação; o rascunho
-inclui o digest SHA-256 do spec e a publicação inclui o template publicado.
+O nome e o cargo/função do signatário são próprios do Curso, ficam em
+**Configurações do curso** e precisam estar preenchidos para publicar ou ativar
+a emissão. Não há fallback global. O modelo versionado controla a posição e a
+visibilidade dos campos; a imagem visual da assinatura é opcional e permanece
+no modelo. Cursos publicados legados sem responsável não emitem certificados
+automáticos; emissão manual, reemissão e reconciliação rejeitam o mesmo estado.
+Depois de preencher os dados do Curso, novas emissões podem ser retomadas sem
+republicar o modelo; as Conclusões que ficaram sem Certificado podem então ser
+reconciliadas. Certificados já emitidos permanecem imutáveis. A alteração do
+responsável registra valores anterior e novo em `audit_logs` na mesma transação.
+Salvar rascunho e publicar também são auditados; o rascunho inclui o digest
+SHA-256 do spec e a publicação inclui o template publicado.
+
+A migration transfere para o Curso valores locais explícitos já gravados no
+modelo, priorizando o publicado. Não copia valores de `app_settings`; Cursos sem
+valor local continuam pendentes para revisão.
+
+As colunas globais legadas `app_settings.certificate_signer_name` e
+`app_settings.certificate_signer_role` permanecem temporariamente no banco para
+compatibilidade com rollback durante a janela de release. O runtime atual não
+as lê nem grava; sua remoção física deve ocorrer em uma etapa posterior, após a
+confirmação de que versões antigas da aplicação não podem voltar a acessá-las.
+As colunas antigas `certificate_templates.signer_name` e `signer_role` também
+ficam sem uso pelo runtime atual e serão removidas na mesma etapa posterior.
 
 `reconcileHistoricalCourseCertificates` é exclusivo de Admin e exige confirmação
 server-side. Cada execução seleciona em ordem estável no máximo 100 Conclusões do Curso

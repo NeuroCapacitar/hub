@@ -24,6 +24,7 @@ import {
 } from "@/features/storage/r2";
 import { getServerEnv } from "@/lib/env";
 import { CertificateDomainError } from "./errors";
+import { isCertificateSignatoryConfigured } from "./template-rules";
 
 const MAX_CERTIFICATE_CODE_ATTEMPTS = 3;
 const CERTIFICATE_RECONCILIATION_BATCH_SIZE = 100;
@@ -128,15 +129,14 @@ export const tryIssueAutomaticCompletionCertificate = async ({
   }>(
     `
        select ct.id, ct.version, ct.background_key, ct.spec,
-              coalesce(ct.signer_name, settings.certificate_signer_name) as signer_name,
-             coalesce(ct.signer_role, settings.certificate_signer_role) as signer_role,
-             ct.signature_key,
+              c.certificate_signer_name as signer_name,
+              c.certificate_signer_role as signer_role,
+              ct.signature_key,
               issuer.cnpj as issuer_cnpj, issuer.legal_name as issuer_legal_name,
               issuer.display_name as issuer_display_name
       from courses c
       join certificate_templates ct on ct.course_id = c.id and ct.status = 'published'
       join certificate_issuer_profiles issuer on issuer.id = 'global'
-      left join app_settings settings on settings.id = 'global'
       where c.id = $1 and c.certificate_enabled = true
       limit 1
     `,
@@ -144,6 +144,14 @@ export const tryIssueAutomaticCompletionCertificate = async ({
   );
   const templateSnapshot = template.rows[0];
   if (!templateSnapshot) {
+    return null;
+  }
+  if (
+    !isCertificateSignatoryConfigured(
+      templateSnapshot.signer_name,
+      templateSnapshot.signer_role
+    )
+  ) {
     return null;
   }
   const issuedAt = new Date().toISOString();
@@ -407,8 +415,8 @@ const issueCertificate = async ({
         ct.version as template_version,
         ct.background_key,
         ct.spec,
-        coalesce(ct.signer_name, settings.certificate_signer_name) as signer_name,
-        coalesce(ct.signer_role, settings.certificate_signer_role) as signer_role,
+        c.certificate_signer_name as signer_name,
+        c.certificate_signer_role as signer_role,
         ct.signature_key,
         issuer.cnpj as issuer_cnpj,
         issuer.legal_name as issuer_legal_name,
@@ -422,7 +430,6 @@ const issueCertificate = async ({
        and cc.course_publication_id = cp.id
       join certificate_templates ct on ct.course_id = c.id and ct.status = 'published'
       join certificate_issuer_profiles issuer on issuer.id = 'global'
-      left join app_settings settings on settings.id = 'global'
       where u.id = $1
       limit 1
     `,
@@ -432,6 +439,13 @@ const issueCertificate = async ({
 
   if (!source) {
     throw new CertificateDomainError("Aluno ou curso nao localizado.");
+  }
+  if (
+    !isCertificateSignatoryConfigured(source.signer_name, source.signer_role)
+  ) {
+    throw new CertificateDomainError(
+      "O responsável pelo certificado não está configurado. Informe nome e cargo em Configurações do curso antes de emitir."
+    );
   }
 
   const issuedAt = new Date().toISOString();

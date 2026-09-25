@@ -455,6 +455,8 @@ export const courses = pgTable(
       .default(0)
       .notNull(),
     certificateEnabled: boolean("certificate_enabled").default(false).notNull(),
+    certificateSignerName: text("certificate_signer_name"),
+    certificateSignerRole: text("certificate_signer_role"),
     ...timestamps,
   },
   (table) => [
@@ -1711,6 +1713,7 @@ export const certificateTemplates = pgTable(
     status: certificateTemplateStatusEnum("status").default("draft").notNull(),
     backgroundKey: text("background_key").notNull(),
     spec: jsonb("spec").notNull(),
+    /** Legacy template signer columns are retained only for rollback compatibility. */
     signerName: text("signer_name"),
     signerRole: text("signer_role"),
     signatureKey: text("signature_key"),
@@ -2102,6 +2105,10 @@ export const stagedLessonResourceUploads = pgTable(
 
 export const appSettings = pgTable("app_settings", {
   id: text("id").primaryKey(),
+  /**
+   * Legacy signer defaults remain for rollback compatibility; the current
+   * runtime must not read or write them.
+   */
   certificateSignerName: text("certificate_signer_name"),
   certificateSignerRole: text("certificate_signer_role"),
   ...timestamps,

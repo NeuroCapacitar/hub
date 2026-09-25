@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createDefaultCertificateTemplateFields,
   findCertificateTemplateOverlaps,
+  isCertificateSignatoryConfigured,
   validateCertificateTemplate,
 } from "./template-rules";
 
@@ -40,6 +41,18 @@ const makeRequiredFields = (
     y: 20,
     ...overrides[field],
   }));
+
+describe("certificate signatory configuration", () => {
+  it("requires both a non-empty name and role", () => {
+    expect(isCertificateSignatoryConfigured("Dra. Maria", "Especialista")).toBe(
+      true
+    );
+    expect(isCertificateSignatoryConfigured("Dra. Maria", null)).toBe(false);
+    expect(isCertificateSignatoryConfigured(null, "Especialista")).toBe(false);
+    expect(isCertificateSignatoryConfigured("  ", "Especialista")).toBe(false);
+    expect(isCertificateSignatoryConfigured("Dra. Maria", "  ")).toBe(false);
+  });
+});
 
 describe("certificate template rules", () => {
   it("creates a valid default template", () => {
@@ -100,6 +113,7 @@ describe("certificate template rules", () => {
       })
     ).toContain("O campo studentName esta fora da area imprimivel.");
   });
+
   it("reports overlapping visible fields without blocking validation", () => {
     const fields = makeRequiredFields({
       studentName: { height: 10, width: 40, x: 0, y: 0 },

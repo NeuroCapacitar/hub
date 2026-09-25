@@ -76,8 +76,6 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
     (issue) => issuerProfileIssueLabels[issue]
   );
   const certificateSettings: CertificateSettingsFormValues = {
-    certificateSignerName: data.settings.certificateSignerName,
-    certificateSignerRole: data.settings.certificateSignerRole,
     issuerCnpj: data.settings.issuerCnpj,
     issuerDisplayName: data.settings.issuerDisplayName,
     issuerLegalName: data.settings.issuerLegalName,
@@ -188,11 +186,11 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
                       Emissão de certificados
                     </h2>
                     <FinanceHelp
-                      description="Configure a identidade global usada para novas emissões. Um Curso pode definir uma assinatura própria, e Certificados já emitidos permanecem imutáveis."
+                      description="Configure a identidade global da organização. Nome e cargo do signatário são definidos em cada Curso; Certificados já emitidos permanecem imutáveis."
                       details={[
                         "Razão social e CNPJ formam o perfil emissor e precisam ser preenchidos juntos.",
                         "A marca exibida aparece no documento quando o template não define outro valor.",
-                        "A assinatura padrão é usada apenas quando o Curso não possui uma assinatura própria.",
+                        "Nome e cargo do signatário são definidos em cada Curso e obrigatórios para publicar; a imagem visual é opcional.",
                       ]}
                       title="Como funciona a emissão"
                     />

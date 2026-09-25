@@ -10,7 +10,7 @@ export interface CertificateFieldMetadata {
   description: string;
   group: CertificateFieldGroupId;
   label: string;
-  source: "course" | "emission" | "issuer" | "validation";
+  source: "course" | "emission" | "issuer" | "template" | "validation";
 }
 
 export interface CertificateFieldGroup {
@@ -67,22 +67,24 @@ export const certificateFieldMetadata: Record<
     source: "issuer",
   },
   signerName: {
-    description: "Nome da pessoa responsável pela assinatura.",
+    description:
+      "Nome definido em Configurações do curso; obrigatório para publicar.",
     group: "signature",
     label: "Nome do signatário",
-    source: "issuer",
+    source: "course",
   },
   signerRole: {
-    description: "Cargo ou função da pessoa que assina.",
+    description:
+      "Cargo definido em Configurações do curso; obrigatório para publicar.",
     group: "signature",
     label: "Cargo do signatário",
-    source: "issuer",
+    source: "course",
   },
   signatureImage: {
-    description: "Imagem visual da assinatura configurada para o certificado.",
+    description: "Imagem visual opcional mantida neste modelo de certificado.",
     group: "signature",
     label: "Assinatura visual",
-    source: "issuer",
+    source: "template",
   },
   validationCode: {
     description: "Código único usado para consultar a autenticidade.",
@@ -118,7 +120,8 @@ export const certificateFieldGroups: readonly CertificateFieldGroup[] = [
     label: "Emissor",
   },
   {
-    description: "Identificação e imagem da assinatura.",
+    description:
+      "Nome e cargo vêm das Configurações do curso; a imagem é definida no modelo.",
     fields: ["signerName", "signerRole", "signatureImage"],
     id: "signature",
     label: "Assinatura",

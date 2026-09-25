@@ -143,6 +143,83 @@ const renderSnapshot = {
 } as const;
 
 describe("certificate lifecycle reasons", () => {
+  it("blocks manual issue for a course without an explicit signatory", async () => {
+    const query = vi.fn((statement: string) => {
+      if (statement.includes("from enrollments")) {
+        return { rows: [{ id: "enrollment-1" }] };
+      }
+      if (
+        statement.includes("from certificates") &&
+        statement.includes("order by issued_at")
+      ) {
+        return { rows: [] };
+      }
+      if (
+        statement.includes("from course_publications") &&
+        statement.includes("status = 'published'")
+      ) {
+        return { rows: [{ id: "publication-current" }] };
+      }
+      if (statement.includes("insert into course_completions")) {
+        return { rows: [] };
+      }
+      if (
+        statement.includes("from course_completions") &&
+        statement.includes("course_publication_id")
+      ) {
+        return { rows: [{ course_publication_id: "publication-origin" }] };
+      }
+      if (
+        statement.includes("from users u") &&
+        statement.includes("join certificate_templates")
+      ) {
+        return {
+          rows: [
+            {
+              background_key: "templates/background.webp",
+              completed_at: new Date("2026-06-10T15:30:00.000Z"),
+              course_title: "Curso",
+              issuer_cnpj: "00.000.000/0001-00",
+              issuer_display_name: "Emissora",
+              issuer_legal_name: "Emissora LTDA",
+              publication_course_title: "Curso histórico",
+              publication_workload_hours: 8,
+              signature_key: null,
+              signer_name: null,
+              signer_role: null,
+              spec: {
+                backgroundKey: "templates/background.webp",
+                fields: renderSnapshot.template.fields,
+              },
+              student_name: "Aluno",
+              template_id: renderSnapshot.template.id,
+              template_version: 1,
+              workload_hours: 8,
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+    dependencies.getPool.mockReturnValue({
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    });
+
+    await expect(
+      issueManualCertificate({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        reasonCategory: "other",
+        reasonDetail: "Revisão do caso.",
+        userId: "student-1",
+      })
+    ).rejects.toThrow("responsável pelo certificado não está configurado");
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("insert into certificates"),
+      expect.anything()
+    );
+  });
+
   it("uses the persisted completion date and effective course workload in manual snapshots", async () => {
     const completedAt = new Date("2026-06-10T15:30:00.000Z");
     const query = vi.fn((statement: string, _values?: unknown[]) => {
@@ -182,8 +259,8 @@ describe("certificate lifecycle reasons", () => {
               issuer_legal_name: "Emissora LTDA",
               publication_course_title: "Curso histórico",
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: renderSnapshot.template.backgroundKey,
                 fields: renderSnapshot.template.fields,
@@ -212,6 +289,14 @@ describe("certificate lifecycle reasons", () => {
       reasonDetail: "Emissao solicitada pelo suporte.",
       userId: "student-1",
     });
+
+    const sourceSelect = query.mock.calls.find(([statement]) =>
+      statement.includes("from users u")
+    )?.[0];
+    expect(sourceSelect).toContain("c.certificate_signer_name as signer_name");
+    expect(sourceSelect).toContain("c.certificate_signer_role as signer_role");
+    expect(sourceSelect).not.toContain("ct.signer_name");
+    expect(sourceSelect).not.toContain("app_settings");
 
     const certificateInsert = query.mock.calls.find(([statement]) =>
       statement.includes("insert into certificates")
@@ -275,8 +360,8 @@ describe("certificate lifecycle reasons", () => {
               issuer_display_name: "Emissora",
               issuer_legal_name: "Emissora LTDA",
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: renderSnapshot.template.fields,
@@ -407,8 +492,8 @@ describe("certificate lifecycle reasons", () => {
               issuer_display_name: "Emissora",
               issuer_legal_name: "Emissora LTDA",
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: renderSnapshot.template.fields,
@@ -607,6 +692,54 @@ describe("certificate lifecycle reasons", () => {
 });
 
 describe("automatic completion certificate retries", () => {
+  it("does not issue a certificate for a legacy published template missing signatory data", async () => {
+    const query = vi.fn((statement: string) => {
+      if (statement.includes("join certificate_templates")) {
+        return Promise.resolve({
+          rows: [
+            {
+              background_key: renderSnapshot.template.backgroundKey,
+              id: renderSnapshot.template.id,
+              issuer_cnpj: renderSnapshot.issuer.cnpj,
+              issuer_display_name: renderSnapshot.issuer.displayName,
+              issuer_legal_name: renderSnapshot.issuer.legalName,
+              signature_key: null,
+              signer_name: "Dra. Maria",
+              signer_role: null,
+              spec: {
+                backgroundKey: renderSnapshot.template.backgroundKey,
+                fields: renderSnapshot.template.fields,
+              },
+              version: renderSnapshot.template.version,
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    await expect(
+      tryIssueAutomaticCompletionCertificate({
+        client: { query } as never,
+        courseId: "course-1",
+        coursePublicationId: "publication-1",
+        courseTitle: "Curso",
+        completedAt: new Date("2026-07-22T12:00:00.000Z"),
+        studentName: "Aluno",
+        userId: "student-1",
+        workloadHours: 8,
+      })
+    ).resolves.toBeNull();
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("insert into certificates"),
+      expect.anything()
+    );
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("insert into outbox_messages"),
+      expect.anything()
+    );
+  });
+
   it("snapshots the effective course workload when issuing automatically", async () => {
     const query = vi.fn((statement: string, _values?: unknown[]) => {
       if (statement.includes("join certificate_templates")) {
@@ -649,6 +782,14 @@ describe("automatic completion certificate retries", () => {
       })
     ).resolves.toBe("PRT-OVERRIDE");
 
+    expect(
+      query.mock.calls.some(
+        ([statement]) =>
+          statement.includes("c.certificate_signer_name as signer_name") &&
+          statement.includes("c.certificate_signer_role as signer_role")
+      )
+    ).toBe(true);
+
     const insert = query.mock.calls.find(([statement]) =>
       statement.includes("insert into certificates")
     );
@@ -678,8 +819,8 @@ describe("automatic completion certificate retries", () => {
               issuer_display_name: renderSnapshot.issuer.displayName,
               issuer_legal_name: renderSnapshot.issuer.legalName,
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: renderSnapshot.template.fields,
@@ -736,8 +877,8 @@ describe("automatic completion certificate retries", () => {
               issuer_display_name: renderSnapshot.issuer.displayName,
               issuer_legal_name: renderSnapshot.issuer.legalName,
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: renderSnapshot.template.fields,
@@ -797,8 +938,8 @@ describe("automatic completion certificate retries", () => {
               issuer_display_name: "Emissora",
               issuer_legal_name: "Emissora LTDA",
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: [
@@ -976,8 +1117,8 @@ describe("automatic completion certificate retries", () => {
               issuer_legal_name: "Emissora Atual LTDA",
               publication_workload_hours: 12,
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: renderSnapshot.template.fields,

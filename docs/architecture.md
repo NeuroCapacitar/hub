@@ -71,11 +71,20 @@ Importações usam alias `@/`. Não há camada de repositórios genérica; Drizz
 - Dados técnicos de analytics => `src/features/learning-analytics`, tabelas `learning_analytics_events` e `learning_analytics_daily_metrics`.
 - Mídia => `src/features/jmvstream`, `src/features/storage`, tabelas `jmvstream_folders`, `jmvstream_video_assets` e JSON de conteúdo.
 - Configurações => `src/app/(admin)/admin/configuracoes`, com perfil emissor global,
-  assinatura padrão, banners e FAQ editorial;
+  banners e FAQ editorial; nome e cargo do responsável ficam em Configurações do
+  Curso, enquanto o layout e a imagem da assinatura pertencem ao template;
 - Operação => `src/features/admin/server.ts`, `src/features/operations/server.ts`,
-  `src/features/jmvstream/server.ts`, `audit_logs`, `app_settings`, `faq_items` e
+  `src/features/jmvstream/server.ts`, `audit_logs`, `faq_items` e
   `dashboard_banners`; saúde de provider e filas ficam nesta superfície, não em
   Configurações.
+
+`app_settings` mantém somente as colunas legadas de signatário global durante a
+janela de compatibilidade de release. O runtime atual não lê nem grava esses
+valores; a remoção física exige confirmar que uma versão anterior não será
+reativada. As colunas antigas de nome/cargo em `certificate_templates` também
+permanecem temporariamente sem uso; `courses.certificate_signer_name` e
+`courses.certificate_signer_role` são a fonte atual. A migration copia somente
+valores locais já explícitos nos templates e nunca herda o padrão global.
 
 ## Banco
 
@@ -149,7 +158,7 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 
 ### Certificado, analytics e manutenção
 
-- cada Curso pode publicar uma versão imutável de template A4, vinculada ao perfil emissor global; novas emissões congelam template, dados do Aluno, Curso e emissão em `render_snapshot`;
+- cada Curso pode publicar uma versão imutável de template A4, vinculada ao perfil emissor global; nome e cargo do responsável são configurados no Curso, sem fallback global; o template controla layout e imagem opcional da assinatura, e novas emissões congelam a versão do template e os dados atuais do responsável, além dos dados do Aluno, Curso e emissão, em `render_snapshot`;
 - `completeLesson` usa lock transacional por Conta e Curso antes do progresso e do resumo; somente a transação que insere a primeira `CourseCompletion` pode criar o Certificado automático `pending` e a mensagem `certificate.render`;
 - o worker obtém claim persistido, grava o artefato privado no R2 e só então enfileira o e-mail que aponta para `/certificados/[code]`. A página do Curso é a entrada contextual do Certificado; `/app/certificados` é o arquivo global autenticado. Ambas distinguem `pending`, `ready`, `failed` e revogado sem transformar a lista autenticada no destino canônico de compartilhamento;
 - `issueManualCertificate`, `revokeCertificate` e `reissueCertificate` controlam lifecycle com confirmação validada no servidor; reemissão cria nova evidência e preserva a anterior revogada;
@@ -196,8 +205,8 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 - `certificate_template_asset_cleanup` registra limpeza atrasada e recuperável
   das artes substituídas;
 - upload JMVStream mantém sessão/estado persistido para retry e limpeza.
-- Configurações globais atualiza `app_settings` e `certificate_issuer_profiles`
-  na mesma transação; o perfil emissor exige razão social e CNPJ juntos e a
+- Configurações globais atualiza `certificate_issuer_profiles` na mesma
+  transação; o perfil emissor exige razão social e CNPJ juntos e a
   alteração registra antes/depois seguro em `settings.updated`.
 - mutações editoriais distinguem criação, atualização, exclusão e reordenação de
   FAQs e banners; os valores legíveis e a ordem anterior/nova entram na auditoria

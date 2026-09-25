@@ -2,8 +2,8 @@
 status: canonical
 owner: engineering
 last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
-current_migration_tag: 0089_reconcile_legacy_profile_support_mode
-migration_entry_count: 90
+current_migration_tag: 0090_course_certificate_signatory
+migration_entry_count: 91
 schema_table_count: 50
 ---
 
@@ -190,6 +190,13 @@ protegendo ambientes cujo ledger registrou `0087`/`0088` sem refletir todo o
 schema. Foi aplicada em Development em 2026-09-19; a transição Support → Student
 passou em transação com rollback, o campo legado não existe mais e os comentários
 mantêm `course_id`, `curriculum_key` e `source_lesson_id` sem identidades nulas.
+
+A migration `0090_course_certificate_signatory` adiciona nome e cargo do
+responsável ao Curso e migra somente valores locais já preenchidos no modelo,
+priorizando o publicado. Não consulta nem copia os padrões globais de
+`app_settings`; Cursos sem valores explícitos continuam pendentes para revisão.
+As colunas antigas de nome/cargo em `certificate_templates` e `app_settings`
+permanecem temporariamente para rollback e não são usadas pelo runtime novo.
 
 O runner de Development aplicou `0085` em 2026-09-17. A auditoria read-only
 confirmou o check `allowlist refinada e grants configuráveis limpos` e nenhum
