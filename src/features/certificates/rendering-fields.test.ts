@@ -15,13 +15,19 @@ vi.mock("./pdf-document", () => ({
 import { renderCertificatePdf } from "./rendering";
 
 type MockDocument = EventEmitter & {
+  clip: () => MockDocument;
+  currentLineHeight: (includeGap?: boolean) => number;
   end: () => void;
   fillColor: (color: string) => MockDocument;
   font: (font: string) => MockDocument;
   fontSize: (size: number) => MockDocument;
   heightOfString: (value: string, options: { width: number }) => number;
   image: (...args: unknown[]) => MockDocument;
+  rect: (...args: number[]) => MockDocument;
+  restore: () => MockDocument;
+  save: () => MockDocument;
   text: (...args: unknown[]) => MockDocument;
+  widthOfString: (value: string) => number;
 };
 
 const createMockDocument = () => {
@@ -31,6 +37,12 @@ const createMockDocument = () => {
   document.fillColor = vi.fn(() => document);
   document.fontSize = vi.fn(() => document);
   document.heightOfString = vi.fn(() => 1);
+  document.currentLineHeight = vi.fn(() => 12);
+  document.widthOfString = vi.fn((value: string) => value.length * 5);
+  document.save = vi.fn(() => document);
+  document.rect = vi.fn(() => document);
+  document.clip = vi.fn(() => document);
+  document.restore = vi.fn(() => document);
   document.text = vi.fn(() => document);
   document.end = vi.fn(() => {
     document.emit("data", Buffer.from("%PDF-mock"));
@@ -293,5 +305,60 @@ describe("certificate rendering field values", () => {
       boxY + (boxHeight - 2) / 2,
       expect.objectContaining({ height: boxHeight, width: expect.any(Number) })
     );
+  });
+
+  it("uses shared measured lines and clips new renderer snapshots to the field", async () => {
+    const document = createMockDocument();
+    dependencies.createCertificatePdfDocument.mockReturnValueOnce(document);
+    const background = await sharp({
+      create: { background: "#ffffff", channels: 3, height: 1680, width: 2376 },
+    })
+      .webp()
+      .toBuffer();
+    const sourceField = snapshot.template.fields[0];
+    if (!sourceField) {
+      throw new Error("Fixture de campo ausente.");
+    }
+    const versionedSnapshot: CertificateRenderSnapshot = {
+      ...snapshot,
+      rendererVersion: 2,
+      student: { name: "Ana Carolina de Souza e Silva" },
+      template: {
+        ...snapshot.template,
+        fields: [
+          {
+            ...sourceField,
+            field: "studentName",
+            height: 10,
+            width: 5,
+            x: 10,
+          },
+        ],
+      },
+    };
+
+    await renderCertificatePdf({
+      background,
+      publicBaseUrl: "https://hub.example.test",
+      signature: null,
+      snapshot: versionedSnapshot,
+    });
+
+    const textCalls = (
+      document.text as unknown as { mock: { calls: unknown[][] } }
+    ).mock.calls;
+    const renderedLines = textCalls.map(([value]) => value);
+    expect(renderedLines.length).toBeGreaterThan(1);
+    expect(renderedLines).not.toContain("Ana Carolina de Souza e Silva");
+    expect(
+      textCalls.every(
+        (call) =>
+          (call[3] as { lineBreak?: boolean } | undefined)?.lineBreak === false
+      )
+    ).toBe(true);
+    expect(document.save).toHaveBeenCalledOnce();
+    expect(document.rect).toHaveBeenCalledOnce();
+    expect(document.clip).toHaveBeenCalledOnce();
+    expect(document.restore).toHaveBeenCalledOnce();
   });
 });

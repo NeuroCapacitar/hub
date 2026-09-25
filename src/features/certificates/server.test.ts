@@ -305,6 +305,7 @@ describe("certificate lifecycle reasons", () => {
     const snapshot = JSON.parse(String(values?.[9])) as {
       completion: { completedAt: string };
       course: { workloadHours: number };
+      rendererVersion: number;
     };
 
     expect(values?.[3]).toMatch(CERTIFICATE_CODE_PATTERN);
@@ -313,6 +314,7 @@ describe("certificate lifecycle reasons", () => {
     expect(values?.[6]).toBe(24);
     expect(snapshot.completion.completedAt).toBe(completedAt.toISOString());
     expect(snapshot.course.workloadHours).toBe(24);
+    expect(snapshot.rendererVersion).toBe(2);
   });
 
   it("retries a manual code collision inside the existing transaction", async () => {
@@ -796,10 +798,12 @@ describe("automatic completion certificate retries", () => {
     const values = insert?.[1] as unknown[] | undefined;
     const snapshot = JSON.parse(String(values?.[8])) as {
       course: { workloadHours: number };
+      rendererVersion: number;
     };
 
     expect(values?.[6]).toBe(8);
     expect(snapshot.course.workloadHours).toBe(8);
+    expect(snapshot.rendererVersion).toBe(2);
   });
 
   it("retries a public code collision without aborting the surrounding transaction", async () => {

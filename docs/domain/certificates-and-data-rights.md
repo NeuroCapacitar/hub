@@ -78,15 +78,24 @@ de assets TTF Inter Regular e Inter Bold empacotados com a aplicação. Os alias
 lógicos persistidos `Helvetica` e `Helvetica-Bold` permanecem compatíveis, mas
 são resolvidos internamente para Inter Regular e Inter Bold, respectivamente. A
 geração de PNG usa Sharp/librsvg com Fontconfig empacotado no runtime Node.js e
-não depende de fontes instaladas no sistema. As dimensões A4 do preview, em
-1200x848, a chave de armazenamento, o contrato de redirect e a validação de
-integridade por `preview_sha256` permanecem inalterados; somente a rasterização
-interna das fontes muda. O PDF e o histórico do Certificado permanecem
-imutáveis. Se um PNG histórico estiver ausente, a rota de preview vigente ainda
-pode gerá-lo sob demanda a partir do snapshot imutável; isso não reescreve o PDF
-nem a evidência do Certificado. Previews existentes, inclusive previews de
-teste, não são objeto de backfill nem de revalidação semântica por esta mudança;
-previews futuros usam o renderizador corrigido.
+não depende de fontes instaladas no sistema. Snapshots novos registram
+`rendererVersion: 2`: PDF e PNG compartilham medição de largura, quebra de linha,
+altura de linha e alinhamento vertical via PDFKit; o PDF também recorta o texto
+ao retângulo configurado. Snapshots sem essa propriedade e os explicitamente
+marcados como versão 1 continuam no caminho legado, inclusive quando uma
+miniatura ausente for regenerada. Essa versão é independente de `version: 1`, que
+continua identificando o formato do snapshot.
+
+O editor administrativo usa os mesmos arquivos Inter e aguarda sua carga antes
+de validar overflow ou ajustar campos ao conteúdo; se a fonte não carregar, avisa
+que a prévia pode divergir e suspende essas validações. Como o editor é renderizado
+no navegador, sua rasterização não promete identidade pixel a pixel com PDF/PNG.
+As dimensões A4 do preview, em 1200x848, a chave de armazenamento, o contrato de
+redirect e a validação de integridade por `preview_sha256` permanecem
+inalterados. PDFs, snapshots e histórico já emitidos são imutáveis. Previews
+existentes e previews de teste não recebem backfill; um PNG novo ou regenerado
+usa a versão registrada no snapshot e não reescreve o PDF nem a evidência do
+Certificado.
 
 Quando um rascunho substitui fundo ou assinatura, a chave anterior entra em
 `certificate_template_asset_cleanup` com carência de 24 horas. A manutenção

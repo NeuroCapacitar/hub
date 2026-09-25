@@ -7,7 +7,9 @@ import type {
   CertificateField,
   CertificateTemplateField,
 } from "@/features/certificates/template-rules";
+import { formatDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { loadCertificatePreviewFonts } from "./certificate-preview-fonts";
 import { certificateTemplateFieldLabels } from "./certificate-template-field-labels";
 import {
   type CertificateFieldGeometry,
@@ -22,11 +24,15 @@ import {
   getCertificatePreviewTextStyle,
 } from "./certificate-template-preview-layout";
 
+const PREVIEW_SAMPLE_DATE = new Date("2026-07-22T12:00:00.000Z");
+const PREVIEW_SAMPLE_CODE = "PRT-1234567890ABCDEF1234567890ABCDEF";
+const PREVIEW_SAMPLE_VALIDATION_URL = `https://hub.example.test/certificados/${PREVIEW_SAMPLE_CODE}`;
+
 const dynamicPreviewSamples = {
-  completedAt: "22 de julho de 2026",
-  issuedAt: "22 de julho de 2026",
+  completedAt: formatDate(PREVIEW_SAMPLE_DATE),
+  issuedAt: formatDate(PREVIEW_SAMPLE_DATE),
   studentName: "Ana Carolina de Souza e Silva",
-  validationCode: "PRT-12345678",
+  validationCode: PREVIEW_SAMPLE_CODE,
   workloadHours: "120 horas",
 } as const;
 
@@ -216,6 +222,9 @@ export function CertificateTemplatePreview({
 }): React.JSX.Element {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [renderedWidth, setRenderedWidth] = useState(0);
+  const [fontStatus, setFontStatus] = useState<
+    "loading" | "loaded" | "unavailable"
+  >("loading");
   const overflowFieldsRef = useRef<Set<CertificateTemplateField["field"]>>(
     new Set()
   );
@@ -244,7 +253,7 @@ export function CertificateTemplatePreview({
   );
 
   useEffect(() => {
-    QRCode.toDataURL("https://hub.example.test/certificados/PRT-12345678", {
+    QRCode.toDataURL(PREVIEW_SAMPLE_VALIDATION_URL, {
       margin: 1,
     })
       .then(setQrDataUrl)
@@ -252,8 +261,27 @@ export function CertificateTemplatePreview({
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+    const loadFonts = async (): Promise<void> => {
+      const loaded = await loadCertificatePreviewFonts(document.fonts);
+      if (isMounted) {
+        setFontStatus(loaded ? "loaded" : "unavailable");
+      }
+    };
+    loadFonts().catch(() => {
+      if (isMounted) {
+        setFontStatus("unavailable");
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const page = pageRef.current;
-    if (!page || renderedWidth <= 0) {
+    if (fontStatus !== "loaded" || !page || renderedWidth <= 0) {
       return;
     }
 
@@ -290,7 +318,7 @@ export function CertificateTemplatePreview({
     }
     overflowFieldsRef.current = nextOverflowFields;
     onOverflowFieldsChange?.([...nextOverflowFields]);
-  }, [fields, onOverflowFieldsChange, renderedWidth, values]);
+  }, [fields, fontStatus, onOverflowFieldsChange, renderedWidth, values]);
 
   useEffect(() => {
     const page = pageRef.current;
@@ -307,7 +335,11 @@ export function CertificateTemplatePreview({
   const lastFitRequestIdRef = useRef(0);
   useEffect(() => {
     const request = fitContentRequest;
-    if (!request || request.id <= lastFitRequestIdRef.current) {
+    if (
+      fontStatus !== "loaded" ||
+      !request ||
+      request.id <= lastFitRequestIdRef.current
+    ) {
       return;
     }
 
@@ -354,6 +386,7 @@ export function CertificateTemplatePreview({
     onFieldInteractionEnd?.(true);
   }, [
     fields,
+    fontStatus,
     fitContentRequest,
     onFieldGeometryChange,
     onFieldInteractionEnd,
@@ -476,7 +509,7 @@ export function CertificateTemplatePreview({
           return (
             <p
               className={cn(
-                "pointer-events-none absolute overflow-hidden text-pretty break-words",
+                "pointer-events-none absolute overflow-hidden break-words",
                 overlapClassName
               )}
               data-overlap={overlapMarker}
@@ -662,6 +695,24 @@ export function CertificateTemplatePreview({
           />
         ) : null}
       </div>
+      {fontStatus === "loading" ? (
+        <p
+          aria-live="polite"
+          className="pointer-events-none absolute right-2 bottom-2 left-2 rounded-md bg-background/90 px-2 py-1 text-center text-muted-foreground text-xs"
+          role="status"
+        >
+          Carregando a fonte da prévia…
+        </p>
+      ) : null}
+      {fontStatus === "unavailable" ? (
+        <p
+          className="pointer-events-none absolute right-2 bottom-2 left-2 rounded-md bg-warning/90 px-2 py-1 text-center font-medium text-warning-foreground text-xs"
+          role="alert"
+        >
+          Não foi possível carregar Inter. A prévia pode diferir do PDF e a
+          validação de texto está suspensa.
+        </p>
+      ) : null}
       {overflowFieldLabels.length > 0 ? (
         <p
           aria-live="polite"

@@ -7,6 +7,7 @@ import {
   parseCertificateReasonCode,
 } from "@/features/certificates/reasons";
 import {
+  CURRENT_CERTIFICATE_RENDERER_VERSION,
   parseCertificateRenderSnapshot,
   parseCertificateTemplateDraft,
 } from "@/features/certificates/render-snapshot";
@@ -183,6 +184,7 @@ export const tryIssueAutomaticCompletionCertificate = async ({
         signerRole: templateSnapshot.signer_role,
         version: templateSnapshot.version,
       },
+      rendererVersion: CURRENT_CERTIFICATE_RENDERER_VERSION,
       version: 1,
     });
 
@@ -486,6 +488,7 @@ const issueCertificate = async ({
         signerRole: source.signer_role,
         version: source.template_version,
       },
+      rendererVersion: CURRENT_CERTIFICATE_RENDERER_VERSION,
       version: 1,
     });
 

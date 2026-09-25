@@ -5,9 +5,11 @@ import { formatDate } from "@/lib/formatters";
 import { observeSentryOperation } from "@/lib/sentry-operation";
 import { getCertificateFontFile } from "./font-assets";
 import { createCertificatePdfDocument } from "./pdf-document";
+import { layoutCertificatePdfText } from "./pdf-text-layout";
 import type { CertificateRenderSnapshot } from "./render-snapshot";
 import { getCertificateValidationPath } from "./rules";
 import { CERTIFICATE_PAGE } from "./template-rules";
+import { getCertificateTextVerticalOffset } from "./text-layout";
 
 const pointsPerMillimeter = 72 / 25.4;
 
@@ -26,24 +28,6 @@ const fieldValues = (
   validationCode: snapshot.certificate.code,
   workloadHours: `${snapshot.course.workloadHours} horas`,
 });
-
-const getVerticalTextOffset = ({
-  height,
-  measuredHeight,
-  verticalAlign,
-}: {
-  height: number;
-  measuredHeight: number;
-  verticalAlign: "top" | "middle" | "bottom" | undefined;
-}): number => {
-  if (verticalAlign === "top") {
-    return 0;
-  }
-  if (verticalAlign === "bottom") {
-    return Math.max(0, height - measuredHeight);
-  }
-  return Math.max(0, (height - measuredHeight) / 2);
-};
 
 interface RenderCertificatePdfInput {
   background: Buffer;
@@ -127,22 +111,44 @@ const renderCertificatePdfInternal = async ({
 
     const value = values[field.field];
     if (value) {
-      document
-        .font(getCertificateFontFile(field.font))
-        .fontSize(field.fontSize);
-      const verticalOffset = getVerticalTextOffset({
-        height,
-        measuredHeight: document.heightOfString(value, {
+      if (snapshot.rendererVersion === 2) {
+        const layout = layoutCertificatePdfText(document, field, value, width);
+        const verticalOffset = getCertificateTextVerticalOffset({
+          height,
+          contentHeight: layout.contentHeight,
+          verticalAlign: field.verticalAlign,
+        });
+
+        document.save();
+        document.rect(x, y, width, height).clip();
+        layout.lines.forEach((line, lineIndex) => {
+          document
+            .fillColor(field.color)
+            .text(line, x, y + verticalOffset + lineIndex * layout.lineHeight, {
+              align: field.align,
+              lineBreak: false,
+              width,
+            });
+        });
+        document.restore();
+      } else {
+        document
+          .font(getCertificateFontFile(field.font))
+          .fontSize(field.fontSize);
+        const verticalOffset = getCertificateTextVerticalOffset({
+          height,
+          contentHeight: document.heightOfString(value, {
+            align: field.align,
+            width,
+          }),
+          verticalAlign: field.verticalAlign,
+        });
+        document.fillColor(field.color).text(value, x, y + verticalOffset, {
           align: field.align,
+          height,
           width,
-        }),
-        verticalAlign: field.verticalAlign,
-      });
-      document.fillColor(field.color).text(value, x, y + verticalOffset, {
-        align: field.align,
-        height,
-        width,
-      });
+        });
+      }
     }
   }
 

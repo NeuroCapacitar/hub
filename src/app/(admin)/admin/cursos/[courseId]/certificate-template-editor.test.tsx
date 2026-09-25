@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import QRCode from "qrcode";
 import type { ComponentProps } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -11,6 +12,7 @@ const {
   actionMocks,
   mediaQueryMocks,
   navigationMocks,
+  previewFontMock,
   stagedUploadMock,
   toastMocks,
 } = vi.hoisted(() => ({
@@ -23,6 +25,7 @@ const {
   },
   mediaQueryMocks: { matches: false },
   navigationMocks: { refresh: vi.fn() },
+  previewFontMock: vi.fn().mockResolvedValue(true),
   stagedUploadMock: vi.fn(),
   toastMocks: { error: vi.fn(), success: vi.fn() },
 }));
@@ -35,6 +38,9 @@ vi.mock("qrcode", () => ({
   default: {
     toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,AAAA"),
   },
+}));
+vi.mock("./certificate-preview-fonts", () => ({
+  loadCertificatePreviewFonts: previewFontMock,
 }));
 vi.mock("@/features/admin/actions", () => ({
   disableCertificateForCourseAction: actionMocks.disable,
@@ -844,6 +850,22 @@ describe("CertificateTemplateEditor", () => {
       container.querySelector('[data-preview-text-field="studentName"]')
         ?.textContent
     ).toBe("Ana Carolina de Souza e Silva");
+    expect(
+      container.querySelector('[data-preview-text-field="completedAt"]')
+        ?.textContent
+    ).toBe("22 de jul. de 2026");
+    expect(
+      container.querySelector('[data-preview-text-field="issuedAt"]')
+        ?.textContent
+    ).toBe("22 de jul. de 2026");
+    expect(
+      container.querySelector('[data-preview-text-field="validationCode"]')
+        ?.textContent
+    ).toBe("PRT-1234567890ABCDEF1234567890ABCDEF");
+    expect(QRCode.toDataURL).toHaveBeenCalledWith(
+      "https://hub.example.test/certificados/PRT-1234567890ABCDEF1234567890ABCDEF",
+      { margin: 1 }
+    );
   });
 
   it("warns about clipped content without blocking draft save and confirms publication", async () => {
@@ -1055,8 +1077,8 @@ describe("CertificateTemplateEditor", () => {
     expect(selected).toMatchObject({ x: 15, y: 47.5 });
   });
 
-  it("fits a selected text field to its measured content", () => {
-    act(() => {
+  it("fits a selected text field to its measured content", async () => {
+    await act(async () => {
       root.render(
         <CertificateTemplateEditor
           certificateEnabled
@@ -1065,6 +1087,7 @@ describe("CertificateTemplateEditor", () => {
           templates={[draftTemplate]}
         />
       );
+      await Promise.resolve();
     });
     selectField(container, "studentName");
 
