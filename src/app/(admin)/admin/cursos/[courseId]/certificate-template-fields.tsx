@@ -570,10 +570,8 @@ const CertificateFieldInspector = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="Helvetica">Helvetica</SelectItem>
-                    <SelectItem value="Helvetica-Bold">
-                      Helvetica Bold
-                    </SelectItem>
+                    <SelectItem value="Helvetica">Inter</SelectItem>
+                    <SelectItem value="Helvetica-Bold">Inter Bold</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>

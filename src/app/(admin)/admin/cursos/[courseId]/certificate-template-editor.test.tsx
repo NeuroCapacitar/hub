@@ -979,6 +979,44 @@ describe("CertificateTemplateEditor", () => {
     ).toBe("above");
   });
 
+  it("shows Inter font names while keeping the legacy values in the template", async () => {
+    await act(async () => {
+      root.render(
+        <CertificateTemplateEditor
+          certificateEnabled
+          courseId="course-1"
+          issuerConfigured
+          templates={[draftTemplate]}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    selectField(container, "studentName");
+    expect(
+      container.querySelector<HTMLButtonElement>("#studentName-font")
+        ?.textContent
+    ).toContain("Inter Bold");
+
+    selectField(container, "courseTitle");
+    expect(
+      container.querySelector<HTMLButtonElement>("#courseTitle-font")
+        ?.textContent
+    ).toContain("Inter");
+
+    const serializedSpec =
+      container.querySelector<HTMLInputElement>('input[name="spec"]')?.value;
+    const spec = JSON.parse(serializedSpec ?? "{}") as {
+      fields: Array<{ field: string; font?: string }>;
+    };
+    expect(spec.fields.find(({ field }) => field === "studentName")?.font).toBe(
+      "Helvetica-Bold"
+    );
+    expect(spec.fields.find(({ field }) => field === "courseTitle")?.font).toBe(
+      "Helvetica"
+    );
+  });
+
   it("centers only the requested axis from the global toolbar", () => {
     act(() => {
       root.render(
