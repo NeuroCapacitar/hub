@@ -37,7 +37,7 @@ import {
 
 const UUID_PATTERN = /^[0-9a-f-]{36}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
-const CERTIFICATE_CODE_PATTERN = /^PRT-[0-9A-F]{32}$/;
+const CERTIFICATE_CODE_PATTERN = /^[A-Za-z0-9_-]{21}[AQgw]$/;
 
 describe("certificate reissue authority", () => {
   it("reuses the canonical enrollment aggregate lock", async () => {
@@ -1490,5 +1490,14 @@ describe("certificate rendering assets", () => {
         expect.stringMatching(UUID_PATTERN),
       ]
     );
+  });
+
+  it("looks up Base64URL codes without normalizing case or characters", async () => {
+    const code = "AAECAwQFBgcICQoLDA0ODw";
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    dependencies.getPool.mockReturnValue({ query });
+
+    await expect(getCertificateByCode(code)).resolves.toBeNull();
+    expect(query).toHaveBeenCalledWith(expect.any(String), [code]);
   });
 });

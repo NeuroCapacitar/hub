@@ -25,7 +25,7 @@ import {
 } from "./certificate-template-preview-layout";
 
 const PREVIEW_SAMPLE_DATE = new Date("2026-07-22T12:00:00.000Z");
-const PREVIEW_SAMPLE_CODE = "PRT-1234567890ABCDEF1234567890ABCDEF";
+const PREVIEW_SAMPLE_CODE = "AAECAwQFBgcICQoLDA0ODw";
 const PREVIEW_SAMPLE_VALIDATION_URL = `https://hub.example.test/certificados/${PREVIEW_SAMPLE_CODE}`;
 
 const dynamicPreviewSamples = {

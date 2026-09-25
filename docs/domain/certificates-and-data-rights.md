@@ -142,9 +142,13 @@ Aluno no Curso. Admin pode selecionar um registro histórico anterior para a
 correção excepcional. Ambos os caminhos usam lock transacional por par
 Aluno/Curso; o predecessor revogado não é reescrito e duas reemissões
 concorrentes não criam ramificação. A UI aplica a mesma fronteira por papel.
-Novas emissões usam código no
-formato `PRT-` seguido de 32 caracteres hexadecimais; o lookup continua
-compatível com códigos legados.
+Novas emissões usam um código Base64URL canônico sem padding, derivado de 16
+bytes aleatórios criptograficamente seguros (22 caracteres), sem prefixo fixo e
+sem normalização de caixa. Códigos legados `PRT-...` permanecem inalterados e
+consultáveis; a migração não atualiza snapshots, PDFs, PNGs ou QR já emitidos.
+Antes de liberar o novo writer em Staging, o preflight deve confirmar que a
+collation do banco distingue caixa e que nenhum template ou consumidor externo
+depende do prefixo antigo.
 
 O nome e o cargo/função do signatário são próprios do Curso, ficam em
 **Configurações do curso** e precisam estar preenchidos para publicar ou ativar

@@ -1,7 +1,11 @@
 import "server-only";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { getPool } from "@/db";
+import {
+  CERTIFICATE_CODE_RANDOM_BYTE_LENGTH,
+  encodeCertificateCode,
+} from "@/features/certificates/certificate-code";
 import {
   type CertificateReasonCode,
   parseCertificateReasonCode,
@@ -12,10 +16,7 @@ import {
   parseCertificateTemplateDraft,
 } from "@/features/certificates/render-snapshot";
 import { renderCertificatePdf } from "@/features/certificates/rendering";
-import {
-  CERTIFICATE_RENDER_CLAIM_LEASE_MINUTES,
-  createCertificateCode,
-} from "@/features/certificates/rules";
+import { CERTIFICATE_RENDER_CLAIM_LEASE_MINUTES } from "@/features/certificates/rules";
 import { lockEnrollmentAggregate } from "@/features/enrollments/enrollment-aggregate-lock";
 import { createCertificateRenderMessage } from "@/features/outbox/rules";
 import { enqueueOutboxMessage } from "@/features/outbox/server";
@@ -164,7 +165,9 @@ export const tryIssueAutomaticCompletionCertificate = async ({
   for (let attempt = 0; attempt < MAX_CERTIFICATE_CODE_ATTEMPTS; attempt += 1) {
     const savepoint = `certificate_code_attempt_${attempt}`;
     await client.query(`savepoint ${savepoint}`);
-    const candidateCode = createCertificateCode(randomUUID());
+    const candidateCode = encodeCertificateCode(
+      randomBytes(CERTIFICATE_CODE_RANDOM_BYTE_LENGTH)
+    );
     const renderSnapshot = parseCertificateRenderSnapshot({
       certificate: { code: candidateCode, issuedAt },
       completion: { completedAt: completionAt },
@@ -465,7 +468,9 @@ const issueCertificate = async ({
   for (let attempt = 0; attempt < MAX_CERTIFICATE_CODE_ATTEMPTS; attempt += 1) {
     const savepoint = `certificate_code_attempt_${attempt}`;
     await client.query(`savepoint ${savepoint}`);
-    const certificateCode = createCertificateCode(randomUUID());
+    const certificateCode = encodeCertificateCode(
+      randomBytes(CERTIFICATE_CODE_RANDOM_BYTE_LENGTH)
+    );
     const renderSnapshot = parseCertificateRenderSnapshot({
       certificate: { code: certificateCode, issuedAt },
       completion: { completedAt: source.completed_at.toISOString() },

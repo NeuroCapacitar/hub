@@ -96,6 +96,18 @@ uma etapa posterior de limpeza após a janela de compatibilidade.
 As antigas colunas de nome/cargo em `certificate_templates` seguem a mesma
 política de retenção; `courses` é a fonte canônica a partir desta emenda.
 
+### Emenda aprovada em 2026-09-25
+
+Novas emissões usam identificadores públicos de 16 bytes CSPRNG em Base64URL
+canônico sem padding (22 caracteres), sem o prefixo constante `PRT-`. O valor é
+opaco, case-sensitive e permanece o código de consulta pública; link e QR
+continuam sendo os meios preferidos para abri-lo. O writer gera bytes novos a
+cada tentativa e preserva a constraint única existente. Códigos antigos,
+snapshots e artefatos permanecem byte a byte inalterados e consultáveis; não há
+alias, backfill, alteração de schema ou mudança do formato do snapshot. A
+liberação do writer fica condicionada a validar a collation do banco e os
+templates/consumidores externos que possam assumir prefixo ou caixa.
+
 Implementado por `issueManualCertificate`, `revokeCertificate`, `reissueCertificate` e `reconcileHistoricalCourseCertificates`. A política
 de que revogação bloqueia nova emissão automática, exigindo reemissão manual, foi ratificada em
 2026-07-20. Autoridade, motivos e informação pública foram ratificados em 2026-07-21; veja

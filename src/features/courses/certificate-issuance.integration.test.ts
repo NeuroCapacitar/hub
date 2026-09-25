@@ -18,7 +18,7 @@ if (!databaseUrl) {
     "CERTIFICATE_CONCURRENCY_DATABASE_URL is required for integration tests."
   );
 }
-const AUTOMATIC_CERTIFICATE_CODE = /^PRT-[0-9A-F]{32}$/;
+const AUTOMATIC_CERTIFICATE_CODE = /^[A-Za-z0-9_-]{21}[AQgw]$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const CONSECUTIVE_ISSUANCE_RUNS = 20;
 const CONSECUTIVE_ISSUANCE_TIMEOUT_MS = 300_000;

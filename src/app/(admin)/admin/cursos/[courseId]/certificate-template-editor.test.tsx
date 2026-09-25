@@ -861,9 +861,9 @@ describe("CertificateTemplateEditor", () => {
     expect(
       container.querySelector('[data-preview-text-field="validationCode"]')
         ?.textContent
-    ).toBe("PRT-1234567890ABCDEF1234567890ABCDEF");
+    ).toBe("AAECAwQFBgcICQoLDA0ODw");
     expect(QRCode.toDataURL).toHaveBeenCalledWith(
-      "https://hub.example.test/certificados/PRT-1234567890ABCDEF1234567890ABCDEF",
+      "https://hub.example.test/certificados/AAECAwQFBgcICQoLDA0ODw",
       { margin: 1 }
     );
   });

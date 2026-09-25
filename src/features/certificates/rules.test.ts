@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  canIssueCertificate,
-  createCertificateCode,
-  getCertificateValidationPath,
-} from "./rules";
+import { canIssueCertificate, getCertificateValidationPath } from "./rules";
 
 describe("certificate rules", () => {
   it("issues certificates only when every lesson is completed", () => {
@@ -24,10 +20,9 @@ describe("certificate rules", () => {
     );
   });
 
-  it("preserves the full random material in uppercase certificate codes", () => {
-    expect(createCertificateCode("abc123def456")).toBe("PRT-ABC123DEF456");
-    expect(createCertificateCode("2c5c41a6-29c1-4a42-8474-f1f7021d5137")).toBe(
-      "PRT-2C5C41A629C14A428474F1F7021D5137"
-    );
+  it("preserves Base64URL case and characters in validation paths", () => {
+    const code = "-_v7-_v7-_v7-_v7-_v7-w";
+
+    expect(getCertificateValidationPath(code)).toBe(`/certificados/${code}`);
   });
 });
