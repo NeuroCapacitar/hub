@@ -256,7 +256,9 @@ describe("PaymentReviewHistorySheet", () => {
 
 describe("AdminFinancePage", () => {
   const financialHealth = {
-    abandonedCheckoutOrders: 0,
+    activeCheckoutCount: 0,
+    activeCheckoutPotentialInCents: 0,
+    closedCheckoutAttempts: 0,
     averagePaidTicketInCents: 10_000,
     checkoutConversionPercent: 50,
     disputedOrders: 0,
@@ -264,7 +266,6 @@ describe("AdminFinancePage", () => {
     paidOrders: 1,
     paidRevenueInCents: 10_000,
     pendingOrders: 0,
-    pendingRevenueInCents: 0,
     readyWebhooks: 0,
     refundedOrders: 0,
     retryableWebhooks: 0,
@@ -352,8 +353,8 @@ describe("AdminFinancePage", () => {
         grossReceivedInCents: 10_000,
         missingFeeEvidenceOrders: 0,
         paidOrders: 2,
-        pendingOrders: 3,
-        pendingRevenueInCents: 15_000,
+        activeCheckoutCount: 2,
+        activeCheckoutPotentialInCents: 15_000,
         period: "30d",
         periodLabel: "Últimos 30 dias",
         refundRatePercent: 50,

@@ -974,7 +974,7 @@ function OperationalContext({
   const support = operations.supportRequests;
   const webhookCount = backlog.webhooks.failed + backlog.webhooks.retryable;
   const hasFinancialContext =
-    financial.pendingRevenueInCents !== undefined ||
+    financial.activeCheckoutPotentialInCents !== undefined ||
     financial.disputedOrderCount !== undefined ||
     financial.refundedOrderCount !== undefined;
 
@@ -995,7 +995,7 @@ function OperationalContext({
               <FinanceHelp
                 description="Use estes números para acompanhar o fluxo local; o fechamento e o saldo continuam no Asaas."
                 details={[
-                  "Valor em aberto inclui apenas pedidos pendentes com checkout ainda válido.",
+                  "O potencial considera links de Checkout ativos sem cobrança registrada no Hub; não confirma que foram abertos ou preenchidos.",
                   "Disputas e reembolsos mostram o estado atual registrado pelo Hub.",
                 ]}
                 title="Contexto financeiro"
@@ -1003,11 +1003,13 @@ function OperationalContext({
             }
             title="Financeiro"
           >
-            {financial.pendingRevenueInCents === undefined ? null : (
+            {financial.activeCheckoutPotentialInCents === undefined ? null : (
               <ContextMetric
-                helper="Pedidos abertos; ainda não recebidos"
-                label="Valor em aberto"
-                value={formatCurrencyInCents(financial.pendingRevenueInCents)}
+                helper={`${financial.activeCheckoutCount ?? 0} checkout${financial.activeCheckoutCount === 1 ? "" : "s"} ativo${financial.activeCheckoutCount === 1 ? "" : "s"} sem cobrança registrada; valor nominal.`}
+                label="Potencial em checkouts ativos"
+                value={formatCurrencyInCents(
+                  financial.activeCheckoutPotentialInCents
+                )}
               />
             )}
             {financial.disputedOrderCount === undefined ? null : (

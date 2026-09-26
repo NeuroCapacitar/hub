@@ -27,7 +27,9 @@ describe("FinancialOverview", () => {
         canViewGlobalAudit={false}
         coursesRevenue={{ courses: [] }}
         financialHealth={{
-          abandonedCheckoutOrders: 0,
+          closedCheckoutAttempts: 2,
+          activeCheckoutCount: 2,
+          activeCheckoutPotentialInCents: 20_000,
           averagePaidTicketInCents: 10_000,
           checkoutConversionPercent: 50,
           disputedOrders: 0,
@@ -35,7 +37,6 @@ describe("FinancialOverview", () => {
           paidOrders: 1,
           paidRevenueInCents: 10_000,
           pendingOrders: 0,
-          pendingRevenueInCents: 0,
           readyWebhooks: 0,
           refundedOrders: 0,
           retryableWebhooks: 0,
@@ -58,6 +59,11 @@ describe("FinancialOverview", () => {
     expect(markup).not.toContain("Receita sem alerta");
     expect(markup).not.toContain("Integração Asaas sem falhas");
     expect(markup).toContain("Anteriores");
+    expect(markup).toContain("Potencial em checkouts ativos");
+    expect(markup).toContain("2 checkouts ativos");
+    expect(markup).toContain(
+      'href="/admin/financeiro?tab=orders&amp;checkout=closed"'
+    );
     expect(markup.indexOf("Pendências financeiras")).toBeLessThan(
       markup.indexOf("Receita por curso")
     );

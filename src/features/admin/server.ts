@@ -167,11 +167,12 @@ export interface AdminDashboardOperations {
     pendingCount: number;
   };
   financial: Partial<{
+    activeCheckoutCount: number;
+    activeCheckoutPotentialInCents: number;
     disputedOrderCount: number;
     failedRefundCount: number;
     pendingPaymentReviewCount: number;
     pendingRefundCount: number;
-    pendingRevenueInCents: number;
     refundedOrderCount: number;
     uncertainCheckoutCount: number;
     uncertainRefundCount: number;
@@ -625,14 +626,14 @@ export interface AdminFinancialOverviewData {
 }
 
 export interface AdminFinancialAnalytics {
+  activeCheckoutCount: number;
+  activeCheckoutPotentialInCents: number;
   averageReceivedTicketInCents: number;
   estimatedNetRevenueInCents: number;
   feesInCents: number;
   grossReceivedInCents: number;
   missingFeeEvidenceOrders: number;
   paidOrders: number;
-  pendingOrders: number;
-  pendingRevenueInCents: number;
   period: AdminFinancialPeriod;
   periodLabel: string;
   refundedOrders: number;
@@ -750,10 +751,11 @@ const readDashboardFinancialOperations = async (
   const [orders, reviews] = await Promise.all([
     accessScope.canViewFinancialOrders
       ? getPool().query<{
+          active_checkout_count: number;
+          active_checkout_potential_in_cents: number | string;
           disputed_orders: number;
           failed_refunds: number;
           pending_refunds: number;
-          pending_revenue_in_cents: number | string;
           refunded_orders: number;
         }>(`
           select
@@ -766,11 +768,13 @@ const readDashboardFinancialOperations = async (
               as disputed_orders,
             (select count(*)::int from orders where status = 'refunded')
               as refunded_orders,
+            (select count(*)::int
+             from orders
+             where ${getActiveCheckoutPredicate("")}) as active_checkout_count,
             (select coalesce(sum(amount_in_cents), 0)::bigint
              from orders
-             where status = 'pending'
-               and checkout_status not in ('failed', 'cancelled', 'expired'))
-              as pending_revenue_in_cents
+             where ${getActiveCheckoutPredicate("")})
+              as active_checkout_potential_in_cents
         `)
       : Promise.resolve(null),
     accessScope.canViewFinancialReviews
@@ -791,8 +795,9 @@ const readDashboardFinancialOperations = async (
           disputedOrderCount: ordersRow.disputed_orders ?? 0,
           failedRefundCount: ordersRow.failed_refunds ?? 0,
           pendingRefundCount: ordersRow.pending_refunds ?? 0,
-          pendingRevenueInCents: Number(
-            ordersRow.pending_revenue_in_cents ?? 0
+          activeCheckoutCount: ordersRow.active_checkout_count ?? 0,
+          activeCheckoutPotentialInCents: Number(
+            ordersRow.active_checkout_potential_in_cents ?? 0
           ),
           refundedOrderCount: ordersRow.refunded_orders ?? 0,
         }
@@ -2043,7 +2048,12 @@ const getCheckoutPredicate = (
   if (checkout === "open") {
     return `${prefix}status = 'pending' and ${prefix}checkout_status not in ('failed', 'cancelled', 'expired')`;
   }
-  return `${prefix}status = 'pending' and ${prefix}checkout_status in ('failed', 'cancelled', 'expired')`;
+  return `${prefix}status in ('pending', 'cancelled') and ${prefix}checkout_status in ('failed', 'cancelled', 'expired')`;
+};
+
+const getActiveCheckoutPredicate = (tableAlias: string): string => {
+  const prefix = tableAlias ? `${tableAlias}.` : "";
+  return `${prefix}status = 'pending' and ${prefix}checkout_status = 'active' and ${prefix}provider_checkout_id is not null and ${prefix}checkout_url is not null and ${prefix}provider_payment_id is null and ${prefix}provider_payment_status is null`;
 };
 
 const readOrders = async (
@@ -2297,13 +2307,14 @@ export const getAdminInstallmentPayments = async (
 
 const readFinancialHealth = async (): Promise<AdminFinancialHealthSummary> => {
   const { rows } = await getPool().query<{
-    abandoned_checkout_orders: number;
+    active_checkout_count: number;
+    active_checkout_potential_in_cents: number | string;
+    closed_checkout_attempts: number;
     disputed_orders: number;
     failed_webhooks: number;
     paid_orders: number;
     paid_revenue_in_cents: number | string;
     pending_orders: number;
-    pending_revenue_in_cents: number | string;
     ready_webhooks: number;
     refunded_orders: number;
     retryable_webhooks: number;
@@ -2314,12 +2325,15 @@ const readFinancialHealth = async (): Promise<AdminFinancialHealthSummary> => {
       count(*) filter (where status = 'paid')::int as paid_orders,
       coalesce(sum(coalesce(paid_amount_in_cents, amount_in_cents)) filter (where status = 'paid'), 0)::bigint as paid_revenue_in_cents,
       count(*) filter (where ${getCheckoutPredicate("", "open")})::int as pending_orders,
+      count(*) filter (
+        where ${getActiveCheckoutPredicate("")}
+      )::int as active_checkout_count,
       coalesce(sum(amount_in_cents) filter (
-        where ${getCheckoutPredicate("", "open")}
-      ), 0)::bigint as pending_revenue_in_cents,
+        where ${getActiveCheckoutPredicate("")}
+      ), 0)::bigint as active_checkout_potential_in_cents,
       count(*) filter (
         where ${getCheckoutPredicate("", "closed")}
-      )::int as abandoned_checkout_orders,
+      )::int as closed_checkout_attempts,
       count(*) filter (where status = 'disputed')::int as disputed_orders,
       count(*) filter (where status = 'refunded')::int as refunded_orders,
       (select count(*)::int from webhook_events where provider = 'asaas' and status = 'failed') as failed_webhooks,
@@ -2333,7 +2347,10 @@ const readFinancialHealth = async (): Promise<AdminFinancialHealthSummary> => {
   const paidRevenueInCents = Number(row?.paid_revenue_in_cents ?? 0);
 
   return {
-    abandonedCheckoutOrders: row?.abandoned_checkout_orders ?? 0,
+    activeCheckoutCount: row?.active_checkout_count ?? 0,
+    activeCheckoutPotentialInCents: Number(
+      row?.active_checkout_potential_in_cents ?? 0
+    ),
     averagePaidTicketInCents: paidOrders
       ? Math.round(paidRevenueInCents / paidOrders)
       : 0,
@@ -2345,7 +2362,7 @@ const readFinancialHealth = async (): Promise<AdminFinancialHealthSummary> => {
     paidOrders,
     paidRevenueInCents,
     pendingOrders: row?.pending_orders ?? 0,
-    pendingRevenueInCents: Number(row?.pending_revenue_in_cents ?? 0),
+    closedCheckoutAttempts: row?.closed_checkout_attempts ?? 0,
     readyWebhooks: row?.ready_webhooks ?? 0,
     refundedOrders: row?.refunded_orders ?? 0,
     retryableWebhooks: row?.retryable_webhooks ?? 0,
@@ -2359,12 +2376,12 @@ const readFinancialAnalytics = async (
   const periodEnd = new Date();
   const fromDate = getAdminFinancialPeriodStart(period, periodEnd);
   const { rows } = await getPool().query<{
+    active_checkout_count: number;
+    active_checkout_potential_in_cents: number | string;
     fees_in_cents: number | string;
     gross_received_in_cents: number | string;
     missing_fee_evidence_orders: number;
     paid_orders: number;
-    pending_orders: number;
-    pending_revenue_in_cents: number | string;
     refunded_orders: number;
     refunded_revenue_in_cents: number | string;
   }>(
@@ -2393,15 +2410,15 @@ const readFinancialAnalytics = async (
               and (fee_amount_in_cents is null or net_amount_in_cents is null)
           )::int as missing_fee_evidence_orders,
           count(*) filter (
-            where ${getCheckoutPredicate("", "open")}
+            where ${getActiveCheckoutPredicate("")}
               and ($1::timestamptz is null or created_at >= $1::timestamptz)
               and created_at <= $2::timestamptz
-          )::int as pending_orders,
+          )::int as active_checkout_count,
           coalesce(sum(amount_in_cents) filter (
-            where ${getCheckoutPredicate("", "open")}
+            where ${getActiveCheckoutPredicate("")}
               and ($1::timestamptz is null or created_at >= $1::timestamptz)
               and created_at <= $2::timestamptz
-          ), 0)::bigint as pending_revenue_in_cents
+          ), 0)::bigint as active_checkout_potential_in_cents
         from orders
       ),
       refunds as (
@@ -2461,8 +2478,10 @@ const readFinancialAnalytics = async (
     grossReceivedInCents,
     missingFeeEvidenceOrders: row?.missing_fee_evidence_orders ?? 0,
     paidOrders,
-    pendingOrders: row?.pending_orders ?? 0,
-    pendingRevenueInCents: Number(row?.pending_revenue_in_cents ?? 0),
+    activeCheckoutCount: row?.active_checkout_count ?? 0,
+    activeCheckoutPotentialInCents: Number(
+      row?.active_checkout_potential_in_cents ?? 0
+    ),
     period,
     periodLabel: getAdminFinancialPeriodLabel(period),
     refundRatePercent,

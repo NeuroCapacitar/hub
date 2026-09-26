@@ -35,7 +35,8 @@ const emptyOperations = {
     failedRefundCount: 0,
     pendingPaymentReviewCount: 0,
     pendingRefundCount: 0,
-    pendingRevenueInCents: 0,
+    activeCheckoutCount: 0,
+    activeCheckoutPotentialInCents: 0,
     refundedOrderCount: 0,
     uncertainCheckoutCount: 0,
     uncertainRefundCount: 0,
@@ -402,7 +403,8 @@ describe("AdminPage", () => {
         financial: {
           ...emptyOperations.financial,
           pendingPaymentReviewCount: 2,
-          pendingRevenueInCents: 45_000,
+          activeCheckoutCount: 3,
+          activeCheckoutPotentialInCents: 45_000,
         },
         integrations: {
           ...emptyOperations.integrations,
@@ -461,6 +463,8 @@ describe("AdminPage", () => {
     expect(markup).toContain("Webhooks em retry");
     expect(markup).toContain("Eventos de e-mail em dead letter");
     expect(markup).toContain("Acessos vencendo em 30 dias");
+    expect(markup).toContain("Potencial em checkouts ativos");
+    expect(markup).toContain("3 checkouts ativos");
     expect(markup).toContain("Solicitações de suporte");
     expect(markup).toContain("Entregue");
     expect(markup).toContain('href="/admin/operacao#jmvstream"');

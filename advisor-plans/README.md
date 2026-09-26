@@ -24,6 +24,7 @@ pessoa responsável autorize sua execução.
 | [Validação técnica de Curso gratuito](free-course-enrollment-analysis-2026-09-15.md) | Validação do relatório preliminar e decisões de domínio | proposed | plano de autoinscrição |
 | [Autoinscrição gratuita](free-course-enrollment-2026-09-15.md) | Curso gratuito, grants, handoff e segurança | implemented — Etapas 0–13 completas | — |
 | [Pesquisa da fonte de verdade do nome da plataforma](platform-brand-name-source-of-truth-research-2026-09-25.md) | Marca pública, perfil emissor, remetente e templates | research | decisão sobre necessidade de renomear sem deploy |
+| [Pesquisa do valor de checkout versus recebível](open-checkout-vs-receivable-kpi-research-2026-09-26.md) | Semântica financeira, status Asaas e valor em aberto | research | decisão sobre separar checkout ativo de cobrança pendente |
 | [Capa 16:9 e CourseCards horizontais](2026-09-22-course-cover-16-9-and-cards-plan.md) | Upload de capa, CourseCards e fallback visual de Aula | implemented — sem commit | decisões ratificadas em 2026-09-22 |
 
 Ao executar ou encerrar um plano, atualize seu `status` e esta tabela. O

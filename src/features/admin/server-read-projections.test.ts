@@ -266,13 +266,14 @@ describe("admin read projections", () => {
         return {
           rows: [
             {
-              abandoned_checkout_orders: 6,
+              closed_checkout_attempts: 6,
+              active_checkout_count: 2,
+              active_checkout_potential_in_cents: "20000",
               disputed_orders: 2,
               failed_webhooks: 1,
               paid_orders: 3,
               paid_revenue_in_cents: "30000",
               pending_orders: 4,
-              pending_revenue_in_cents: "40000",
               refunded_orders: 1,
               retryable_webhooks: 4,
               total_orders: 10,
@@ -287,7 +288,9 @@ describe("admin read projections", () => {
     const data = await getAdminFinancialOverviewData();
 
     expect(data.financialHealth).toEqual({
-      abandonedCheckoutOrders: 6,
+      closedCheckoutAttempts: 6,
+      activeCheckoutCount: 2,
+      activeCheckoutPotentialInCents: 20_000,
       averagePaidTicketInCents: 10_000,
       checkoutConversionPercent: 30,
       disputedOrders: 2,
@@ -295,7 +298,6 @@ describe("admin read projections", () => {
       paidOrders: 3,
       paidRevenueInCents: 30_000,
       pendingOrders: 4,
-      pendingRevenueInCents: 40_000,
       readyWebhooks: 0,
       refundedOrders: 1,
       retryableWebhooks: 4,
@@ -311,8 +313,14 @@ describe("admin read projections", () => {
     expect(healthSql).toContain("status = 'failed'");
     expect(healthSql).toContain("status = 'retryable'");
     expect(healthSql).toContain("ready_webhooks");
-    expect(healthSql).toContain("abandoned_checkout_orders");
+    expect(healthSql).toContain("closed_checkout_attempts");
     expect(healthSql).toContain("checkout_status not in");
+    expect(healthSql).toContain("checkout_status = 'active'");
+    expect(healthSql).toContain("provider_checkout_id is not null");
+    expect(healthSql).toContain("checkout_url is not null");
+    expect(healthSql).toContain("provider_payment_id is null");
+    expect(healthSql).toContain("provider_payment_status is null");
+    expect(healthSql).toContain("status in ('pending', 'cancelled')");
     expect(healthSql).toContain(
       "sum(coalesce(paid_amount_in_cents, amount_in_cents))"
     );
@@ -380,9 +388,9 @@ describe("admin read projections", () => {
             {
               fees_in_cents: "500",
               gross_received_in_cents: "10000",
+              active_checkout_count: 2,
+              active_checkout_potential_in_cents: "15000",
               paid_orders: 2,
-              pending_orders: 3,
-              pending_revenue_in_cents: "15000",
               refunded_orders: 1,
               refunded_revenue_in_cents: "500",
             },
@@ -403,8 +411,8 @@ describe("admin read projections", () => {
         grossReceivedInCents: 10_000,
         missingFeeEvidenceOrders: 0,
         paidOrders: 2,
-        pendingOrders: 3,
-        pendingRevenueInCents: 15_000,
+        activeCheckoutCount: 2,
+        activeCheckoutPotentialInCents: 15_000,
         period: "30d",
         periodLabel: "Últimos 30 dias",
         refundRatePercent: 50,
@@ -422,8 +430,11 @@ describe("admin read projections", () => {
     expect(analyticsSql).toContain(
       "coalesce(paid_amount_in_cents, amount_in_cents)"
     );
-    expect(analyticsSql).toContain("status = 'pending'");
-    expect(analyticsSql).toContain("checkout_status not in");
+    expect(analyticsSql).toContain("checkout_status = 'active'");
+    expect(analyticsSql).toContain("provider_checkout_id is not null");
+    expect(analyticsSql).toContain("checkout_url is not null");
+    expect(analyticsSql).toContain("provider_payment_id is null");
+    expect(analyticsSql).toContain("provider_payment_status is null");
     expect(analyticsSql).toContain(
       "coalesce(paid_at, created_at) <= $2::timestamptz"
     );
@@ -1319,6 +1330,28 @@ describe("admin read projections", () => {
     );
   });
 
+  it("keeps canceled and expired checkouts visible without restricting order status to pending", async () => {
+    query.mockImplementation((sql: string) =>
+      sql.includes("from orders o") ? { rows: [] } : { rows: [] }
+    );
+
+    await getAdminFinancialOrdersData({ checkout: "closed", page: 1 });
+
+    const orderCall = query.mock.calls.find(
+      ([sql, values]) =>
+        String(sql).includes("from orders o") &&
+        (values as unknown[]).length === 2
+    );
+    const sql = String(orderCall?.[0]);
+
+    expect(orderCall?.[1]).toEqual([21, 0]);
+    expect(sql).toContain("o.status in ('pending', 'cancelled')");
+    expect(sql).toContain(
+      "o.checkout_status in ('failed', 'cancelled', 'expired')"
+    );
+    expect(sql).not.toContain("o.status = $1");
+  });
+
   it("keeps blank payment methods in the unknown bucket, not the other bucket", async () => {
     query.mockImplementation((sql: string) => {
       if (sql.includes("from orders o")) {
@@ -1832,7 +1865,8 @@ describe("admin read projections", () => {
               disputed_orders: 2,
               failed_refunds: 1,
               pending_refunds: 4,
-              pending_revenue_in_cents: "45000",
+              active_checkout_count: 3,
+              active_checkout_potential_in_cents: "45000",
               refunded_orders: 5,
             },
           ],
@@ -1977,7 +2011,8 @@ describe("admin read projections", () => {
         failedRefundCount: 1,
         pendingPaymentReviewCount: 3,
         pendingRefundCount: 4,
-        pendingRevenueInCents: 45_000,
+        activeCheckoutCount: 3,
+        activeCheckoutPotentialInCents: 45_000,
         refundedOrderCount: 5,
         uncertainCheckoutCount: 6,
         uncertainRefundCount: 7,

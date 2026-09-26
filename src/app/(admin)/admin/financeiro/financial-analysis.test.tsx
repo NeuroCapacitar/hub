@@ -19,8 +19,8 @@ describe("FinancialAnalysis", () => {
           grossReceivedInCents: 10_000,
           missingFeeEvidenceOrders: 0,
           paidOrders: 2,
-          pendingOrders: 3,
-          pendingRevenueInCents: 15_000,
+          activeCheckoutCount: 2,
+          activeCheckoutPotentialInCents: 15_000,
           period: "30d",
           periodLabel: "Últimos 30 dias",
           refundRatePercent: 50,
@@ -35,7 +35,11 @@ describe("FinancialAnalysis", () => {
     expect(markup).toContain("Líquido estimado");
     expect(markup).toContain("Pedidos com recebimento");
     expect(markup).toContain("Valor médio recebido");
-    expect(markup).toContain("Recebimentos em aberto");
+    expect(markup).toContain("Potencial em checkouts ativos");
+    expect(markup).toContain(
+      "2 checkouts ativos sem cobrança registrada no Hub, criados no período"
+    );
+    expect(markup).not.toContain("Recebimentos em aberto");
     expect(markup).not.toContain("Taxas sobre recebimentos");
     expect(markup).toContain("Taxa de reembolso");
     expect(markup).toContain("150,00");
@@ -56,8 +60,8 @@ describe("FinancialAnalysis", () => {
           grossReceivedInCents: 0,
           missingFeeEvidenceOrders: 0,
           paidOrders: 0,
-          pendingOrders: 0,
-          pendingRevenueInCents: 0,
+          activeCheckoutCount: 0,
+          activeCheckoutPotentialInCents: 0,
           period: "all",
           periodLabel: "Todo o histórico",
           refundRatePercent: null,

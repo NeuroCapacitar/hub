@@ -51,11 +51,13 @@ const getOrdersHref = ({
   status,
 }: {
   checkout?: AdminOrderCheckoutFilter;
-  status: AdminOrderStatusFilter;
+  status?: AdminOrderStatusFilter;
 }): string => {
   const params = new URLSearchParams();
   params.set("tab", "orders");
-  params.set("status", status);
+  if (status) {
+    params.set("status", status);
+  }
   if (checkout) {
     params.set("checkout", checkout);
   }
@@ -303,20 +305,24 @@ export function FinancialOverview({
           <AdminMetricCard
             help={
               <FinanceHelp
-                description="Valor dos pedidos que ainda aguardam confirmação de pagamento."
+                description="Soma nominal dos Pedidos com link de Checkout ativo e sem cobrança registrada pelo Hub."
                 details={[
-                  "Checkouts falhos, cancelados ou expirados ficam fora deste valor.",
-                  "Use a aba Pedidos para consultar cada caso e a evidência disponível.",
+                  "Um link ativo não comprova que a pessoa abriu ou preencheu o Checkout, nem que o Asaas gerou uma cobrança.",
+                  "Este valor não é recebível nem saldo disponível; confira as cobranças diretamente no Asaas.",
                 ]}
-                title="Valor em aberto"
+                title="Potencial em checkouts ativos"
               />
             }
-            helper={`${financialHealth.pendingOrders} pedido${
-              financialHealth.pendingOrders === 1 ? "" : "s"
-            } em aberto no histórico.`}
+            helper={`${financialHealth.activeCheckoutCount} checkout${
+              financialHealth.activeCheckoutCount === 1 ? "" : "s"
+            } ativo${
+              financialHealth.activeCheckoutCount === 1 ? "" : "s"
+            } sem cobrança registrada no Hub; valor nominal.`}
             icon={Alert02Icon}
-            label="Valor em aberto"
-            value={formatCurrencyInCents(financialHealth.pendingRevenueInCents)}
+            label="Potencial em checkouts ativos"
+            value={formatCurrencyInCents(
+              financialHealth.activeCheckoutPotentialInCents
+            )}
           />
           <AdminMetricCard
             help={
@@ -349,8 +355,8 @@ export function FinancialOverview({
                   <FinanceHelp
                     description="Consulte como ler os estados do Pedido e os alertas da integração."
                     details={[
-                      "Pendentes aguardam pagamento; Pagos têm recebimento confirmado; Disputas e Reembolsos exigem leitura do caso.",
-                      "Checkouts encerrados sem pagamento aparecem como observação e não entram no valor em aberto.",
+                      "Pedidos pendentes ainda não têm pagamento confirmado; podem incluir a criação do Checkout em andamento ou uma tentativa que exige reconciliação.",
+                      "Tentativas encerradas sem pagamento aparecem separadas do potencial dos links ativos.",
                       "Webhooks são avisos automáticos do Asaas; falhas e retries podem atrasar a atualização local.",
                     ]}
                     title="Saúde financeira"
@@ -399,21 +405,20 @@ export function FinancialOverview({
                 />
               </div>
             </div>
-            {financialHealth.abandonedCheckoutOrders > 0 ? (
+            {financialHealth.closedCheckoutAttempts > 0 ? (
               <p className="px-5 py-3 text-muted-foreground text-xs">
-                {financialHealth.abandonedCheckoutOrders} checkout
-                {financialHealth.abandonedCheckoutOrders === 1 ? "" : "s"}{" "}
-                encerrado
-                {financialHealth.abandonedCheckoutOrders === 1 ? "" : "s"}
-                sem pagamento. Eles não entram no valor em aberto.{" "}
+                {financialHealth.closedCheckoutAttempts} tentativa
+                {financialHealth.closedCheckoutAttempts === 1 ? "" : "s"} de
+                Checkout encerrada
+                {financialHealth.closedCheckoutAttempts === 1 ? "" : "s"}
+                sem pagamento. Não entra
+                {financialHealth.closedCheckoutAttempts === 1 ? "" : "m"} no
+                potencial dos links ativos.{" "}
                 <Link
                   className="font-medium underline underline-offset-4"
-                  href={getOrdersHref({
-                    checkout: "closed",
-                    status: "pending",
-                  })}
+                  href={getOrdersHref({ checkout: "closed" })}
                 >
-                  Ver checkouts encerrados
+                  Ver tentativas encerradas
                 </Link>
               </p>
             ) : null}

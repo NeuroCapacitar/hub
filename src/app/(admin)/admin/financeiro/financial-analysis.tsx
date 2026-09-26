@@ -56,7 +56,7 @@ export function FinancialAnalysis({
                   "Cada Pedido com recebimento entra uma vez, inclusive quando a compra é parcelada; o valor total da compra não é dividido em parcelas.",
                   "Recebido confirmado soma o valor bruto dos Pedidos pagos, reembolsados ou em disputa com evidência de pagamento. A data usada é a confirmação do pagamento ou, se ausente, a criação do Pedido.",
                   "Valor médio recebido usa o valor total registrado para a compra, não uma parcela isolada.",
-                  "Recebimentos em aberto consideram apenas Pedidos pendentes com checkout não encerrado e criados no período; parcelas futuras de uma cobrança já confirmada não entram.",
+                  "O potencial considera apenas Pedidos do período com link de Checkout ativo no Hub; isso não comprova cobrança criada, pagamento em andamento ou recebível.",
                   "Reembolsos usam a confirmação do evento; o líquido é uma estimativa baseada nos dados salvos no Hub e não substitui o fechamento contábil.",
                   "Os indicadores não representam o saldo disponível no Asaas. Para conciliação oficial, confira o Asaas e os detalhes da cobrança; cobranças individuais aparecem quando são sincronizadas.",
                 ]}
@@ -145,9 +145,11 @@ export function FinancialAnalysis({
               value={averageReceivedTicket}
             />
             <AdminMetricCard
-              helper={`${analytics.pendingOrders} pedido${analytics.pendingOrders === 1 ? "" : "s"} ainda sem confirmação, criados no período.`}
-              label="Recebimentos em aberto"
-              value={formatCurrencyInCents(analytics.pendingRevenueInCents)}
+              helper={`${analytics.activeCheckoutCount} checkout${analytics.activeCheckoutCount === 1 ? "" : "s"} ativo${analytics.activeCheckoutCount === 1 ? "" : "s"} sem cobrança registrada no Hub, criado${analytics.activeCheckoutCount === 1 ? "" : "s"} no período; valor nominal.`}
+              label="Potencial em checkouts ativos"
+              value={formatCurrencyInCents(
+                analytics.activeCheckoutPotentialInCents
+              )}
             />
             <AdminMetricCard
               helper="Indicador operacional: reembolsos confirmados no período divididos pelos recebimentos do período."
