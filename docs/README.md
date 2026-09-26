@@ -83,6 +83,7 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 
 ### Revisões
 
+- [Pesquisa de versionamento de templates de Certificado e publicações de Curso](reviews/2026-09-25-certificate-template-and-course-versioning-research.md)
 - [Pesquisa de migração do código público de Certificado para Base64URL](reviews/2026-09-25-certificate-code-base64url-migration-research.md)
 - [Pesquisa do código público de validação de Certificado](reviews/2026-09-25-certificate-validation-code-research.md)
 - [Pesquisa de paridade entre preview e PDF de Certificado](reviews/2026-09-25-certificate-preview-renderer-parity-research.md)
