@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
+  connection: vi.fn(),
   getPublishedFaqItems: vi.fn(),
   permanentRedirect: vi.fn(),
   requireSession: vi.fn(),
@@ -9,6 +10,9 @@ const dependencies = vi.hoisted(() => ({
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({
   permanentRedirect: dependencies.permanentRedirect,
+}));
+vi.mock("next/server", () => ({
+  connection: dependencies.connection,
 }));
 vi.mock("@/features/courses/preview", () => ({
   canMutateStudentExperience: () => true,
@@ -30,6 +34,7 @@ import StudentFaqLegacyRoute from "./page";
 describe("StudentFaqLegacyRoute", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dependencies.connection.mockResolvedValue(undefined);
     dependencies.getPublishedFaqItems.mockResolvedValue([]);
     dependencies.requireSession.mockResolvedValue({
       role: "student",
@@ -40,6 +45,7 @@ describe("StudentFaqLegacyRoute", () => {
   it("permanently redirects the retired FAQ route to Ajuda", async () => {
     await StudentFaqLegacyRoute();
 
+    expect(dependencies.connection).toHaveBeenCalledOnce();
     expect(dependencies.permanentRedirect).toHaveBeenCalledWith("/app/ajuda");
   });
 });
