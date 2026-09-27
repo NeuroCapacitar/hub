@@ -33,7 +33,9 @@ const getNetHelper = (analytics: AdminFinancialAnalytics): string => {
   }
   if (analytics.pendingPartialRefundReviewCount > 0) {
     warnings.push(
-      `${analytics.pendingPartialRefundReviewCount} revisão${analytics.pendingPartialRefundReviewCount === 1 ? "" : "ões"} de reembolso parcial pendente${analytics.pendingPartialRefundReviewCount === 1 ? "" : "s"} (qualquer data); valor ainda não subtraído`
+      analytics.pendingPartialRefundReviewCount === 1
+        ? "1 revisão de reembolso parcial aberta no período selecionado segue pendente; o valor ainda não foi subtraído"
+        : `${analytics.pendingPartialRefundReviewCount} revisões de reembolso parcial abertas no período selecionado seguem pendentes; os valores ainda não foram subtraídos`
     );
   }
   return warnings.length

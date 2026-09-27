@@ -9,6 +9,39 @@ vi.mock("next/navigation", () => ({
 import { FinancialAnalysis } from "./financial-analysis";
 
 describe("FinancialAnalysis", () => {
+  it("dates pending partial-refund notices to the selected period", () => {
+    const renderMarkup = (pendingPartialRefundReviewCount: number): string =>
+      renderToStaticMarkup(
+        <FinancialAnalysis
+          analytics={{
+            averageConfirmedSaleTicketInCents: 0,
+            estimatedNetRevenueInCents: 0,
+            feesInCents: 0,
+            grossConfirmedSalesInCents: 0,
+            missingFeeEvidenceOrders: 0,
+            confirmedSaleOrders: 0,
+            pendingPartialRefundReviewCount,
+            activeCheckoutCount: 0,
+            activeCheckoutPotentialInCents: 0,
+            period: "30d",
+            periodLabel: "Últimos 30 dias",
+            providerPaymentDateFallbackOrders: 0,
+            refundReceiptsRatioPercent: null,
+            refundedOrders: 0,
+            refundedRevenueInCents: 0,
+          }}
+        />
+      );
+
+    expect(renderMarkup(1)).toContain(
+      "1 revisão de reembolso parcial aberta no período selecionado segue pendente; o valor ainda não foi subtraído"
+    );
+    expect(renderMarkup(2)).toContain(
+      "2 revisões de reembolso parcial abertas no período selecionado seguem pendentes; os valores ainda não foram subtraídos"
+    );
+    expect(renderMarkup(1)).not.toContain("qualquer data");
+  });
+
   it("explains the period metrics and keeps the estimate explicit", () => {
     const markup = renderToStaticMarkup(
       <FinancialAnalysis
