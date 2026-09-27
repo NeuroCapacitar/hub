@@ -341,6 +341,11 @@ describe("AdminPage", () => {
     expect(markup).toContain("Os 5 pedidos mais recentes do checkout.");
     expect(markup).toContain("Os 5 certificados emitidos mais recentemente.");
     expect(markup).toContain("Os 5 comentários mais recentes nas aulas.");
+    const roundedActivityTables =
+      markup.match(
+        /<div class="[^"]*rounded-surface[^"]*" data-slot="table-container"/g
+      ) ?? [];
+    expect(roundedActivityTables).toHaveLength(3);
     expect(markup).toContain("<table");
     expect(markup).toContain("CERT-1");
     expect(markup).toContain("Aluno exemplo");

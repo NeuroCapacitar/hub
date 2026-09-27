@@ -1377,9 +1377,7 @@ function RecentCommentsCard({
           Os 5 comentários mais recentes nas aulas.
         </p>
       </div>
-      <div className="rounded-lg border">
-        <RecentCommentsTable comments={comments} />
-      </div>
+      <RecentCommentsTable comments={comments} />
     </section>
   );
 }
@@ -1415,9 +1413,7 @@ function RecentOrdersCard({
           </Button>
         </div>
       </div>
-      <div className="rounded-lg border">
-        <RecentOrdersTable orders={orders} />
-      </div>
+      <RecentOrdersTable orders={orders} />
     </section>
   );
 }
@@ -1440,9 +1436,7 @@ function RecentCertificatesCard({
           Os 5 certificados emitidos mais recentemente.
         </p>
       </div>
-      <div className="rounded-lg border">
-        <RecentCertificatesTable certificates={certificates} />
-      </div>
+      <RecentCertificatesTable certificates={certificates} />
     </section>
   );
 }
@@ -1453,7 +1447,10 @@ function RecentOrdersTable({
   orders: AdminDashboardRecentOrder[];
 }): React.JSX.Element {
   return (
-    <Table className="min-w-[760px]">
+    <Table
+      className="min-w-[760px]"
+      containerClassName="rounded-surface border-border"
+    >
       <TableCaption className="sr-only">
         Últimos pedidos registrados no checkout
       </TableCaption>
@@ -1545,7 +1542,10 @@ function RecentCertificatesTable({
   certificates: AdminDashboardRecentCertificate[];
 }): React.JSX.Element {
   return (
-    <Table className="min-w-[760px]">
+    <Table
+      className="min-w-[760px]"
+      containerClassName="rounded-surface border-border"
+    >
       <TableCaption className="sr-only">
         Últimos certificados emitidos na plataforma
       </TableCaption>
@@ -1624,7 +1624,10 @@ function RecentCommentsTable({
   comments: AdminDashboardRecentComment[];
 }): React.JSX.Element {
   return (
-    <Table className="min-w-[920px] table-fixed">
+    <Table
+      className="min-w-[920px] table-fixed"
+      containerClassName="rounded-surface border-border"
+    >
       <TableCaption className="sr-only">
         Últimos comentários de alunos nas aulas
       </TableCaption>
@@ -1734,9 +1737,7 @@ function SupportRequestsSection({
           na fila, aceito ou entregue.
         </p>
       </div>
-      <div className="rounded-lg border">
-        <SupportRequestsTable recent={recent} />
-      </div>
+      <SupportRequestsTable recent={recent} />
     </section>
   );
 }
@@ -1747,7 +1748,10 @@ function SupportRequestsTable({
   recent: AdminDashboardSupportRequest[];
 }): React.JSX.Element {
   return (
-    <Table className="min-w-[760px]">
+    <Table
+      className="min-w-[760px]"
+      containerClassName="rounded-surface border-border"
+    >
       <TableCaption className="sr-only">
         Solicitações de suporte e estado de entrega do e-mail
       </TableCaption>

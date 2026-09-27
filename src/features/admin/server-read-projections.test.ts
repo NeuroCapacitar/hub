@@ -1774,7 +1774,7 @@ describe("admin read projections", () => {
     expect(dashboardSql).toContain("has_published_publication");
   });
 
-  it("projects recent student comments for Support through the shared dashboard", async () => {
+  it("links recent student comments to the current lesson without a draft", async () => {
     requirePermission.mockResolvedValue({
       role: "support",
       supportPermissionGrants: [],
@@ -1794,8 +1794,8 @@ describe("admin read projections", () => {
               created_at: new Date("2026-09-19T12:00:00.000Z"),
               lesson_id: lessonId,
               lesson_title: "Lesson one",
-              navigation_lesson_id: "lesson-draft",
-              navigation_lesson_title: "Lesson current",
+              navigation_lesson_id: "lesson-published",
+              navigation_lesson_title: "Lesson published",
               parent_id: "comment-parent",
               status: "visible",
             },
@@ -1812,8 +1812,8 @@ describe("admin read projections", () => {
         authorName: "Student",
         commentId: "comment-support-1",
         isReply: true,
-        lessonId: "lesson-draft",
-        lessonTitle: "Lesson current",
+        lessonId: "lesson-published",
+        lessonTitle: "Lesson published",
       }),
     ]);
     const commentsSql = String(
@@ -1822,7 +1822,12 @@ describe("admin read projections", () => {
       )?.[0]
     ).toLowerCase();
     expect(commentsSql).toContain("coalesce(p.role, 'student') = 'student'");
-    expect(commentsSql).toContain("draft_lesson");
+    expect(commentsSql).toContain(
+      "candidate_publication.status in ('draft', 'published')"
+    );
+    expect(commentsSql).toContain(
+      "order by case when candidate_publication.status = 'draft' then 0 else 1 end"
+    );
     expect(commentsSql).toContain("limit 5");
   });
 

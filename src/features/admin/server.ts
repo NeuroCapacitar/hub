@@ -1463,8 +1463,8 @@ const readDashboardRecentComments = async (): Promise<
       lc.created_at,
       l.id as lesson_id,
       l.title as lesson_title,
-      draft_lesson.id as navigation_lesson_id,
-      draft_lesson.title as navigation_lesson_title,
+      navigation_lesson.id as navigation_lesson_id,
+      navigation_lesson.title as navigation_lesson_title,
       lc.course_id,
       c.title as course_title,
       u.name as author_name,
@@ -1481,9 +1481,10 @@ const readDashboardRecentComments = async (): Promise<
         on candidate_publication.id = candidate_lesson.course_publication_id
       where candidate_module.course_id = lc.course_id
         and candidate_lesson.curriculum_key = lc.curriculum_key
-        and candidate_publication.status = 'draft'
+        and candidate_publication.status in ('draft', 'published')
+      order by case when candidate_publication.status = 'draft' then 0 else 1 end
       limit 1
-    ) as draft_lesson on true
+    ) as navigation_lesson on true
     left join users u on u.id = lc.author_user_id
     left join profiles p on p.user_id = lc.author_user_id
     where coalesce(p.role, 'student') = 'student'
