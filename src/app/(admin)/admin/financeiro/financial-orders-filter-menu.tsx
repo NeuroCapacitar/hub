@@ -17,27 +17,36 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   ADMIN_ORDER_CHECKOUT_FILTERS,
+  ADMIN_ORDER_PAYMENT_EVIDENCE_FILTERS,
   ADMIN_ORDER_PAYMENT_METHOD_FILTERS,
+  ADMIN_ORDER_REFUND_FILTERS,
   ADMIN_ORDER_STATUS_FILTERS,
   type AdminOrderCheckoutFilter,
+  type AdminOrderPaymentEvidenceFilter,
   type AdminOrderPaymentMethodFilter,
+  type AdminOrderRefundFilter,
   type AdminOrderStatusFilter,
   getAdminOrderCheckoutFilterLabel,
   getAdminOrderPaymentMethodFilterLabel,
+  getAdminOrderRefundFilterLabel,
   getAdminOrderStatusFilterLabel,
 } from "@/features/admin/order-filters";
 import { route } from "@/lib/routes";
 
 interface OrdersFilterHrefOptions {
   checkout?: AdminOrderCheckoutFilter | undefined;
+  paymentEvidence?: AdminOrderPaymentEvidenceFilter | undefined;
   paymentMethod?: AdminOrderPaymentMethodFilter | undefined;
+  refundStatus?: AdminOrderRefundFilter | undefined;
   search: string;
   status?: AdminOrderStatusFilter | undefined;
 }
 
 export const getOrdersFilterHref = ({
   checkout,
+  paymentEvidence,
   paymentMethod,
+  refundStatus,
   search,
   status,
 }: OrdersFilterHrefOptions): string => {
@@ -54,8 +63,65 @@ export const getOrdersFilterHref = ({
   if (paymentMethod) {
     params.set("paymentMethod", paymentMethod);
   }
+  if (paymentEvidence) {
+    params.set("paymentEvidence", paymentEvidence);
+  }
+  if (refundStatus) {
+    params.set("refundStatus", refundStatus);
+  }
   return route(`/admin/financeiro?${params.toString()}`);
 };
+
+type OrdersFilterMenuHrefOptions = Partial<
+  Pick<
+    OrdersFilterHrefOptions,
+    | "checkout"
+    | "paymentEvidence"
+    | "paymentMethod"
+    | "refundStatus"
+    | "search"
+    | "status"
+  >
+>;
+
+export const getOrdersFilterMenuHref = (
+  options: OrdersFilterMenuHrefOptions,
+  currentFilters: Pick<OrdersFilterHrefOptions, "paymentEvidence" | "search">
+): string => {
+  const requestedPaymentEvidence =
+    "paymentEvidence" in options
+      ? options.paymentEvidence
+      : currentFilters.paymentEvidence;
+  const paymentEvidence =
+    options.status === "paid" && !options.checkout
+      ? requestedPaymentEvidence
+      : undefined;
+
+  return getOrdersFilterHref({
+    checkout: options.checkout,
+    paymentEvidence,
+    paymentMethod: options.paymentMethod,
+    refundStatus: options.refundStatus,
+    search: options.search ?? currentFilters.search,
+    status: options.status,
+  });
+};
+
+export const getCheckoutFilterHref = ({
+  checkout,
+  paymentMethod,
+  refundStatus,
+  search,
+}: Omit<OrdersFilterHrefOptions, "checkout" | "paymentEvidence" | "status"> & {
+  checkout: AdminOrderCheckoutFilter;
+}): string =>
+  getOrdersFilterHref({
+    checkout,
+    paymentMethod,
+    refundStatus,
+    search,
+    status: checkout === "closed" ? undefined : "pending",
+  });
 
 function FilterMenuLink({
   active,
@@ -117,34 +183,33 @@ function ActiveFilterPill({
 
 export function FinancialOrdersFilterMenu({
   checkout,
+  paymentEvidence,
   paymentMethod,
+  refundStatus,
   search,
   status,
 }: {
   checkout?: AdminOrderCheckoutFilter | undefined;
+  paymentEvidence?: AdminOrderPaymentEvidenceFilter | undefined;
   paymentMethod?: AdminOrderPaymentMethodFilter | undefined;
+  refundStatus?: AdminOrderRefundFilter | undefined;
   search: string;
   status?: AdminOrderStatusFilter | undefined;
 }): React.JSX.Element {
   const activeFilterCount =
     Number(Boolean(search)) +
     Number(Boolean(status)) +
+    Number(Boolean(paymentEvidence)) +
     Number(Boolean(paymentMethod)) +
-    Number(Boolean(checkout));
-  const baseHref = (
-    options: Partial<
-      Pick<
-        OrdersFilterHrefOptions,
-        "checkout" | "paymentMethod" | "search" | "status"
-      >
-    > = {}
-  ) =>
-    getOrdersFilterHref({
-      checkout: options.checkout,
-      paymentMethod: options.paymentMethod,
-      search: options.search ?? search,
-      status: options.status,
-    });
+    Number(Boolean(checkout)) +
+    Number(Boolean(refundStatus));
+  const paymentEvidenceLabel = paymentEvidence
+    ? (ADMIN_ORDER_PAYMENT_EVIDENCE_FILTERS.find(
+        (option) => option.value === paymentEvidence
+      )?.label ?? paymentEvidence)
+    : undefined;
+  const baseHref = (options: OrdersFilterMenuHrefOptions = {}) =>
+    getOrdersFilterMenuHref(options, { paymentEvidence, search });
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -183,6 +248,7 @@ export function FinancialOrdersFilterMenu({
                     href={baseHref({
                       checkout: undefined,
                       paymentMethod,
+                      refundStatus,
                       status,
                     })}
                   >
@@ -191,10 +257,47 @@ export function FinancialOrdersFilterMenu({
                   {ADMIN_ORDER_CHECKOUT_FILTERS.map((option) => (
                     <FilterMenuLink
                       active={checkout === option.value}
-                      href={baseHref({
+                      href={getCheckoutFilterHref({
                         checkout: option.value,
                         paymentMethod,
-                        status: "pending",
+                        refundStatus,
+                        search,
+                      })}
+                      key={option.value}
+                    >
+                      {option.label}
+                    </FilterMenuLink>
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                Vínculo do pagamento
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuGroup>
+                  <FilterMenuLink
+                    active={!paymentEvidence}
+                    href={baseHref({
+                      checkout,
+                      paymentEvidence: undefined,
+                      paymentMethod,
+                      refundStatus,
+                      status,
+                    })}
+                  >
+                    Todos
+                  </FilterMenuLink>
+                  {ADMIN_ORDER_PAYMENT_EVIDENCE_FILTERS.map((option) => (
+                    <FilterMenuLink
+                      active={paymentEvidence === option.value}
+                      href={baseHref({
+                        checkout: undefined,
+                        paymentEvidence: option.value,
+                        paymentMethod,
+                        refundStatus,
+                        status: "paid",
                       })}
                       key={option.value}
                     >
@@ -210,7 +313,7 @@ export function FinancialOrdersFilterMenu({
                 <DropdownMenuGroup>
                   <FilterMenuLink
                     active={!paymentMethod}
-                    href={baseHref({ checkout, status })}
+                    href={baseHref({ checkout, refundStatus, status })}
                   >
                     Todos
                   </FilterMenuLink>
@@ -220,6 +323,7 @@ export function FinancialOrdersFilterMenu({
                       href={baseHref({
                         checkout,
                         paymentMethod: option.value,
+                        refundStatus,
                         status,
                       })}
                       key={option.value}
@@ -236,7 +340,7 @@ export function FinancialOrdersFilterMenu({
                 <DropdownMenuGroup>
                   <FilterMenuLink
                     active={!status}
-                    href={baseHref({ checkout, paymentMethod })}
+                    href={baseHref({ checkout, paymentMethod, refundStatus })}
                   >
                     Todos
                   </FilterMenuLink>
@@ -246,11 +350,46 @@ export function FinancialOrdersFilterMenu({
                       href={baseHref({
                         checkout: option === "pending" ? checkout : undefined,
                         paymentMethod,
+                        refundStatus,
                         status: option,
                       })}
                       key={option}
                     >
                       {getAdminOrderStatusFilterLabel(option)}
+                    </FilterMenuLink>
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                Estado do reembolso
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuGroup>
+                  <FilterMenuLink
+                    active={!refundStatus}
+                    href={baseHref({
+                      checkout,
+                      paymentMethod,
+                      refundStatus: undefined,
+                      status,
+                    })}
+                  >
+                    Todos
+                  </FilterMenuLink>
+                  {ADMIN_ORDER_REFUND_FILTERS.map((option) => (
+                    <FilterMenuLink
+                      active={refundStatus === option.value}
+                      href={baseHref({
+                        checkout,
+                        paymentMethod,
+                        refundStatus: option.value,
+                        status,
+                      })}
+                      key={option.value}
+                    >
+                      {option.label}
                     </FilterMenuLink>
                   ))}
                 </DropdownMenuGroup>
@@ -262,7 +401,18 @@ export function FinancialOrdersFilterMenu({
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
                 <DropdownMenuItem asChild variant="destructive">
-                  <Link href={baseHref({ search: "" })}>Limpar filtros</Link>
+                  <Link
+                    href={baseHref({
+                      checkout: undefined,
+                      paymentEvidence: undefined,
+                      paymentMethod: undefined,
+                      refundStatus: undefined,
+                      search: "",
+                      status: undefined,
+                    })}
+                  >
+                    Limpar filtros
+                  </Link>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
             </>
@@ -273,7 +423,7 @@ export function FinancialOrdersFilterMenu({
       {status ? (
         <ActiveFilterPill
           label={`Status: ${getAdminOrderStatusFilterLabel(status)}`}
-          onRemoveHref={baseHref({ checkout, paymentMethod })}
+          onRemoveHref={baseHref({ checkout, paymentMethod, refundStatus })}
         />
       ) : null}
       {checkout ? (
@@ -282,6 +432,7 @@ export function FinancialOrdersFilterMenu({
           onRemoveHref={baseHref({
             checkout: undefined,
             paymentMethod,
+            refundStatus,
             status,
           })}
         />
@@ -289,7 +440,25 @@ export function FinancialOrdersFilterMenu({
       {paymentMethod ? (
         <ActiveFilterPill
           label={`Pagamento: ${getAdminOrderPaymentMethodFilterLabel(paymentMethod)}`}
-          onRemoveHref={baseHref({ checkout, status })}
+          onRemoveHref={baseHref({ checkout, refundStatus, status })}
+        />
+      ) : null}
+      {refundStatus ? (
+        <ActiveFilterPill
+          label={`Reembolso: ${getAdminOrderRefundFilterLabel(refundStatus)}`}
+          onRemoveHref={baseHref({ checkout, paymentMethod, status })}
+        />
+      ) : null}
+      {paymentEvidence ? (
+        <ActiveFilterPill
+          label={`Vínculo: ${paymentEvidenceLabel}`}
+          onRemoveHref={baseHref({
+            checkout,
+            paymentEvidence: undefined,
+            paymentMethod,
+            refundStatus,
+            status,
+          })}
         />
       ) : null}
       {search ? (
@@ -298,6 +467,7 @@ export function FinancialOrdersFilterMenu({
           onRemoveHref={baseHref({
             checkout,
             paymentMethod,
+            refundStatus,
             search: "",
             status,
           })}

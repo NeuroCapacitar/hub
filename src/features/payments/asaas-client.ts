@@ -311,6 +311,10 @@ const parsePayment = (value: unknown): AsaasPayment => {
   const installmentId = getOptionalString(value.installment);
   const anticipated = getOptionalBoolean(value.anticipated);
   const clientPaymentDate = getOptionalProviderDate(value.clientPaymentDate);
+  const confirmedDate = getOptionalProviderDate(value.confirmedDate);
+  const customerPaymentDate = getOptionalProviderDate(
+    value.customerPaymentDate
+  );
   const dueDate = getOptionalProviderDate(value.dueDate);
   const installmentNumber = getOptionalPositiveInteger(value.installmentNumber);
   const paymentDate = getOptionalProviderDate(value.paymentDate);
@@ -319,8 +323,10 @@ const parsePayment = (value: unknown): AsaasPayment => {
     ...(anticipated === undefined ? {} : { anticipated }),
     billingType: value.billingType,
     ...(clientPaymentDate ? { clientPaymentDate } : {}),
+    ...(confirmedDate ? { confirmedDate } : {}),
     checkoutSession: getNullableString(value.checkoutSession),
     customer: value.customer,
+    ...(customerPaymentDate ? { customerPaymentDate } : {}),
     ...(dueDate ? { dueDate } : {}),
     externalReference: getNullableString(value.externalReference),
     id: value.id,

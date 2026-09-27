@@ -149,8 +149,8 @@ Development. `DEC-DISC-014` permanece como histórico do comportamento anterior.
 
 A rota Financeiro organiza a operação em Visão geral, Pedidos e Análises. A visão
 operacional mantém a fila de revisões, a conciliação e a sincronização local do extrato
-próximas dos pedidos; Análises compara por período recebimentos confirmados,
-recebimentos em aberto, taxas e reembolsos, sempre marcando o líquido como estimativa
+próximas dos pedidos; Análises compara por período vendas brutas confirmadas,
+reembolsos, taxas e potencial nominal de Checkouts ativos, sempre marcando o líquido como estimativa
 baseada nos snapshots. Recebimento confirmado não é saldo disponível no Asaas. Compras
 parceladas entram no resumo global pelo total agregado; depois de uma conciliação que
 valide o parcelamento, o detalhe do Pedido também mostra as cobranças individuais,

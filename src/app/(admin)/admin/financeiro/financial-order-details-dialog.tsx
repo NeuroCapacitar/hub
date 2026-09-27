@@ -201,6 +201,9 @@ export function FinancialOrderTableRow({
 }): React.JSX.Element {
   const customerLabel = getCustomerLabel(order);
   const orderStatus = getOrderStatusPresentation(order.status);
+  const refundStatus = order.refundRequestStatus
+    ? getRefundRequestStatusPresentation(order.refundRequestStatus)
+    : null;
 
   return (
     <TableRow>
@@ -218,12 +221,22 @@ export function FinancialOrderTableRow({
         <p className="truncate font-medium text-sm">{order.courseTitle}</p>
       </TableCell>
       <TableCell className="align-top">
-        <Badge
-          aria-label={`Status do pedido: ${orderStatus.label}`}
-          variant={orderStatus.variant}
-        >
-          {orderStatus.label}
-        </Badge>
+        <div className="flex flex-col items-start gap-1">
+          <Badge
+            aria-label={`Status do pedido: ${orderStatus.label}`}
+            variant={orderStatus.variant}
+          >
+            {orderStatus.label}
+          </Badge>
+          {refundStatus ? (
+            <Badge
+              aria-label={`Status do reembolso: ${refundStatus.label}`}
+              variant={refundStatus.variant}
+            >
+              Reembolso: {refundStatus.label}
+            </Badge>
+          ) : null}
+        </div>
       </TableCell>
       <TableCell className="text-right align-top">
         <p className="whitespace-nowrap font-medium tabular-nums">

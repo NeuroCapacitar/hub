@@ -15,6 +15,7 @@ import type {
 } from "@/features/payments/asaas";
 import type { AsaasBuyerIdentityPreparation } from "@/features/payments/asaas-customer-enrichment";
 import { decideQueriedAsaasPayment } from "@/features/payments/asaas-financial-events";
+import { getAsaasPaymentDate } from "@/features/payments/asaas-payment-date";
 import { runCoordinatedAsaasQuery } from "@/features/payments/asaas-query-policy";
 import { findExactAsaasRefundEvidence } from "@/features/payments/asaas-refund-evidence";
 import { parseBuyerIdentity } from "@/features/payments/buyer-identity";
@@ -175,6 +176,7 @@ const adaptQueriedPaymentDecision = ({
     payment.netValueInCents >= 0 &&
     payment.netValueInCents <= payment.valueInCents;
   const refund = findFullRefund(payment, order.amountInCents);
+  const providerPaymentDate = getAsaasPaymentDate(payment);
   const matrixDecision = decideQueriedAsaasPayment({
     evidence: {
       billingType: payment.billingType,
@@ -183,6 +185,7 @@ const adaptQueriedPaymentDecision = ({
       installmentId: payment.installmentId ?? null,
       netValueInCents: payment.netValueInCents,
       paymentId: payment.id,
+      ...(providerPaymentDate ? { providerPaymentDate } : {}),
       status: payment.status,
       valueInCents: payment.valueInCents,
     },
@@ -890,6 +893,7 @@ export const reconcileAsaasPayment = async ({
              case when $10 then $5 else net_amount_in_cents end,
            fee_amount_in_cents =
              case when $10 then $6 else fee_amount_in_cents end,
+           provider_payment_date = coalesce(provider_payment_date, $12::date),
            payment_installment_count = coalesce($11::integer, payment_installment_count),
            receipt_url = coalesce($7, receipt_url),
            updated_at = now()
@@ -906,6 +910,7 @@ export const reconcileAsaasPayment = async ({
         decision.shouldUpdateProviderPaymentStatus,
         decision.canPersistMoney,
         payment.installmentCount ?? null,
+        getAsaasPaymentDate(payment) ?? null,
       ]
     );
 

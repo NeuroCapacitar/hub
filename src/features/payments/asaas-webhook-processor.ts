@@ -698,6 +698,7 @@ const persistDecision = async ({
            when $15::boolean then $16
            else provider_payment_status
          end,
+         provider_payment_date = coalesce(provider_payment_date, $31::date),
          provider_risk_status = case
            when $17::boolean then $18
            else provider_risk_status
@@ -790,6 +791,7 @@ const persistDecision = async ({
       updates.feeAmountInCents ?? null,
       updates.paymentInstallmentCount !== undefined,
       updates.paymentInstallmentCount ?? null,
+      updates.providerPaymentDate ?? null,
     ]
   );
   return getString(result.rows[0], "id") !== null;
@@ -813,6 +815,9 @@ const preserveProviderEvidence = (
     ...(decision.updates.paymentMethod === undefined
       ? {}
       : { paymentMethod: decision.updates.paymentMethod }),
+    ...(decision.updates.providerPaymentDate === undefined
+      ? {}
+      : { providerPaymentDate: decision.updates.providerPaymentDate }),
     ...(decision.updates.providerCheckoutStatus === undefined
       ? {}
       : { providerCheckoutStatus: decision.updates.providerCheckoutStatus }),

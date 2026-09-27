@@ -231,24 +231,29 @@ O token de confirmação e sua auditoria usam uma transação local. A reserva e
 auditoria usam outra transação local antes da mutação externa. A persistência da
 evidência ou da falha ocorre depois da resposta do provider.
 
-Conciliação por pagamento e sincronização local do extrato são mutações administrativas e
-exigem `manageFinancialOperations`, exclusiva de Admin. Toda resolução manual de
-Revisão exige `manageFinancialReviews`, também exclusiva de Admin; `viewFinancials`
-autoriza somente leitura. `amount_mismatch` pode aceitar uma decisão explícita de
+Conciliação por pagamento e sincronização local do extrato exigem
+`manageFinancialOperations`. Toda resolução manual de Revisão exige
+`manageFinancialReviews`; `viewFinancials` autoriza somente leitura. Admin recebe
+as capacidades administrativas; Suporte pode receber cada grant financeiro de forma
+independente conforme a matriz do [ADR-0017](../adr/0017-support-granular-permissions.md).
+`amount_mismatch` pode aceitar uma decisão explícita de
 liberar ou manter o bloqueio; `buyer_identity` exige reembolso integral;
 `event_anomaly`, `terminal_conflict` e `uncertain_result` exigem
 conciliação/reprocessamento; e `partial_refund` exige tratamento financeiro
 específico. Esses tipos não aceitam aprovação ou rejeição genérica. Uma conciliação
 iniciada a partir de uma Revisão só a encerra quando não há nova divergência e o
-resultado financeiro é seguro. A área financeira oculta os controles mutáveis para
-Suporte, mas a autorização do servidor permanece a barreira efetiva.
+resultado financeiro é seguro. A interface e o servidor exibem e autorizam cada ação
+segundo o grant correspondente; possuir leitura não concede mutações.
 
 **Projeção administrativa:** o resumo separa Pedidos pendentes de **potencial em
 Checkouts ativos**. O potencial soma o valor nominal do Pedido somente quando o
 Pedido está `pending`, o Checkout está `active`, o Hub preserva o ID e a URL da
 sessão do provedor e não há ID nem status de cobrança registrados. Isso comprova a
 existência local do link sem evidência de cobrança no Hub, não que a pessoa o abriu
-ou preencheu; portanto, não é recebível, receita confirmada ou saldo disponível. A
+ou preencheu; portanto, não é recebível, receita confirmada ou saldo disponível.
+Checkouts que o Asaas marcou como pagos, sem evidência financeira de cobrança no Hub,
+ficam fora do potencial e aparecem como pendência de confirmação. Checkouts em criação,
+ativos, incertos e encerrados são classificados em filas distintas. A
 visão por período considera esses links
 ativos entre Pedidos criados no intervalo e ainda ativos no momento da consulta,
 não um saldo histórico no fim de cada dia. Estados `failed`, `cancelled` e
@@ -265,27 +270,29 @@ abandonos comprovados.
 Webhooks falhos, em retry e em processamento são apresentados como estados distintos;
 a lista completa e o reprocessamento ficam em Admin > Operação, enquanto o histórico
 administrativo permanece em Admin > Auditoria. Análises por período usam a data de
-pagamento, ou a criação quando ela não existe, limitadas ao intervalo selecionado até
-o momento da consulta, e identificam o líquido como estimativa derivada dos snapshots
-do Pedido. O valor confirmado usa `paid_amount_in_cents` quando há evidência do
-pagamento e só recorre a `amount_in_cents` como fallback. O Hub não apresenta links
-ativos como cobranças pendentes: eventos suficientes para projetar cobranças não
-pagas ainda não fazem parte desta métrica. O Hub registra uma compra parcelada uma vez
-pelo total agregado nos resumos; quando a conciliação valida o parcelamento, também
-sincroniza as cobranças individuais em `asaas_installment_payments`.
+pagamento informada pelo Asaas quando disponível; sem ela, usam `paid_at`, que registra
+a confirmação no Hub. O número de pedidos com fallback fica explícito. O bruto inclui
+Pedidos `paid`, `refunded` e `disputed` somente quando há evidência de pagamento
+(`paid_at`, `paid_amount_in_cents` e identificador Asaas); estados posteriores não
+apagam vendas confirmadas do histórico. Reembolsos são movimentos do período e a razão
+“Reembolsos / recebimentos” é uma comparação por contagem, não uma taxa de coorte; pode
+superar 100%. O líquido é uma estimativa dos snapshots do Pedido, marcada como
+incompleta quando faltam dados de taxa/líquido ou há Revisão de reembolso parcial
+pendente. Valores de reembolso parcial não são inferidos do total do Pedido.
+As filas de reembolso do Painel mostram a idade do item mais antigo e o valor dos
+Pedidos envolvidos em solicitações integrais abertas, incertas ou falhas; esse valor
+é exposição operacional, não perda nem estorno confirmado.
+
+O Hub não apresenta links ativos como cobranças pendentes: eventos suficientes para
+projetar cobranças não pagas ainda não fazem parte desta métrica. O Hub registra uma
+compra parcelada uma vez pelo total agregado nos resumos; quando a conciliação valida o
+parcelamento, também sincroniza as cobranças individuais em
+`asaas_installment_payments`.
 O detalhe do Pedido apresenta o status de cada cobrança e um resumo de valores
 confirmados e ainda não confirmados, sempre como evidência do Asaas, não como prova de
 saldo disponível ou liquidação bancária. Uma trilha append-only em `financial_events`
 também registra ocorrências futuras de Pedido, webhook, sincronização, reembolso e
 Revisão; snapshots de backfill não reconstituem transições anteriores à sua criação.
-O Hub registra uma compra parcelada uma vez pelo total agregado nos resumos; quando
-a conciliação valida o parcelamento, também sincroniza as cobranças individuais em
-`asaas_installment_payments`. O detalhe do Pedido apresenta o status de cada cobrança
-e um resumo de valores confirmados e ainda não confirmados, sempre como evidência do
-Asaas, não como prova de saldo disponível ou liquidação bancária.
-Uma trilha append-only em `financial_events` também registra ocorrências futuras
-de Pedido, webhook, sincronização, reembolso e Revisão; snapshots de backfill
-não reconstituem transições anteriores à sua criação.
 
 ### REG-COM-009 Oferta de pagamento pertence ao Curso e ao Pedido
 

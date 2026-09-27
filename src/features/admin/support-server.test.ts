@@ -37,12 +37,12 @@ describe("support read projections", () => {
 
   it("lists operational course aggregates without loading authoring data", async () => {
     query.mockImplementation((sql: string) => {
-      if (sql.includes("sum(paid_order_count)")) {
+      if (sql.includes("sum(confirmed_sale_order_count)")) {
         return {
           rows: [
             {
-              paid_order_count: 7,
-              paid_revenue_in_cents: 70_000,
+              confirmed_sale_order_count: 7,
+              gross_confirmed_sales_revenue_in_cents: 70_000,
               total_count: 1,
               total_enrollment_count: 10,
             },
@@ -54,8 +54,8 @@ describe("support read projections", () => {
           {
             active_enrollment_count: 8,
             id: courseId,
-            paid_order_count: 7,
-            paid_revenue_in_cents: 70_000,
+            confirmed_sale_order_count: 7,
+            gross_confirmed_sales_revenue_in_cents: 70_000,
             refunded_order_count: 2,
             refunded_revenue_in_cents: 20_000,
             status: "active",
@@ -71,8 +71,8 @@ describe("support read projections", () => {
         {
           activeEnrollmentCount: 8,
           id: courseId,
-          paidOrderCount: 7,
-          paidRevenueInCents: 70_000,
+          confirmedSaleOrderCount: 7,
+          grossConfirmedSalesRevenueInCents: 70_000,
           refundedOrderCount: 2,
           refundedRevenueInCents: 20_000,
           status: "active",
@@ -85,8 +85,8 @@ describe("support read projections", () => {
       pageSize: 20,
       totalCount: 1,
       totals: {
-        paidOrderCount: 7,
-        paidRevenueInCents: 70_000,
+        confirmedSaleOrderCount: 7,
+        grossConfirmedSalesRevenueInCents: 70_000,
         totalEnrollmentCount: 10,
       },
     });
@@ -96,6 +96,8 @@ describe("support read projections", () => {
     expect(sql).toContain("from courses c");
     expect(sql).toContain("from enrollments e");
     expect(sql).toContain("from orders o");
+    expect(sql).toContain("o.status in ('paid', 'refunded', 'disputed')");
+    expect(sql).toContain("o.paid_amount_in_cents is not null");
     expect(sql).toContain("e.starts_at <= now()");
     expect(sql).toContain("e.expires_at >= now()");
     expect(sql).toContain("cp.status = 'published'");

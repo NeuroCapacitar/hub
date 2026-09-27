@@ -30,6 +30,12 @@ import { isValidCnpj } from "@/lib/cnpj";
 import type { AppSession } from "@/lib/session";
 import type { AdminAuditSource, AdminAuditTargetType } from "./audit-filters";
 import type { AdminAuditLog, AuditMetadata } from "./audit-types";
+import {
+  buildFinancialAnalyticsQuery,
+  getActiveCheckoutPredicate,
+  getConfirmedSalePredicate,
+} from "./financial-metrics-query";
+import { MAX_ADMIN_FINANCIAL_ORDER_PAGE } from "./financial-order-query";
 import type { AdminFinancialPeriod } from "./financial-period";
 import {
   getAdminFinancialPeriodLabel,
@@ -37,7 +43,9 @@ import {
 } from "./financial-period";
 import type {
   AdminOrderCheckoutFilter,
+  AdminOrderPaymentEvidenceFilter,
   AdminOrderPaymentMethodFilter,
+  AdminOrderRefundFilter,
   AdminOrderStatusFilter,
 } from "./order-filters";
 import type {
@@ -53,10 +61,11 @@ import {
 
 export interface AdminOverview {
   activeEnrollments: number;
+  confirmedSaleOrders?: number;
   courses: number;
   failedWebhooks: number;
-  paidOrders?: number;
-  paidRevenueInCents?: number;
+  grossConfirmedSalesRevenueInCents?: number;
+  oldestPendingCheckoutAt?: Date | null;
   pendingOrders?: number;
   retryableWebhooks: number;
   students: number;
@@ -169,14 +178,32 @@ export interface AdminDashboardOperations {
   financial: Partial<{
     activeCheckoutCount: number;
     activeCheckoutPotentialInCents: number;
+    oldestActiveCheckoutAt: Date | null;
+    checkoutPaidAwaitingConfirmationCount: number;
+    checkoutPaidAwaitingConfirmationExposureInCents: number;
+    oldestCheckoutPaidAwaitingConfirmationAt: Date | null;
     disputedOrderCount: number;
+    disputedOrderExposureInCents: number;
+    oldestDisputeAt: Date | null;
+    failedRefundExposureInCents: number;
     failedRefundCount: number;
+    oldestFailedRefundAt: Date | null;
+    oldestPendingRefundAt: Date | null;
+    oldestUncertainRefundAt: Date | null;
+    pendingRefundExposureInCents: number;
     pendingPaymentReviewCount: number;
+    pendingPaymentReviewExposureInCents: number;
+    oldestPendingPaymentReviewAt: Date | null;
     pendingRefundCount: number;
     refundedOrderCount: number;
+    uncertainRefundExposureInCents: number;
     uncertainCheckoutCount: number;
+    uncertainCheckoutExposureInCents: number;
+    oldestUncertainCheckoutAt: Date | null;
     uncertainRefundCount: number;
     uncorrelatedOrderCount: number;
+    uncorrelatedOrderExposureInCents: number;
+    oldestUncorrelatedOrderAt: Date | null;
   }>;
   integrations: {
     backlog: OperationalBacklogSnapshot;
@@ -231,26 +258,31 @@ export const getAdminOverview = async (): Promise<AdminOverview> => {
         (select count(*)::int from webhook_events where provider = 'asaas' and status = 'retryable') as retryable_webhooks
     `),
     accessScope.canViewFinancialAnalysis
-      ? pool.query<{ paid_revenue_in_cents: number | string }>(`
+      ? pool.query<{
+          gross_confirmed_sales_revenue_in_cents: number | string;
+        }>(`
           select coalesce(
-            sum(coalesce(paid_amount_in_cents, amount_in_cents))
-              filter (where status = 'paid'),
+            sum(paid_amount_in_cents)
+              filter (where ${getConfirmedSalePredicate("")}),
             0
-          )::bigint as paid_revenue_in_cents
+          )::bigint as gross_confirmed_sales_revenue_in_cents
           from orders
         `)
       : Promise.resolve(null),
     accessScope.canViewFinancialOrders
       ? pool.query<{
-          paid_orders: number;
+          confirmed_sale_orders: number;
+          oldest_pending_checkout_at: Date | null;
           pending_orders: number;
         }>(`
           select
-            (select count(*)::int from orders where status = 'paid') as paid_orders,
+            (select count(*)::int from orders where ${getConfirmedSalePredicate("")}) as confirmed_sale_orders,
             (select count(*)::int
              from orders
-             where status = 'pending'
-               and checkout_status not in ('failed', 'cancelled', 'expired')) as pending_orders
+             where ${getCheckoutPredicate("", "creating")}) as pending_orders,
+            (select min(created_at)
+             from orders
+             where ${getCheckoutPredicate("", "creating")}) as oldest_pending_checkout_at
         `)
       : Promise.resolve(null),
   ]);
@@ -265,21 +297,26 @@ export const getAdminOverview = async (): Promise<AdminOverview> => {
     retryableWebhooks: countRow?.retryable_webhooks ?? 0,
     failedWebhooks: countRow?.failed_webhooks ?? 0,
     ...(analysisRow
-      ? { paidRevenueInCents: Number(analysisRow.paid_revenue_in_cents ?? 0) }
+      ? {
+          grossConfirmedSalesRevenueInCents: Number(
+            analysisRow.gross_confirmed_sales_revenue_in_cents ?? 0
+          ),
+        }
       : {}),
     ...(ordersRow
       ? {
-          paidOrders: ordersRow.paid_orders ?? 0,
+          confirmedSaleOrders: ordersRow.confirmed_sale_orders ?? 0,
           pendingOrders: ordersRow.pending_orders ?? 0,
+          oldestPendingCheckoutAt: ordersRow.oldest_pending_checkout_at,
         }
       : {}),
   };
 };
 
 export interface CourseRevenueSummary {
+  confirmedSaleOrders: number;
   courseId: string;
   courseTitle: string;
-  paidOrders: number;
   totalOrders: number;
   totalRevenueInCents: number;
 }
@@ -359,7 +396,7 @@ export interface AdminCourse {
 
 export interface AdminCourseOverviewSummary {
   activeEnrollmentCount: number;
-  paidOrderCount?: number;
+  confirmedSaleOrderCount?: number;
   validCertificateCount: number;
 }
 
@@ -628,17 +665,19 @@ export interface AdminFinancialOverviewData {
 export interface AdminFinancialAnalytics {
   activeCheckoutCount: number;
   activeCheckoutPotentialInCents: number;
-  averageReceivedTicketInCents: number;
+  averageConfirmedSaleTicketInCents: number;
+  confirmedSaleOrders: number;
   estimatedNetRevenueInCents: number;
   feesInCents: number;
-  grossReceivedInCents: number;
+  grossConfirmedSalesInCents: number;
   missingFeeEvidenceOrders: number;
-  paidOrders: number;
+  pendingPartialRefundReviewCount: number;
   period: AdminFinancialPeriod;
   periodLabel: string;
+  providerPaymentDateFallbackOrders: number;
   refundedOrders: number;
   refundedRevenueInCents: number;
-  refundRatePercent: number | null;
+  refundReceiptsRatioPercent: number | null;
 }
 
 export interface AdminFinancialAnalysisData {
@@ -745,67 +784,200 @@ const readDashboardAccessOperations = async (): Promise<
   };
 };
 
+interface DashboardFinancialOrdersRow {
+  active_checkout_count: number;
+  active_checkout_potential_in_cents: number | string;
+  checkout_paid_awaiting_confirmation: number;
+  checkout_paid_awaiting_confirmation_exposure_in_cents: number | string;
+  disputed_order_exposure_in_cents: number | string;
+  disputed_orders: number;
+  failed_refund_exposure_in_cents: number | string;
+  failed_refunds: number;
+  oldest_active_checkout_at: Date | null;
+  oldest_checkout_paid_awaiting_confirmation_at: Date | null;
+  oldest_dispute_at: Date | null;
+  oldest_failed_refund_at: Date | null;
+  oldest_pending_refund_at: Date | null;
+  oldest_uncertain_checkout_at: Date | null;
+  oldest_uncertain_refund_at: Date | null;
+  oldest_uncorrelated_order_at: Date | null;
+  pending_refund_exposure_in_cents: number | string;
+  pending_refunds: number;
+  refunded_orders: number;
+  uncertain_checkout_count: number;
+  uncertain_checkout_exposure_in_cents: number | string;
+  uncertain_refund_exposure_in_cents: number | string;
+  uncorrelated_order_count: number;
+  uncorrelated_order_exposure_in_cents: number | string;
+}
+
+interface DashboardPaymentReviewsRow {
+  oldest_pending_payment_review_at: Date | null;
+  pending_payment_review_exposure_in_cents: number | string;
+  pending_payment_reviews: number;
+}
+
+const readDashboardFinancialOrderSummary = async (): Promise<
+  AdminDashboardOperations["financial"]
+> => {
+  const { rows } = await getPool().query<DashboardFinancialOrdersRow>(`
+    select
+      (select count(*)::int from refund_requests where status = 'failed')
+        as failed_refunds,
+      (select min(created_at) from refund_requests where status = 'failed')
+        as oldest_failed_refund_at,
+      (select coalesce(sum(coalesce(rr.provider_refunded_amount_in_cents, o.paid_amount_in_cents, o.amount_in_cents)), 0)::bigint
+       from refund_requests rr join orders o on o.id = rr.order_id
+       where rr.status = 'failed') as failed_refund_exposure_in_cents,
+      (select count(*)::int
+       from refund_requests
+       where status in ('requested', 'processing')) as pending_refunds,
+      (select min(created_at) from refund_requests
+       where status in ('requested', 'processing')) as oldest_pending_refund_at,
+      (select coalesce(sum(coalesce(rr.provider_refunded_amount_in_cents, o.paid_amount_in_cents, o.amount_in_cents)), 0)::bigint
+       from refund_requests rr join orders o on o.id = rr.order_id
+       where rr.status in ('requested', 'processing')) as pending_refund_exposure_in_cents,
+      (select min(created_at) from refund_requests where status = 'uncertain')
+        as oldest_uncertain_refund_at,
+      (select coalesce(sum(coalesce(rr.provider_refunded_amount_in_cents, o.paid_amount_in_cents, o.amount_in_cents)), 0)::bigint
+       from refund_requests rr join orders o on o.id = rr.order_id
+       where rr.status = 'uncertain') as uncertain_refund_exposure_in_cents,
+      (select count(*)::int from orders where status = 'disputed')
+        as disputed_orders,
+      (select coalesce(sum(coalesce(paid_amount_in_cents, amount_in_cents)), 0)::bigint
+       from orders where status = 'disputed') as disputed_order_exposure_in_cents,
+      (select min(event.occurred_at)
+       from financial_events event join orders disputed_order on disputed_order.id = event.order_id
+       where disputed_order.status = 'disputed'
+         and event.event_type = 'order.status_changed'
+         and event.order_status_after = 'disputed'
+         and event.order_status_before is distinct from 'disputed') as oldest_dispute_at,
+      (select count(*)::int from orders where status = 'refunded')
+        as refunded_orders,
+      (select count(*)::int from orders where provider = 'asaas' and status = 'pending' and checkout_status = 'uncertain')
+        as uncertain_checkout_count,
+      (select coalesce(sum(amount_in_cents), 0)::bigint from orders where provider = 'asaas' and status = 'pending' and checkout_status = 'uncertain')
+        as uncertain_checkout_exposure_in_cents,
+      (select min(created_at) from orders where provider = 'asaas' and status = 'pending' and checkout_status = 'uncertain')
+        as oldest_uncertain_checkout_at,
+      (select count(*)::int from orders where provider = 'asaas' and status = 'paid' and provider_payment_id is null and provider_installment_id is null)
+        as uncorrelated_order_count,
+      (select coalesce(sum(coalesce(paid_amount_in_cents, amount_in_cents)), 0)::bigint from orders where provider = 'asaas' and status = 'paid' and provider_payment_id is null and provider_installment_id is null)
+        as uncorrelated_order_exposure_in_cents,
+      (select min(paid_at) from orders where provider = 'asaas' and status = 'paid' and provider_payment_id is null and provider_installment_id is null)
+        as oldest_uncorrelated_order_at,
+      (select count(*)::int
+       from orders
+       where ${getActiveCheckoutPredicate("")}) as active_checkout_count,
+      (select count(*)::int
+       from orders
+       where ${getCheckoutPredicate("", "paid-awaiting-confirmation")})
+        as checkout_paid_awaiting_confirmation,
+      (select coalesce(sum(amount_in_cents), 0)::bigint
+       from orders where ${getCheckoutPredicate("", "paid-awaiting-confirmation")})
+        as checkout_paid_awaiting_confirmation_exposure_in_cents,
+      (select min(created_at)
+       from orders where ${getCheckoutPredicate("", "paid-awaiting-confirmation")})
+        as oldest_checkout_paid_awaiting_confirmation_at,
+      (select coalesce(sum(amount_in_cents), 0)::bigint
+       from orders
+       where ${getActiveCheckoutPredicate("")})
+        as active_checkout_potential_in_cents,
+      (select min(created_at)
+       from orders where ${getActiveCheckoutPredicate("")})
+        as oldest_active_checkout_at
+  `);
+  const row = rows[0];
+  if (!row) {
+    return {};
+  }
+
+  return {
+    disputedOrderCount: row.disputed_orders,
+    disputedOrderExposureInCents: Number(row.disputed_order_exposure_in_cents),
+    oldestDisputeAt: row.oldest_dispute_at,
+    failedRefundExposureInCents: Number(row.failed_refund_exposure_in_cents),
+    failedRefundCount: row.failed_refunds,
+    oldestFailedRefundAt: row.oldest_failed_refund_at,
+    oldestPendingRefundAt: row.oldest_pending_refund_at,
+    oldestUncertainRefundAt: row.oldest_uncertain_refund_at,
+    pendingRefundExposureInCents: Number(row.pending_refund_exposure_in_cents),
+    pendingRefundCount: row.pending_refunds,
+    uncertainCheckoutCount: row.uncertain_checkout_count,
+    uncertainCheckoutExposureInCents: Number(
+      row.uncertain_checkout_exposure_in_cents
+    ),
+    oldestUncertainCheckoutAt: row.oldest_uncertain_checkout_at,
+    uncorrelatedOrderCount: row.uncorrelated_order_count,
+    uncorrelatedOrderExposureInCents: Number(
+      row.uncorrelated_order_exposure_in_cents
+    ),
+    oldestUncorrelatedOrderAt: row.oldest_uncorrelated_order_at,
+    checkoutPaidAwaitingConfirmationExposureInCents: Number(
+      row.checkout_paid_awaiting_confirmation_exposure_in_cents
+    ),
+    oldestCheckoutPaidAwaitingConfirmationAt:
+      row.oldest_checkout_paid_awaiting_confirmation_at,
+    oldestActiveCheckoutAt: row.oldest_active_checkout_at,
+    uncertainRefundExposureInCents: Number(
+      row.uncertain_refund_exposure_in_cents
+    ),
+    activeCheckoutCount: row.active_checkout_count,
+    checkoutPaidAwaitingConfirmationCount:
+      row.checkout_paid_awaiting_confirmation,
+    activeCheckoutPotentialInCents: Number(
+      row.active_checkout_potential_in_cents
+    ),
+    refundedOrderCount: row.refunded_orders,
+  };
+};
+
+const readDashboardPaymentReviewSummary = async (): Promise<
+  AdminDashboardOperations["financial"]
+> => {
+  const { rows } = await getPool().query<DashboardPaymentReviewsRow>(`
+    with pending_review_orders as (
+      select
+        o.id,
+        min(pr.created_at) as created_at,
+        max(coalesce(pr.observed_amount_in_cents, o.paid_amount_in_cents, o.amount_in_cents)) as exposure_in_cents
+      from payment_reviews pr
+      join orders o on o.id = pr.order_id
+      where pr.status = 'pending'
+      group by o.id
+    )
+    select count(*)::int as pending_payment_reviews,
+           coalesce(sum(exposure_in_cents), 0)::bigint as pending_payment_review_exposure_in_cents,
+           min(created_at) as oldest_pending_payment_review_at
+    from pending_review_orders
+  `);
+  const row = rows[0];
+  if (!row) {
+    return {};
+  }
+
+  return {
+    pendingPaymentReviewCount: row.pending_payment_reviews,
+    pendingPaymentReviewExposureInCents: Number(
+      row.pending_payment_review_exposure_in_cents
+    ),
+    oldestPendingPaymentReviewAt: row.oldest_pending_payment_review_at,
+  };
+};
+
 const readDashboardFinancialOperations = async (
   accessScope: AdminDashboardAccessScope
 ): Promise<AdminDashboardOperations["financial"]> => {
   const [orders, reviews] = await Promise.all([
     accessScope.canViewFinancialOrders
-      ? getPool().query<{
-          active_checkout_count: number;
-          active_checkout_potential_in_cents: number | string;
-          disputed_orders: number;
-          failed_refunds: number;
-          pending_refunds: number;
-          refunded_orders: number;
-        }>(`
-          select
-            (select count(*)::int from refund_requests where status = 'failed')
-              as failed_refunds,
-            (select count(*)::int
-             from refund_requests
-             where status in ('requested', 'processing')) as pending_refunds,
-            (select count(*)::int from orders where status = 'disputed')
-              as disputed_orders,
-            (select count(*)::int from orders where status = 'refunded')
-              as refunded_orders,
-            (select count(*)::int
-             from orders
-             where ${getActiveCheckoutPredicate("")}) as active_checkout_count,
-            (select coalesce(sum(amount_in_cents), 0)::bigint
-             from orders
-             where ${getActiveCheckoutPredicate("")})
-              as active_checkout_potential_in_cents
-        `)
-      : Promise.resolve(null),
+      ? readDashboardFinancialOrderSummary()
+      : Promise.resolve({}),
     accessScope.canViewFinancialReviews
-      ? getPool().query<{ pending_payment_reviews: number }>(`
-          select count(*)::int as pending_payment_reviews
-          from payment_reviews
-          where status = 'pending'
-        `)
-      : Promise.resolve(null),
+      ? readDashboardPaymentReviewSummary()
+      : Promise.resolve({}),
   ]);
 
-  const ordersRow = orders?.rows[0];
-  const reviewsRow = reviews?.rows[0];
-
-  return {
-    ...(ordersRow
-      ? {
-          disputedOrderCount: ordersRow.disputed_orders ?? 0,
-          failedRefundCount: ordersRow.failed_refunds ?? 0,
-          pendingRefundCount: ordersRow.pending_refunds ?? 0,
-          activeCheckoutCount: ordersRow.active_checkout_count ?? 0,
-          activeCheckoutPotentialInCents: Number(
-            ordersRow.active_checkout_potential_in_cents ?? 0
-          ),
-          refundedOrderCount: ordersRow.refunded_orders ?? 0,
-        }
-      : {}),
-    ...(reviewsRow
-      ? { pendingPaymentReviewCount: reviewsRow.pending_payment_reviews ?? 0 }
-      : {}),
-  };
+  return { ...orders, ...reviews };
 };
 
 const readDashboardPendingCertificates = async (): Promise<
@@ -2029,13 +2201,15 @@ interface AdminOrderQuery {
   checkout?: AdminOrderCheckoutFilter | undefined;
   page?: number;
   pageSize?: number;
+  paymentEvidence?: AdminOrderPaymentEvidenceFilter | undefined;
   paymentMethod?: AdminOrderPaymentMethodFilter | undefined;
+  refundStatus?: AdminOrderRefundFilter | undefined;
   search?: string;
   status?: AdminOrderStatusFilter | undefined;
 }
 
 const DEFAULT_ADMIN_ORDER_PAGE_SIZE = 20;
-export const MAX_ADMIN_ORDER_PAGE = 1000;
+export const MAX_ADMIN_ORDER_PAGE = MAX_ADMIN_FINANCIAL_ORDER_PAGE;
 const DEFAULT_ADMIN_REVIEW_PAGE_SIZE = 20;
 const MAX_ADMIN_REVIEW_PAGE = 1000;
 const MAX_ADMIN_REVIEW_PAGE_SIZE = 100;
@@ -2045,15 +2219,22 @@ const getCheckoutPredicate = (
   checkout: AdminOrderCheckoutFilter
 ): string => {
   const prefix = tableAlias ? `${tableAlias}.` : "";
+  if (checkout === "creating") {
+    return `${prefix}status = 'pending' and ${prefix}checkout_status in ('pending', 'creating')`;
+  }
+  if (checkout === "active") {
+    return getActiveCheckoutPredicate(tableAlias);
+  }
+  if (checkout === "uncertain") {
+    return `${prefix}provider = 'asaas' and ${prefix}status = 'pending' and ${prefix}checkout_status = 'uncertain'`;
+  }
   if (checkout === "open") {
-    return `${prefix}status = 'pending' and ${prefix}checkout_status not in ('failed', 'cancelled', 'expired')`;
+    return `${prefix}status = 'pending' and ${prefix}checkout_status in ('pending', 'creating', 'active') and upper(${prefix}provider_checkout_status) is distinct from 'PAID'`;
+  }
+  if (checkout === "paid-awaiting-confirmation") {
+    return `${prefix}status = 'pending' and upper(${prefix}provider_checkout_status) = 'PAID' and ${prefix}provider_payment_id is null and ${prefix}provider_payment_status is null`;
   }
   return `${prefix}status in ('pending', 'cancelled') and ${prefix}checkout_status in ('failed', 'cancelled', 'expired')`;
-};
-
-const getActiveCheckoutPredicate = (tableAlias: string): string => {
-  const prefix = tableAlias ? `${tableAlias}.` : "";
-  return `${prefix}status = 'pending' and ${prefix}checkout_status = 'active' and ${prefix}provider_checkout_id is not null and ${prefix}checkout_url is not null and ${prefix}provider_payment_id is null and ${prefix}provider_payment_status is null`;
 };
 
 const readOrders = async (
@@ -2067,8 +2248,19 @@ const readOrders = async (
   const search = options.search?.trim() ?? "";
   const filters: string[] = [];
   const filterValues: unknown[] = [];
+  if (options.paymentEvidence === "uncorrelated") {
+    filters.push(
+      "o.provider = 'asaas' and o.status = 'paid' and o.provider_payment_id is null and o.provider_installment_id is null"
+    );
+  }
   if (options.checkout) {
     filters.push(getCheckoutPredicate("o", options.checkout));
+  }
+  if (options.refundStatus === "open") {
+    filters.push("rr.status in ('requested', 'processing')");
+  } else if (options.refundStatus) {
+    filterValues.push(options.refundStatus);
+    filters.push(`rr.status = $${filterValues.length}`);
   }
   if (options.status) {
     filterValues.push(options.status);
@@ -2187,6 +2379,7 @@ const readOrders = async (
         select count(*)::int as total_count
         from orders o
         join courses c on c.id = o.course_id
+        left join refund_requests rr on rr.order_id = o.id
         ${filters.length ? `where ${filters.join(" and ")}` : ""}
       `,
       filterValues
@@ -2309,11 +2502,13 @@ const readFinancialHealth = async (): Promise<AdminFinancialHealthSummary> => {
   const { rows } = await getPool().query<{
     active_checkout_count: number;
     active_checkout_potential_in_cents: number | string;
+    checkout_paid_awaiting_confirmation_count: number;
     closed_checkout_attempts: number;
+    confirmed_sale_orders: number;
     disputed_orders: number;
     failed_webhooks: number;
     paid_orders: number;
-    paid_revenue_in_cents: number | string;
+    gross_confirmed_sales_revenue_in_cents: number | string;
     pending_orders: number;
     ready_webhooks: number;
     refunded_orders: number;
@@ -2323,8 +2518,10 @@ const readFinancialHealth = async (): Promise<AdminFinancialHealthSummary> => {
     select
       count(*)::int as total_orders,
       count(*) filter (where status = 'paid')::int as paid_orders,
-      coalesce(sum(coalesce(paid_amount_in_cents, amount_in_cents)) filter (where status = 'paid'), 0)::bigint as paid_revenue_in_cents,
-      count(*) filter (where ${getCheckoutPredicate("", "open")})::int as pending_orders,
+      count(*) filter (where ${getConfirmedSalePredicate("")})::int as confirmed_sale_orders,
+      coalesce(sum(paid_amount_in_cents) filter (where ${getConfirmedSalePredicate("")}), 0)::bigint as gross_confirmed_sales_revenue_in_cents,
+      count(*) filter (where ${getCheckoutPredicate("", "creating")})::int as pending_orders,
+      count(*) filter (where ${getCheckoutPredicate("", "paid-awaiting-confirmation")})::int as checkout_paid_awaiting_confirmation_count,
       count(*) filter (
         where ${getActiveCheckoutPredicate("")}
       )::int as active_checkout_count,
@@ -2344,23 +2541,29 @@ const readFinancialHealth = async (): Promise<AdminFinancialHealthSummary> => {
   const row = rows[0];
   const totalOrders = row?.total_orders ?? 0;
   const paidOrders = row?.paid_orders ?? 0;
-  const paidRevenueInCents = Number(row?.paid_revenue_in_cents ?? 0);
+  const confirmedSaleOrders = row?.confirmed_sale_orders ?? 0;
+  const grossConfirmedSalesRevenueInCents = Number(
+    row?.gross_confirmed_sales_revenue_in_cents ?? 0
+  );
 
   return {
     activeCheckoutCount: row?.active_checkout_count ?? 0,
+    checkoutPaidAwaitingConfirmationCount:
+      row?.checkout_paid_awaiting_confirmation_count ?? 0,
     activeCheckoutPotentialInCents: Number(
       row?.active_checkout_potential_in_cents ?? 0
     ),
-    averagePaidTicketInCents: paidOrders
-      ? Math.round(paidRevenueInCents / paidOrders)
+    averageConfirmedSaleTicketInCents: confirmedSaleOrders
+      ? Math.round(grossConfirmedSalesRevenueInCents / confirmedSaleOrders)
       : 0,
     checkoutConversionPercent: totalOrders
-      ? Math.round((paidOrders / totalOrders) * 100)
+      ? Math.round((confirmedSaleOrders / totalOrders) * 100)
       : 0,
     disputedOrders: row?.disputed_orders ?? 0,
     failedWebhooks: row?.failed_webhooks ?? 0,
     paidOrders,
-    paidRevenueInCents,
+    confirmedSaleOrders,
+    grossConfirmedSalesRevenueInCents,
     pendingOrders: row?.pending_orders ?? 0,
     closedCheckoutAttempts: row?.closed_checkout_attempts ?? 0,
     readyWebhooks: row?.ready_webhooks ?? 0,
@@ -2379,112 +2582,48 @@ const readFinancialAnalytics = async (
     active_checkout_count: number;
     active_checkout_potential_in_cents: number | string;
     fees_in_cents: number | string;
-    gross_received_in_cents: number | string;
+    gross_confirmed_sales_in_cents: number | string;
     missing_fee_evidence_orders: number;
-    paid_orders: number;
+    confirmed_sale_orders: number;
+    pending_partial_refund_review_count: number;
+    provider_payment_date_fallback_orders: number;
     refunded_orders: number;
     refunded_revenue_in_cents: number | string;
-  }>(
-    `
-      with received_orders as (
-        select
-          count(*) filter (
-            where status in ('paid', 'refunded', 'disputed')
-              and ($1::timestamptz is null or coalesce(paid_at, created_at) >= $1::timestamptz)
-              and coalesce(paid_at, created_at) <= $2::timestamptz
-          )::int as paid_orders,
-          coalesce(sum(coalesce(paid_amount_in_cents, amount_in_cents)) filter (
-            where status in ('paid', 'refunded', 'disputed')
-              and ($1::timestamptz is null or coalesce(paid_at, created_at) >= $1::timestamptz)
-              and coalesce(paid_at, created_at) <= $2::timestamptz
-          ), 0)::bigint as gross_received_in_cents,
-          coalesce(sum(coalesce(fee_amount_in_cents, 0)) filter (
-            where status in ('paid', 'refunded', 'disputed')
-              and ($1::timestamptz is null or coalesce(paid_at, created_at) >= $1::timestamptz)
-              and coalesce(paid_at, created_at) <= $2::timestamptz
-          ), 0)::bigint as fees_in_cents,
-          count(*) filter (
-            where status in ('paid', 'refunded', 'disputed')
-              and ($1::timestamptz is null or coalesce(paid_at, created_at) >= $1::timestamptz)
-              and coalesce(paid_at, created_at) <= $2::timestamptz
-              and (fee_amount_in_cents is null or net_amount_in_cents is null)
-          )::int as missing_fee_evidence_orders,
-          count(*) filter (
-            where ${getActiveCheckoutPredicate("")}
-              and ($1::timestamptz is null or created_at >= $1::timestamptz)
-              and created_at <= $2::timestamptz
-          )::int as active_checkout_count,
-          coalesce(sum(amount_in_cents) filter (
-            where ${getActiveCheckoutPredicate("")}
-              and ($1::timestamptz is null or created_at >= $1::timestamptz)
-              and created_at <= $2::timestamptz
-          ), 0)::bigint as active_checkout_potential_in_cents
-        from orders
-      ),
-      refunds as (
-        select
-          count(*) filter (
-            where (
-              rr.status = 'confirmed'
-              or o.status = 'refunded'
-            )
-              and ($1::timestamptz is null or coalesce(rr.confirmed_at, o.refunded_at) >= $1::timestamptz)
-              and coalesce(rr.confirmed_at, o.refunded_at) <= $2::timestamptz
-          )::int as refunded_orders,
-          coalesce(sum(
-            case
-              when rr.status = 'confirmed' then coalesce(
-                rr.provider_refunded_amount_in_cents,
-                coalesce(o.paid_amount_in_cents, o.amount_in_cents)
-              )
-              when o.status = 'refunded' then
-                coalesce(o.paid_amount_in_cents, o.amount_in_cents)
-              else 0
-            end
-          ) filter (
-            where (
-              rr.status = 'confirmed'
-              or o.status = 'refunded'
-            )
-              and ($1::timestamptz is null or coalesce(rr.confirmed_at, o.refunded_at) >= $1::timestamptz)
-              and coalesce(rr.confirmed_at, o.refunded_at) <= $2::timestamptz
-          ), 0)::bigint as refunded_revenue_in_cents
-        from orders o
-        left join refund_requests rr on rr.order_id = o.id
-      )
-      select received_orders.*, refunds.*
-      from received_orders cross join refunds
-    `,
-    [fromDate, periodEnd]
-  );
+  }>(buildFinancialAnalyticsQuery({ fromDate, periodEnd }));
   const row = rows[0];
-  const grossReceivedInCents = Number(row?.gross_received_in_cents ?? 0);
+  const grossConfirmedSalesInCents = Number(
+    row?.gross_confirmed_sales_in_cents ?? 0
+  );
   const feesInCents = Number(row?.fees_in_cents ?? 0);
   const refundedRevenueInCents = Number(row?.refunded_revenue_in_cents ?? 0);
-  const paidOrders = row?.paid_orders ?? 0;
-  const averageReceivedTicketInCents = paidOrders
-    ? Math.round(grossReceivedInCents / paidOrders)
+  const confirmedSaleOrders = row?.confirmed_sale_orders ?? 0;
+  const averageConfirmedSaleTicketInCents = confirmedSaleOrders
+    ? Math.round(grossConfirmedSalesInCents / confirmedSaleOrders)
     : 0;
   const refundedOrders = row?.refunded_orders ?? 0;
-  const refundRatePercent = paidOrders
-    ? Number(((refundedOrders / paidOrders) * 100).toFixed(1))
+  const refundReceiptsRatioPercent = confirmedSaleOrders
+    ? Number(((refundedOrders / confirmedSaleOrders) * 100).toFixed(1))
     : null;
 
   return {
-    averageReceivedTicketInCents,
+    averageConfirmedSaleTicketInCents,
     estimatedNetRevenueInCents:
-      grossReceivedInCents - feesInCents - refundedRevenueInCents,
+      grossConfirmedSalesInCents - feesInCents - refundedRevenueInCents,
     feesInCents,
-    grossReceivedInCents,
+    grossConfirmedSalesInCents,
     missingFeeEvidenceOrders: row?.missing_fee_evidence_orders ?? 0,
-    paidOrders,
+    confirmedSaleOrders,
+    pendingPartialRefundReviewCount:
+      row?.pending_partial_refund_review_count ?? 0,
     activeCheckoutCount: row?.active_checkout_count ?? 0,
     activeCheckoutPotentialInCents: Number(
       row?.active_checkout_potential_in_cents ?? 0
     ),
     period,
     periodLabel: getAdminFinancialPeriodLabel(period),
-    refundRatePercent,
+    providerPaymentDateFallbackOrders:
+      row?.provider_payment_date_fallback_orders ?? 0,
+    refundReceiptsRatioPercent,
     refundedOrders,
     refundedRevenueInCents,
   };
@@ -2622,14 +2761,14 @@ const readCourseRevenue = async (): Promise<AdminCourseRevenueData> => {
     course_id: string;
     course_title: string;
     total_orders: number;
-    paid_orders: number;
+    confirmed_sale_orders: number;
     total_revenue_in_cents: number;
   }>(
     `
       select c.id as course_id, c.title as course_title,
              count(o.id)::int as total_orders,
-             count(case when o.status = 'paid' then 1 end)::int as paid_orders,
-             coalesce(sum(case when o.status = 'paid' then coalesce(o.paid_amount_in_cents, o.amount_in_cents) else 0 end), 0)::bigint as total_revenue_in_cents
+             count(case when ${getConfirmedSalePredicate("o")} then 1 end)::int as confirmed_sale_orders,
+             coalesce(sum(case when ${getConfirmedSalePredicate("o")} then o.paid_amount_in_cents else 0 end), 0)::bigint as total_revenue_in_cents
        from courses c
        left join orders o on o.course_id = c.id
        group by c.id, c.title
@@ -2641,7 +2780,7 @@ const readCourseRevenue = async (): Promise<AdminCourseRevenueData> => {
       courseId: row.course_id,
       courseTitle: row.course_title,
       totalOrders: row.total_orders,
-      paidOrders: row.paid_orders,
+      confirmedSaleOrders: row.confirmed_sale_orders,
       totalRevenueInCents: Number(row.total_revenue_in_cents),
     })),
   };
@@ -3799,12 +3938,12 @@ export const getAdminCourseOverviewSummary = async (
 ): Promise<AdminCourseOverviewSummary> => {
   const session = await requirePermission("viewCourses");
   const includeFinancialOrders = canPerform(session, "viewFinancialOrders");
-  const paidOrderProjection = includeFinancialOrders
-    ? "(select count(*)::int from orders where course_id = $1 and status = 'paid') as paid_order_count,"
+  const confirmedSaleOrderProjection = includeFinancialOrders
+    ? `(select count(*)::int from orders where course_id = $1 and ${getConfirmedSalePredicate("")}) as confirmed_sale_order_count,`
     : "";
   const { rows } = await getPool().query<{
     active_enrollment_count: number;
-    paid_order_count?: number;
+    confirmed_sale_order_count?: number;
     valid_certificate_count: number;
   }>(
     `
@@ -3824,7 +3963,7 @@ export const getAdminCourseOverviewSummary = async (
               where cp.course_id = c.id and cp.status = 'published'
             )
         ) as active_enrollment_count,
-        ${paidOrderProjection}
+        ${confirmedSaleOrderProjection}
         (select count(*)::int from certificates where course_id = $1 and status = 'valid') as valid_certificate_count
     `,
     [courseId]
@@ -3834,9 +3973,9 @@ export const getAdminCourseOverviewSummary = async (
   return {
     activeEnrollmentCount: row?.active_enrollment_count ?? 0,
     validCertificateCount: row?.valid_certificate_count ?? 0,
-    ...(row?.paid_order_count === undefined
+    ...(row?.confirmed_sale_order_count === undefined
       ? {}
-      : { paidOrderCount: row.paid_order_count }),
+      : { confirmedSaleOrderCount: row.confirmed_sale_order_count }),
   };
 };
 

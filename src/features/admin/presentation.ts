@@ -91,13 +91,15 @@ export interface AdminStudentAccessSummary {
 export interface AdminFinancialHealthSummary {
   activeCheckoutCount: number;
   activeCheckoutPotentialInCents: number;
-  averagePaidTicketInCents: number;
+  averageConfirmedSaleTicketInCents: number;
   checkoutConversionPercent: number;
+  checkoutPaidAwaitingConfirmationCount: number;
   closedCheckoutAttempts: number;
+  confirmedSaleOrders: number;
   disputedOrders: number;
   failedWebhooks: number;
+  grossConfirmedSalesRevenueInCents: number;
   paidOrders: number;
-  paidRevenueInCents: number;
   pendingOrders: number;
   readyWebhooks: number;
   refundedOrders: number;

@@ -97,6 +97,57 @@ const formatCountBreakdown = (
     .map(([label, value]) => [label, formatCount(value)].join(": "))
     .join(" · ");
 
+const formatQueueAge = (createdAt: Date): string => {
+  const elapsedMinutes = Math.max(
+    0,
+    Math.floor((Date.now() - createdAt.getTime()) / 60_000)
+  );
+  if (elapsedMinutes < 1) {
+    return "há menos de 1 min";
+  }
+  if (elapsedMinutes < 60) {
+    return `há ${formatCount(elapsedMinutes)} min`;
+  }
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) {
+    return `há ${formatCount(elapsedHours)} h`;
+  }
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return `há ${formatCount(elapsedDays)} dia${elapsedDays === 1 ? "" : "s"}`;
+};
+
+const formatFinancialQueueDescription = ({
+  exposureInCents,
+  oldestAt,
+  summary,
+}: {
+  exposureInCents: number;
+  oldestAt: Date | null | undefined;
+  summary: string;
+}): string =>
+  [
+    summary,
+    oldestAt ? `Mais antigo: ${formatQueueAge(oldestAt)}.` : null,
+    exposureInCents > 0
+      ? `Valor dos pedidos envolvidos: ${formatCurrencyInCents(exposureInCents)}; referência operacional, não perda nem débito confirmado.`
+      : null,
+  ]
+    .filter((item): item is string => item !== null)
+    .join(" ");
+
+const appendOldestQueueAge = ({
+  description,
+  itemLabel,
+  oldestAt,
+}: {
+  description: string;
+  itemLabel: string;
+  oldestAt: Date | null;
+}): string =>
+  oldestAt
+    ? `${description} ${itemLabel} mais antigo: ${formatQueueAge(oldestAt)}.`
+    : description;
+
 const getPluralLabel = (
   value: number,
   singular: string,
@@ -163,6 +214,188 @@ const getCourseMissingItems = (
   return missing;
 };
 
+const getFinancialAttentionIssues = (
+  financial: AdminDashboardOperations["financial"]
+): DashboardIssue[] => {
+  const issues: DashboardIssue[] = [];
+  const add = (issue: DashboardIssue): void => {
+    if (issue.count > 0) {
+      issues.push(issue);
+    }
+  };
+
+  if (financial.pendingPaymentReviewCount !== undefined) {
+    add({
+      actionLabel: "Abrir fila",
+      count: financial.pendingPaymentReviewCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.pendingPaymentReviewExposureInCents ?? 0,
+        oldestAt: financial.oldestPendingPaymentReviewAt,
+        summary:
+          "Exceções financeiras aguardam uma decisão; os valores são pedidos envolvidos, não perdas confirmadas.",
+      }),
+      href: "/admin/financeiro?tab=overview",
+      label: "Revisões financeiras",
+      tone: "attention",
+    });
+  }
+  if (financial.uncertainCheckoutCount !== undefined) {
+    add({
+      actionLabel: "Conferir pedidos",
+      count: financial.uncertainCheckoutCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.uncertainCheckoutExposureInCents ?? 0,
+        oldestAt: financial.oldestUncertainCheckoutAt,
+        summary:
+          "O Hub não conseguiu confirmar o resultado da criação do Checkout; não significa que o cliente pagou.",
+      }),
+      href: "/admin/financeiro?tab=orders&status=pending&checkout=uncertain",
+      label: "Checkouts com resultado incerto",
+      tone: "attention",
+    });
+  }
+  if (financial.uncorrelatedOrderCount !== undefined) {
+    add({
+      actionLabel: "Conferir pagamentos",
+      count: financial.uncorrelatedOrderCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.uncorrelatedOrderExposureInCents ?? 0,
+        oldestAt: financial.oldestUncorrelatedOrderAt,
+        summary:
+          "O Pedido está pago localmente, mas não possui identificador de cobrança Asaas correlacionado.",
+      }),
+      href: "/admin/financeiro?tab=orders&paymentEvidence=uncorrelated&status=paid",
+      label: "Pagamentos sem vínculo",
+      tone: "attention",
+    });
+  }
+  if (financial.uncertainRefundCount !== undefined) {
+    add({
+      actionLabel: "Conferir reembolsos",
+      count: financial.uncertainRefundCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.uncertainRefundExposureInCents ?? 0,
+        oldestAt: financial.oldestUncertainRefundAt,
+        summary:
+          "O resultado do reembolso ainda não foi confirmado pelo Asaas.",
+      }),
+      href: "/admin/financeiro?tab=orders&refundStatus=uncertain",
+      label: "Reembolsos incertos",
+      tone: "attention",
+    });
+  }
+  if (financial.failedRefundCount !== undefined) {
+    add({
+      actionLabel: "Ver reembolsos",
+      count: financial.failedRefundCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.failedRefundExposureInCents ?? 0,
+        oldestAt: financial.oldestFailedRefundAt,
+        summary:
+          "O reembolso falhou e precisa ser conferido antes de uma nova tentativa.",
+      }),
+      href: "/admin/financeiro?tab=orders&refundStatus=failed",
+      label: "Reembolsos com falha",
+      tone: "attention",
+    });
+  }
+  if (financial.checkoutPaidAwaitingConfirmationCount !== undefined) {
+    add({
+      actionLabel: "Conferir pedidos",
+      count: financial.checkoutPaidAwaitingConfirmationCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents:
+          financial.checkoutPaidAwaitingConfirmationExposureInCents ?? 0,
+        oldestAt: financial.oldestCheckoutPaidAwaitingConfirmationAt,
+        summary:
+          "O Asaas marcou o Checkout como pago, mas o Hub ainda não recebeu evidência de cobrança suficiente para confirmar o pagamento ou liberar acesso.",
+      }),
+      href: "/admin/financeiro?tab=orders&status=pending&checkout=paid-awaiting-confirmation",
+      label: "Checkout pago, aguardando confirmação",
+      tone: "attention",
+    });
+  }
+  return issues;
+};
+
+const getFinancialWatchIssues = (
+  financial: AdminDashboardOperations["financial"],
+  overview: AdminOverview
+): DashboardIssue[] => {
+  const issues: DashboardIssue[] = [];
+  const add = (issue: DashboardIssue): void => {
+    if (issue.count > 0) {
+      issues.push(issue);
+    }
+  };
+
+  add({
+    actionLabel: "Ver pedidos",
+    count: overview.pendingOrders ?? 0,
+    description: [
+      "O Hub ainda está criando ou associando a sessão de Checkout.",
+      overview.oldestPendingCheckoutAt
+        ? `Mais antigo: ${formatQueueAge(overview.oldestPendingCheckoutAt)}.`
+        : null,
+    ]
+      .filter((part): part is string => part !== null)
+      .join(" "),
+    href: "/admin/financeiro?tab=orders&status=pending&checkout=creating",
+    label: "Checkouts em criação",
+    tone: "watch",
+  });
+  if (financial.activeCheckoutCount !== undefined) {
+    add({
+      actionLabel: "Acompanhar links",
+      count: financial.activeCheckoutCount,
+      description: [
+        "Links ativos sem cobrança registrada no Hub; valor nominal, não recebível.",
+        financial.oldestActiveCheckoutAt
+          ? `Mais antigo: ${formatQueueAge(financial.oldestActiveCheckoutAt)}.`
+          : null,
+        (financial.activeCheckoutPotentialInCents ?? 0) > 0
+          ? `Valor nominal: ${formatCurrencyInCents(financial.activeCheckoutPotentialInCents ?? 0)}.`
+          : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(" "),
+      href: "/admin/financeiro?tab=orders&status=pending&checkout=active",
+      label: "Checkouts ativos sem cobrança",
+      tone: "watch",
+    });
+  }
+  if (financial.pendingRefundCount !== undefined) {
+    add({
+      actionLabel: "Ver financeiro",
+      count: financial.pendingRefundCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.pendingRefundExposureInCents ?? 0,
+        oldestAt: financial.oldestPendingRefundAt,
+        summary: "Reembolsos solicitados ou ainda em processamento.",
+      }),
+      href: "/admin/financeiro?tab=orders&refundStatus=open",
+      label: "Reembolsos abertos",
+      tone: "watch",
+    });
+  }
+  if (financial.disputedOrderCount !== undefined) {
+    add({
+      actionLabel: "Ver disputas",
+      count: financial.disputedOrderCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.disputedOrderExposureInCents ?? 0,
+        oldestAt: financial.oldestDisputeAt,
+        summary:
+          "Pedidos permanecem marcados como disputa; o valor não é tratado como perda até uma decisão do provedor.",
+      }),
+      href: "/admin/financeiro?tab=orders&status=disputed",
+      label: "Pedidos em disputa",
+      tone: "watch",
+    });
+  }
+  return issues;
+};
+
 const getDashboardIssues = ({
   courseHealth,
   operations,
@@ -183,56 +416,22 @@ const getDashboardIssues = ({
     }
   };
   const backlog = operations.integrations.backlog;
-  const financial = operations.financial;
   const support = operations.supportRequests;
   const failedIntegrationCount =
     backlog.webhooks.failed + backlog.outbox.deadLetters;
-  const uncertainFinancialCount =
-    (financial.uncertainCheckoutCount ?? 0) +
-    (financial.uncertainRefundCount ?? 0) +
-    (financial.uncorrelatedOrderCount ?? 0);
-
-  if (financial.pendingPaymentReviewCount !== undefined) {
-    add(attention, {
-      actionLabel: "Abrir fila",
-      count: financial.pendingPaymentReviewCount,
-      description:
-        "Exceções aguardam uma decisão antes de concluir o fluxo financeiro.",
-      href: "/admin/financeiro",
-      label: "Revisões financeiras",
-      tone: "attention",
-    });
-  }
-  add(attention, {
-    actionLabel: "Ver financeiro",
-    count: uncertainFinancialCount,
-    description: formatCountBreakdown([
-      ["Checkouts incertos", financial.uncertainCheckoutCount ?? 0],
-      ["Sem pagamento vinculado", financial.uncorrelatedOrderCount ?? 0],
-      ["Reembolsos incertos", financial.uncertainRefundCount ?? 0],
-    ]),
-    href: "/admin/financeiro",
-    label: "Resultados financeiros incertos",
-    tone: "attention",
-  });
-  if (financial.failedRefundCount !== undefined) {
-    add(attention, {
-      actionLabel: "Ver reembolsos",
-      count: financial.failedRefundCount,
-      description:
-        "O reembolso falhou e precisa ser conferido antes de uma nova tentativa.",
-      href: "/admin/financeiro",
-      label: "Reembolsos com falha",
-      tone: "attention",
-    });
-  }
+  attention.push(...getFinancialAttentionIssues(operations.financial));
+  watch.push(...getFinancialWatchIssues(operations.financial, overview));
   add(attention, {
     actionLabel: "Abrir Operação",
     count: failedIntegrationCount,
-    description: formatCountBreakdown([
-      ["Webhooks falhos", backlog.webhooks.failed],
-      ["Mensagens em dead letter", backlog.outbox.deadLetters],
-    ]),
+    description: appendOldestQueueAge({
+      description: formatCountBreakdown([
+        ["Webhooks falhos", backlog.webhooks.failed],
+        ["Mensagens em dead letter", backlog.outbox.deadLetters],
+      ]),
+      itemLabel: "Webhook falho",
+      oldestAt: backlog.webhooks.oldestFailedAt,
+    }),
     href: "/admin/operacao",
     label: "Falhas de integração",
     tone: "attention",
@@ -278,43 +477,18 @@ const getDashboardIssues = ({
   });
 
   add(watch, {
-    actionLabel: "Ver pedidos",
-    count: overview.pendingOrders ?? 0,
-    description: "Checkouts ainda abertos; não entram na receita bruta paga.",
-    href: "/admin/financeiro?tab=orders&status=pending&checkout=open",
-    label: "Pedidos aguardando confirmação",
-    tone: "watch",
-  });
-  add(watch, {
     actionLabel: "Abrir Operação",
     count: backlog.webhooks.retryable,
-    description:
-      "A próxima tentativa automática ainda pode regularizar estes eventos.",
+    description: appendOldestQueueAge({
+      description:
+        "A próxima tentativa automática ainda pode regularizar estes eventos.",
+      itemLabel: "Webhook em retry",
+      oldestAt: backlog.webhooks.oldestRetryAt,
+    }),
     href: "/admin/operacao",
     label: "Webhooks em retry",
     tone: "watch",
   });
-  if (financial.pendingRefundCount !== undefined) {
-    add(watch, {
-      actionLabel: "Ver financeiro",
-      count: financial.pendingRefundCount,
-      description: "Solicitações de reembolso ainda estão em processamento.",
-      href: "/admin/financeiro",
-      label: "Reembolsos em processamento",
-      tone: "watch",
-    });
-  }
-  if (financial.disputedOrderCount !== undefined) {
-    add(watch, {
-      actionLabel: "Ver disputas",
-      count: financial.disputedOrderCount,
-      description:
-        "Pedidos permanecem marcados como disputa no estado financeiro local.",
-      href: "/admin/financeiro?tab=orders&status=disputed",
-      label: "Pedidos em disputa",
-      tone: "watch",
-    });
-  }
   add(watch, {
     actionLabel: "Ver alunos",
     count: operations.access.expiringStudentCount,
@@ -461,30 +635,30 @@ function DashboardSummary({
     },
   ];
 
-  if (overview.paidRevenueInCents !== undefined) {
+  if (overview.grossConfirmedSalesRevenueInCents !== undefined) {
     metrics.unshift({
       helper: "Histórico; não é saldo no Asaas",
       help: (
         <FinanceHelp
-          description="A receita é calculada a partir dos pedidos que o Hub mantém como pagos."
+          description="Soma histórica dos pedidos com evidência de pagamento confirmado, mesmo quando depois reembolsados ou contestados."
           details={[
-            "É um histórico operacional do Hub; não representa saldo disponível ou liquidação no Asaas.",
-            "Pedidos em aberto aparecem separadamente no contexto financeiro.",
+            "É uma métrica operacional do Hub; não representa saldo disponível ou liquidação no Asaas.",
+            "Reembolsos e disputas são ajustes separados e não apagam a venda bruta histórica.",
           ]}
-          title="Receita bruta paga"
+          title="Vendas brutas confirmadas"
         />
       ),
       icon: Money01Icon,
-      label: "Receita bruta paga",
-      value: formatCurrencyInCents(overview.paidRevenueInCents),
+      label: "Vendas brutas confirmadas",
+      value: formatCurrencyInCents(overview.grossConfirmedSalesRevenueInCents),
     });
   }
-  if (overview.paidOrders !== undefined) {
+  if (overview.confirmedSaleOrders !== undefined) {
     metrics.push({
       helper: "Confirmados no histórico",
       icon: ShoppingCart01Icon,
-      label: "Pedidos pagos",
-      value: formatCount(overview.paidOrders),
+      label: "Pedidos com pagamento confirmado",
+      value: formatCount(overview.confirmedSaleOrders),
     });
   }
 
@@ -492,10 +666,10 @@ function DashboardSummary({
     <section aria-labelledby="dashboard-summary-title">
       <div className="mb-6">
         <h2 className="type-section-title" id="dashboard-summary-title">
-          Resumo do dia
+          Resumo da operação
         </h2>
         <p className="type-body-sm mt-1 text-muted-foreground">
-          Os números principais para começar a operação.
+          Visão histórica das vendas e do estado atual da operação.
         </p>
       </div>
       <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-5">
@@ -1089,8 +1263,8 @@ function OperationalContext({
       </div>
       {hasFinancialContext ? (
         <p className="mt-4 text-muted-foreground text-xs">
-          Receita bruta paga é o histórico do Hub. Saldo disponível, liquidação
-          e detalhes do provedor devem ser conferidos no Asaas.
+          Vendas brutas confirmadas são o histórico do Hub. Saldo disponível,
+          liquidação e detalhes do provedor devem ser conferidos no Asaas.
         </p>
       ) : null}
     </section>

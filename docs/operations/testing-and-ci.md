@@ -112,6 +112,10 @@ Para testar somente integração, configure uma URL PostgreSQL descartável e
 execute `bun run test:certificates:integration`. Para E2E, use as URLs e os
 servidores locais definidos no `playwright.config.ts`.
 
+O teste das projeções financeiras usa tabelas temporárias na conexão e exige
+`INTEGRATION_DATABASE_URL` apontando para `hub_integration` em `localhost` ou
+`127.0.0.1`; ele rejeita destinos remotos antes de conectar.
+
 ### PostgreSQL descartável no Windows
 
 O caminho recomendado é executar a CI, que já provisiona PostgreSQL 18. Se o

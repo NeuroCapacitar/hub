@@ -19,27 +19,47 @@ const formatPercent = (value: number | null): string =>
 const formatCurrencyWithBase = (value: number, denominator: number): string =>
   denominator > 0 ? formatCurrencyInCents(value) : "Sem base";
 
+const getFeeHelper = (analytics: AdminFinancialAnalytics): string =>
+  analytics.missingFeeEvidenceOrders > 0
+    ? `${analytics.missingFeeEvidenceOrders} pedido${analytics.missingFeeEvidenceOrders === 1 ? "" : "s"} sem taxa ou líquido completo; estimativa parcial.`
+    : "Taxas identificadas nos snapshots de pagamento.";
+
+const getNetHelper = (analytics: AdminFinancialAnalytics): string => {
+  const warnings: string[] = [];
+  if (analytics.missingFeeEvidenceOrders > 0) {
+    warnings.push(
+      `${analytics.missingFeeEvidenceOrders} pedido${analytics.missingFeeEvidenceOrders === 1 ? "" : "s"} sem evidência completa de taxa/líquido`
+    );
+  }
+  if (analytics.pendingPartialRefundReviewCount > 0) {
+    warnings.push(
+      `${analytics.pendingPartialRefundReviewCount} revisão${analytics.pendingPartialRefundReviewCount === 1 ? "" : "ões"} de reembolso parcial pendente${analytics.pendingPartialRefundReviewCount === 1 ? "" : "s"} (qualquer data); valor ainda não subtraído`
+    );
+  }
+  return warnings.length
+    ? `Estimativa incompleta: ${warnings.join("; ")}.`
+    : "Estimativa após taxas e reembolsos confirmados.";
+};
+
+const getPaymentDateHelper = (analytics: AdminFinancialAnalytics): string =>
+  analytics.providerPaymentDateFallbackOrders > 0
+    ? `${analytics.providerPaymentDateFallbackOrders} pedido${analytics.providerPaymentDateFallbackOrders === 1 ? " usa" : "s usam"} a data de confirmação no Hub porque o Asaas não informou a data do pagamento.`
+    : "O período usa a data do pagamento informada pelo Asaas.";
+
 export function FinancialAnalysis({
   analytics,
 }: {
   analytics: AdminFinancialAnalytics;
 }): React.JSX.Element {
-  const hasReceivedOrders = analytics.paidOrders > 0;
-  const averageReceivedTicket = formatCurrencyWithBase(
-    analytics.averageReceivedTicketInCents,
-    analytics.paidOrders
+  const averageConfirmedSaleTicket = formatCurrencyWithBase(
+    analytics.averageConfirmedSaleTicketInCents,
+    analytics.confirmedSaleOrders
   );
-  const refundRate = hasReceivedOrders
-    ? formatPercent(analytics.refundRatePercent)
-    : "Sem base";
-  const feeHelper =
-    analytics.missingFeeEvidenceOrders > 0
-      ? `${analytics.missingFeeEvidenceOrders} pedido${analytics.missingFeeEvidenceOrders === 1 ? "" : "s"} sem taxa ou líquido completo; estimativa parcial.`
-      : "Taxas identificadas nos snapshots de pagamento.";
-  const netHelper =
-    analytics.missingFeeEvidenceOrders > 0
-      ? `Estimativa após taxas e reembolsos; ${analytics.missingFeeEvidenceOrders} pedido${analytics.missingFeeEvidenceOrders === 1 ? "" : "s"} sem evidência financeira completa.`
-      : "Estimativa após taxas e reembolsos confirmados.";
+  const refundReceiptsRatio = formatPercent(
+    analytics.refundReceiptsRatioPercent
+  );
+  const feeHelper = getFeeHelper(analytics);
+  const netHelper = getNetHelper(analytics);
 
   return (
     <Card>
@@ -53,11 +73,12 @@ export function FinancialAnalysis({
               <FinanceHelp
                 description="Consulte como cada indicador é calculado, quais dados entram e quais são os limites desta análise."
                 details={[
-                  "Cada Pedido com recebimento entra uma vez, inclusive quando a compra é parcelada; o valor total da compra não é dividido em parcelas.",
-                  "Recebido confirmado soma o valor bruto dos Pedidos pagos, reembolsados ou em disputa com evidência de pagamento. A data usada é a confirmação do pagamento ou, se ausente, a criação do Pedido.",
-                  "Valor médio recebido usa o valor total registrado para a compra, não uma parcela isolada.",
+                  "Cada Pedido com pagamento confirmado entra uma vez, inclusive quando a compra é parcelada; o valor total da compra não é dividido em parcelas.",
+                  "Vendas brutas confirmadas incluem Pedidos pagos, reembolsados ou em disputa que preservam evidência de pagamento. A data do Asaas é preferida; quando ausente, usamos a confirmação registrada no Hub.",
+                  "O ticket médio usa o valor total confirmado do Pedido, não uma parcela isolada.",
                   "O potencial considera apenas Pedidos do período com link de Checkout ativo no Hub; isso não comprova cobrança criada, pagamento em andamento ou recebível.",
-                  "Reembolsos usam a confirmação do evento; o líquido é uma estimativa baseada nos dados salvos no Hub e não substitui o fechamento contábil.",
+                  "Reembolsos usam a data de confirmação registrada. A relação Reembolsos / recebimentos compara contagens do período, não uma coorte, e pode superar 100%.",
+                  "O líquido é uma estimativa baseada nos dados salvos no Hub. Revisões de reembolso parcial pendentes ainda não têm um valor confiável subtraído.",
                   "Os indicadores não representam o saldo disponível no Asaas. Para conciliação oficial, confira o Asaas e os detalhes da cobrança; cobranças individuais aparecem quando são sincronizadas.",
                 ]}
                 title="Análise por período"
@@ -71,6 +92,9 @@ export function FinancialAnalysis({
               <span className="block text-xs">
                 Valores operacionais do Hub; não representam o saldo disponível
                 no Asaas.
+              </span>
+              <span className="block text-xs">
+                {getPaymentDateHelper(analytics)}
               </span>
             </CardDescription>
           </div>
@@ -95,9 +119,11 @@ export function FinancialAnalysis({
           </div>
           <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
             <AdminMetricCard
-              helper={`${analytics.paidOrders} pedido${analytics.paidOrders === 1 ? "" : "s"} com evidência de pagamento; valor antes de taxas e reembolsos.`}
-              label="Recebido confirmado"
-              value={formatCurrencyInCents(analytics.grossReceivedInCents)}
+              helper={`${analytics.confirmedSaleOrders} pedido${analytics.confirmedSaleOrders === 1 ? "" : "s"} com evidência de pagamento; valor bruto antes de taxas e reembolsos.`}
+              label="Vendas brutas confirmadas"
+              value={formatCurrencyInCents(
+                analytics.grossConfirmedSalesInCents
+              )}
             />
             <AdminMetricCard
               helper={feeHelper}
@@ -136,13 +162,13 @@ export function FinancialAnalysis({
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <AdminMetricCard
               helper="Pedidos com evidência de pagamento no período."
-              label="Pedidos com recebimento"
-              value={analytics.paidOrders.toString()}
+              label="Pedidos com pagamento confirmado"
+              value={analytics.confirmedSaleOrders.toString()}
             />
             <AdminMetricCard
-              helper="Recebido bruto dividido pelos pedidos com recebimento."
-              label="Valor médio recebido"
-              value={averageReceivedTicket}
+              helper="Vendas brutas confirmadas divididas pelos pedidos com pagamento confirmado."
+              label="Ticket médio confirmado"
+              value={averageConfirmedSaleTicket}
             />
             <AdminMetricCard
               helper={`${analytics.activeCheckoutCount} checkout${analytics.activeCheckoutCount === 1 ? "" : "s"} ativo${analytics.activeCheckoutCount === 1 ? "" : "s"} sem cobrança registrada no Hub, criado${analytics.activeCheckoutCount === 1 ? "" : "s"} no período; valor nominal.`}
@@ -152,9 +178,9 @@ export function FinancialAnalysis({
               )}
             />
             <AdminMetricCard
-              helper="Indicador operacional: reembolsos confirmados no período divididos pelos recebimentos do período."
-              label="Taxa de reembolso"
-              value={refundRate}
+              helper={`${analytics.refundedOrders} reembolso${analytics.refundedOrders === 1 ? "" : "s"} confirmado${analytics.refundedOrders === 1 ? "" : "s"} / ${analytics.confirmedSaleOrders} pedido${analytics.confirmedSaleOrders === 1 ? "" : "s"} com pagamento confirmado neste período. Relação por contagem, não por coorte; pode superar 100%.`}
+              label="Reembolsos / recebimentos"
+              value={refundReceiptsRatio}
             />
           </div>
         </section>

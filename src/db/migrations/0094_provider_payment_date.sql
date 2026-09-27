@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "provider_payment_date" date;

@@ -171,7 +171,7 @@ vi.mock("./course-overview", () => ({
     operationalState: { key: string };
     overviewSummary: {
       activeEnrollmentCount: number;
-      paidOrderCount: number;
+      confirmedSaleOrderCount: number;
       validCertificateCount: number;
     };
     publicationState: { hasDraft: boolean; hasPublished: boolean };
@@ -179,6 +179,7 @@ vi.mock("./course-overview", () => ({
   }) => (
     <div
       data-active-enrollments={overviewSummary.activeEnrollmentCount}
+      data-confirmed-sales={overviewSummary.confirmedSaleOrderCount}
       data-course-availability={courseAvailability.label}
       data-course-id={courseId}
       data-course-overview="true"
@@ -187,7 +188,6 @@ vi.mock("./course-overview", () => ({
       data-has-published={publicationState.hasPublished}
       data-module-count={moduleCount}
       data-operational-state={operationalState.key}
-      data-paid-orders={overviewSummary.paidOrderCount}
       data-total-lessons={contentSummary.totalLessons}
       data-valid-certificates={overviewSummary.validCertificateCount}
     >
@@ -261,7 +261,7 @@ beforeEach(() => {
     modules: [],
     overviewSummary: {
       activeEnrollmentCount: 57,
-      paidOrderCount: 83,
+      confirmedSaleOrderCount: 83,
       validCertificateCount: 41,
     },
     publicationState: { hasDraft: false, hasPublished: true },
@@ -306,7 +306,7 @@ describe("AdminCourseDetailPage overview", () => {
     });
     expect(markup).toContain('data-course-overview="true"');
     expect(markup).toContain('data-active-enrollments="57"');
-    expect(markup).toContain('data-paid-orders="83"');
+    expect(markup).toContain('data-confirmed-sales="83"');
     expect(markup).toContain('data-valid-certificates="41"');
     expect(markup).not.toContain('data-pending-certificate-reconciliation="7"');
     expect(markup).toContain('data-module-count="0"');
@@ -411,7 +411,7 @@ describe("AdminCourseDetailPage certificate", () => {
       modules: [],
       overviewSummary: {
         activeEnrollmentCount: 0,
-        paidOrderCount: 0,
+        confirmedSaleOrderCount: 0,
         validCertificateCount: 0,
       },
       publicationState: { hasDraft: false, hasPublished: true },
@@ -462,7 +462,7 @@ describe("AdminCourseDetailPage header", () => {
       modules: [],
       overviewSummary: {
         activeEnrollmentCount: 0,
-        paidOrderCount: 0,
+        confirmedSaleOrderCount: 0,
         validCertificateCount: 0,
       },
       publicationState: { hasDraft: false, hasPublished: true },

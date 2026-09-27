@@ -22,7 +22,9 @@ import {
 } from "@/components/ui/table";
 import type {
   AdminOrderCheckoutFilter,
+  AdminOrderPaymentEvidenceFilter,
   AdminOrderPaymentMethodFilter,
+  AdminOrderRefundFilter,
   AdminOrderStatusFilter,
 } from "@/features/admin/order-filters";
 import type { AdminOrder } from "@/features/admin/server";
@@ -32,13 +34,17 @@ import { FinancialOrdersTableClient } from "./financial-orders-table-client";
 const getOrderPageHref = ({
   checkout,
   page,
+  paymentEvidence,
   paymentMethod,
+  refundStatus,
   search,
   status,
 }: {
   checkout?: AdminOrderCheckoutFilter | undefined;
   page: number;
+  paymentEvidence?: AdminOrderPaymentEvidenceFilter | undefined;
   paymentMethod?: AdminOrderPaymentMethodFilter | undefined;
+  refundStatus?: AdminOrderRefundFilter | undefined;
   search: string;
   status?: AdminOrderStatusFilter | undefined;
 }): string => {
@@ -54,6 +60,12 @@ const getOrderPageHref = ({
   }
   if (paymentMethod) {
     params.set("paymentMethod", paymentMethod);
+  }
+  if (refundStatus) {
+    params.set("refundStatus", refundStatus);
+  }
+  if (paymentEvidence) {
+    params.set("paymentEvidence", paymentEvidence);
   }
   if (page > 1) {
     params.set("page", String(page));
@@ -105,7 +117,9 @@ export function FinancialOrdersTable({
   hasNextPage,
   orders,
   page,
+  paymentEvidence,
   paymentMethod,
+  refundStatus,
   search,
   status,
   totalCount,
@@ -116,13 +130,20 @@ export function FinancialOrdersTable({
   hasNextPage: boolean;
   orders: AdminOrder[];
   page: number;
+  paymentEvidence?: AdminOrderPaymentEvidenceFilter | undefined;
   paymentMethod?: AdminOrderPaymentMethodFilter | undefined;
+  refundStatus?: AdminOrderRefundFilter | undefined;
   search: string;
   status?: AdminOrderStatusFilter | undefined;
   totalCount: number;
 }): React.JSX.Element {
   const hasActiveFilter = Boolean(
-    search || status || paymentMethod || checkout
+    search ||
+      status ||
+      paymentEvidence ||
+      paymentMethod ||
+      checkout ||
+      refundStatus
   );
   return (
     <div>
@@ -138,6 +159,12 @@ export function FinancialOrdersTable({
             name="paymentMethod"
             type="hidden"
             value={paymentMethod ?? ""}
+          />
+          <input name="refundStatus" type="hidden" value={refundStatus ?? ""} />
+          <input
+            name="paymentEvidence"
+            type="hidden"
+            value={paymentEvidence ?? ""}
           />
           <input name="status" type="hidden" value={status ?? ""} />
           <input name="tab" type="hidden" value="orders" />
@@ -157,7 +184,9 @@ export function FinancialOrdersTable({
         </form>
         <FinancialOrdersFilterMenu
           checkout={checkout}
+          paymentEvidence={paymentEvidence}
           paymentMethod={paymentMethod}
+          refundStatus={refundStatus}
           search={search}
           status={status}
         />
@@ -213,6 +242,8 @@ export function FinancialOrdersTable({
                       page: page - 1,
                       checkout,
                       paymentMethod,
+                      paymentEvidence,
+                      refundStatus,
                       search,
                       status,
                     })}
@@ -232,6 +263,8 @@ export function FinancialOrdersTable({
                       page: page + 1,
                       checkout,
                       paymentMethod,
+                      paymentEvidence,
+                      refundStatus,
                       search,
                       status,
                     })}

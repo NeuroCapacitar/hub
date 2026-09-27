@@ -1227,6 +1227,7 @@ export const orders = pgTable(
     feeAmountInCents: integer("fee_amount_in_cents"),
     paymentMethod: text("payment_method"),
     receiptUrl: text("receipt_url"),
+    providerPaymentDate: date("provider_payment_date"),
     paidAt: timestamp("paid_at", tz),
     refundedAt: timestamp("refunded_at", tz),
     customerEmail: text("customer_email"),

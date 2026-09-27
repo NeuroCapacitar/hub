@@ -2,8 +2,8 @@
 status: canonical
 owner: engineering
 last_verified_commit: c10f0d2
-current_migration_tag: 0093_certificate_issuance_guard
-migration_entry_count: 94
+current_migration_tag: 0094_provider_payment_date
+migration_entry_count: 95
 schema_table_count: 51
 ---
 
@@ -209,6 +209,15 @@ de auditoria e as mensagens de outbox. Uma transação grava o hash do código e
 data de revogação como tombstone público. A conclusão mantém somente o marcador
 booleano necessário para impedir emissão automática/manual duplicada. Nenhuma
 dessas migrations foi aplicada a Staging ou Production nesta alteração.
+
+A migration `0094_provider_payment_date` adiciona `orders.provider_payment_date`
+como `date`, sem horário ou fuso, preservando a data efetiva informada pelo Asaas
+separada de `paid_at`, que continua sendo a confirmação registrada pelo Hub. Dados
+anteriores permanecem nulos e usam `paid_at` como fallback nos períodos; o teste de
+integração financeira exercita a consulta em PostgreSQL descartável. A migration
+foi aplicada ao Development em 2026-09-26 pelo runner guardado; a auditoria
+read-only confirmou a coluna e o registro Drizzle `0094`. Staging e Production
+não foram tocados.
 
 O runner de Development aplicou `0085` em 2026-09-17. A auditoria read-only
 confirmou o check `allowlist refinada e grants configuráveis limpos` e nenhum

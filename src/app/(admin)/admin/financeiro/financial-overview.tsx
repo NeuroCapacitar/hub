@@ -220,7 +220,7 @@ export function FinancialOverview({
   canExecuteRefund,
   canManageFinancialOperations,
   canManageFinancialReviews,
-  canViewGlobalAudit,
+  canViewOperations,
   coursesRevenue,
   financialHealth,
   paymentReviews,
@@ -228,7 +228,7 @@ export function FinancialOverview({
   canExecuteRefund: boolean;
   canManageFinancialOperations: boolean;
   canManageFinancialReviews: boolean;
-  canViewGlobalAudit: boolean;
+  canViewOperations: boolean;
   coursesRevenue: AdminCourseRevenueData | null;
   financialHealth: AdminFinancialHealthSummary | null;
   paymentReviews: AdminPaymentReviewPage | null;
@@ -252,21 +252,21 @@ export function FinancialOverview({
     failedWebhooks > 0 ||
     retryableWebhooks > 0 ||
     financialHealth.readyWebhooks > 0;
-  const averagePaidTicket =
-    financialHealth.paidOrders > 0
-      ? formatCurrencyInCents(financialHealth.averagePaidTicketInCents)
+  const averageConfirmedSaleTicket =
+    financialHealth.confirmedSaleOrders > 0
+      ? formatCurrencyInCents(financialHealth.averageConfirmedSaleTicketInCents)
       : "Sem base";
-  const averagePaidTicketHelper =
-    financialHealth.paidOrders > 0
-      ? "Receita dos pedidos atualmente pagos dividida pela quantidade de pedidos."
-      : "Sem base: ainda não há pedidos atualmente pagos.";
+  const averageConfirmedSaleTicketHelper =
+    financialHealth.confirmedSaleOrders > 0
+      ? "Vendas brutas confirmadas divididas pelo número de pedidos com pagamento confirmado."
+      : "Sem base: ainda não há pedidos com pagamento confirmado.";
   const checkoutConversion =
     financialHealth.totalOrders > 0
       ? `${financialHealth.checkoutConversionPercent}%`
       : "Sem base";
   const checkoutConversionHelper =
     financialHealth.totalOrders > 0
-      ? "Pedidos pagos divididos por pedidos registrados no histórico."
+      ? "Pedidos com evidência de pagamento confirmado divididos por pedidos registrados no histórico."
       : "Sem base: ainda não há pedidos registrados no histórico.";
   const hasPendingReviews = (paymentReviews?.totalCount ?? 0) > 0;
 
@@ -289,18 +289,20 @@ export function FinancialOverview({
         </div>
         <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
           <AdminMetricCard
-            helper={`${financialHealth.paidOrders} pedido${
-              financialHealth.paidOrders === 1 ? "" : "s"
-            } pago${financialHealth.paidOrders === 1 ? "" : "s"} no histórico completo.`}
+            helper={`${financialHealth.confirmedSaleOrders} pedido${
+              financialHealth.confirmedSaleOrders === 1 ? "" : "s"
+            } com pagamento confirmado no histórico completo.`}
             icon={Coins01Icon}
-            label="Receita bruta de pedidos pagos"
-            value={formatCurrencyInCents(financialHealth.paidRevenueInCents)}
+            label="Vendas brutas confirmadas"
+            value={formatCurrencyInCents(
+              financialHealth.grossConfirmedSalesRevenueInCents
+            )}
           />
           <AdminMetricCard
-            helper={averagePaidTicketHelper}
+            helper={averageConfirmedSaleTicketHelper}
             icon={CreditCardIcon}
-            label="Valor médio dos pedidos pagos"
-            value={averagePaidTicket}
+            label="Ticket médio confirmado"
+            value={averageConfirmedSaleTicket}
           />
           <AdminMetricCard
             help={
@@ -327,17 +329,17 @@ export function FinancialOverview({
           <AdminMetricCard
             help={
               <FinanceHelp
-                description="Percentual de pedidos pagos em relação a todos os pedidos registrados."
+                description="Percentual de pedidos com evidência de pagamento confirmado em relação a todos os pedidos registrados."
                 details={[
                   "É um indicador operacional de pedidos, não uma conversão de visitantes do checkout.",
-                  "Pedidos cancelados e checkouts encerrados permanecem no denominador.",
+                  "Pedidos cancelados e checkouts encerrados permanecem no denominador; reembolsos e disputas não apagam a venda histórica.",
                 ]}
-                title="Pedidos pagos / registrados"
+                title="Pagamentos confirmados / pedidos"
               />
             }
             helper={checkoutConversionHelper}
             icon={ShoppingCart01Icon}
-            label="Pedidos pagos / registrados"
+            label="Pagamentos confirmados / pedidos"
             value={checkoutConversion}
           />
         </div>
@@ -355,16 +357,17 @@ export function FinancialOverview({
                   <FinanceHelp
                     description="Consulte como ler os estados do Pedido e os alertas da integração."
                     details={[
-                      "Pedidos pendentes ainda não têm pagamento confirmado; podem incluir a criação do Checkout em andamento ou uma tentativa que exige reconciliação.",
-                      "Tentativas encerradas sem pagamento aparecem separadas do potencial dos links ativos.",
+                      "Checkouts em criação ainda estão sendo associados pelo Hub. Links ativos sem cobrança aparecem no potencial nominal; isso não é recebível.",
+                      "Um Checkout marcado como pago sem evidência de cobrança aparece na fila de confirmação do Painel; não libera acesso por si só.",
+                      "Pedidos pagos, reembolsados e em disputa são estados atuais distintos; a venda bruta histórica preserva a evidência de pagamento.",
                       "Webhooks são avisos automáticos do Asaas; falhas e retries podem atrasar a atualização local.",
                     ]}
-                    title="Saúde financeira"
+                    title="Pedidos e checkouts"
                   />
                 </div>
                 <CardDescription className="mt-1">
-                  Quatro estados dos Pedidos; alertas da integração aparecem
-                  quando necessário.
+                  Checkouts em criação e estados atuais dos Pedidos; alertas da
+                  integração aparecem quando necessário.
                 </CardDescription>
               </div>
               <div className="flex size-8 items-center justify-center rounded-md bg-muted/50 text-muted-foreground">
@@ -382,10 +385,10 @@ export function FinancialOverview({
               <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
                 <FinanceStatusTile
                   href={getOrdersHref({
-                    checkout: "open",
+                    checkout: "creating",
                     status: "pending",
                   })}
-                  label="Pendentes"
+                  label="Em criação"
                   value={financialHealth.pendingOrders.toString()}
                 />
                 <FinanceStatusTile
@@ -427,7 +430,7 @@ export function FinancialOverview({
                 <Separator />
                 <div className="bg-muted/10 p-5">
                   <FinancialIntegrationStatus
-                    canViewGlobalAudit={canViewGlobalAudit}
+                    canViewOperations={canViewOperations}
                     failedWebhooks={failedWebhooks}
                     readyWebhooks={financialHealth.readyWebhooks}
                     retryableWebhooks={retryableWebhooks}
@@ -462,7 +465,8 @@ export function FinancialOverview({
                 </h2>
               </div>
               <p className="mt-1 text-muted-foreground text-sm">
-                Pedidos pagos e receita bruta por curso no histórico completo.
+                Pedidos com pagamento confirmado e vendas brutas por curso no
+                histórico completo.
               </p>
             </div>
             <CoursesRevenueTable data={coursesRevenue.courses} />
@@ -479,12 +483,12 @@ const getRetryDescription = (retryableWebhooks: number): string =>
     : `${retryableWebhooks} webhooks também estão em retry.`;
 
 function FinancialIntegrationStatus({
-  canViewGlobalAudit,
+  canViewOperations,
   failedWebhooks,
   readyWebhooks,
   retryableWebhooks,
 }: {
-  canViewGlobalAudit: boolean;
+  canViewOperations: boolean;
   failedWebhooks: number;
   readyWebhooks: number;
   retryableWebhooks: number;
@@ -500,13 +504,13 @@ function FinancialIntegrationStatus({
           {retryableWebhooks > 0
             ? getRetryDescription(retryableWebhooks)
             : "A atualização de pagamento ou acesso pode estar atrasada."}
-          {canViewGlobalAudit ? (
+          {canViewOperations ? (
             <Button asChild className="mt-3" size="sm" variant="outline">
               <Link href={route("/admin/operacao")}>Abrir Operação</Link>
             </Button>
           ) : (
             <span className="mt-3 block text-destructive/80 text-xs">
-              Encaminhe a recuperação para uma administradora.
+              Peça a alguém com acesso à Operação para conferir a integração.
             </span>
           )}
         </AlertDescription>
@@ -522,13 +526,13 @@ function FinancialIntegrationStatus({
           {retryableWebhooks === 1
             ? "1 webhook está aguardando uma nova tentativa automática."
             : `${retryableWebhooks} webhooks estão aguardando novas tentativas automáticas.`}
-          {canViewGlobalAudit ? (
+          {canViewOperations ? (
             <Button asChild className="mt-3" size="sm" variant="outline">
               <Link href={route("/admin/operacao")}>Abrir Operação</Link>
             </Button>
           ) : (
             <span className="mt-3 block text-muted-foreground text-xs">
-              A recuperação será acompanhada por uma administradora.
+              A pessoa responsável pela Operação pode acompanhar a tentativa.
             </span>
           )}
         </AlertDescription>

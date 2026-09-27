@@ -1,4 +1,5 @@
 import { parseAsaasDecimalToCents } from "./asaas-money";
+import { getAsaasPaymentDate } from "./asaas-payment-date";
 
 export interface AsaasWebhookEnvelope {
   dateCreated: string | null;
@@ -66,6 +67,7 @@ export interface AsaasFinancialEventDecision {
     paymentMethod?: string;
     providerCheckoutStatus?: string;
     providerDisputeStatus?: string;
+    providerPaymentDate?: string;
     providerPaymentStatus?: string;
     providerRefundStatus?: string;
     providerRiskStatus?: string;
@@ -101,12 +103,14 @@ const knownPaymentWebhookEvents = new Set([
   ...refundEvidenceEvents,
   ...riskEvents,
   "PAYMENT_CONFIRMED",
+  "PAYMENT_CREATED",
   "PAYMENT_CREDIT_CARD_CAPTURE_REFUSED",
   "PAYMENT_DELETED",
   "PAYMENT_OVERDUE",
   "PAYMENT_PARTIALLY_REFUNDED",
   "PAYMENT_RECEIVED",
   "PAYMENT_REFUNDED",
+  "PAYMENT_UPDATED",
 ]);
 const knownCheckoutWebhookEvents = new Set([
   "CHECKOUT_CANCELED",
@@ -177,6 +181,7 @@ interface ParsedPaymentEvent {
   event: string;
   netValueInCents: number | null;
   paymentStatus: string;
+  providerPaymentDate?: string;
   valueInCents: number | null;
 }
 
@@ -187,6 +192,7 @@ export interface QueriedAsaasPaymentEvidence {
   installmentId: string | null;
   netValueInCents: number;
   paymentId: string;
+  providerPaymentDate?: string;
   status: string;
   valueInCents: number;
 }
@@ -312,16 +318,24 @@ const getPaymentUpdates = ({
   billingType,
   netValueInCents,
   paymentStatus,
+  providerPaymentDate,
   valueInCents,
 }: Pick<
   ParsedPaymentEvent,
-  "billingType" | "netValueInCents" | "paymentStatus" | "valueInCents"
+  | "billingType"
+  | "netValueInCents"
+  | "paymentStatus"
+  | "providerPaymentDate"
+  | "valueInCents"
 >): FinancialUpdates => {
   const updates: FinancialUpdates = {
     providerPaymentStatus: paymentStatus,
   };
   if (billingType) {
     updates.paymentMethod = billingType;
+  }
+  if (providerPaymentDate) {
+    updates.providerPaymentDate = providerPaymentDate;
   }
   if (
     netValueInCents !== null &&
@@ -386,6 +400,9 @@ const getRegularPaymentEvidence = ({
     ? getPaymentUpdates(payment)
     : {
         ...(payment.billingType ? { paymentMethod: payment.billingType } : {}),
+        ...(payment.providerPaymentDate
+          ? { providerPaymentDate: payment.providerPaymentDate }
+          : {}),
       };
   if (
     payment.event === "PAYMENT_RECEIVED" &&
@@ -781,11 +798,18 @@ const decidePaymentEvent = ({
     };
   }
 
+  const providerPaymentDate = getAsaasPaymentDate({
+    clientPaymentDate: getString(paymentRecord, "clientPaymentDate"),
+    confirmedDate: getString(paymentRecord, "confirmedDate"),
+    customerPaymentDate: getString(paymentRecord, "customerPaymentDate"),
+    paymentDate: getString(paymentRecord, "paymentDate"),
+  });
   const payment: ParsedPaymentEvent = {
     billingType: getString(paymentRecord, "billingType"),
     event,
     netValueInCents: parseAsaasDecimalToCents(paymentRecord.netValue),
     paymentStatus,
+    ...(providerPaymentDate ? { providerPaymentDate } : {}),
     valueInCents: parseAsaasDecimalToCents(paymentRecord.value),
   };
   return decideParsedPaymentEvent({ correlation, payment, snapshot });
@@ -843,6 +867,9 @@ export const decideQueriedAsaasPayment = ({
       event: getQueriedPaymentEvent(evidence),
       netValueInCents: evidence.netValueInCents,
       paymentStatus: evidence.status,
+      ...(evidence.providerPaymentDate
+        ? { providerPaymentDate: evidence.providerPaymentDate }
+        : {}),
       valueInCents: evidence.valueInCents,
     },
     snapshot,
@@ -924,6 +951,9 @@ export const decideAsaasAdverseEventWithoutInstallment = ({
     alertReason: "event_anomaly",
     reviewReason: null,
     updates: {
+      ...(decision.updates.providerPaymentDate
+        ? { providerPaymentDate: decision.updates.providerPaymentDate }
+        : {}),
       ...(decision.updates.paymentMethod
         ? { paymentMethod: decision.updates.paymentMethod }
         : {}),
