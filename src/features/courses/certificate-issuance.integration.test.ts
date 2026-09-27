@@ -116,8 +116,14 @@ const createFixture = async ({
   const userId = `certificate-student-${randomUUID()}`;
   const { rows: courseRows } = await testPool.query<{ id: string }>(
     `
-      insert into courses (slug, title, workload_hours, status, certificate_enabled)
-      values ($1, 'Curso de concorrencia', 8, 'active', true)
+      insert into courses (
+        slug, title, workload_hours, status, certificate_enabled,
+        certificate_signer_name, certificate_signer_role
+      )
+      values (
+        $1, 'Curso de concorrencia', 8, 'active', true,
+        'Responsável de teste', 'Especialista'
+      )
       returning id
     `,
     [`certificate-concurrency-${randomUUID()}`]
