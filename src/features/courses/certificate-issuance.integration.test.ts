@@ -542,6 +542,12 @@ describe("emissao concorrente de certificado", () => {
   it("retorna código somente para a transação que vence o conflito", async () => {
     const fixture = await createFixture();
     const testPool = getTestPool();
+    await testPool.query(
+      `insert into course_completions (
+        user_id, course_id, course_publication_id
+      ) values ($1, $2, $3)`,
+      [fixture.userId, fixture.courseId, fixture.coursePublicationId]
+    );
     const firstClient = await testPool.connect();
     const secondClient = await testPool.connect();
     try {
