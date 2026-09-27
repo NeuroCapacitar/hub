@@ -4,25 +4,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
-      <div aria-busy="true" className="flex flex-col gap-6" role="status">
+      <div aria-busy="true" className="flex flex-col gap-16" role="status">
         <span className="sr-only">Carregando a lista de Alunos…</span>
 
-        <section>
-          <Skeleton className="mb-3 h-5 w-36" />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Skeleton className="h-[126px] rounded-xl" />
-            <Skeleton className="h-[126px] rounded-xl" />
-            <Skeleton className="h-[126px] rounded-xl" />
-            <Skeleton className="h-[126px] rounded-xl" />
-          </div>
-        </section>
+        <div className="flex flex-col gap-8">
+          <Skeleton className="h-8 w-64" />
+          <section>
+            <Skeleton className="mb-6 h-5 w-36" />
+            <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
+              <Skeleton className="h-[126px] rounded-xl" />
+              <Skeleton className="h-[126px] rounded-xl" />
+              <Skeleton className="h-[126px] rounded-xl" />
+              <Skeleton className="h-[126px] rounded-xl" />
+            </div>
+          </section>
+        </div>
 
-        <section className="rounded-lg bg-card py-6 text-card-foreground shadow-sm ring-1 ring-border/50">
-          <div className="grid gap-1.5 px-6 pb-4">
+        <section className="grid gap-6">
+          <div className="grid gap-1.5">
             <Skeleton className="h-6 w-52" />
             <Skeleton className="h-4 w-full max-w-[460px]" />
           </div>
-          <div className="px-6">
+          <div className="grid gap-4">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <Skeleton className="h-9 w-full max-w-[420px]" />
               <Skeleton className="h-9 w-20" />

@@ -3,13 +3,16 @@ import {
   DashboardSquare01Icon,
   HelpSquareIcon,
   Image01Icon,
+  PaintBoardIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import Link from "next/link";
 import { FinanceHelp } from "@/components/admin/finance-help";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Scrollspy } from "@/components/reui/scrollspy";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   getAdminBannersData,
@@ -19,6 +22,7 @@ import {
 import { getAdminAuthMediaData } from "@/features/auth-media/server";
 import { requirePermission } from "@/lib/auth-permissions";
 import { canPerform } from "@/lib/auth-policy";
+import { route } from "@/lib/routes";
 import { AuthMediaGallery } from "./auth-media/auth-media-gallery";
 import { BannerGallery } from "./banners/banner-gallery";
 import {
@@ -72,8 +76,6 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
     (issue) => issuerProfileIssueLabels[issue]
   );
   const certificateSettings: CertificateSettingsFormValues = {
-    certificateSignerName: data.settings.certificateSignerName,
-    certificateSignerRole: data.settings.certificateSignerRole,
     issuerCnpj: data.settings.issuerCnpj,
     issuerDisplayName: data.settings.issuerDisplayName,
     issuerLegalName: data.settings.issuerLegalName,
@@ -82,7 +84,23 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader title="Configurações globais" />
+        <PageHeader
+          actions={
+            <Button asChild variant="outline">
+              <Link href={route("/admin/configuracoes/design-system")}>
+                <HugeiconsIcon
+                  aria-hidden="true"
+                  data-icon="inline-start"
+                  icon={PaintBoardIcon}
+                  size={16}
+                  strokeWidth={1.5}
+                />
+                Sistema visual
+              </Link>
+            </Button>
+          }
+          title="Configurações globais"
+        />
 
         <div className="grid grid-cols-1 gap-14 md:grid-cols-[220px_1fr] lg:grid-cols-[240px_1fr]">
           <aside className="hidden md:block">
@@ -152,10 +170,10 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
             </div>
           </aside>
 
-          <div className="min-w-0 space-y-16">
+          <div className="min-w-0 space-y-20">
             <section
               aria-labelledby="settings-certificates"
-              className="grid scroll-mt-24 gap-5"
+              className="grid scroll-mt-24 gap-6"
               id="certificados"
             >
               <div className="flex items-start justify-between gap-3">
@@ -168,11 +186,11 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
                       Emissão de certificados
                     </h2>
                     <FinanceHelp
-                      description="Configure a identidade global usada para novas emissões. Um Curso pode definir uma assinatura própria, e Certificados já emitidos permanecem imutáveis."
+                      description="Configure a identidade global da organização. Nome e cargo do signatário são definidos em cada Curso; Certificados já emitidos permanecem imutáveis."
                       details={[
                         "Razão social e CNPJ formam o perfil emissor e precisam ser preenchidos juntos.",
                         "A marca exibida aparece no documento quando o template não define outro valor.",
-                        "A assinatura padrão é usada apenas quando o Curso não possui uma assinatura própria.",
+                        "Nome e cargo do signatário são definidos em cada Curso e obrigatórios para publicar; a imagem visual é opcional.",
                       ]}
                       title="Como funciona a emissão"
                     />
@@ -205,7 +223,7 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
               </Card>
             </section>
 
-            <section className="grid scroll-mt-24 gap-5" id="tela-acesso">
+            <section className="grid scroll-mt-24 gap-6" id="tela-acesso">
               <div className="space-y-1">
                 <h2 className="type-section-title">Tela de acesso</h2>
                 <p className="text-muted-foreground text-sm">
@@ -218,7 +236,7 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
               />
             </section>
 
-            <section className="grid scroll-mt-24 gap-5" id="banners-dashboard">
+            <section className="grid scroll-mt-24 gap-6" id="banners-dashboard">
               <div className="space-y-1">
                 <h2 className="type-section-title">Banners do Dashboard</h2>
                 <p className="text-muted-foreground text-sm">
@@ -233,7 +251,7 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
             </section>
 
             <section
-              className="grid scroll-mt-24 gap-5"
+              className="grid scroll-mt-24 gap-6"
               id="perguntas-frequentes"
             >
               <div className="flex items-start justify-between gap-3">

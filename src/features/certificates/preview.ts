@@ -6,9 +6,16 @@ import {
   CERTIFICATE_FONT_FAMILY,
   configureCertificateFontRuntime,
 } from "./font-assets";
+import { CERTIFICATE_FONT_ASCENDER_RATIO } from "./font-metrics";
+import { createCertificatePdfDocument } from "./pdf-document";
+import {
+  type CertificatePdfTextMetrics,
+  layoutCertificatePdfText,
+} from "./pdf-text-layout";
 import type { CertificateRenderSnapshot } from "./render-snapshot";
 import { getCertificateValidationPath } from "./rules";
 import { CERTIFICATE_PAGE } from "./template-rules";
+import { getCertificateTextVerticalOffset } from "./text-layout";
 
 const PREVIEW_WIDTH = 1200;
 const PREVIEW_HEIGHT = Math.round(
@@ -128,6 +135,58 @@ const createTextSvg = ({
   return `<clipPath id="${clipId}"><rect x="${x}" y="${y}" width="${width}" height="${height}" /></clipPath><g clip-path="url(#${clipId})" fill="${escapeXml(field.color)}" font-family="${CERTIFICATE_FONT_FAMILY}" font-size="${fontSize}" font-weight="${field.font === "Helvetica-Bold" ? 700 : 400}">${text}</g>`;
 };
 
+const createMeasuredTextSvg = ({
+  document,
+  field,
+  height,
+  index,
+  value,
+  width,
+  x,
+  y,
+}: {
+  document: CertificatePdfTextMetrics;
+  field: CertificateRenderSnapshot["template"]["fields"][number];
+  height: number;
+  index: number;
+  value: string;
+  width: number;
+  x: number;
+  y: number;
+}): string => {
+  const fontSize = field.fontSize * PREVIEW_SCALE;
+  const layout = layoutCertificatePdfText(
+    document,
+    field,
+    value,
+    width / PREVIEW_SCALE
+  );
+  const verticalOffset =
+    getCertificateTextVerticalOffset({
+      contentHeight: layout.contentHeight,
+      height: height / PREVIEW_SCALE,
+      verticalAlign: field.verticalAlign,
+    }) * PREVIEW_SCALE;
+  const baseline =
+    y + verticalOffset + fontSize * CERTIFICATE_FONT_ASCENDER_RATIO;
+  const anchor = getTextAnchor(field.align);
+  let textX = x + width / 2;
+  if (field.align === "left") {
+    textX = x;
+  } else if (field.align === "right") {
+    textX = x + width;
+  }
+  const clipId = `certificate-preview-field-${index}`;
+  const text = layout.lines
+    .map(
+      (line, lineIndex) =>
+        `<text x="${textX}" y="${baseline + lineIndex * layout.lineHeight * PREVIEW_SCALE}" text-anchor="${anchor}">${escapeXml(line)}</text>`
+    )
+    .join("");
+
+  return `<clipPath id="${clipId}"><rect x="${x}" y="${y}" width="${width}" height="${height}" /></clipPath><g clip-path="url(#${clipId})" fill="${escapeXml(field.color)}" font-family="${CERTIFICATE_FONT_FAMILY}" font-size="${fontSize}" font-weight="${field.font === "Helvetica-Bold" ? 700 : 400}">${text}</g>`;
+};
+
 export const createCertificatePreviewSvg = ({
   qrDataUrl,
   signatureDataUrl,
@@ -139,6 +198,10 @@ export const createCertificatePreviewSvg = ({
 }): string => {
   const values = fieldValues(snapshot);
   const elements: string[] = [];
+  const metricsDocument =
+    snapshot.rendererVersion === 2
+      ? createCertificatePdfDocument({ autoFirstPage: false })
+      : null;
 
   snapshot.template.fields.forEach((field, index) => {
     if (!field.visible) {
@@ -167,10 +230,23 @@ export const createCertificatePreviewSvg = ({
     const value = values[field.field];
     if (value) {
       elements.push(
-        createTextSvg({ field, height, index, value, width, x, y })
+        metricsDocument
+          ? createMeasuredTextSvg({
+              document: metricsDocument,
+              field,
+              height,
+              index,
+              value,
+              width,
+              x,
+              y,
+            })
+          : createTextSvg({ field, height, index, value, width, x, y })
       );
     }
   });
+
+  metricsDocument?.end();
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${PREVIEW_WIDTH}" height="${PREVIEW_HEIGHT}" viewBox="0 0 ${PREVIEW_WIDTH} ${PREVIEW_HEIGHT}">${elements.join("")}</svg>`;
 };

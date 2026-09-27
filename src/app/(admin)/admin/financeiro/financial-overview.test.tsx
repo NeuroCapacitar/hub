@@ -24,18 +24,21 @@ describe("FinancialOverview", () => {
         canExecuteRefund={false}
         canManageFinancialOperations={false}
         canManageFinancialReviews={false}
-        canViewGlobalAudit={false}
+        canViewOperations={false}
         coursesRevenue={{ courses: [] }}
         financialHealth={{
-          abandonedCheckoutOrders: 0,
-          averagePaidTicketInCents: 10_000,
+          closedCheckoutAttempts: 2,
+          activeCheckoutCount: 2,
+          activeCheckoutPotentialInCents: 20_000,
+          checkoutPaidAwaitingConfirmationCount: 0,
+          averageConfirmedSaleTicketInCents: 10_000,
           checkoutConversionPercent: 50,
           disputedOrders: 0,
           failedWebhooks: 0,
           paidOrders: 1,
-          paidRevenueInCents: 10_000,
+          confirmedSaleOrders: 1,
+          grossConfirmedSalesRevenueInCents: 10_000,
           pendingOrders: 0,
-          pendingRevenueInCents: 0,
           readyWebhooks: 0,
           refundedOrders: 0,
           retryableWebhooks: 0,
@@ -58,11 +61,51 @@ describe("FinancialOverview", () => {
     expect(markup).not.toContain("Receita sem alerta");
     expect(markup).not.toContain("Integração Asaas sem falhas");
     expect(markup).toContain("Anteriores");
+    expect(markup).toContain("Potencial em checkouts ativos");
+    expect(markup).toContain("2 checkouts ativos");
+    expect(markup).toContain(
+      'href="/admin/financeiro?tab=orders&amp;checkout=closed"'
+    );
     expect(markup.indexOf("Pendências financeiras")).toBeLessThan(
       markup.indexOf("Receita por curso")
     );
     expect(markup.indexOf("Pendências financeiras")).toBeLessThan(
-      markup.indexOf("Receita bruta de pedidos pagos")
+      markup.indexOf("Vendas brutas confirmadas")
     );
+  });
+
+  it("shows the operation destination to Support with operation-view access", () => {
+    const markup = renderToStaticMarkup(
+      <FinancialOverview
+        canExecuteRefund={false}
+        canManageFinancialOperations={false}
+        canManageFinancialReviews={false}
+        canViewOperations
+        coursesRevenue={{ courses: [] }}
+        financialHealth={{
+          activeCheckoutCount: 0,
+          activeCheckoutPotentialInCents: 0,
+          checkoutPaidAwaitingConfirmationCount: 0,
+          averageConfirmedSaleTicketInCents: 0,
+          checkoutConversionPercent: 0,
+          closedCheckoutAttempts: 0,
+          confirmedSaleOrders: 0,
+          disputedOrders: 0,
+          failedWebhooks: 1,
+          paidOrders: 0,
+          grossConfirmedSalesRevenueInCents: 0,
+          pendingOrders: 0,
+          readyWebhooks: 0,
+          refundedOrders: 0,
+          retryableWebhooks: 0,
+          totalOrders: 0,
+        }}
+        paymentReviews={null}
+      />
+    );
+
+    expect(markup).toContain("Abrir Operação");
+    expect(markup).toContain('href="/admin/operacao"');
+    expect(markup).not.toContain("administradora");
   });
 });

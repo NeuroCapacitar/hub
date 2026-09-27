@@ -16,21 +16,17 @@ const getCardTitleClass = (variant: CardTitleVariant): string => {
 
 function Card({
   className,
-  density = "default",
   size = "default",
   ...props
 }: React.ComponentProps<"div"> & {
-  density?: "default" | "compact";
   size?: "default" | "sm";
 }) {
   return (
     <div
       className={cn(
-        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-lg bg-card py-(--card-spacing) text-card-foreground text-sm shadow-sm ring-1 ring-border/50 [--card-spacing:--spacing(6)] has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
-        density === "compact" && "!gap-0 !py-0",
+        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-surface bg-card py-(--card-spacing) text-card-foreground text-sm shadow-sm ring-1 ring-border/50 [--card-spacing:--spacing(6)] has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] *:[img:first-child]:rounded-t-surface *:[img:last-child]:rounded-b-surface",
         className
       )}
-      data-density={density}
       data-size={size}
       data-slot="card"
       {...props}
@@ -38,21 +34,13 @@ function Card({
   );
 }
 
-function CardHeader({
-  className,
-  density = "default",
-  ...props
-}: React.ComponentProps<"div"> & {
-  density?: "default" | "compact";
-}) {
+function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "group/card-header @container/card-header grid auto-rows-min items-start gap-1.5 rounded-t-lg px-(--card-spacing) has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-(--card-spacing)",
-        density === "compact" && "!gap-1 !px-4 !py-2 !pb-2",
+        "group/card-header @container/card-header grid auto-rows-min items-start gap-1.5 rounded-t-surface px-(--card-spacing) has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-(--card-spacing)",
         className
       )}
-      data-density={density}
       data-slot="card-header"
       {...props}
     />
@@ -114,7 +102,7 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "flex items-center rounded-b-lg px-(--card-spacing) [.border-t]:pt-(--card-spacing)",
+        "flex items-center rounded-b-surface px-(--card-spacing) [.border-t]:pt-(--card-spacing)",
         className
       )}
       data-slot="card-footer"

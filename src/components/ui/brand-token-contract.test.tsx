@@ -24,8 +24,42 @@ describe("brand token contract", () => {
     const classes = buttonVariants({ variant: "default" });
 
     expect(classes).toContain("bg-button-primary");
+    expect(classes).toContain("rounded-control");
     expect(classes).toContain("focus-visible:outline-focus");
     expect(classes).toContain("focus-visible:ring-background");
+  });
+
+  it("keeps the comfortable radius baseline and semantic scale centralized", async () => {
+    const source = await readFile(
+      new URL("../../app/globals.css", import.meta.url),
+      "utf8"
+    );
+
+    expect(source).toContain("--radius: 0.5rem;");
+    expect(source).toContain(
+      "--shape-radius-detail: calc(var(--radius) * 0.75);"
+    );
+    expect(source).toContain("--shape-radius-control: var(--radius);");
+    expect(source).toContain(
+      "--shape-radius-card: calc(var(--radius) * 1.25);"
+    );
+    expect(source).toContain(
+      "--shape-radius-surface: calc(var(--radius) * 1.5);"
+    );
+    expect(source).toContain("--shape-radius-media: calc(var(--radius) * 2);");
+  });
+
+  it("uses semantic radius roles for shared form controls", async () => {
+    const sources = await Promise.all(
+      ["input.tsx", "select.tsx", "textarea.tsx"].map((file) =>
+        readFile(new URL(`./${file}`, import.meta.url), "utf8")
+      )
+    );
+
+    expect(sources[0]).toContain("rounded-control");
+    expect(sources[1]).toContain("rounded-control");
+    expect(sources[1]).toContain("rounded-card");
+    expect(sources[2]).toContain("rounded-control");
   });
 
   it("keeps the orange Button accent opt-in", () => {

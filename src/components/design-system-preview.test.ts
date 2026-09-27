@@ -32,6 +32,17 @@ describe("design system preview coverage", () => {
     }
 
     expect(source).toContain('variant="progress"');
+    expect(source).toContain('size="sm"');
+
+    for (const radius of [
+      "rounded-detail",
+      "rounded-control",
+      "rounded-card",
+      "rounded-surface",
+      "rounded-media",
+    ]) {
+      expect(source).toContain(radius);
+    }
 
     for (const surface of [
       "bg-background",

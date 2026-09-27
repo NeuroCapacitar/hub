@@ -1,5 +1,12 @@
 import { LESSON_SERVER_FALLBACK_MAX_BYTES } from "@/features/storage/lesson-resource-upload";
 import { validateLessonAttachmentUpload } from "@/features/storage/r2-objects";
+import {
+  isUploadAbortedError,
+  UploadAbortedError,
+  type UploadStatusPhase,
+  type UploadTransferProgress,
+  uploadBlobWithProgress,
+} from "@/features/storage/xhr-upload";
 
 export interface LessonResourceUploadPreview {
   blob: Blob;
@@ -37,6 +44,8 @@ class InvalidLessonResourceUploadError extends Error {}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const LESSON_UPLOAD_CONFIRMATION_ATTEMPTS = 2;
 const SUPPORT_CORRELATION_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -138,12 +147,17 @@ const readPreparedUpload = async (
 const prepareLessonResourceUpload = async ({
   file,
   lessonId,
+  onStatus,
   preview,
+  signal,
 }: {
   file: File;
   lessonId: string;
+  onStatus?: ((phase: UploadStatusPhase) => void) | undefined;
   preview: LessonResourceUploadPreview | null | undefined;
+  signal?: AbortSignal | undefined;
 }): Promise<PreparedLessonResourceUpload> => {
+  onStatus?.("preparing");
   const response = await fetch(
     `/api/admin/lessons/${lessonId}/resources/upload-url`,
     {
@@ -164,6 +178,7 @@ const prepareLessonResourceUpload = async ({
       }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
+      signal: signal ?? null,
     }
   );
 
@@ -176,9 +191,11 @@ const prepareLessonResourceUpload = async ({
 const reissueLessonResourceUpload = async ({
   lessonId,
   resourceId,
+  signal,
 }: {
   lessonId: string;
   resourceId: string;
+  signal?: AbortSignal | undefined;
 }): Promise<PreparedLessonResourceUpload> => {
   const response = await fetch(
     `/api/admin/lessons/${lessonId}/resources/reissue-url`,
@@ -186,6 +203,7 @@ const reissueLessonResourceUpload = async ({
       body: JSON.stringify({ resourceId }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
+      signal: signal ?? null,
     }
   );
 
@@ -217,30 +235,28 @@ const assertSamePreparedObject = (
 const putExact = async ({
   body,
   contentType,
+  onProgress,
+  signal,
   uploadUrl,
 }: {
   body: Blob;
   contentType: string;
+  onProgress?: ((progress: UploadTransferProgress) => void) | undefined;
+  signal?: AbortSignal | undefined;
   uploadUrl: string;
 }): Promise<void> => {
   try {
-    const bodyBuffer = await body.arrayBuffer();
-    const response = await fetch(uploadUrl, {
-      body: bodyBuffer,
+    await uploadBlobWithProgress({
+      body,
       headers: { "Content-Type": contentType },
-      method: "PUT",
+      onProgress,
+      signal,
+      url: uploadUrl,
     });
-
-    if (!response.ok) {
-      throw new DirectLessonResourceUploadError(
-        "O R2 recusou o upload direto."
-      );
-    }
   } catch (error) {
-    if (error instanceof DirectLessonResourceUploadError) {
+    if (isUploadAbortedError(error)) {
       throw error;
     }
-
     throw new DirectLessonResourceUploadError(
       "O upload direto para o R2 falhou."
     );
@@ -249,18 +265,40 @@ const putExact = async ({
 
 const uploadPreparedObjects = async ({
   file,
+  onProgress,
   prepared,
   preview,
+  signal,
 }: {
   file: File;
+  onProgress?: ((progress: UploadTransferProgress) => void) | undefined;
   prepared: PreparedLessonResourceUpload;
   preview: LessonResourceUploadPreview | null | undefined;
+  signal?: AbortSignal | undefined;
 }): Promise<void> => {
+  const totalBytes = file.size + (preview?.blob.size ?? 0);
+  let completedBytes = 0;
+  let lastReportedPercentage: number | null | undefined;
+  const reportPartProgress =
+    () =>
+    (progress: UploadTransferProgress): void => {
+      const loaded = Math.min(totalBytes, completedBytes + progress.loaded);
+      const percentage = Math.min(100, Math.round((loaded / totalBytes) * 100));
+      if (percentage === lastReportedPercentage) {
+        return;
+      }
+      lastReportedPercentage = percentage;
+      onProgress?.({ loaded, percentage, total: totalBytes });
+    };
+
   await putExact({
     body: file,
     contentType: prepared.reference.contentType,
+    onProgress: reportPartProgress(),
+    signal,
     uploadUrl: prepared.uploadUrl,
   });
+  completedBytes += file.size;
 
   if (preview) {
     if (!prepared.previewUploadUrl) {
@@ -272,48 +310,91 @@ const uploadPreparedObjects = async ({
     await putExact({
       body: preview.blob,
       contentType: preview.contentType,
+      onProgress: reportPartProgress(),
+      signal,
       uploadUrl: prepared.previewUploadUrl,
     });
+    completedBytes += preview.blob.size;
   }
 };
 
 const confirmLessonResourceUpload = async ({
   lessonId,
+  onStatus,
   resourceId,
+  signal,
 }: {
   lessonId: string;
+  onStatus?: ((phase: UploadStatusPhase) => void) | undefined;
   resourceId: string;
+  signal?: AbortSignal | undefined;
 }): Promise<LessonResourceUploadReference> => {
-  const response = await fetch(
-    `/api/admin/lessons/${lessonId}/resources/confirm`,
-    {
-      body: JSON.stringify({ resourceId }),
-      headers: { "Content-Type": "application/json" },
-      method: "POST",
+  for (
+    let attempt = 0;
+    attempt < LESSON_UPLOAD_CONFIRMATION_ATTEMPTS;
+    attempt += 1
+  ) {
+    onStatus?.("confirming");
+    let response: Response;
+    try {
+      response = await fetch(
+        `/api/admin/lessons/${lessonId}/resources/confirm`,
+        {
+          body: JSON.stringify({ resourceId }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+          signal: signal ?? null,
+        }
+      );
+    } catch (error) {
+      if (isUploadAbortedError(error, signal)) {
+        throw new UploadAbortedError();
+      }
+      if (
+        attempt + 1 < LESSON_UPLOAD_CONFIRMATION_ATTEMPTS &&
+        error instanceof TypeError
+      ) {
+        continue;
+      }
+      throw new Error("Não foi possível confirmar o anexo. Tente novamente.");
     }
-  );
-  const value = await readJson(response);
 
-  if (!(response.ok && isRecord(value) && isReference(value.reference))) {
+    const value = await readJson(response);
+    if (response.ok && isRecord(value) && isReference(value.reference)) {
+      return value.reference;
+    }
+
+    if (
+      attempt + 1 < LESSON_UPLOAD_CONFIRMATION_ATTEMPTS &&
+      response.status >= 500
+    ) {
+      continue;
+    }
+
     throw new Error(
       readSafeError(value, "Nao foi possivel confirmar o upload.")
     );
   }
 
-  return value.reference;
+  throw new Error("Não foi possível confirmar o anexo. Tente novamente.");
 };
 
 const uploadThroughServer = async ({
   file,
   lessonId,
+  onStatus,
   preview,
   resourceId,
+  signal,
 }: {
   file: File;
   lessonId: string;
+  onStatus?: ((phase: UploadStatusPhase) => void) | undefined;
   preview: LessonResourceUploadPreview | null | undefined;
   resourceId: string;
+  signal?: AbortSignal | undefined;
 }): Promise<LessonResourceUploadReference> => {
+  onStatus?.("fallback");
   const formData = new FormData();
   formData.set("file", file);
   formData.set("resourceId", resourceId);
@@ -326,7 +407,7 @@ const uploadThroughServer = async ({
 
   const response = await fetch(
     `/api/admin/lessons/${lessonId}/resources/upload`,
-    { body: formData, method: "POST" }
+    { body: formData, method: "POST", signal: signal ?? null }
   );
   const value = await readJson(response);
 
@@ -342,11 +423,17 @@ const uploadThroughServer = async ({
 export const uploadLessonResource = async ({
   file,
   lessonId,
+  onStatus,
+  onProgress,
   preview,
+  signal,
 }: {
   file: File;
   lessonId: string;
+  onStatus?: ((phase: UploadStatusPhase) => void) | undefined;
+  onProgress?: ((progress: UploadTransferProgress) => void) | undefined;
   preview?: LessonResourceUploadPreview | null;
+  signal?: AbortSignal | undefined;
 }): Promise<LessonResourceUploadReference> => {
   validateLessonAttachmentUpload({
     contentType: file.type,
@@ -354,33 +441,59 @@ export const uploadLessonResource = async ({
     sizeBytes: file.size,
   });
 
-  const initial = await prepareLessonResourceUpload({
-    file,
-    lessonId,
-    preview,
-  });
-
+  let initial: PreparedLessonResourceUpload;
   try {
-    await uploadPreparedObjects({ file, prepared: initial, preview });
-    return await confirmLessonResourceUpload({
+    initial = await prepareLessonResourceUpload({
+      file,
       lessonId,
-      resourceId: initial.reference.id,
+      onStatus,
+      preview,
+      signal,
     });
-  } catch {
+  } catch (error) {
+    if (isUploadAbortedError(error, signal)) {
+      throw new UploadAbortedError();
+    }
+    throw error;
+  }
+
+  let resourceId = initial.reference.id;
+  onStatus?.("uploading");
+  try {
+    await uploadPreparedObjects({
+      file,
+      onProgress,
+      prepared: initial,
+      preview,
+      signal,
+    });
+  } catch (error) {
+    if (isUploadAbortedError(error, signal)) {
+      throw new UploadAbortedError();
+    }
+    onStatus?.("retrying");
     let renewed: PreparedLessonResourceUpload;
 
     try {
       renewed = await reissueLessonResourceUpload({
         lessonId,
         resourceId: initial.reference.id,
+        signal,
       });
       assertSamePreparedObject(initial.reference, renewed.reference);
-      await uploadPreparedObjects({ file, prepared: renewed, preview });
-      return await confirmLessonResourceUpload({
-        lessonId,
-        resourceId: renewed.reference.id,
+      onStatus?.("uploading");
+      await uploadPreparedObjects({
+        file,
+        onProgress,
+        prepared: renewed,
+        preview,
+        signal,
       });
+      resourceId = renewed.reference.id;
     } catch (error) {
+      if (isUploadAbortedError(error, signal)) {
+        throw new UploadAbortedError();
+      }
       if (error instanceof InvalidLessonResourceUploadError) {
         throw error;
       }
@@ -389,8 +502,10 @@ export const uploadLessonResource = async ({
         return await uploadThroughServer({
           file,
           lessonId,
+          onStatus,
           preview,
           resourceId: initial.reference.id,
+          signal,
         });
       }
 
@@ -399,4 +514,11 @@ export const uploadLessonResource = async ({
       );
     }
   }
+
+  return await confirmLessonResourceUpload({
+    lessonId,
+    onStatus,
+    resourceId,
+    signal,
+  });
 };

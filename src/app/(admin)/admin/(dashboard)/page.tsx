@@ -97,6 +97,57 @@ const formatCountBreakdown = (
     .map(([label, value]) => [label, formatCount(value)].join(": "))
     .join(" · ");
 
+const formatQueueAge = (createdAt: Date): string => {
+  const elapsedMinutes = Math.max(
+    0,
+    Math.floor((Date.now() - createdAt.getTime()) / 60_000)
+  );
+  if (elapsedMinutes < 1) {
+    return "há menos de 1 min";
+  }
+  if (elapsedMinutes < 60) {
+    return `há ${formatCount(elapsedMinutes)} min`;
+  }
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) {
+    return `há ${formatCount(elapsedHours)} h`;
+  }
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return `há ${formatCount(elapsedDays)} dia${elapsedDays === 1 ? "" : "s"}`;
+};
+
+const formatFinancialQueueDescription = ({
+  exposureInCents,
+  oldestAt,
+  summary,
+}: {
+  exposureInCents: number;
+  oldestAt: Date | null | undefined;
+  summary: string;
+}): string =>
+  [
+    summary,
+    oldestAt ? `Mais antigo: ${formatQueueAge(oldestAt)}.` : null,
+    exposureInCents > 0
+      ? `Valor dos pedidos envolvidos: ${formatCurrencyInCents(exposureInCents)}; referência operacional, não perda nem débito confirmado.`
+      : null,
+  ]
+    .filter((item): item is string => item !== null)
+    .join(" ");
+
+const appendOldestQueueAge = ({
+  description,
+  itemLabel,
+  oldestAt,
+}: {
+  description: string;
+  itemLabel: string;
+  oldestAt: Date | null;
+}): string =>
+  oldestAt
+    ? `${description} ${itemLabel} mais antigo: ${formatQueueAge(oldestAt)}.`
+    : description;
+
 const getPluralLabel = (
   value: number,
   singular: string,
@@ -163,6 +214,188 @@ const getCourseMissingItems = (
   return missing;
 };
 
+const getFinancialAttentionIssues = (
+  financial: AdminDashboardOperations["financial"]
+): DashboardIssue[] => {
+  const issues: DashboardIssue[] = [];
+  const add = (issue: DashboardIssue): void => {
+    if (issue.count > 0) {
+      issues.push(issue);
+    }
+  };
+
+  if (financial.pendingPaymentReviewCount !== undefined) {
+    add({
+      actionLabel: "Abrir fila",
+      count: financial.pendingPaymentReviewCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.pendingPaymentReviewExposureInCents ?? 0,
+        oldestAt: financial.oldestPendingPaymentReviewAt,
+        summary:
+          "Exceções financeiras aguardam uma decisão; os valores são pedidos envolvidos, não perdas confirmadas.",
+      }),
+      href: "/admin/financeiro?tab=overview",
+      label: "Revisões financeiras",
+      tone: "attention",
+    });
+  }
+  if (financial.uncertainCheckoutCount !== undefined) {
+    add({
+      actionLabel: "Conferir pedidos",
+      count: financial.uncertainCheckoutCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.uncertainCheckoutExposureInCents ?? 0,
+        oldestAt: financial.oldestUncertainCheckoutAt,
+        summary:
+          "O Hub não conseguiu confirmar o resultado da criação do Checkout; não significa que o cliente pagou.",
+      }),
+      href: "/admin/financeiro?tab=orders&status=pending&checkout=uncertain",
+      label: "Checkouts com resultado incerto",
+      tone: "attention",
+    });
+  }
+  if (financial.uncorrelatedOrderCount !== undefined) {
+    add({
+      actionLabel: "Conferir pagamentos",
+      count: financial.uncorrelatedOrderCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.uncorrelatedOrderExposureInCents ?? 0,
+        oldestAt: financial.oldestUncorrelatedOrderAt,
+        summary:
+          "O Pedido está pago localmente, mas não possui identificador de cobrança Asaas correlacionado.",
+      }),
+      href: "/admin/financeiro?tab=orders&paymentEvidence=uncorrelated&status=paid",
+      label: "Pagamentos sem vínculo",
+      tone: "attention",
+    });
+  }
+  if (financial.uncertainRefundCount !== undefined) {
+    add({
+      actionLabel: "Conferir reembolsos",
+      count: financial.uncertainRefundCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.uncertainRefundExposureInCents ?? 0,
+        oldestAt: financial.oldestUncertainRefundAt,
+        summary:
+          "O resultado do reembolso ainda não foi confirmado pelo Asaas.",
+      }),
+      href: "/admin/financeiro?tab=orders&refundStatus=uncertain",
+      label: "Reembolsos incertos",
+      tone: "attention",
+    });
+  }
+  if (financial.failedRefundCount !== undefined) {
+    add({
+      actionLabel: "Ver reembolsos",
+      count: financial.failedRefundCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.failedRefundExposureInCents ?? 0,
+        oldestAt: financial.oldestFailedRefundAt,
+        summary:
+          "O reembolso falhou e precisa ser conferido antes de uma nova tentativa.",
+      }),
+      href: "/admin/financeiro?tab=orders&refundStatus=failed",
+      label: "Reembolsos com falha",
+      tone: "attention",
+    });
+  }
+  if (financial.checkoutPaidAwaitingConfirmationCount !== undefined) {
+    add({
+      actionLabel: "Conferir pedidos",
+      count: financial.checkoutPaidAwaitingConfirmationCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents:
+          financial.checkoutPaidAwaitingConfirmationExposureInCents ?? 0,
+        oldestAt: financial.oldestCheckoutPaidAwaitingConfirmationAt,
+        summary:
+          "O Asaas marcou o Checkout como pago, mas o Hub ainda não recebeu evidência de cobrança suficiente para confirmar o pagamento ou liberar acesso.",
+      }),
+      href: "/admin/financeiro?tab=orders&status=pending&checkout=paid-awaiting-confirmation",
+      label: "Checkout pago, aguardando confirmação",
+      tone: "attention",
+    });
+  }
+  return issues;
+};
+
+const getFinancialWatchIssues = (
+  financial: AdminDashboardOperations["financial"],
+  overview: AdminOverview
+): DashboardIssue[] => {
+  const issues: DashboardIssue[] = [];
+  const add = (issue: DashboardIssue): void => {
+    if (issue.count > 0) {
+      issues.push(issue);
+    }
+  };
+
+  add({
+    actionLabel: "Ver pedidos",
+    count: overview.pendingOrders ?? 0,
+    description: [
+      "O Hub ainda está criando ou associando a sessão de Checkout.",
+      overview.oldestPendingCheckoutAt
+        ? `Mais antigo: ${formatQueueAge(overview.oldestPendingCheckoutAt)}.`
+        : null,
+    ]
+      .filter((part): part is string => part !== null)
+      .join(" "),
+    href: "/admin/financeiro?tab=orders&status=pending&checkout=creating",
+    label: "Checkouts em criação",
+    tone: "watch",
+  });
+  if (financial.activeCheckoutCount !== undefined) {
+    add({
+      actionLabel: "Acompanhar links",
+      count: financial.activeCheckoutCount,
+      description: [
+        "Links ativos sem cobrança registrada no Hub; valor nominal, não recebível.",
+        financial.oldestActiveCheckoutAt
+          ? `Mais antigo: ${formatQueueAge(financial.oldestActiveCheckoutAt)}.`
+          : null,
+        (financial.activeCheckoutPotentialInCents ?? 0) > 0
+          ? `Valor nominal: ${formatCurrencyInCents(financial.activeCheckoutPotentialInCents ?? 0)}.`
+          : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(" "),
+      href: "/admin/financeiro?tab=orders&status=pending&checkout=active",
+      label: "Checkouts ativos sem cobrança",
+      tone: "watch",
+    });
+  }
+  if (financial.pendingRefundCount !== undefined) {
+    add({
+      actionLabel: "Ver financeiro",
+      count: financial.pendingRefundCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.pendingRefundExposureInCents ?? 0,
+        oldestAt: financial.oldestPendingRefundAt,
+        summary: "Reembolsos solicitados ou ainda em processamento.",
+      }),
+      href: "/admin/financeiro?tab=orders&refundStatus=open",
+      label: "Reembolsos abertos",
+      tone: "watch",
+    });
+  }
+  if (financial.disputedOrderCount !== undefined) {
+    add({
+      actionLabel: "Ver disputas",
+      count: financial.disputedOrderCount,
+      description: formatFinancialQueueDescription({
+        exposureInCents: financial.disputedOrderExposureInCents ?? 0,
+        oldestAt: financial.oldestDisputeAt,
+        summary:
+          "Pedidos permanecem marcados como disputa; o valor não é tratado como perda até uma decisão do provedor.",
+      }),
+      href: "/admin/financeiro?tab=orders&status=disputed",
+      label: "Pedidos em disputa",
+      tone: "watch",
+    });
+  }
+  return issues;
+};
+
 const getDashboardIssues = ({
   courseHealth,
   operations,
@@ -183,56 +416,22 @@ const getDashboardIssues = ({
     }
   };
   const backlog = operations.integrations.backlog;
-  const financial = operations.financial;
   const support = operations.supportRequests;
   const failedIntegrationCount =
     backlog.webhooks.failed + backlog.outbox.deadLetters;
-  const uncertainFinancialCount =
-    (financial.uncertainCheckoutCount ?? 0) +
-    (financial.uncertainRefundCount ?? 0) +
-    (financial.uncorrelatedOrderCount ?? 0);
-
-  if (financial.pendingPaymentReviewCount !== undefined) {
-    add(attention, {
-      actionLabel: "Abrir fila",
-      count: financial.pendingPaymentReviewCount,
-      description:
-        "Exceções aguardam uma decisão antes de concluir o fluxo financeiro.",
-      href: "/admin/financeiro",
-      label: "Revisões financeiras",
-      tone: "attention",
-    });
-  }
-  add(attention, {
-    actionLabel: "Ver financeiro",
-    count: uncertainFinancialCount,
-    description: formatCountBreakdown([
-      ["Checkouts incertos", financial.uncertainCheckoutCount ?? 0],
-      ["Sem pagamento vinculado", financial.uncorrelatedOrderCount ?? 0],
-      ["Reembolsos incertos", financial.uncertainRefundCount ?? 0],
-    ]),
-    href: "/admin/financeiro",
-    label: "Resultados financeiros incertos",
-    tone: "attention",
-  });
-  if (financial.failedRefundCount !== undefined) {
-    add(attention, {
-      actionLabel: "Ver reembolsos",
-      count: financial.failedRefundCount,
-      description:
-        "O reembolso falhou e precisa ser conferido antes de uma nova tentativa.",
-      href: "/admin/financeiro",
-      label: "Reembolsos com falha",
-      tone: "attention",
-    });
-  }
+  attention.push(...getFinancialAttentionIssues(operations.financial));
+  watch.push(...getFinancialWatchIssues(operations.financial, overview));
   add(attention, {
     actionLabel: "Abrir Operação",
     count: failedIntegrationCount,
-    description: formatCountBreakdown([
-      ["Webhooks falhos", backlog.webhooks.failed],
-      ["Mensagens em dead letter", backlog.outbox.deadLetters],
-    ]),
+    description: appendOldestQueueAge({
+      description: formatCountBreakdown([
+        ["Webhooks falhos", backlog.webhooks.failed],
+        ["Mensagens em dead letter", backlog.outbox.deadLetters],
+      ]),
+      itemLabel: "Webhook falho",
+      oldestAt: backlog.webhooks.oldestFailedAt,
+    }),
     href: "/admin/operacao",
     label: "Falhas de integração",
     tone: "attention",
@@ -278,43 +477,18 @@ const getDashboardIssues = ({
   });
 
   add(watch, {
-    actionLabel: "Ver pedidos",
-    count: overview.pendingOrders ?? 0,
-    description: "Checkouts ainda abertos; não entram na receita bruta paga.",
-    href: "/admin/financeiro?tab=orders&status=pending&checkout=open",
-    label: "Pedidos aguardando confirmação",
-    tone: "watch",
-  });
-  add(watch, {
     actionLabel: "Abrir Operação",
     count: backlog.webhooks.retryable,
-    description:
-      "A próxima tentativa automática ainda pode regularizar estes eventos.",
+    description: appendOldestQueueAge({
+      description:
+        "A próxima tentativa automática ainda pode regularizar estes eventos.",
+      itemLabel: "Webhook em retry",
+      oldestAt: backlog.webhooks.oldestRetryAt,
+    }),
     href: "/admin/operacao",
     label: "Webhooks em retry",
     tone: "watch",
   });
-  if (financial.pendingRefundCount !== undefined) {
-    add(watch, {
-      actionLabel: "Ver financeiro",
-      count: financial.pendingRefundCount,
-      description: "Solicitações de reembolso ainda estão em processamento.",
-      href: "/admin/financeiro",
-      label: "Reembolsos em processamento",
-      tone: "watch",
-    });
-  }
-  if (financial.disputedOrderCount !== undefined) {
-    add(watch, {
-      actionLabel: "Ver disputas",
-      count: financial.disputedOrderCount,
-      description:
-        "Pedidos permanecem marcados como disputa no estado financeiro local.",
-      href: "/admin/financeiro?tab=orders&status=disputed",
-      label: "Pedidos em disputa",
-      tone: "watch",
-    });
-  }
   add(watch, {
     actionLabel: "Ver alunos",
     count: operations.access.expiringStudentCount,
@@ -390,8 +564,8 @@ export default async function AdminPage(): Promise<React.JSX.Element> {
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-6">
-        <PageHeader title="Operação diária" />
+      <div className="flex flex-col gap-16">
+        <PageHeader title="Operação diária" visibleHeading={false} />
 
         <DashboardSummary operations={data.operations} overview={overview} />
 
@@ -461,44 +635,44 @@ function DashboardSummary({
     },
   ];
 
-  if (overview.paidRevenueInCents !== undefined) {
+  if (overview.grossConfirmedSalesRevenueInCents !== undefined) {
     metrics.unshift({
       helper: "Histórico; não é saldo no Asaas",
       help: (
         <FinanceHelp
-          description="A receita é calculada a partir dos pedidos que o Hub mantém como pagos."
+          description="Soma histórica dos pedidos com evidência de pagamento confirmado, mesmo quando depois reembolsados ou contestados."
           details={[
-            "É um histórico operacional do Hub; não representa saldo disponível ou liquidação no Asaas.",
-            "Pedidos em aberto aparecem separadamente no contexto financeiro.",
+            "É uma métrica operacional do Hub; não representa saldo disponível ou liquidação no Asaas.",
+            "Reembolsos e disputas são ajustes separados e não apagam a venda bruta histórica.",
           ]}
-          title="Receita bruta paga"
+          title="Vendas brutas confirmadas"
         />
       ),
       icon: Money01Icon,
-      label: "Receita bruta paga",
-      value: formatCurrencyInCents(overview.paidRevenueInCents),
+      label: "Vendas brutas confirmadas",
+      value: formatCurrencyInCents(overview.grossConfirmedSalesRevenueInCents),
     });
   }
-  if (overview.paidOrders !== undefined) {
+  if (overview.confirmedSaleOrders !== undefined) {
     metrics.push({
       helper: "Confirmados no histórico",
       icon: ShoppingCart01Icon,
-      label: "Pedidos pagos",
-      value: formatCount(overview.paidOrders),
+      label: "Pedidos com pagamento confirmado",
+      value: formatCount(overview.confirmedSaleOrders),
     });
   }
 
   return (
     <section aria-labelledby="dashboard-summary-title">
-      <div className="mb-3">
+      <div className="mb-6">
         <h2 className="type-section-title" id="dashboard-summary-title">
-          Resumo do dia
+          Resumo da operação
         </h2>
         <p className="type-body-sm mt-1 text-muted-foreground">
-          Os números principais para começar a operação.
+          Visão histórica das vendas e do estado atual da operação.
         </p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-5">
         {metrics.map((metric) => (
           <AdminMetricCard
             help={metric.help}
@@ -551,7 +725,7 @@ function OperationsOverview({
     <>
       {hasOperationalQueues ? (
         <section aria-labelledby="dashboard-operations-title">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-center gap-1">
               <h2
                 className="type-section-title"
@@ -572,7 +746,7 @@ function OperationsOverview({
               {operationBadgeLabel}
             </Badge>
           </div>
-          <div className="grid gap-4">
+          <div className="grid gap-12">
             {hasAttention ? (
               <IssueGroup
                 description="Falhas e exceções que podem bloquear uma decisão."
@@ -594,7 +768,7 @@ function OperationsOverview({
       ) : null}
       {hasCatalogContent ? (
         <section aria-labelledby="dashboard-content-title">
-          <div className="mb-3">
+          <div className="mb-6">
             <h2 className="type-section-title" id="dashboard-content-title">
               Conteúdo e certificados
             </h2>
@@ -604,7 +778,7 @@ function OperationsOverview({
           </div>
           <div
             className={cn(
-              "grid gap-4",
+              "grid gap-x-5 gap-y-12",
               hasCatalog && hasPendingCertificates && "xl:grid-cols-2"
             )}
           >
@@ -656,7 +830,7 @@ function IssueGroup({
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+      <CardContent className="divide-y divide-border/50 p-0">
         {issues.map((issue) => (
           <IssueRow issue={issue} key={issue.label} />
         ))}
@@ -667,7 +841,7 @@ function IssueGroup({
 
 function IssueRow({ issue }: { issue: DashboardIssue }): React.JSX.Element {
   return (
-    <div className="grid gap-3 rounded-lg border bg-muted/10 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+    <div className="grid gap-3 px-4 py-4 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5 sm:py-5 sm:last:pb-0 sm:first:pt-0">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-sm">{issue.label}</span>
@@ -740,7 +914,7 @@ function CatalogHealthCard({
         </CardAction>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="m-4 rounded-lg border bg-muted/10 p-4 sm:m-5">
+        <div className="border-border/50 border-b px-4 py-4 sm:px-5 sm:py-5">
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm">Prontidão média</span>
             <strong className="font-semibold tabular-nums">
@@ -793,7 +967,7 @@ function CoursePriorityList({
   }
 
   return (
-    <div className="p-4 pt-0 sm:p-5 sm:pt-0">
+    <div className="p-4 sm:p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <p className="type-label">Cursos que precisam de revisão</p>
         <Badge className="tabular-nums" variant="warning">
@@ -805,7 +979,7 @@ function CoursePriorityList({
           const missingItems = getCourseMissingItems(course);
           return (
             <div
-              className="grid gap-3 rounded-lg border bg-muted/10 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              className="grid gap-3 border-border/50 border-t py-3 first:border-t-0 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
               key={course.id}
             >
               <div className="min-w-0">
@@ -893,12 +1067,12 @@ function CertificateQueueCard({
           </Badge>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className={pending.length > 0 ? "p-0" : undefined}>
         {pending.length > 0 ? (
-          <div className="grid gap-3">
+          <div className="divide-y divide-border/50">
             {pending.map((certificate) => (
               <div
-                className="grid gap-3 rounded-lg border bg-muted/10 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5 sm:py-5"
                 key={
                   certificate.courseId +
                   ":" +
@@ -974,13 +1148,13 @@ function OperationalContext({
   const support = operations.supportRequests;
   const webhookCount = backlog.webhooks.failed + backlog.webhooks.retryable;
   const hasFinancialContext =
-    financial.pendingRevenueInCents !== undefined ||
+    financial.activeCheckoutPotentialInCents !== undefined ||
     financial.disputedOrderCount !== undefined ||
     financial.refundedOrderCount !== undefined;
 
   return (
     <section aria-labelledby="dashboard-context-title">
-      <div className="mb-3">
+      <div className="mb-6">
         <h2 className="type-section-title" id="dashboard-context-title">
           Contexto de acompanhamento
         </h2>
@@ -988,14 +1162,14 @@ function OperationalContext({
           Valores e filas que ajudam a interpretar as pendências.
         </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-x-5 gap-y-12 md:grid-cols-3">
         {hasFinancialContext ? (
           <ContextCard
             help={
               <FinanceHelp
                 description="Use estes números para acompanhar o fluxo local; o fechamento e o saldo continuam no Asaas."
                 details={[
-                  "Valor em aberto inclui apenas pedidos pendentes com checkout ainda válido.",
+                  "O potencial considera links de Checkout ativos sem cobrança registrada no Hub; não confirma que foram abertos ou preenchidos.",
                   "Disputas e reembolsos mostram o estado atual registrado pelo Hub.",
                 ]}
                 title="Contexto financeiro"
@@ -1003,11 +1177,13 @@ function OperationalContext({
             }
             title="Financeiro"
           >
-            {financial.pendingRevenueInCents === undefined ? null : (
+            {financial.activeCheckoutPotentialInCents === undefined ? null : (
               <ContextMetric
-                helper="Pedidos abertos; ainda não recebidos"
-                label="Valor em aberto"
-                value={formatCurrencyInCents(financial.pendingRevenueInCents)}
+                helper={`${financial.activeCheckoutCount ?? 0} checkout${financial.activeCheckoutCount === 1 ? "" : "s"} ativo${financial.activeCheckoutCount === 1 ? "" : "s"} sem cobrança registrada; valor nominal.`}
+                label="Potencial em checkouts ativos"
+                value={formatCurrencyInCents(
+                  financial.activeCheckoutPotentialInCents
+                )}
               />
             )}
             {financial.disputedOrderCount === undefined ? null : (
@@ -1086,9 +1262,9 @@ function OperationalContext({
         </ContextCard>
       </div>
       {hasFinancialContext ? (
-        <p className="mt-2 text-muted-foreground text-xs">
-          Receita bruta paga é o histórico do Hub. Saldo disponível, liquidação
-          e detalhes do provedor devem ser conferidos no Asaas.
+        <p className="mt-4 text-muted-foreground text-xs">
+          Vendas brutas confirmadas são o histórico do Hub. Saldo disponível,
+          liquidação e detalhes do provedor devem ser conferidos no Asaas.
         </p>
       ) : null}
     </section>
@@ -1117,7 +1293,7 @@ function ContextCard({
         </div>
       </CardHeader>
       <CardContent>
-        <dl className="grid gap-3">{children}</dl>
+        <dl className="divide-y divide-border/50">{children}</dl>
       </CardContent>
     </Card>
   );
@@ -1133,7 +1309,7 @@ function ContextMetric({
   value: string;
 }): React.JSX.Element {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/10 p-3">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 py-3 first:pt-0 last:pb-0">
       <dt className="truncate font-medium text-sm">{label}</dt>
       <dd className="row-span-2 shrink-0 text-right font-semibold text-lg tabular-nums">
         {value}
@@ -1162,7 +1338,7 @@ function RecentActivity({
 
   return (
     <section aria-labelledby="dashboard-activity-title">
-      <div className="mb-3">
+      <div className="mb-6">
         <h2 className="type-section-title" id="dashboard-activity-title">
           Atividade recente
         </h2>
@@ -1171,7 +1347,7 @@ function RecentActivity({
           fluxo.
         </p>
       </div>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-12">
         {recentOrders.length > 0 ? (
           <RecentOrdersCard orders={recentOrders} />
         ) : null}
@@ -1192,21 +1368,19 @@ function RecentCommentsCard({
   comments: AdminDashboardRecentComment[];
 }): React.JSX.Element {
   return (
-    <Card className="min-w-0">
-      <CardHeader className="border-b pb-4">
-        <CardTitle as="h3" className="text-base">
+    <section aria-labelledby="dashboard-comments-title" className="grid gap-6">
+      <div>
+        <h3 className="type-section-title" id="dashboard-comments-title">
           Últimos comentários
-        </CardTitle>
-        <CardDescription className="mt-1">
+        </h3>
+        <p className="mt-1 text-muted-foreground text-sm">
           Os 5 comentários mais recentes nas aulas.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="rounded-lg border">
-          <RecentCommentsTable comments={comments} />
-        </div>
-      </CardContent>
-    </Card>
+        </p>
+      </div>
+      <div className="rounded-lg border">
+        <RecentCommentsTable comments={comments} />
+      </div>
+    </section>
   );
 }
 
@@ -1216,17 +1390,17 @@ function RecentOrdersCard({
   orders: AdminDashboardRecentOrder[];
 }): React.JSX.Element {
   return (
-    <Card className="min-w-0">
-      <CardHeader className="border-b pb-4">
+    <section aria-labelledby="dashboard-orders-title" className="grid gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <CardTitle as="h3" className="text-base">
+          <h3 className="type-section-title" id="dashboard-orders-title">
             Últimas compras
-          </CardTitle>
-          <CardDescription className="mt-1">
+          </h3>
+          <p className="mt-1 text-muted-foreground text-sm">
             Os 5 pedidos mais recentes do checkout.
-          </CardDescription>
+          </p>
         </div>
-        <CardAction>
+        <div>
           <Button asChild size="sm" variant="outline">
             <Link href={route("/admin/financeiro?tab=orders")}>
               Ver todos os pedidos
@@ -1239,14 +1413,12 @@ function RecentOrdersCard({
               />
             </Link>
           </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        <div className="rounded-lg border">
-          <RecentOrdersTable orders={orders} />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+      <div className="rounded-lg border">
+        <RecentOrdersTable orders={orders} />
+      </div>
+    </section>
   );
 }
 
@@ -1256,21 +1428,22 @@ function RecentCertificatesCard({
   certificates: AdminDashboardRecentCertificate[];
 }): React.JSX.Element {
   return (
-    <Card className="min-w-0">
-      <CardHeader className="border-b pb-4">
-        <CardTitle as="h3" className="text-base">
+    <section
+      aria-labelledby="dashboard-certificates-title"
+      className="grid gap-6"
+    >
+      <div>
+        <h3 className="type-section-title" id="dashboard-certificates-title">
           Últimos certificados emitidos
-        </CardTitle>
-        <CardDescription className="mt-1">
+        </h3>
+        <p className="mt-1 text-muted-foreground text-sm">
           Os 5 certificados emitidos mais recentemente.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="rounded-lg border">
-          <RecentCertificatesTable certificates={certificates} />
-        </div>
-      </CardContent>
-    </Card>
+        </p>
+      </div>
+      <div className="rounded-lg border">
+        <RecentCertificatesTable certificates={certificates} />
+      </div>
+    </section>
   );
 }
 
@@ -1547,31 +1720,23 @@ function SupportRequestsSection({
   totalCount: number;
 }): React.JSX.Element {
   return (
-    <section aria-labelledby="dashboard-support-title">
-      <Card className="overflow-hidden">
-        <CardHeader className="border-b pb-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <CardTitle
-              as="h2"
-              className="text-base"
-              id="dashboard-support-title"
-            >
-              Solicitações de suporte
-            </CardTitle>
-            <Badge variant="info">{formatCount(totalCount)}</Badge>
-          </div>
-          <CardDescription className="mt-1">
-            Mostrando {formatCount(recent.length)} de {formatCount(totalCount)}
-            solicitações mais recentes; o estado indica se o e-mail foi colocado
-            na fila, aceito ou entregue.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-lg border">
-            <SupportRequestsTable recent={recent} />
-          </div>
-        </CardContent>
-      </Card>
+    <section aria-labelledby="dashboard-support-title" className="grid gap-6">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="type-section-title" id="dashboard-support-title">
+            Solicitações de suporte
+          </h2>
+          <Badge variant="info">{formatCount(totalCount)}</Badge>
+        </div>
+        <p className="mt-1 text-muted-foreground text-sm">
+          Mostrando {formatCount(recent.length)} de {formatCount(totalCount)}
+          solicitações mais recentes; o estado indica se o e-mail foi colocado
+          na fila, aceito ou entregue.
+        </p>
+      </div>
+      <div className="rounded-lg border">
+        <SupportRequestsTable recent={recent} />
+      </div>
     </section>
   );
 }

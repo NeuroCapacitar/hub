@@ -1,7 +1,7 @@
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
-  CheckmarkCircle02Icon,
+  CircleDotIcon,
   CircleIcon,
   Clock01Icon,
   Download01Icon,
@@ -19,6 +19,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { completeLessonAction } from "@/app/(student)/app/actions";
+import { IconCircleCheck } from "@/components/custom icons/icon-circle-check";
 import { LessonCommentsSection } from "@/components/lesson-comments-section";
 import {
   LessonFocusHidden,
@@ -39,7 +40,14 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
   Sidebar,
@@ -47,6 +55,12 @@ import {
   SidebarMenuItem,
   SidebarMenuLink,
 } from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { getLessonComments } from "@/features/comments/server";
 import type { LessonResource } from "@/features/courses/lesson-content";
 import {
@@ -178,10 +192,11 @@ export default async function LessonPage({
       sidebar={
         <LessonCourseSidebar
           activeLessonId={data.lesson.id}
+          isPreview={data.isPreview}
           lessonsCount={lessonView.lessons.length}
           modules={lessonView.visibleModules}
           previewMode={previewMode}
-          progressPercent={data.progressPercent}
+          requiredLessonProgress={data.requiredLessonProgress}
         />
       }
     />
@@ -258,10 +273,11 @@ function LessonMainContent({
   const mobileCourseNavigation = (
     <LessonCourseMobileNavigation
       activeLessonId={data.lesson.id}
+      isPreview={data.isPreview}
       lessonsCount={lessonView.lessons.length}
       modules={lessonView.visibleModules}
       previewMode={previewMode}
-      progressPercent={data.progressPercent}
+      requiredLessonProgress={data.requiredLessonProgress}
     />
   );
   const materialUnavailableAlert = lessonView.materialUnavailable ? (
@@ -298,9 +314,6 @@ function LessonMainContent({
       <div className="flex flex-col">
         <LessonVideoPlayer
           durationSeconds={data.lesson.durationSeconds}
-          initialLinearProgressBlocked={
-            data.lesson.watchProgress?.isLinearProgressBlocked ?? false
-          }
           initialPositionSeconds={
             data.lesson.watchProgress?.resumePositionSeconds ?? 0
           }
@@ -397,12 +410,10 @@ function LessonHeader({
             <LessonFocusToggle />
             {data.lesson.isCompleted ? (
               <Button className="gap-2" disabled size="sm" variant="secondary">
-                <HugeiconsIcon
+                <IconCircleCheck
                   aria-hidden="true"
+                  className="text-learning-complete"
                   data-icon="inline-start"
-                  icon={CheckmarkCircle02Icon}
-                  size={16}
-                  strokeWidth={2}
                 />
                 Aula concluída
               </Button>
@@ -567,10 +578,7 @@ function LessonResourceItem({
   const isExternal = resource.storage !== "r2";
 
   return (
-    <Card
-      className="bg-card/50 transition-colors hover:bg-muted/40"
-      density="compact"
-    >
+    <Card className="gap-0 rounded-card bg-card/50 py-0 transition-colors hover:bg-muted/40">
       <CardContent className="px-4 py-1 sm:px-5">
         <div className="grid min-w-0 grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-4 py-3">
           <ResourceVisual
@@ -805,17 +813,26 @@ function LessonNextStepCard({
 
 function LessonCourseSidebar({
   activeLessonId,
+  isPreview,
   lessonsCount,
   modules,
   previewMode,
-  progressPercent,
+  requiredLessonProgress,
 }: {
   activeLessonId: string;
+  isPreview: boolean;
   lessonsCount: number;
   modules: LessonPageData["modules"];
   previewMode: StudentPreviewMode | null;
-  progressPercent: number;
+  requiredLessonProgress: LessonPageData["requiredLessonProgress"];
 }): React.JSX.Element {
+  const progressLabel = getRequiredLessonProgressLabel({
+    isPreview,
+    progress: requiredLessonProgress,
+  });
+  const hasRequiredProgress =
+    !isPreview && requiredLessonProgress.totalCount > 0;
+
   return (
     <aside aria-label="Conteúdo do curso" className="h-full">
       <Sidebar
@@ -823,22 +840,39 @@ function LessonCourseSidebar({
         collapsible="none"
         side="right"
       >
-        <div className="shrink-0 border-b-0 px-6 py-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="font-semibold text-sm">Conteúdo do curso</p>
-              <p className="mt-1 text-sidebar-foreground text-xs">
-                {progressPercent}% concluído
-              </p>
-            </div>
-            <Badge variant="outline">{lessonsCount} aulas</Badge>
-          </div>
-          <Progress
-            aria-label="Progresso do curso"
-            className="mt-3 h-1 bg-muted"
-            tone={progressPercent >= 100 ? "complete" : "active"}
-            value={progressPercent}
-          />
+        <div className="shrink-0 px-3 py-4">
+          <Card className="gap-3" size="sm">
+            <CardHeader>
+              <CardTitle as="h2" className="text-sm">
+                Conteúdo do curso
+              </CardTitle>
+              <CardDescription className="text-sidebar-foreground text-xs">
+                {progressLabel}
+              </CardDescription>
+              <CardAction className="flex flex-col items-end gap-1">
+                {hasRequiredProgress ? (
+                  <span className="text-sidebar-foreground text-xs tabular-nums">
+                    {requiredLessonProgress.percent}%
+                  </span>
+                ) : null}
+                <Badge variant="outline">{lessonsCount} aulas</Badge>
+              </CardAction>
+            </CardHeader>
+            {hasRequiredProgress ? (
+              <CardContent className="pt-0">
+                <Progress
+                  aria-label={`Progresso das aulas obrigatórias: ${requiredLessonProgress.completedCount} de ${requiredLessonProgress.totalCount} concluídas`}
+                  className="h-1 bg-muted"
+                  tone={
+                    requiredLessonProgress.percent >= 100
+                      ? "complete"
+                      : "active"
+                  }
+                  value={requiredLessonProgress.percent}
+                />
+              </CardContent>
+            ) : null}
+          </Card>
         </div>
         <LessonCourseOutline
           activeLessonId={activeLessonId}
@@ -852,23 +886,36 @@ function LessonCourseSidebar({
 
 function LessonCourseMobileNavigation({
   activeLessonId,
+  isPreview,
   lessonsCount,
   modules,
   previewMode,
-  progressPercent,
+  requiredLessonProgress,
 }: {
   activeLessonId: string;
+  isPreview: boolean;
   lessonsCount: number;
   modules: LessonPageData["modules"];
   previewMode: StudentPreviewMode | null;
-  progressPercent: number;
+  requiredLessonProgress: LessonPageData["requiredLessonProgress"];
 }): React.JSX.Element {
+  const progressLabel = getRequiredLessonProgressLabel({
+    isPreview,
+    progress: requiredLessonProgress,
+  });
+
   return (
     <details className="border-border border-y lg:hidden">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-medium text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-8">
-        <span>Conteúdo do curso</span>
-        <span className="text-muted-foreground text-xs">
-          {progressPercent}% concluído · {lessonsCount} aulas
+        <span className="min-w-0 flex-1 truncate">Conteúdo do curso</span>
+        <span className="flex min-w-0 max-w-[62%] flex-1 flex-col items-end text-right text-muted-foreground text-xs">
+          <span className="max-w-full truncate">{progressLabel}</span>
+          <span className="tabular-nums">
+            {lessonsCount} aulas
+            {isPreview || requiredLessonProgress.totalCount === 0
+              ? ""
+              : ` · ${requiredLessonProgress.percent}%`}
+          </span>
         </span>
       </summary>
       <nav
@@ -883,6 +930,24 @@ function LessonCourseMobileNavigation({
       </nav>
     </details>
   );
+}
+
+function getRequiredLessonProgressLabel({
+  isPreview,
+  progress,
+}: {
+  isPreview: boolean;
+  progress: LessonPageData["requiredLessonProgress"];
+}): string {
+  if (isPreview) {
+    return "Prévia sem progresso";
+  }
+
+  if (progress.totalCount === 0) {
+    return "Sem aulas obrigatórias";
+  }
+
+  return `${progress.completedCount} de ${progress.totalCount} obrigatórias`;
 }
 
 function LessonCourseOutline({
@@ -909,34 +974,39 @@ function LessonCourseOutline({
 
   return (
     <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-2 py-2">
-      <Accordion
-        className="rounded-lg border-sidebar-border"
-        defaultValue={[activeModuleId]}
-        type="multiple"
-      >
-        {modules.map((module) => (
-          <AccordionItem key={module.id} value={module.id}>
-            <AccordionTrigger className="gap-3 px-3 py-3 text-sidebar-foreground text-sm hover:no-underline focus:no-underline">
-              <span className="flex min-w-0 flex-1 items-center gap-3">
-                <span className="min-w-0 flex-1 truncate">{module.title}</span>
-                <ModuleLockStatus module={module} />
-              </span>
-            </AccordionTrigger>
-            <AccordionContent className="px-0 pb-2 [&_a]:no-underline">
-              <SidebarMenu>
-                {module.lessons.map((lesson) => (
-                  <LessonSidebarItem
-                    activeLessonId={activeLessonId}
-                    key={lesson.id}
-                    lesson={lesson}
-                    previewMode={previewMode}
-                  />
-                ))}
-              </SidebarMenu>
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
+      <TooltipProvider delayDuration={200}>
+        <Accordion
+          className="rounded-lg border-sidebar-border"
+          defaultValue={[activeModuleId]}
+          type="multiple"
+        >
+          {modules.map((module) => (
+            <AccordionItem key={module.id} value={module.id}>
+              <AccordionTrigger className="gap-3 px-3 py-3 text-sidebar-foreground text-sm hover:no-underline focus:no-underline">
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate">
+                    {module.title}
+                  </span>
+                  <ModuleCompletionStatus module={module} />
+                  <ModuleLockStatus module={module} />
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="px-0 pb-2 [&_a]:no-underline">
+                <SidebarMenu>
+                  {module.lessons.map((lesson) => (
+                    <LessonSidebarItem
+                      activeLessonId={activeLessonId}
+                      key={lesson.id}
+                      lesson={lesson}
+                      previewMode={previewMode}
+                    />
+                  ))}
+                </SidebarMenu>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      </TooltipProvider>
     </div>
   );
 }
@@ -947,29 +1017,149 @@ function ModuleLockStatus({
   module: LessonPageData["modules"][number];
 }): React.JSX.Element | null {
   if (module.releaseState === "time_locked") {
+    const availableAt = formatLessonReleaseDate(module.availableAt);
+    const tooltip = getModuleLockTooltip(module);
+
+    if (!tooltip) {
+      return null;
+    }
+
     return (
-      <span className="flex shrink-0 items-center gap-1.5 font-normal text-amber-700 text-xs dark:text-amber-300">
-        <HugeiconsIcon icon={Clock01Icon} size={14} strokeWidth={2} />
+      <span
+        aria-label={tooltip}
+        className="flex shrink-0 items-center gap-1.5 font-normal text-amber-700 text-xs dark:text-amber-300"
+        role="img"
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span aria-hidden="true" className="inline-flex">
+              <HugeiconsIcon
+                aria-hidden="true"
+                icon={Clock01Icon}
+                size={14}
+                strokeWidth={2}
+              />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={6}>
+            {tooltip}
+          </TooltipContent>
+        </Tooltip>
         <span className="font-normal text-[11px] tabular-nums">
-          {formatLessonReleaseDate(module.availableAt)}
+          {availableAt}
         </span>
       </span>
     );
   }
 
-  const hasSequenceLockedLessons = module.lessons.some(
-    (lesson) => !(lesson.isAvailable || lesson.isCompleted)
-  );
+  if (!hasSequenceLockedLessons(module)) {
+    return null;
+  }
 
-  if (!hasSequenceLockedLessons) {
+  const tooltip = getModuleLockTooltip(module);
+
+  if (!tooltip) {
     return null;
   }
 
   return (
-    <span className="flex shrink-0 items-center gap-1.5 font-normal text-sidebar-foreground/60 text-xs">
-      <HugeiconsIcon icon={SquareLock02Icon} size={14} strokeWidth={2} />
-      <span>Continue a sequência</span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          aria-label={tooltip}
+          className="flex shrink-0 items-center font-normal text-sidebar-foreground/60 text-xs"
+          role="img"
+        >
+          <HugeiconsIcon
+            aria-hidden="true"
+            icon={SquareLock02Icon}
+            size={14}
+            strokeWidth={2}
+          />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="left" sideOffset={6}>
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function hasSequenceLockedLessons(
+  module: LessonPageData["modules"][number]
+): boolean {
+  return module.lessons.some(
+    (lesson) => !(lesson.isAvailable || lesson.isCompleted)
+  );
+}
+
+function getModuleCompletionLabel(
+  module: LessonPageData["modules"][number]
+): string | null {
+  const requiredLessonsComplete =
+    module.requiredLessonCount > 0 &&
+    module.completedRequiredLessonCount === module.requiredLessonCount &&
+    module.releaseState !== "invalid";
+
+  if (!requiredLessonsComplete) {
+    return null;
+  }
+
+  return module.pendingOptionalLessonCount > 0
+    ? "Obrigatórias concluídas"
+    : "Módulo concluído";
+}
+
+function getModuleCompletionTooltip(label: string): string {
+  if (label === "Obrigatórias concluídas") {
+    return "Obrigatórias concluídas. Ainda há aulas opcionais pendentes.";
+  }
+
+  return "Módulo concluído.";
+}
+
+function getModuleLockTooltip(
+  module: LessonPageData["modules"][number]
+): string | null {
+  if (module.releaseState === "time_locked") {
+    return `Este módulo ainda não foi liberado. Liberação prevista: ${formatLessonReleaseDate(module.availableAt)}.`;
+  }
+
+  if (hasSequenceLockedLessons(module)) {
+    return "Conclua as aulas obrigatórias anteriores para liberar a sequência.";
+  }
+
+  return null;
+}
+
+function ModuleCompletionStatus({
+  module,
+}: {
+  module: LessonPageData["modules"][number];
+}): React.JSX.Element | null {
+  const label = getModuleCompletionLabel(module);
+
+  if (!label) {
+    return null;
+  }
+
+  const tooltip = getModuleCompletionTooltip(label);
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          aria-label={tooltip}
+          className="flex shrink-0 items-center text-learning-complete"
+          role="img"
+        >
+          <IconCircleCheck />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="left" sideOffset={6}>
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -1146,45 +1336,100 @@ function LessonSidebarItem({
   lesson: LessonPageData["modules"][number]["lessons"][number];
   previewMode: StudentPreviewMode | null;
 }): React.JSX.Element {
-  const marker = getLessonMarker(lesson);
+  const isActive = lesson.id === activeLessonId;
+  const marker = getLessonMarker({
+    isActive,
+    isAvailable: lesson.isAvailable,
+    isCompleted: lesson.isCompleted,
+  });
+  const accessibleStatus = getLessonAccessibleStatus(lesson);
+  const statusTooltip = getLessonStatusTooltip(lesson, isActive);
+  const markerContent = (
+    <span
+      aria-hidden="true"
+      className="flex size-5 shrink-0 items-center justify-center"
+    >
+      {marker}
+    </span>
+  );
+  const statusMarker = statusTooltip ? (
+    <Tooltip>
+      <TooltipTrigger asChild>{markerContent}</TooltipTrigger>
+      <TooltipContent side="left" sideOffset={6}>
+        {statusTooltip}
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    markerContent
+  );
   const content = (
     <>
-      <span className="flex size-4 shrink-0 items-center justify-center text-xs">
-        {marker}
-      </span>
+      {statusMarker}
       <span className="min-w-0 flex-1">
-        <span className="block truncate">
-          {lesson.isCompleted ? "Concluída · " : ""}
-          {lesson.title}
-        </span>
+        {accessibleStatus ? (
+          <span className="sr-only">{accessibleStatus}: </span>
+        ) : null}
+        <span className="block truncate">{lesson.title}</span>
       </span>
     </>
   );
 
-  if (!lesson.isAvailable) {
-    return (
-      <SidebarMenuItem>
-        <div
-          aria-disabled="true"
-          className="flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2 py-2 text-sidebar-foreground/60 text-sm"
-        >
-          {content}
-        </div>
-      </SidebarMenuItem>
-    );
+  const item = lesson.isAvailable ? (
+    <SidebarMenuLink
+      href={route(getPreviewAwareHref(`/app/aulas/${lesson.id}`, previewMode))}
+      isActive={isActive}
+    >
+      {content}
+    </SidebarMenuLink>
+  ) : (
+    <div
+      aria-disabled="true"
+      className="flex min-h-9 cursor-default select-none items-center gap-2 rounded-md px-2 py-2 text-sidebar-foreground/60 text-sm"
+    >
+      {content}
+    </div>
+  );
+
+  return <SidebarMenuItem>{item}</SidebarMenuItem>;
+}
+
+function getLessonStatusTooltip(
+  lesson: LessonPageData["modules"][number]["lessons"][number],
+  isActive: boolean
+): string | null {
+  if (lesson.isCompleted) {
+    return isActive
+      ? "Esta aula já foi concluída. Você está nela agora."
+      : "Esta aula já foi concluída.";
   }
 
-  const href = route(
-    getPreviewAwareHref(`/app/aulas/${lesson.id}`, previewMode)
-  );
+  if (!lesson.isAvailable) {
+    return "Aula bloqueada.";
+  }
 
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuLink href={href} isActive={lesson.id === activeLessonId}>
-        {content}
-      </SidebarMenuLink>
-    </SidebarMenuItem>
-  );
+  if (isActive) {
+    return "Esta é a aula aberta no momento.";
+  }
+
+  return null;
+}
+
+function getLessonAccessibleStatus({
+  isAvailable,
+  isCompleted,
+}: {
+  isAvailable: boolean;
+  isCompleted: boolean;
+}): string | null {
+  if (isCompleted) {
+    return "Aula concluída";
+  }
+
+  if (!isAvailable) {
+    return "Aula bloqueada";
+  }
+
+  return null;
 }
 
 function formatLessonReleaseDate(value: Date | null): string {
@@ -1200,26 +1445,49 @@ function formatLessonReleaseDate(value: Date | null): string {
 }
 
 function getLessonMarker({
+  isActive,
   isAvailable,
   isCompleted,
 }: {
+  isActive: boolean;
   isAvailable: boolean;
   isCompleted: boolean;
-}): React.ReactNode {
+}): React.JSX.Element {
   if (isCompleted) {
-    return "✓";
+    return <IconCircleCheck className="size-[18px] text-learning-complete" />;
   }
 
-  if (isAvailable) {
-    return "•";
+  if (!isAvailable) {
+    return (
+      <HugeiconsIcon
+        aria-hidden="true"
+        className="text-sidebar-foreground/50"
+        icon={SquareLock02Icon}
+        size={14}
+        strokeWidth={2}
+      />
+    );
+  }
+
+  if (isActive) {
+    return (
+      <HugeiconsIcon
+        aria-hidden="true"
+        className="text-progress-active"
+        icon={CircleDotIcon}
+        size={16}
+        strokeWidth={2}
+      />
+    );
   }
 
   return (
     <HugeiconsIcon
       aria-hidden="true"
-      icon={SquareLock02Icon}
+      className="text-sidebar-foreground/50"
+      icon={CircleIcon}
       size={14}
-      strokeWidth={2}
+      strokeWidth={1.5}
     />
   );
 }

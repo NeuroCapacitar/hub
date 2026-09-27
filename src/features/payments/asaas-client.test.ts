@@ -470,7 +470,9 @@ describe("AsaasClient", () => {
         billingType: "CREDIT_CARD",
         checkoutSession: "chk_123",
         clientPaymentDate: "2026-09-10",
+        confirmedDate: "2026-09-11",
         customer: "cus_123",
+        customerPaymentDate: "2026-09-09",
         dueDate: "2026-09-15",
         id: "pay_123",
         installment: "ins_123",
@@ -488,6 +490,8 @@ describe("AsaasClient", () => {
     ).resolves.toMatchObject({
       anticipated: false,
       clientPaymentDate: "2026-09-10",
+      confirmedDate: "2026-09-11",
+      customerPaymentDate: "2026-09-09",
       dueDate: "2026-09-15",
       installmentId: "ins_123",
       installmentNumber: 2,

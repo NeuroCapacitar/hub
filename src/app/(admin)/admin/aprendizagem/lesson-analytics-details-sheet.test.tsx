@@ -14,6 +14,7 @@ const lesson: LessonAnalyticsLessonReport = {
     medianCheckpointPercent: 70,
     medianHoursToComplete: 1.75,
     medianHoursToNextLesson: 2,
+    nextLessonTimingSampleCount: 2,
     playingSeconds: 5400,
     started: 8,
   },
@@ -21,12 +22,15 @@ const lesson: LessonAnalyticsLessonReport = {
   current: {
     activeEnrollments: 5,
     completed: 3,
+    checkpointSampleCount: 4,
+    completionTimingSampleCount: 3,
     errorCount: 0,
     lessonTitle: "Aula atual",
     medianCheckpointPercent: 80,
     medianHoursToComplete: 1.5,
     medianHoursToNextLesson: 2,
     moduleTitle: "Módulo 1",
+    nextLessonTimingSampleCount: 2,
     playingSeconds: 3600,
     publicationNumber: 2,
     publicationStatus: "published",
@@ -40,12 +44,15 @@ const lesson: LessonAnalyticsLessonReport = {
     {
       activeEnrollments: 5,
       completed: 3,
+      checkpointSampleCount: 4,
+      completionTimingSampleCount: 3,
       errorCount: 0,
       lessonTitle: "Aula atual",
       medianCheckpointPercent: 80,
       medianHoursToComplete: 1.5,
       medianHoursToNextLesson: 2,
       moduleTitle: "Módulo 1",
+      nextLessonTimingSampleCount: 2,
       playingSeconds: 3600,
       publicationNumber: 2,
       publicationStatus: "published",
@@ -54,12 +61,15 @@ const lesson: LessonAnalyticsLessonReport = {
     {
       activeEnrollments: 0,
       completed: 2,
+      checkpointSampleCount: 2,
+      completionTimingSampleCount: 2,
       errorCount: 3,
       lessonTitle: "Aula anterior",
       medianCheckpointPercent: 60,
       medianHoursToComplete: 2,
       medianHoursToNextLesson: null,
       moduleTitle: "Módulo antigo",
+      nextLessonTimingSampleCount: 0,
       playingSeconds: 1800,
       publicationNumber: 1,
       publicationStatus: "retired",
@@ -129,6 +139,9 @@ describe("LessonAnalyticsDetailsSheet", () => {
     expect(
       document.querySelector('abbr[title="Checkpoint mediano"]')
     ).not.toBeNull();
+    expect(document.body.textContent).toContain("n=4");
+    expect(document.body.textContent).toContain("n=3");
+    expect(document.body.textContent).toContain("n=2");
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   });
 });

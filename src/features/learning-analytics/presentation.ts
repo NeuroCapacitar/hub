@@ -1,4 +1,5 @@
 import type {
+  LearningAnalyticsActivityScale,
   LearningAnalyticsKpis,
   LessonAnalyticsLessonReport,
   LessonAnalyticsLessonSummary,
@@ -11,6 +12,8 @@ const PUBLICATION_STATUS_ORDER = {
   draft: 1,
   retired: 2,
 } as const;
+
+export const MIN_LEARNING_ANALYTICS_PAUSE_INSIGHT_SAMPLE_SIZE = 3;
 
 const compareCurrentLessons = (
   left: LessonAnalyticsMetric,
@@ -26,12 +29,15 @@ const toVersionMetric = (
 ): LessonAnalyticsVersionMetric => ({
   activeEnrollments: metric.activeEnrollments,
   completed: metric.completed,
+  checkpointSampleCount: metric.checkpointSampleCount,
+  completionTimingSampleCount: metric.completionTimingSampleCount,
   errorCount: metric.errorCount,
   lessonTitle: metric.lessonTitle,
   medianCheckpointPercent: metric.medianCheckpointPercent,
   medianHoursToComplete: metric.medianHoursToComplete,
   medianHoursToNextLesson: metric.medianHoursToNextLesson,
   moduleTitle: metric.moduleTitle,
+  nextLessonTimingSampleCount: metric.nextLessonTimingSampleCount,
   playingSeconds: metric.playingSeconds,
   publicationNumber: metric.publicationNumber,
   publicationStatus: metric.publicationStatus,
@@ -51,6 +57,7 @@ const toAggregateMetric = (
   medianCheckpointPercent: current.aggregateMedianCheckpointPercent,
   medianHoursToComplete: current.aggregateMedianHoursToComplete,
   medianHoursToNextLesson: current.aggregateMedianHoursToNextLesson,
+  nextLessonTimingSampleCount: current.aggregateNextLessonTimingSampleCount,
   playingSeconds: versions.reduce(
     (total, version) => total + version.playingSeconds,
     0
@@ -122,6 +129,57 @@ export const buildLearningAnalyticsKpis = (
       (lesson) => lesson.aggregate.started === 0
     ).length,
   };
+};
+
+export const buildLearningAnalyticsActivityScale = (
+  lessons: readonly LessonAnalyticsLessonReport[]
+): LearningAnalyticsActivityScale => {
+  let maxValue = 0;
+
+  for (const lesson of lessons) {
+    maxValue = Math.max(
+      maxValue,
+      lesson.aggregate.completed,
+      lesson.aggregate.started
+    );
+  }
+
+  return { maxValue };
+};
+
+export const getLearningAnalyticsPauseInsights = (
+  lessons: readonly LessonAnalyticsLessonReport[],
+  limit = 3
+): LessonAnalyticsLessonReport[] =>
+  lessons
+    .filter(
+      (lesson) =>
+        lesson.aggregate.medianHoursToNextLesson !== null &&
+        lesson.aggregate.nextLessonTimingSampleCount >=
+          MIN_LEARNING_ANALYTICS_PAUSE_INSIGHT_SAMPLE_SIZE
+    )
+    .sort((left, right) => {
+      const leftHours = left.aggregate.medianHoursToNextLesson ?? 0;
+      const rightHours = right.aggregate.medianHoursToNextLesson ?? 0;
+
+      return (
+        rightHours - leftHours ||
+        right.aggregate.nextLessonTimingSampleCount -
+          left.aggregate.nextLessonTimingSampleCount ||
+        left.position - right.position
+      );
+    })
+    .slice(0, Math.max(0, limit));
+
+export const getLearningAnalyticsActivityWidth = (
+  value: number,
+  maximum: number
+): number => {
+  if (value <= 0 || maximum <= 0) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, Math.round((value / maximum) * 100)));
 };
 
 export const formatLearningAnalyticsHours = (value: number | null): string =>

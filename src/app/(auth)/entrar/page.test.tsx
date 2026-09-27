@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   connection: vi.fn(),
+  getServerEnv: vi.fn(),
   getCurrentSession: vi.fn(),
   redirect: vi.fn(),
 }));
@@ -16,9 +17,21 @@ vi.mock("@/components/auth-shell", () => ({
 vi.mock("@/lib/session", () => ({
   getCurrentSession: dependencies.getCurrentSession,
 }));
+vi.mock("@/lib/env", () => ({ getServerEnv: dependencies.getServerEnv }));
 vi.mock("./sign-in-form", () => ({
-  SignInForm: ({ returnTo }: { returnTo: string | null }) => (
-    <div data-return-to={returnTo ?? "none"}>Sign-in form</div>
+  SignInForm: ({
+    returnTo,
+    supportEmail,
+  }: {
+    returnTo: string | null;
+    supportEmail: string | null;
+  }) => (
+    <div
+      data-return-to={returnTo ?? "none"}
+      data-support-email={supportEmail ?? "none"}
+    >
+      Sign-in form
+    </div>
   ),
 }));
 
@@ -30,6 +43,9 @@ describe("SignInPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dependencies.connection.mockResolvedValue(undefined);
+    dependencies.getServerEnv.mockReturnValue({
+      SUPPORT_EMAIL: "support@example.test",
+    });
     dependencies.getCurrentSession.mockResolvedValue(null);
     dependencies.redirect.mockImplementation((path: string) => {
       throw new Error(`redirect:${path}`);
@@ -44,6 +60,7 @@ describe("SignInPage", () => {
     );
 
     expect(markup).toContain('data-return-to="/comprar/curso-gratis"');
+    expect(markup).toContain('data-support-email="support@example.test"');
     expect(markup).toContain(
       "Entre para voltar ao Curso e confirmar sua inscrição gratuita."
     );

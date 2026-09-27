@@ -39,7 +39,7 @@ describe("CourseCoverCropDialog", () => {
     vi.restoreAllMocks();
   });
 
-  it("describes the canonical 24:25 card crop and revokes the source URL", () => {
+  it("describes the canonical 16:9 card crop and revokes the source URL", () => {
     const create = vi
       .spyOn(URL, "createObjectURL")
       .mockReturnValue("blob:source");
@@ -56,7 +56,7 @@ describe("CourseCoverCropDialog", () => {
     );
 
     expect(document.body.textContent).toContain(
-      "Enquadre a imagem para o card do curso (960 × 1000 px, proporção 24:25)."
+      "Enquadre a imagem para o card do curso (1280 × 720 px, proporção 16:9)."
     );
     expect(
       document.body.querySelector('[data-testid="cropper"]')

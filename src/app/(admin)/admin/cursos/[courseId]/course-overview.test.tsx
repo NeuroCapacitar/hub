@@ -5,7 +5,7 @@ import { CourseOverview } from "./course-overview";
 
 const overviewSummary = {
   activeEnrollmentCount: 57,
-  paidOrderCount: 83,
+  confirmedSaleOrderCount: 83,
   validCertificateCount: 41,
 };
 
@@ -70,7 +70,7 @@ describe("CourseOverview", () => {
     expect(markup).toContain("Matrículas ativas");
     expect(markup).toContain("Alunos com acesso liberado.");
     expect(markup).toContain(">57<");
-    expect(markup).toContain("Pedidos pagos");
+    expect(markup).toContain("Pagamentos confirmados");
     expect(markup).toContain(">83<");
     expect(markup).toContain("Certificados válidos");
     expect(markup).toContain(">41<");

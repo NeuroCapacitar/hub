@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { DialogBody, DialogClose, DialogFooter } from "@/components/ui/dialog";
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -124,12 +123,10 @@ function FieldHelp({
 
 function CourseCreationFields({
   aggregateId,
-  isCoverUploading,
   priceFieldId,
   onCoverUploadingChange,
 }: {
   aggregateId: string;
-  isCoverUploading: boolean;
   onCoverUploadingChange: (isUploading: boolean) => void;
   priceFieldId: string;
 }): React.JSX.Element {
@@ -165,25 +162,20 @@ function CourseCreationFields({
     <>
       <input name="courseId" type="hidden" value="" />
       <FieldSet aria-label="Identidade do curso" className="gap-5">
-        <div className="grid min-w-0 gap-5 md:grid-cols-[minmax(0,11rem)_minmax(0,1fr)] md:items-stretch">
+        <div className="grid min-w-0 gap-5 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] md:items-stretch">
           <Field className="min-w-0">
             <FieldTitle className="items-center">
               <span>Capa do curso</span>
               <FieldHelp label="Ajuda sobre a capa do curso">
-                Opcional. Use PNG, JPG ou WebP de até 4 MB, na proporção
-                recomendada de 24:25.
+                Opcional. Envie PNG, JPG ou WebP de até 4 MiB e ajuste o
+                enquadramento em 16:9.
               </FieldHelp>
             </FieldTitle>
             <CourseCoverUploadField
               aggregateId={aggregateId}
-              className="mx-auto max-w-[176px] md:mx-0 md:w-[176px]"
+              className="mx-auto max-w-[224px] md:mx-0 md:w-[224px]"
               onUploadingChange={onCoverUploadingChange}
             />
-            {isCoverUploading ? (
-              <FieldDescription aria-live="polite" role="status">
-                Enviando a capa…
-              </FieldDescription>
-            ) : null}
           </Field>
 
           <div className="grid min-w-0 gap-5">
@@ -292,7 +284,6 @@ export function CourseCreationForm({
           <FieldGroup className="gap-6">
             <CourseCreationFields
               aggregateId={aggregateId}
-              isCoverUploading={isCoverUploading}
               onCoverUploadingChange={setIsCoverUploading}
               priceFieldId={priceFieldId}
             />

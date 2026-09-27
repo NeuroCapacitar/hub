@@ -109,6 +109,13 @@ const nextConfig: NextConfig = {
         : []),
     ],
   },
+  redirects: async () => [
+    {
+      source: "/app/perguntas-frequentes",
+      destination: "/app/ajuda",
+      permanent: true,
+    },
+  ],
   outputFileTracingIncludes: {
     "/*": [
       "node_modules/sharp/**/*",

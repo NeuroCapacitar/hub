@@ -31,7 +31,7 @@ export function PasswordInput({
             : "Mostrar conteúdo confidencial"
         }
         aria-pressed={isVisible}
-        className="absolute inset-y-0 end-0 flex w-11 items-center justify-center rounded-e-lg text-muted-foreground outline-none transition-[background-color,color,scale] hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/70 active:scale-[0.96]"
+        className="absolute inset-y-0 end-0 flex w-11 items-center justify-center rounded-e-control text-muted-foreground outline-none transition-[background-color,color,scale] hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/70 active:scale-[0.96]"
         disabled={disabled}
         onClick={() => setIsVisible((visible) => !visible)}
         onPointerDown={(event) => event.preventDefault()}

@@ -23,16 +23,20 @@ const getAuthRedirectPath = (returnTo: string | null): string => {
 
 export function SignInForm({
   returnTo = null,
+  supportEmail = null,
 }: {
   returnTo?: string | null;
+  supportEmail?: string | null;
 } = {}): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
+  const [isAccessBlocked, setIsAccessBlocked] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const safeReturnTo = getSafeAuthReturnTo(returnTo);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    setIsAccessBlocked(false);
     setIsPending(true);
 
     try {
@@ -71,6 +75,7 @@ export function SignInForm({
         await fetch("/api/auth/sign-out", { method: "POST" }).catch(
           () => undefined
         );
+        setIsAccessBlocked(true);
         setError(
           "Acesso bloqueado. Entre em contato com o suporte para revisar sua conta."
         );
@@ -127,7 +132,19 @@ export function SignInForm({
       </FieldGroup>
       {error ? (
         <Alert className="mt-5" variant="destructive">
-          <AlertDescription id="sign-in-error">{error}</AlertDescription>
+          <AlertDescription id="sign-in-error">
+            {error}
+            {isAccessBlocked && supportEmail ? (
+              <span className="mt-1 block">
+                <a
+                  className="font-medium text-foreground focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+                  href={`mailto:${supportEmail}?subject=${encodeURIComponent("Acesso bloqueado na conta")}`}
+                >
+                  Enviar e-mail para {supportEmail}
+                </a>
+              </span>
+            ) : null}
+          </AlertDescription>
         </Alert>
       ) : null}
       <Button className="mt-5 h-12 w-full" loading={isPending} type="submit">

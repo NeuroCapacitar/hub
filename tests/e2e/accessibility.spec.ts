@@ -116,7 +116,7 @@ test("student surfaces have no moderate or higher accessibility violations", asy
 
   await page.goto("/app/certificados");
   await expect(
-    page.getByRole("heading", { name: "Certificados" })
+    page.getByRole("heading", { name: "Suas conquistas" })
   ).toBeVisible();
   await assertNoBlockingAccessibilityViolations(page, "student certificates");
 });

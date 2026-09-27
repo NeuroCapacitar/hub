@@ -25,6 +25,8 @@ describe("LessonCard", () => {
     expect(markup).toContain("Bloqueada");
     expect(markup).not.toContain('data-variant="destructive"');
     expect(markup).not.toContain("bg-destructive/10");
+    expect(markup).toContain("group-hover:scale-[1.02]");
+    expect(markup).toContain("group-hover:scale-[1.05]");
   });
 
   it("prefers the lesson thumbnail and keeps cover fitting explicit", () => {
@@ -38,6 +40,7 @@ describe("LessonCard", () => {
 
     expect(markup).toContain("video-thumb.jpg");
     expect(markup).not.toContain("course-cover.webp");
+    expect(markup).toContain("aspect-video");
     expect(markup).toContain("object-cover");
     expect(markup).toContain("object-center");
   });
@@ -51,6 +54,15 @@ describe("LessonCard", () => {
     expect(markup).toContain('src="/course-cover.webp"');
     expect(markup).not.toContain("/_next/image");
     expect(markup).toContain("object-cover");
+  });
+
+  it("emphasizes the next lesson with the progress badge", () => {
+    const markup = renderToStaticMarkup(
+      <LessonCard {...baseProps} status="next" />
+    );
+
+    expect(markup).toContain('data-variant="progress"');
+    expect(markup).toContain("Próxima");
   });
 
   it("keeps the visual fallback when neither image exists", () => {

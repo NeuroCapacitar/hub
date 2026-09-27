@@ -1,10 +1,13 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
+import { createCertificatePdfDocument } from "./pdf-document";
+import { layoutCertificatePdfText } from "./pdf-text-layout";
 import {
   createCertificatePreviewSvg,
   renderCertificatePreview,
 } from "./preview";
 import type { CertificateRenderSnapshot } from "./render-snapshot";
+import { CERTIFICATE_PAGE } from "./template-rules";
 
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
@@ -96,6 +99,52 @@ describe("createCertificatePreviewSvg", () => {
     expect(svg).toContain("Ação");
     expect(svg).toContain("Responsável");
   });
+
+  it("uses the PDF text metrics and line layout for renderer version 2", () => {
+    const courseTitle =
+      "Ação muito comprida para validar a quebra tipográfica compartilhada";
+    const sourceField = snapshot.template.fields[0];
+    if (!sourceField) {
+      throw new Error("Fixture de campo ausente.");
+    }
+    const field = {
+      ...sourceField,
+      field: "courseTitle" as const,
+      fontSize: 24,
+      height: 40,
+      width: 10,
+      x: 20,
+      y: 20,
+    };
+    const versionedSnapshot: CertificateRenderSnapshot = {
+      ...snapshot,
+      rendererVersion: 2,
+      course: { ...snapshot.course, title: courseTitle },
+      template: { ...snapshot.template, fields: [field] },
+    };
+    const document = createCertificatePdfDocument({ autoFirstPage: false });
+    const expectedLayout = layoutCertificatePdfText(
+      document,
+      field,
+      courseTitle,
+      (CERTIFICATE_PAGE.width * (72 / 25.4) * field.width) / 100
+    );
+    document.end();
+
+    const svg = createCertificatePreviewSvg({
+      qrDataUrl: "data:image/png;base64,qr",
+      signatureDataUrl: null,
+      snapshot: versionedSnapshot,
+    });
+    const actualLines = [...svg.matchAll(/<text[^>]*>(.*?)<\/text>/gu)].map(
+      ([, value]) => value
+    );
+
+    expect(expectedLayout.lines.length).toBeGreaterThan(1);
+    expect(actualLines).toEqual(expectedLayout.lines);
+    expect(svg).toContain('font-family="Inter"');
+    expect(svg).toContain('font-size="');
+  });
 });
 
 describe("renderCertificatePreview", () => {
@@ -115,7 +164,7 @@ describe("renderCertificatePreview", () => {
       background,
       publicBaseUrl: "https://hub.example.test",
       signature: null,
-      snapshot,
+      snapshot: { ...snapshot, rendererVersion: 2 },
     });
     const metadata = await sharp(result.png).metadata();
 

@@ -87,7 +87,7 @@ describe("CoursesRevenueTable", () => {
           {
             courseId: "course-1",
             courseTitle: "Curso",
-            paidOrders: 2,
+            confirmedSaleOrders: 2,
             totalOrders: 3,
             totalRevenueInCents: 25_000,
           },
@@ -97,7 +97,7 @@ describe("CoursesRevenueTable", () => {
 
     expect(markup).not.toContain("2–2 de 3 cursos");
     expect(markup).not.toContain("1–3 de 3 cursos");
-    expect(markup).toContain("Receita bruta paga");
+    expect(markup).toContain("Vendas brutas confirmadas");
     expect(markup).not.toContain("Buscar receita por curso");
     expect(markup).not.toContain("revenueQ");
     expect(markup.match(/overflow-x-auto/g)).toHaveLength(1);
@@ -256,15 +256,18 @@ describe("PaymentReviewHistorySheet", () => {
 
 describe("AdminFinancePage", () => {
   const financialHealth = {
-    abandonedCheckoutOrders: 0,
-    averagePaidTicketInCents: 10_000,
+    activeCheckoutCount: 0,
+    activeCheckoutPotentialInCents: 0,
+    checkoutPaidAwaitingConfirmationCount: 0,
+    closedCheckoutAttempts: 0,
+    averageConfirmedSaleTicketInCents: 10_000,
     checkoutConversionPercent: 50,
     disputedOrders: 0,
     failedWebhooks: 0,
     paidOrders: 1,
-    paidRevenueInCents: 10_000,
+    confirmedSaleOrders: 1,
+    grossConfirmedSalesRevenueInCents: 10_000,
     pendingOrders: 0,
-    pendingRevenueInCents: 0,
     readyWebhooks: 0,
     refundedOrders: 0,
     retryableWebhooks: 0,
@@ -310,6 +313,11 @@ describe("AdminFinancePage", () => {
     ).toHaveBeenCalledOnce();
     expect(pageDependencies.getAdminFinancialOrdersData).not.toHaveBeenCalled();
     expect(markup).toContain("Visão geral");
+    const actionIndex = markup.indexOf("Ações financeiras");
+    const tabsIndex = markup.indexOf('aria-label="Seções do financeiro"');
+    expect(actionIndex).toBeGreaterThanOrEqual(0);
+    expect(tabsIndex).toBeGreaterThanOrEqual(0);
+    expect(actionIndex).toBeLessThan(tabsIndex);
     expect(markup).not.toContain("Receita sem alerta");
     expect(markup).toContain("Pagos");
     expect(markup).toContain("Tudo em ordem");
@@ -337,21 +345,75 @@ describe("AdminFinancePage", () => {
     expect(markup).toContain("Busque, filtre e abra um pedido");
   });
 
+  it("preserves cancelled orders in the closed-checkout refund queue", async () => {
+    pageDependencies.getAdminFinancialOrdersData.mockResolvedValue({
+      orders: [],
+      ordersHasNextPage: false,
+      ordersTotalCount: 0,
+    });
+
+    await AdminFinancePage({
+      searchParams: Promise.resolve({
+        checkout: "closed",
+        refundStatus: "failed",
+        status: "cancelled",
+        tab: "orders",
+      }),
+    });
+
+    expect(pageDependencies.getAdminFinancialOrdersData).toHaveBeenCalledWith({
+      checkout: "closed",
+      page: 1,
+      paymentMethod: undefined,
+      refundStatus: "failed",
+      search: "",
+      status: "cancelled",
+    });
+  });
+
+  it("loads uncorrelated confirmed payments from the direct queue filter", async () => {
+    pageDependencies.getAdminFinancialOrdersData.mockResolvedValue({
+      orders: [],
+      ordersHasNextPage: false,
+      ordersTotalCount: 0,
+    });
+
+    await AdminFinancePage({
+      searchParams: Promise.resolve({
+        paymentEvidence: "uncorrelated",
+        status: "paid",
+        tab: "orders",
+      }),
+    });
+
+    expect(pageDependencies.getAdminFinancialOrdersData).toHaveBeenCalledWith({
+      checkout: undefined,
+      page: 1,
+      paymentEvidence: "uncorrelated",
+      paymentMethod: undefined,
+      refundStatus: undefined,
+      search: "",
+      status: "paid",
+    });
+  });
+
   it("loads only analysis data for the analysis tab", async () => {
     navigationState.search = "tab=analysis&period=30d";
     pageDependencies.getAdminFinancialAnalysisData.mockResolvedValue({
       analytics: {
-        averageReceivedTicketInCents: 5000,
+        averageConfirmedSaleTicketInCents: 5000,
         estimatedNetRevenueInCents: 9000,
         feesInCents: 500,
-        grossReceivedInCents: 10_000,
+        grossConfirmedSalesInCents: 10_000,
         missingFeeEvidenceOrders: 0,
-        paidOrders: 2,
-        pendingOrders: 3,
-        pendingRevenueInCents: 15_000,
+        confirmedSaleOrders: 2,
+        pendingPartialRefundReviewCount: 0,
+        activeCheckoutCount: 2,
+        activeCheckoutPotentialInCents: 15_000,
         period: "30d",
         periodLabel: "Últimos 30 dias",
-        refundRatePercent: 50,
+        providerPaymentDateFallbackOrders: 0,
+        refundReceiptsRatioPercent: 50,
         refundedOrders: 1,
         refundedRevenueInCents: 500,
       },

@@ -135,6 +135,8 @@ describe("AdminOperationsPage", () => {
     );
 
     expect(markup).toContain("Alertas operacionais");
+    expect(markup).toContain("border-destructive/30");
+    expect(markup).toContain("bg-destructive/5");
     expect(markup).toContain("Mensagens em dead letter");
     expect(markup).toContain("Detalhes");
     expect(markup).toContain("Nenhum webhook para recuperar");
@@ -217,6 +219,8 @@ describe("AdminOperationsPage", () => {
     );
 
     expect(markup).toContain("Eventos Resend em dead letter");
+    expect(markup).toContain("border-warning/30");
+    expect(markup).toContain("bg-warning/5");
     expect(markup).toContain("email_message_unresolved");
     expect(markup).toContain('href="#resend-webhooks"');
     expect(markup).toContain('href="https://resend.com/webhooks"');

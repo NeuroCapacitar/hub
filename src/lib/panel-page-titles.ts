@@ -5,7 +5,14 @@ export interface PanelBreadcrumb {
 
 export interface PanelRouteMeta {
   readonly ancestors: readonly PanelBreadcrumb[];
+  readonly compactTitle?: string | undefined;
+  readonly mobilePageHeading?: boolean | undefined;
   readonly title: string;
+  readonly visibleHeading: boolean;
+}
+
+interface PanelRouteMetaOptions {
+  readonly studentDashboardGreeting?: string | undefined;
 }
 
 const PAGE_TITLES: Readonly<Record<string, string>> = {
@@ -25,10 +32,16 @@ const PAGE_TITLES: Readonly<Record<string, string>> = {
   "/app/certificados": "Seus certificados",
   "/app/checkout/sucesso": "Seu acesso está sendo liberado",
   "/app/configuracoes": "Configurações",
-  "/app/perguntas-frequentes": "Perguntas frequentes",
+  "/app/ajuda": "Ajuda",
 };
 
 const TRAILING_SLASHES = /\/+$/;
+const COMPACT_PAGE_TITLES = new Set(["/admin", "/app"]);
+const PAGE_ANCESTORS: Readonly<Record<string, readonly PanelBreadcrumb[]>> = {
+  "/admin/configuracoes/design-system": [
+    { href: "/admin/configuracoes", label: "Configurações" },
+  ],
+};
 
 const DYNAMIC_PAGE_TITLES = [
   [
@@ -62,29 +75,47 @@ const DYNAMIC_PAGE_TITLES = [
   readonly PanelBreadcrumb[],
 ])[];
 
-export function getPanelRouteMeta(pathname: string): PanelRouteMeta {
+export function getPanelRouteMeta(
+  pathname: string,
+  { studentDashboardGreeting }: PanelRouteMetaOptions = {}
+): PanelRouteMeta {
   const normalizedPath = pathname.replace(TRAILING_SLASHES, "") || "/";
-  const exactTitle = PAGE_TITLES[normalizedPath];
+  const isStudentDashboardGreeting =
+    normalizedPath === "/app" && Boolean(studentDashboardGreeting);
+  const exactTitle = isStudentDashboardGreeting
+    ? studentDashboardGreeting
+    : PAGE_TITLES[normalizedPath];
 
   if (exactTitle) {
-    return { ancestors: [], title: exactTitle };
+    return {
+      ancestors: PAGE_ANCESTORS[normalizedPath] ?? [],
+      ...(isStudentDashboardGreeting
+        ? { compactTitle: "Início", mobilePageHeading: true }
+        : {}),
+      title: exactTitle,
+      visibleHeading: !COMPACT_PAGE_TITLES.has(normalizedPath),
+    };
   }
 
   for (const [pattern, title, ancestors] of DYNAMIC_PAGE_TITLES) {
     if (pattern.test(normalizedPath)) {
-      return { ancestors, title };
+      return { ancestors, title, visibleHeading: true };
     }
   }
 
   if (normalizedPath.startsWith("/admin")) {
-    return { ancestors: [], title: "Administração" };
+    return { ancestors: [], title: "Administração", visibleHeading: false };
   }
 
   if (normalizedPath.startsWith("/app")) {
-    return { ancestors: [], title: "Aprendizagem" };
+    return { ancestors: [], title: "Aprendizagem", visibleHeading: false };
   }
 
-  return { ancestors: [], title: "NeuroCapacitar Hub" };
+  return {
+    ancestors: [],
+    title: "NeuroCapacitar Hub",
+    visibleHeading: false,
+  };
 }
 
 export function getPanelPageTitle(pathname: string): string {

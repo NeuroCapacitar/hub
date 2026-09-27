@@ -40,17 +40,27 @@ export async function GET(
     rows[0]?.status === "active" ||
     rows[0]?.catalog_visibility === "listed"
   ) {
-    return Response.redirect(getPublicMediaUrl(image.key), 302);
+    return new Response(null, {
+      headers: {
+        "Cache-Control": "public, max-age=3600",
+        Location: getPublicMediaUrl(image.key),
+      },
+      status: 302,
+    });
   }
 
   await requirePermission("manageCourseDetails");
 
-  const signedUrl = await createR2ObjectReadUrl({ key: image.key });
+  const signedUrl = await createR2ObjectReadUrl({
+    key: image.key,
+    responseCacheControl: "private, max-age=240",
+  });
 
   return new Response(null, {
     headers: {
-      "Cache-Control": "public, max-age=300",
+      "Cache-Control": "private, max-age=240",
       Location: signedUrl,
+      Vary: "Cookie",
     },
     status: 302,
   });

@@ -204,7 +204,20 @@ Os fatos abaixo são comprovados por `src/app/layout.tsx`,
 - `PanelLayout` fornece sidebar, cabeçalho autenticado, skip link e região
   principal;
 - `PageContainer` usa largura máxima de 1344px e padding responsivo;
-- `PageHeader` centraliza `h1`, descrição, status e ações;
+- `PageHeader` apresenta um `h1` visível por padrão, com descrição opcional,
+  status e ações. A descrição só deve acrescentar contexto útil; não deve
+  repetir o título ou o conteúdo da primeira seção. Use `visibleHeading={false}`
+  nas páginas compactas que priorizam o conteúdo, como o Painel, e registre com
+  `PanelPageTitle visibleHeading` quando um cabeçalho específico da página já
+  fornece o `h1` visível;
+- `PanelBreadcrumb` é navegação hierárquica secundária: quando há `h1` visível,
+  apresenta somente os ancestrais, sem repetir a página atual. Sem ancestrais,
+  não ocupa espaço no shell. Páginas compactas sem título local podem manter o
+  nome atual no shell;
+- ações de página pertencem ao `PageHeader`; ações limitadas a uma aba, filtro,
+  formulário ou linha permanecem junto ao conteúdo que afetam. Um `h2` deve
+  nomear uma seção ou conjunto de dados distinto; não repita nele a descrição
+  geral já explicada pelo `PageHeader`;
 - os primitives reutilizáveis ficam em `src/components/ui`.
 
 Não introduza uma biblioteca visual, design system paralelo, CSS externo ou
@@ -332,6 +345,9 @@ Regras de superfície:
 - `Card` já fornece a superfície padrão, raio, sombra e anel semântico; nos
   usos comuns, a classe do chamador deve cuidar apenas de layout ou de uma
   variação comprovada;
+- `Card` usa espaçamento e forma confortáveis por padrão; detalhes que exigem
+  comparação rápida usam `size="sm"` e classes locais explícitas, sem uma
+  segunda API global de densidade;
 - um card agrupa conteúdo ou interação realmente relacionada;
 - não criar card apenas para dar peso visual a uma seção;
 - evitar card dentro de card, bordas repetidas e sombras ornamentais;
@@ -370,9 +386,32 @@ primitives existentes definem a topologia de cada tela.
 - tabelas longas podem rolar dentro do contêiner da tabela, nunca esconder o
   overflow da página inteira.
 
-Não transforme toda tela em um mosaico uniforme. A densidade deve acompanhar a
-tarefa: operação pode ser compacta e comparável; aprendizagem deve preservar
-leitura e foco no conteúdo.
+Não transforme toda tela em um mosaico uniforme. O padrão global é confortável;
+detalhes operacionais podem reduzir padding localmente quando a comparação for
+a tarefa principal, sem criar uma aparência operacional separada.
+
+As formas semânticas da fundação vivem em `src/app/globals.css`:
+`--shape-radius-detail`, `--shape-radius-control`, `--shape-radius-card`,
+`--shape-radius-surface` e `--shape-radius-media`. O valor-base `--radius` é o
+baseline confortável global de 8px; os papéis semânticos derivam dele para
+manter uma escala centralizada de detalhe, controle, card, superfície e mídia.
+Novos usos devem preferir o papel semântico quando a intenção for um dos
+contextos acima.
+
+Os primitives de controle compartilhados usam `rounded-control`; dropdowns e
+superfícies de Card usam o papel correspondente (`rounded-card`,
+`rounded-surface` ou `rounded-media`). Classes legadas que dependem da escala de
+`--radius` também recebem o baseline confortável automaticamente; exceções devem
+ser definidas centralmente por papel, nunca como valores locais espalhados pelos
+componentes.
+
+O contrato atual usa uma linguagem confortável globalmente. Admin, Financeiro,
+Auditoria, Operação e tabelas podem usar `size="sm"` e espaçamento local quando
+a comparação rápida justificar a redução de espaço; isso é uma exceção do
+componente, não uma densidade visual alternativa.
+
+A fixture de [design-system-preview.tsx](src/components/design-system-preview.tsx)
+é a referência de comparação antes de migrar outros primitives ou telas reais.
 
 ## Tipografia e ritmo
 
@@ -426,6 +465,13 @@ Ritmo vertical:
 - parágrafos seguem um ritmo de corpo consistente;
 - label, valor e detalhe mantêm a mesma relação entre peers;
 - mudança de grupo tem gap claramente maior que o espaço interno;
+- nas rotas administrativas, o stack principal separa cabeçalho e blocos
+  independentes com um ritmo confortável de `gap-16`;
+- o título e a descrição de uma sessão permanecem próximos do conteúdo, em
+  torno de `gap-6` ou `mb-6`; o espaço maior pertence entre sessões e também
+  após o cabeçalho que introduz o bloco;
+- sessões irmãs dentro de um bloco e grupos internos relacionados usam o mesmo
+  ritmo maior, em torno de `gap-12`;
 - caption ou fonte ficam próximos da evidência que qualificam;
 - componentes filhos não adicionam margens concorrentes quando o container já
   possui o gap.
@@ -493,6 +539,16 @@ mapa visual local para o mesmo estado.
 
 `Progress` comunica progresso mensurável e recebe `aria-label` contextual.
 Não use a cor do indicador como único significado.
+
+Uploads mostram o arquivo e a etapa em andamento junto ao seletor/lista. Mostre
+percentual somente quando o transporte reportar bytes mensuráveis; preparação,
+confirmação e fallback usam estado indeterminado, sem inventar progresso.
+Cancelamento deve abortar a requisição e não iniciar retry/fallback. Falhas
+recuperáveis permanecem junto ao arquivo com Retry/Descartar; não duplique a
+mesma falha em um toast. Toast fica para sucesso e falhas finais sem estado
+persistente no item.
+Limites binários devem ser escritos como `MiB`; não altere o limite em bytes ao
+uniformizar a unidade visível.
 
 `Toast`, `role="status"`, `aria-live="polite"` e `role="alert"` têm papéis
 distintos:
@@ -621,6 +677,9 @@ os substitua por uma transição ampla.
 - cards de Aula em moldura horizontal priorizam a thumbnail do vídeo; quando ela
   não existe, usam a capa do Curso; sem nenhuma das duas, usam o fallback visual
   do próprio card;
+- capas de Curso e molduras dos LessonCards usam proporção 16:9. Novas capas
+  são geradas como uma única imagem WebP de 1280×720; capas legadas mantêm
+  os arquivos atuais e podem ser recortadas visualmente até a substituição;
 - imagens de Aula ocupam a moldura com `fill` e `object-cover object-center`,
   preservando a proporção e aceitando corte para não deformar a imagem;
 - URLs lógicas de Capa incluem uma versão codificada da chave da variante em

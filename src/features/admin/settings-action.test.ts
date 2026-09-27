@@ -45,16 +45,9 @@ import {
 const WHITESPACE_PATTERN = /\s+/;
 
 const createSettingsForm = (
-  values: {
-    cnpj?: string;
-    displayName?: string;
-    legalName?: string;
-    signerName?: string;
-  } = {}
+  values: { cnpj?: string; displayName?: string; legalName?: string } = {}
 ): FormData => {
   const formData = new FormData();
-  formData.set("certificateSignerName", values.signerName ?? "Maria");
-  formData.set("certificateSignerRole", "Diretora");
   formData.set("issuerLegalName", values.legalName ?? "Empresa LTDA");
   formData.set("issuerDisplayName", values.displayName ?? "Empresa");
   formData.set("issuerCnpj", values.cnpj ?? "04252011000110");
@@ -75,16 +68,6 @@ describe("saveSettingsAction", () => {
       user: { id: "admin-1" },
     });
     dependencies.clientQuery.mockImplementation((sql: string) => {
-      if (sql.includes("from app_settings")) {
-        return Promise.resolve({
-          rows: [
-            {
-              certificate_signer_name: "Ana",
-              certificate_signer_role: "Gestora",
-            },
-          ],
-        });
-      }
       if (sql.includes("from certificate_issuer_profiles")) {
         return Promise.resolve({
           rows: [
@@ -118,10 +101,11 @@ describe("saveSettingsAction", () => {
     );
     expect(statements[0]).toBe("BEGIN");
     expect(statements.at(-1)).toBe("COMMIT");
-    expect(dependencies.clientQuery).toHaveBeenCalledWith(
-      expect.stringContaining("insert into app_settings"),
-      ["Maria", "Diretora"]
-    );
+    expect(
+      dependencies.clientQuery.mock.calls.some(([sql]) =>
+        String(sql).includes("app_settings")
+      )
+    ).toBe(false);
     expect(dependencies.clientQuery).toHaveBeenCalledWith(
       expect.stringContaining("insert into certificate_issuer_profiles"),
       ["Empresa LTDA", "04.252.011/0001-10", "Empresa"]
@@ -133,10 +117,6 @@ describe("saveSettingsAction", () => {
         client: dependencies.client,
         metadata: expect.objectContaining({
           changes: expect.objectContaining({
-            certificateSignerName: {
-              after: "Maria",
-              before: "Ana",
-            },
             issuerCnpj: {
               after: "••••0110",
               before: "••••0198",
@@ -174,13 +154,10 @@ describe("saveSettingsAction", () => {
 
   it("rolls back settings when a later write fails", async () => {
     dependencies.clientQuery.mockImplementation((sql: string) => {
-      if (sql.includes("from app_settings")) {
-        return Promise.resolve({ rows: [] });
-      }
       if (sql.includes("from certificate_issuer_profiles")) {
         return Promise.resolve({ rows: [] });
       }
-      if (sql.includes("insert into app_settings")) {
+      if (sql.includes("insert into certificate_issuer_profiles")) {
         return Promise.reject(new Error("database unavailable"));
       }
       return Promise.resolve({ rows: [] });

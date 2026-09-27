@@ -39,6 +39,7 @@ describe("Sentry options", () => {
     );
     const metric = options.beforeSendMetric?.({
       attributes: {
+        certificate_code: "-_v7-_v7-_v7-_v7-_v7-w",
         email: "student@example.test",
         operation: "checkout.create",
         request_url: "https://hub.example.test/app?email=student@example.test",
@@ -56,6 +57,7 @@ describe("Sentry options", () => {
       },
     });
     expect(metric?.attributes).not.toHaveProperty("email");
+    expect(metric?.attributes).not.toHaveProperty("certificate_code");
     expect(metric?.attributes).not.toHaveProperty("request_url");
     expect(JSON.stringify(metric)).not.toContain("student@example.test");
   });
@@ -194,6 +196,55 @@ describe("Sentry options", () => {
     expect(JSON.stringify(originalBreadcrumb)).toBe(originalBreadcrumbSnapshot);
     expect(breadcrumb).not.toBe(originalBreadcrumb);
     expect(breadcrumb?.data).not.toBe(originalBreadcrumb.data);
+  });
+
+  it("redacts canonical Base64URL codes while preserving adjacent opaque text", () => {
+    const options = getSentryOptions(
+      "https://public@example.ingest.sentry.io/1"
+    );
+    const code = "-_v7-_v7-_v7-_v7-_v7-w";
+    const mixedCaseCode = "AAECAwQFBgcICQoLDA0ODw";
+    const longerOpaqueValue = `x${code}`;
+    const nearMatch = `${"A".repeat(21)}B`;
+    const event = options.beforeSend?.({
+      extra: {
+        certificateCode: code,
+        note: `Certificate ${code} was not found.`,
+        nearMatch,
+        unrelated: longerOpaqueValue,
+      },
+      message: `Lookup failed for ${code}; mixed case ${mixedCaseCode}`,
+    } as unknown as Parameters<NonNullable<typeof options.beforeSend>>[0]);
+    const breadcrumb = options.beforeBreadcrumb?.({
+      message: `Opening ${code}`,
+    });
+    const transaction = options.beforeSendTransaction?.({
+      transaction: `Certificate lookup ${code}`,
+      type: "transaction",
+    });
+    const span = options.beforeSendSpan?.({
+      data: { code },
+      description: `GET /certificados/${code}`,
+      span_id: "span-id",
+      start_timestamp: 1,
+      trace_id: "trace-id",
+    });
+
+    expect(event?.extra).toEqual({
+      note: "Certificate [certificate-code] was not found.",
+      nearMatch,
+      unrelated: longerOpaqueValue,
+    });
+    expect(event?.message).toBe(
+      "Lookup failed for [certificate-code]; mixed case [certificate-code]"
+    );
+    expect(JSON.stringify(event?.extra)).toContain(longerOpaqueValue);
+    expect(JSON.stringify(breadcrumb)).not.toContain(code);
+    expect(transaction?.transaction).toBe(
+      "Certificate lookup [certificate-code]"
+    );
+    expect(JSON.stringify(span)).not.toContain(code);
+    expect(span?.description).toBe("GET /certificados/[certificate-code]");
   });
 
   it("redacts certificate codes from transaction names", () => {

@@ -98,6 +98,17 @@ describe("FinancialOrdersTable", () => {
     expect(markup).not.toContain("Conciliar pagamento");
   });
 
+  it("surfaces the refund status in the filtered order list", () => {
+    const markup = renderOrdersTable({
+      orders: [{ ...paidOrder, refundRequestStatus: "failed" }],
+      refundStatus: "failed",
+    });
+
+    expect(markup).toContain("Reembolso: Falhou");
+    expect(markup).toContain('name="refundStatus"');
+    expect(markup).toContain('value="failed"');
+  });
+
   it("renders a useful empty state for a filtered page", () => {
     const markup = renderOrdersTable({
       orders: [],

@@ -32,6 +32,9 @@ describe("GET /api/admin/learning-analytics/export", () => {
       {
         activeEnrollments: 5,
         completed: 2,
+        aggregateNextLessonTimingSampleCount: 2,
+        checkpointSampleCount: 3,
+        completionTimingSampleCount: 0,
         coursePublicationId: "publication-1",
         courseTitle: "Curso de exemplo",
         errorCount: 1,
@@ -44,6 +47,7 @@ describe("GET /api/admin/learning-analytics/export", () => {
         medianHoursToNextLesson: 2,
         moduleSortOrder: 1,
         moduleTitle: "Módulo inicial",
+        nextLessonTimingSampleCount: 2,
         publicationNumber: 3,
         publicationStatus: "published",
         started: 4,

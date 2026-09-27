@@ -455,6 +455,8 @@ export const courses = pgTable(
       .default(0)
       .notNull(),
     certificateEnabled: boolean("certificate_enabled").default(false).notNull(),
+    certificateSignerName: text("certificate_signer_name"),
+    certificateSignerRole: text("certificate_signer_role"),
     ...timestamps,
   },
   (table) => [
@@ -1225,6 +1227,7 @@ export const orders = pgTable(
     feeAmountInCents: integer("fee_amount_in_cents"),
     paymentMethod: text("payment_method"),
     receiptUrl: text("receipt_url"),
+    providerPaymentDate: date("provider_payment_date"),
     paidAt: timestamp("paid_at", tz),
     refundedAt: timestamp("refunded_at", tz),
     customerEmail: text("customer_email"),
@@ -1635,7 +1638,9 @@ export const certificates = pgTable(
     issuedAt: timestamp("issued_at", tz).defaultNow().notNull(),
     pdfStorageKey: text("pdf_storage_key"),
     pdfSha256: text("pdf_sha256"),
+    pdfPurgedAt: timestamp("pdf_purged_at", tz),
     previewSha256: text("preview_sha256"),
+    previewPurgedAt: timestamp("preview_purged_at", tz),
     renderedAt: timestamp("rendered_at", tz),
     renderStatus: certificateRenderStatusEnum("render_status")
       .default("pending")
@@ -1672,7 +1677,15 @@ export const certificates = pgTable(
     ),
     check(
       "certificates_ready_artifact_check",
-      sql`${table.renderStatus} <> 'ready' or (${table.pdfStorageKey} is not null and ${table.pdfSha256} is not null and ${table.renderedAt} is not null and ${table.renderClaimToken} is null)`
+      sql`${table.renderStatus} <> 'ready' or (${table.pdfStorageKey} is not null and ${table.pdfSha256} is not null and ${table.renderedAt} is not null and ${table.renderClaimToken} is null) or ${table.pdfPurgedAt} is not null`
+    ),
+    check(
+      "certificates_pdf_purged_state_check",
+      sql`${table.pdfPurgedAt} is null or (${table.status} = 'revoked' and ${table.pdfStorageKey} is null and ${table.pdfSha256} is null and ${table.renderClaimToken} is null)`
+    ),
+    check(
+      "certificates_preview_purged_state_check",
+      sql`${table.previewPurgedAt} is null or (${table.status} = 'revoked' and ${table.previewSha256} is null)`
     ),
     check(
       "certificates_revocation_state_check",
@@ -1685,6 +1698,20 @@ export const certificates = pgTable(
     check(
       "certificates_valid_revocation_fields_check",
       sql`${table.status} = 'revoked' or (${table.revokedReason} is null and ${table.revokedReasonCategory} is null and ${table.revokedByUserId} is null)`
+    ),
+  ]
+);
+
+export const certificateRevocationTombstones = pgTable(
+  "certificate_revocation_tombstones",
+  {
+    codeHash: text("code_hash").primaryKey(),
+    revokedAt: timestamp("revoked_at", tz).notNull(),
+  },
+  (table) => [
+    check(
+      "certificate_revocation_tombstones_code_hash_check",
+      sql`${table.codeHash} ~ '^[a-f0-9]{64}$'`
     ),
   ]
 );
@@ -1711,6 +1738,7 @@ export const certificateTemplates = pgTable(
     status: certificateTemplateStatusEnum("status").default("draft").notNull(),
     backgroundKey: text("background_key").notNull(),
     spec: jsonb("spec").notNull(),
+    /** Legacy template signer columns are retained only for rollback compatibility. */
     signerName: text("signer_name"),
     signerRole: text("signer_role"),
     signatureKey: text("signature_key"),
@@ -1746,6 +1774,10 @@ export const courseCompletions = pgTable(
       .notNull()
       .references(() => coursePublications.id, { onDelete: "restrict" }),
     completedAt: timestamp("completed_at", tz).defaultNow().notNull(),
+    /** Prevents duplicate issuance after the detailed certificate row is purged. */
+    certificateEverIssued: boolean("certificate_ever_issued")
+      .default(false)
+      .notNull(),
     ...timestamps,
   },
   (table) => [
@@ -2102,6 +2134,10 @@ export const stagedLessonResourceUploads = pgTable(
 
 export const appSettings = pgTable("app_settings", {
   id: text("id").primaryKey(),
+  /**
+   * Legacy signer defaults remain for rollback compatibility; the current
+   * runtime must not read or write them.
+   */
   certificateSignerName: text("certificate_signer_name"),
   certificateSignerRole: text("certificate_signer_role"),
   ...timestamps,

@@ -8,6 +8,7 @@ import {
   MAX_RELEASE_DELAY_DAYS,
 } from "@/features/courses/module-content-release";
 import { requirePermission } from "@/lib/auth-permissions";
+import { getConfirmedSalePredicate } from "./financial-metrics-query";
 
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE = 10_000;
@@ -16,9 +17,9 @@ const MAX_COURSE_PAGE_SIZE = 100;
 
 export interface SupportCourseOperation {
   activeEnrollmentCount: number;
+  confirmedSaleOrderCount: number;
+  grossConfirmedSalesRevenueInCents: number;
   id: string;
-  paidOrderCount: number;
-  paidRevenueInCents: number;
   refundedOrderCount: number;
   refundedRevenueInCents: number;
   status: string;
@@ -33,8 +34,8 @@ export interface SupportCourseOperationsPage {
   pageSize: number;
   totalCount: number;
   totals: {
-    paidOrderCount: number;
-    paidRevenueInCents: number;
+    confirmedSaleOrderCount: number;
+    grossConfirmedSalesRevenueInCents: number;
     totalEnrollmentCount: number;
   };
 }
@@ -130,9 +131,9 @@ const SUPPORT_COURSE_STATS_SQL = `
     c.status,
     enrollment_stats.total_enrollment_count,
     enrollment_stats.active_enrollment_count,
-    financial_stats.paid_order_count,
+    financial_stats.confirmed_sale_order_count,
     financial_stats.refunded_order_count,
-    financial_stats.paid_revenue_in_cents,
+    financial_stats.gross_confirmed_sales_revenue_in_cents,
     financial_stats.refunded_revenue_in_cents
   from courses c
   cross join lateral (
@@ -154,14 +155,14 @@ const SUPPORT_COURSE_STATS_SQL = `
   ) enrollment_stats
   cross join lateral (
     select
-      count(*) filter (where o.status = 'paid')::int as paid_order_count,
+      count(*) filter (where ${getConfirmedSalePredicate("o")})::int as confirmed_sale_order_count,
       count(*) filter (where o.status = 'refunded')::int
         as refunded_order_count,
       coalesce(
-        sum(coalesce(o.paid_amount_in_cents, o.amount_in_cents))
-          filter (where o.status = 'paid'),
+        sum(o.paid_amount_in_cents)
+          filter (where ${getConfirmedSalePredicate("o")}),
         0
-      ) as paid_revenue_in_cents,
+      ) as gross_confirmed_sales_revenue_in_cents,
       coalesce(
         sum(
           coalesce(
@@ -193,16 +194,16 @@ export const getSupportCourseOperations = async (
     : DEFAULT_COURSE_PAGE_SIZE;
   const [summaryResult, pageResult] = await Promise.all([
     getPool().query<{
-      paid_order_count: number;
-      paid_revenue_in_cents: number | string;
+      confirmed_sale_order_count: number;
+      gross_confirmed_sales_revenue_in_cents: number | string;
       total_count: number;
       total_enrollment_count: number;
     }>(
       `
         select
           count(*)::int as total_count,
-          coalesce(sum(paid_order_count), 0)::int as paid_order_count,
-          coalesce(sum(paid_revenue_in_cents), 0)::bigint as paid_revenue_in_cents,
+          coalesce(sum(confirmed_sale_order_count), 0)::int as confirmed_sale_order_count,
+          coalesce(sum(gross_confirmed_sales_revenue_in_cents), 0)::bigint as gross_confirmed_sales_revenue_in_cents,
           coalesce(sum(total_enrollment_count), 0)::int as total_enrollment_count
         from (${SUPPORT_COURSE_STATS_SQL}) course_stats
       `
@@ -210,8 +211,8 @@ export const getSupportCourseOperations = async (
     getPool().query<{
       active_enrollment_count: number;
       id: string;
-      paid_order_count: number;
-      paid_revenue_in_cents: number | string;
+      confirmed_sale_order_count: number;
+      gross_confirmed_sales_revenue_in_cents: number | string;
       refunded_order_count: number;
       refunded_revenue_in_cents: number | string;
       status: string;
@@ -234,8 +235,10 @@ export const getSupportCourseOperations = async (
     courses: rows.slice(0, pageSize).map((row) => ({
       activeEnrollmentCount: row.active_enrollment_count,
       id: row.id,
-      paidOrderCount: row.paid_order_count,
-      paidRevenueInCents: Number(row.paid_revenue_in_cents),
+      confirmedSaleOrderCount: row.confirmed_sale_order_count,
+      grossConfirmedSalesRevenueInCents: Number(
+        row.gross_confirmed_sales_revenue_in_cents
+      ),
       refundedOrderCount: row.refunded_order_count,
       refundedRevenueInCents: Number(row.refunded_revenue_in_cents),
       status: row.status,
@@ -247,8 +250,10 @@ export const getSupportCourseOperations = async (
     pageSize,
     totalCount: summary?.total_count ?? 0,
     totals: {
-      paidOrderCount: summary?.paid_order_count ?? 0,
-      paidRevenueInCents: Number(summary?.paid_revenue_in_cents ?? 0),
+      confirmedSaleOrderCount: summary?.confirmed_sale_order_count ?? 0,
+      grossConfirmedSalesRevenueInCents: Number(
+        summary?.gross_confirmed_sales_revenue_in_cents ?? 0
+      ),
       totalEnrollmentCount: summary?.total_enrollment_count ?? 0,
     },
   };

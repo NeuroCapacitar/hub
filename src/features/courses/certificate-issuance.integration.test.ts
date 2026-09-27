@@ -18,7 +18,7 @@ if (!databaseUrl) {
     "CERTIFICATE_CONCURRENCY_DATABASE_URL is required for integration tests."
   );
 }
-const AUTOMATIC_CERTIFICATE_CODE = /^PRT-[0-9A-F]{32}$/;
+const AUTOMATIC_CERTIFICATE_CODE = /^[A-Za-z0-9_-]{21}[AQgw]$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const CONSECUTIVE_ISSUANCE_RUNS = 20;
 const CONSECUTIVE_ISSUANCE_TIMEOUT_MS = 300_000;
@@ -26,6 +26,7 @@ const REMOTE_LOCK_OBSERVATION_TIMEOUT_MS = 30_000;
 
 const dependencies = vi.hoisted(() => ({
   createR2ObjectReadUrl: vi.fn(),
+  deleteR2Objects: vi.fn(),
   getPool: vi.fn(),
   renderCertificatePdf: vi.fn(),
   resolveLessonAccess: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock("@/features/certificates/rendering", () => ({
 }));
 vi.mock("@/features/storage/r2", () => ({
   createR2ObjectReadUrl: dependencies.createR2ObjectReadUrl,
+  deleteR2Objects: dependencies.deleteR2Objects,
   uploadPrivateR2ObjectIfAbsent: dependencies.uploadPrivateR2ObjectIfAbsent,
 }));
 vi.mock("@/lib/env", () => ({
@@ -114,8 +116,14 @@ const createFixture = async ({
   const userId = `certificate-student-${randomUUID()}`;
   const { rows: courseRows } = await testPool.query<{ id: string }>(
     `
-      insert into courses (slug, title, workload_hours, status, certificate_enabled)
-      values ($1, 'Curso de concorrencia', 8, 'active', true)
+      insert into courses (
+        slug, title, workload_hours, status, certificate_enabled,
+        certificate_signer_name, certificate_signer_role
+      )
+      values (
+        $1, 'Curso de concorrencia', 8, 'active', true,
+        'Responsável de teste', 'Especialista'
+      )
       returning id
     `,
     [`certificate-concurrency-${randomUUID()}`]
@@ -351,6 +359,7 @@ describe("emissao concorrente de certificado", () => {
     dependencies.createR2ObjectReadUrl.mockImplementation(
       async ({ key }: { key: string }) => `https://r2.test/${key}`
     );
+    dependencies.deleteR2Objects.mockResolvedValue(undefined);
     dependencies.renderCertificatePdf.mockResolvedValue({
       pdf: Buffer.from("stable-pdf"),
       sha256: "a".repeat(64),
@@ -533,6 +542,12 @@ describe("emissao concorrente de certificado", () => {
   it("retorna código somente para a transação que vence o conflito", async () => {
     const fixture = await createFixture();
     const testPool = getTestPool();
+    await testPool.query(
+      `insert into course_completions (
+        user_id, course_id, course_publication_id
+      ) values ($1, $2, $3)`,
+      [fixture.userId, fixture.courseId, fixture.coursePublicationId]
+    );
     const firstClient = await testPool.connect();
     const secondClient = await testPool.connect();
     try {
@@ -737,11 +752,12 @@ describe("emissao concorrente de certificado", () => {
     const history = await getTestPool().query<{
       code: string;
       id: string;
+      preview_purged_at: Date | null;
       render_snapshot: unknown;
       replaces_certificate_id: string | null;
       status: "revoked" | "valid";
     }>(
-      `select id, code, render_snapshot, replaces_certificate_id, status
+      `select id, code, render_snapshot, preview_purged_at, replaces_certificate_id, status
        from certificates
        where course_id = $1 and user_id = $2
        order by issued_at, id`,
@@ -756,6 +772,7 @@ describe("emissao concorrente de certificado", () => {
         code: predecessor.code,
         render_snapshot: predecessor.render_snapshot,
         replaces_certificate_id: null,
+        preview_purged_at: expect.any(Date),
         status: "revoked",
       }
     );

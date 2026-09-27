@@ -36,6 +36,7 @@ describe("getCertificateListViewModel", () => {
 
     expect(result).toMatchObject({
       alert: null,
+      badgeVariant: "learning",
       canDownload: true,
       kind: "available",
       statusLabel: "Disponível",
@@ -60,6 +61,7 @@ describe("getCertificateListViewModel", () => {
     });
     expect(result.alert?.description).toContain("22 de jul. de 2026");
     expect(result.alert?.description).toContain("Revisao de integridade");
+    expect(result.alert?.title).toBe("Este certificado não está mais válido");
   });
 
   it("distinguishes a render failure and exposes a support action", () => {

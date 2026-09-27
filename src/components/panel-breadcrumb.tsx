@@ -26,11 +26,16 @@ const MAX_VISIBLE_ITEMS = 3;
 
 interface PanelBreadcrumbProps {
   readonly ancestors: readonly PanelBreadcrumbItem[];
-  readonly currentTitle: string;
+  readonly compactCurrentTitle?: string | undefined;
+  readonly currentTitle?: string;
 }
 
 type VisibleItem =
-  | { readonly item: PanelBreadcrumbItem; readonly type: "item" }
+  | {
+      readonly isCurrent: boolean;
+      readonly item: PanelBreadcrumbItem;
+      readonly type: "item";
+    }
   | {
       readonly hidden: readonly PanelBreadcrumbItem[];
       readonly type: "ellipsis";
@@ -38,39 +43,49 @@ type VisibleItem =
 
 function collapseBreadcrumbs(
   ancestors: readonly PanelBreadcrumbItem[],
-  currentTitle: string
+  currentTitle?: string
 ): readonly VisibleItem[] {
-  const items = [...ancestors, { label: currentTitle }];
+  const items = ancestors.map((item) => ({ item, isCurrent: false }));
+
+  if (currentTitle !== undefined) {
+    items.push({ item: { label: currentTitle }, isCurrent: true });
+  }
 
   if (items.length <= MAX_VISIBLE_ITEMS) {
-    return items.map((item) => ({ item, type: "item" as const }));
+    return items.map(({ isCurrent, item }) => ({
+      isCurrent,
+      item,
+      type: "item" as const,
+    }));
   }
 
   const first = items[0];
   const penultimate = items.at(-2);
-  const current = items.at(-1);
+  const last = items.at(-1);
 
-  if (!(first && penultimate && current)) {
+  if (!(first && penultimate && last)) {
     return [];
   }
 
   return [
-    { item: first, type: "item" },
+    { isCurrent: first.isCurrent, item: first.item, type: "item" },
     {
-      hidden: items.slice(1, -2),
+      hidden: items.slice(1, -2).map(({ item }) => item),
       type: "ellipsis",
     },
-    { item: penultimate, type: "item" },
-    { item: current, type: "item" },
+    { isCurrent: penultimate.isCurrent, item: penultimate.item, type: "item" },
+    { isCurrent: last.isCurrent, item: last.item, type: "item" },
   ];
 }
 
 function BreadcrumbItemContent({
   item,
   isCurrent,
+  compactLabel,
 }: {
   readonly isCurrent: boolean;
   readonly item: PanelBreadcrumbItem;
+  readonly compactLabel?: string | undefined;
 }): React.JSX.Element {
   const className = cn(
     "block min-w-0 truncate",
@@ -82,11 +97,18 @@ function BreadcrumbItemContent({
   if (isCurrent) {
     return (
       <BreadcrumbPage
-        aria-label={item.label}
+        aria-label={compactLabel ? undefined : item.label}
         className={className}
         title={item.label}
       >
-        {item.label}
+        {compactLabel ? (
+          <>
+            <span className="hidden md:inline">{item.label}</span>
+            <span className="md:hidden">{compactLabel}</span>
+          </>
+        ) : (
+          item.label
+        )}
       </BreadcrumbPage>
     );
   }
@@ -146,10 +168,14 @@ function CollapsedBreadcrumb({
 
 export function PanelBreadcrumb({
   ancestors,
+  compactCurrentTitle,
   currentTitle,
-}: PanelBreadcrumbProps): React.JSX.Element {
+}: PanelBreadcrumbProps): React.JSX.Element | null {
   const items = collapseBreadcrumbs(ancestors, currentTitle);
-  const currentIndex = items.length - 1;
+
+  if (items.length === 0) {
+    return null;
+  }
 
   return (
     <Breadcrumb aria-label="Caminho da página" className="min-w-0 flex-1">
@@ -173,14 +199,17 @@ export function PanelBreadcrumb({
               <BreadcrumbItem
                 className={cn(
                   "min-w-0 shrink",
-                  index === currentIndex
+                  entry.isCurrent
                     ? "max-w-[min(55vw,24rem)] flex-1"
                     : "max-w-[9rem] sm:max-w-[13rem]"
                 )}
               >
                 <BreadcrumbItemContent
-                  isCurrent={index === currentIndex}
+                  isCurrent={entry.isCurrent}
                   item={entry.item}
+                  {...(entry.isCurrent && compactCurrentTitle
+                    ? { compactLabel: compactCurrentTitle }
+                    : {})}
                 />
               </BreadcrumbItem>
             )}

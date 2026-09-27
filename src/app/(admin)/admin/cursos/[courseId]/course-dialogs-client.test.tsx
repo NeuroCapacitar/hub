@@ -7,10 +7,40 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const saveCourseActionMock = vi.hoisted(() => vi.fn());
+const saveCourseSettingsActionMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/components/course-cover-upload-field", async () => {
+  const React = await import("react");
+  return {
+    CourseCoverUploadField: ({
+      className,
+      onUploadingChange,
+    }: {
+      className?: string;
+      onUploadingChange?: (isUploading: boolean) => void;
+    }) =>
+      React.createElement(
+        "div",
+        { className },
+        React.createElement(
+          "button",
+          {
+            onClick: () => onUploadingChange?.(true),
+            type: "button",
+          },
+          "Enviar capa"
+        )
+      ),
+  };
+});
 
 vi.mock("@/features/admin/actions", () => ({
-  saveCourseAction: saveCourseActionMock,
+  saveCourseSettingsAction: saveCourseSettingsActionMock,
+}));
+
+vi.mock("@/features/admin/course-availability-actions", () => ({
+  archiveCourseAction: vi.fn(),
+  restoreCourseAction: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
@@ -36,12 +66,23 @@ class ResizeObserverMock {
 
 const course: CourseData = {
   accessDurationMonths: 12,
+  catalogVisibility: "listed",
+  certificateSignerName: "Dra. Maria",
+  certificateSignerRole: "Responsável técnica",
   description: "Curso de teste",
+  hasCommercialHistory: false,
   id: "course-1",
+  interestCount: 0,
+  interestNotificationsSent: 0,
+  launchDate: null,
+  launchLandingUrl: null,
   paymentAllowCreditCard: true,
   paymentAllowPix: true,
   paymentMaxInstallmentCount: 3,
   priceInCents: 1990,
+  pendingCheckoutCancellations: 0,
+  pendingInterestNotifications: 0,
+  salesStatus: "open",
   slug: "curso-teste",
   status: "active",
   thumbnailUrl: null,
@@ -56,8 +97,8 @@ let root: Root | null = null;
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   globalThis.ResizeObserver = ResizeObserverMock;
-  saveCourseActionMock.mockReset();
-  saveCourseActionMock.mockResolvedValue(undefined);
+  saveCourseSettingsActionMock.mockReset();
+  saveCourseSettingsActionMock.mockResolvedValue({ ok: true });
 });
 
 afterEach(() => {
@@ -152,6 +193,103 @@ const togglePaymentMethod = (method: "card" | "pix"): void => {
 };
 
 describe("course payment settings", () => {
+  it("places responsible details in the shared settings form without certificate or signature copy", () => {
+    const markup = renderToStaticMarkup(<CourseSettingsForm course={course} />);
+
+    expect(markup).toContain('name="responsibleName"');
+    expect(markup).toContain('name="responsibleTitle"');
+    expect(markup).toContain("Nome do responsável");
+    expect(markup).toContain("Cargo ou título");
+    expect(markup).not.toContain("certificado");
+    expect(markup).not.toContain("assinatura");
+    expect(markup).not.toContain("Salvar responsável");
+    expect(markup.match(/<form/g)).toHaveLength(1);
+  });
+
+  it("submits availability with course settings instead of rendering a second save button", () => {
+    const markup = renderToStaticMarkup(
+      <CourseSettingsForm
+        course={{ ...course, salesStatus: "closed", status: "draft" }}
+      />
+    );
+
+    expect(markup).toContain('name="saveCourseAvailability"');
+    expect(markup).toContain('name="preset"');
+    expect(markup).toContain('name="launchDate"');
+    expect(markup).toContain('name="launchLandingUrl"');
+    expect(markup).not.toContain("Salvar disponibilidade");
+    expect(markup.match(/Salvar configurações/g)).toHaveLength(1);
+    expect(markup.match(/<form/g)).toHaveLength(1);
+  });
+
+  it("keeps one shared save action when only availability is editable", () => {
+    const markup = renderToStaticMarkup(
+      <CourseSettingsForm
+        availabilityReadOnly={false}
+        course={course}
+        readOnly
+        signatoryReadOnly
+      />
+    );
+
+    expect(markup).toContain('name="saveCourseAvailability"');
+    expect(markup).not.toContain('name="saveCourseDetails"');
+    expect(markup).not.toContain('name="saveCourseResponsible"');
+    expect(markup).toContain("Salvar configurações");
+    expect(markup.match(/>Disponibilidade</g)).toHaveLength(1);
+    expect(markup.match(/<form/g)).toHaveLength(1);
+  });
+
+  it("does not show a no-op save action for an archived course", () => {
+    const markup = renderToStaticMarkup(
+      <CourseSettingsForm
+        availabilityReadOnly={false}
+        course={{
+          ...course,
+          catalogVisibility: "hidden",
+          salesStatus: "closed",
+          status: "archived",
+        }}
+        readOnly
+        signatoryReadOnly
+      />
+    );
+
+    expect(markup).toContain("Restaurar curso");
+    expect(markup).not.toContain("Salvar configurações");
+  });
+
+  it("saves the responsible person through the shared course settings button", async () => {
+    renderCourseSettingsForm();
+    const responsibleName = container?.querySelector<HTMLInputElement>(
+      'input[name="responsibleName"]'
+    );
+    expect(responsibleName).not.toBeNull();
+    act(() => {
+      if (responsibleName) {
+        Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          "value"
+        )?.set?.call(responsibleName, "Dra. Joana");
+        responsibleName.dispatchEvent(new Event("input", { bubbles: true }));
+        responsibleName.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+
+    await submitSettingsForm();
+
+    expect(saveCourseSettingsActionMock).toHaveBeenCalledOnce();
+    const submittedFormData = saveCourseSettingsActionMock.mock.calls[0]?.[0];
+    expect(submittedFormData.get("saveCourseDetails")).toBe("on");
+    expect(submittedFormData.get("saveCourseResponsible")).toBe("on");
+    expect(submittedFormData.get("responsibleName")).toBe("Dra. Joana");
+    expect(submittedFormData.get("responsibleTitle")).toBe(
+      "Responsável técnica"
+    );
+    expect(submittedFormData.get("saveCourseAvailability")).toBe("on");
+    expect(submittedFormData.get("preset")).toBe("available");
+  });
+
   it("shows the free-course note and hides paid controls for zero price", () => {
     const markup = renderToStaticMarkup(
       <CourseSettingsForm course={{ ...course, priceInCents: 0 }} />
@@ -171,8 +309,8 @@ describe("course payment settings", () => {
 
     await submitSettingsForm();
 
-    expect(saveCourseActionMock).toHaveBeenCalledOnce();
-    const submittedFormData = saveCourseActionMock.mock.calls[0]?.[0];
+    expect(saveCourseSettingsActionMock).toHaveBeenCalledOnce();
+    const submittedFormData = saveCourseSettingsActionMock.mock.calls[0]?.[0];
     expect(submittedFormData.get("price")).toBe(formatCurrencyInCents(0));
     expect(submittedFormData.get("paymentAllowPix")).toBeNull();
     expect(submittedFormData.get("paymentAllowCreditCard")).toBeNull();
@@ -237,7 +375,7 @@ describe("course payment settings", () => {
 
     await submitSettingsForm();
 
-    const submittedFormData = saveCourseActionMock.mock.calls[0]?.[0];
+    const submittedFormData = saveCourseSettingsActionMock.mock.calls[0]?.[0];
     expect(submittedFormData.get("paymentAllowCreditCard")).toBeNull();
     expect(submittedFormData.get("paymentMaxInstallmentCount")).toBeNull();
   });
@@ -327,8 +465,10 @@ describe("course payment settings", () => {
     expect(markup).toContain("Identidade do curso");
     expect(markup).toContain("Acesso e carga horária");
     expect(markup).toContain("Oferta de pagamento");
-    expect(markup).toContain("lg:grid-cols-[208px_minmax(0,1fr)]");
-    expect(markup).toContain("sm:w-[208px]");
+    expect(markup).toContain("lg:grid-cols-[320px_minmax(0,1fr)]");
+    expect(markup).toContain("lg:items-center");
+    expect(markup).toContain("sm:w-[320px]");
+    expect(markup).toContain("min-h-18");
     expect(markup).toContain("Editar carga horária");
     expect(markup).toContain('name="workloadHoursOverride"');
     expect(markup.indexOf("Carga horária")).toBeLessThan(
@@ -346,8 +486,9 @@ describe("course payment settings", () => {
     );
 
     expect(markup).toContain('data-course-settings-readonly="true"');
-    expect(markup).toContain("Você pode consultar estas informações");
+    expect(markup).toContain("Você pode consultar os dados gerais");
     expect(markup).toContain(formatCurrencyInCents(course.priceInCents));
+    expect(markup).toContain("lg:items-center");
     expect(markup).not.toContain("Salvar configurações");
     expect(markup).not.toContain("<form");
   });
@@ -370,12 +511,23 @@ describe("course payment settings", () => {
     expect(options.at(9)?.getAttribute("aria-disabled")).toBe("true");
   });
 
+  it("blocks settings save while the course cover is still uploading", async () => {
+    renderCourseSettingsForm();
+    act(() => findButton("Enviar capa").click());
+
+    expect(findButton("Salvar configurações").disabled).toBe(true);
+
+    await submitSettingsForm();
+
+    expect(saveCourseSettingsActionMock).not.toHaveBeenCalled();
+  });
+
   it("saves an equivalent price without opening confirmation", async () => {
     renderCourseSettingsForm();
     setPrice("19,90");
     await submitSettingsForm();
 
-    expect(saveCourseActionMock).toHaveBeenCalledOnce();
+    expect(saveCourseSettingsActionMock).toHaveBeenCalledOnce();
     expect(document.body.textContent).not.toContain(
       "Confirmar alteração de preço?"
     );
@@ -386,7 +538,7 @@ describe("course payment settings", () => {
     setPrice("29,90");
     await submitSettingsForm();
 
-    expect(saveCourseActionMock).not.toHaveBeenCalled();
+    expect(saveCourseSettingsActionMock).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain(
       "Confirmar alteração de preço?"
     );
@@ -401,7 +553,7 @@ describe("course payment settings", () => {
 
     clickButton("Cancelar");
 
-    expect(saveCourseActionMock).not.toHaveBeenCalled();
+    expect(saveCourseSettingsActionMock).not.toHaveBeenCalled();
   });
 
   it("saves the original form snapshot after confirming a changed price", async () => {
@@ -411,8 +563,8 @@ describe("course payment settings", () => {
     setPrice("39,90");
     await clickButtonAsync("Confirmar alteração");
 
-    expect(saveCourseActionMock).toHaveBeenCalledOnce();
-    const submittedFormData = saveCourseActionMock.mock.calls[0]?.[0];
+    expect(saveCourseSettingsActionMock).toHaveBeenCalledOnce();
+    const submittedFormData = saveCourseSettingsActionMock.mock.calls[0]?.[0];
     expect(submittedFormData).toBeInstanceOf(FormData);
     expect(submittedFormData.get("price")).toBe("29,90");
   });

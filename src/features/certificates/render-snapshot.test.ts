@@ -131,6 +131,39 @@ describe("parseCertificateRenderSnapshot", () => {
     });
 
     expect(snapshot.issuer.displayName).toBe("Hub");
+    expect(snapshot.rendererVersion).toBeUndefined();
     expect(snapshot.template.fields.at(-1)?.field).toBe("courseFreeStatement");
+  });
+
+  it("accepts a separate renderer version without changing the snapshot schema version", () => {
+    const snapshot = {
+      certificate: { code: "CERT-123", issuedAt: "2026-07-22T12:00:00.000Z" },
+      completion: { completedAt: "2026-07-21T12:00:00.000Z" },
+      course: { title: "Curso", workloadHours: 10 },
+      issuer: {
+        cnpj: "12.345.678/0001-90",
+        displayName: "Hub",
+        legalName: "Hub Educacao LTDA",
+      },
+      student: { name: "Ana" },
+      template: {
+        backgroundKey: validDraft.backgroundKey,
+        fields: validDraft.fields,
+        id: "2c5c41a6-29c1-4a42-8474-f1f7021d5137",
+        signatureKey: null,
+        signerName: null,
+        signerRole: null,
+        version: 1,
+      },
+      version: 1,
+    };
+
+    expect(
+      parseCertificateRenderSnapshot({ ...snapshot, rendererVersion: 2 })
+        .rendererVersion
+    ).toBe(2);
+    expect(() =>
+      parseCertificateRenderSnapshot({ ...snapshot, rendererVersion: 99 })
+    ).toThrow(CertificateTemplateValidationError);
   });
 });

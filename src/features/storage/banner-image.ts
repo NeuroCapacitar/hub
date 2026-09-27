@@ -4,6 +4,7 @@ export const BANNER_IMAGE_WIDTH = 1680;
 export const BANNER_IMAGE_HEIGHT = 420;
 export const BANNER_IMAGE_ASPECT_RATIO =
   BANNER_IMAGE_WIDTH / BANNER_IMAGE_HEIGHT;
+export const BANNER_STORAGE_PREFIX = "banners/";
 
 export const BANNER_IMAGE_PREVIEW = {
   aspectRatio: "4:1",
@@ -13,6 +14,17 @@ export const BANNER_IMAGE_PREVIEW = {
 } as const;
 
 export const BANNER_ACCEPT = ".jpeg,.jpg,.png,.webp";
+
+export const isBannerStorageKey = (key: string): boolean => {
+  if (!key.startsWith(BANNER_STORAGE_PREFIX)) {
+    return false;
+  }
+
+  const fileName = key.slice(BANNER_STORAGE_PREFIX.length);
+  return (
+    Boolean(fileName) && !fileName.includes("/") && !fileName.includes("..")
+  );
+};
 
 const ALLOWED_BANNER_CONTENT_TYPES = new Set([
   "image/jpeg",
@@ -36,6 +48,6 @@ export const validateBannerUploadRequest = ({
   }
 
   if (sizeBytes > MAX_BANNER_BYTES) {
-    throw new Error("A imagem do banner excede o limite de 5MB.");
+    throw new Error("A imagem do banner excede o limite de 5 MiB.");
   }
 };

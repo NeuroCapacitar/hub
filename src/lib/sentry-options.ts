@@ -9,6 +9,10 @@ import { isFullSentryRelease } from "./sentry-deployment";
 
 const SENTRY_TRACE_SAMPLE_RATE = 0.1;
 const CERTIFICATE_CODE = /\bPRT-[0-9A-Z-]{6,}\b/giu;
+// A canonical, unpadded 16-byte Base64URL value is 22 chars; its final
+// Base64 sextet can only encode to A, Q, g, or w.
+const CERTIFICATE_BASE64URL_CODE =
+  /(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{21}[AQgw](?![A-Za-z0-9_-])/gu;
 const CERTIFICATE_REFERENCE =
   /\/certificados\/[^/?#\s]+((?:\/[^?#\s]*)?)(?:[?#]\S*)?/giu;
 const LOCATION_VALUE = /^(?:[A-Z]+\s+)?(?:https?:\/\/|\/)\S+$/u;
@@ -18,12 +22,12 @@ const EMAIL_ADDRESS = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu;
 const BEARER_TOKEN = /\bBearer\s+[A-Za-z0-9._~+/=-]+/giu;
 const LOCATION_WITH_QUERY = /(?:https?:\/\/|\/)[^\s?#]+[?#][^\s]*/giu;
 const SENSITIVE_ATTRIBUTE_KEY =
-  /authorization|cookie|email|password|secret|signature|token|payload|signed.?url|user.?name|^user$/iu;
+  /authorization|certificate.?code|cookie|email|password|secret|signature|token|payload|signed.?url|user.?name|^user$/iu;
 const REDACTED_EMAIL = "[email]";
 const REDACTED_TOKEN = "Bearer [token]";
 const CIRCULAR_REFERENCE = "[circular]";
 const SENSITIVE_METRIC_ATTRIBUTE_KEY =
-  /authorization|cookie|email|name|password|payload|secret|signature|signed.?url|token|url|user.?name|^user$/iu;
+  /authorization|certificate.?code|cookie|email|name|password|payload|secret|signature|signed.?url|token|url|user.?name|^user$/iu;
 
 const normalizeTelemetryText = (value: string): string => {
   const withoutCertificateQuery = value.replace(
@@ -42,6 +46,7 @@ const normalizeTelemetryText = (value: string): string => {
 
   return withoutLocationQuery
     .replace(CERTIFICATE_CODE, CERTIFICATE_CODE_PLACEHOLDER)
+    .replace(CERTIFICATE_BASE64URL_CODE, CERTIFICATE_CODE_PLACEHOLDER)
     .replace(EMAIL_ADDRESS, REDACTED_EMAIL)
     .replace(BEARER_TOKEN, REDACTED_TOKEN);
 };

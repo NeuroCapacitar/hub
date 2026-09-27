@@ -114,7 +114,7 @@ export const validateLessonAttachmentUpload = ({
   }
 
   if (sizeBytes > maxSizeBytes) {
-    throw new Error("Arquivo maior que 150 MB.");
+    throw new Error("Arquivo maior que 150 MiB.");
   }
 };
 

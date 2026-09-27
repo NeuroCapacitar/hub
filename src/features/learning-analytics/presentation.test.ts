@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildLearningAnalyticsActivityScale,
   buildLearningAnalyticsKpis,
   buildLessonAnalyticsLessonReports,
   formatLearningAnalyticsPlayingTime,
+  getLearningAnalyticsActivityWidth,
+  getLearningAnalyticsPauseInsights,
 } from "./presentation";
 import type { LessonAnalyticsMetric } from "./types";
 
@@ -11,6 +14,8 @@ const metric = (
 ): LessonAnalyticsMetric => ({
   activeEnrollments: 10,
   completed: 4,
+  checkpointSampleCount: 6,
+  completionTimingSampleCount: 5,
   courseId: "course-1",
   coursePublicationId: "publication-2",
   courseTitle: "Curso",
@@ -25,6 +30,7 @@ const metric = (
   medianHoursToNextLesson: 1,
   moduleSortOrder: 1,
   moduleTitle: "Módulo 1",
+  nextLessonTimingSampleCount: 4,
   playingSeconds: 3600,
   publicationNumber: 2,
   publicationStatus: "published",
@@ -32,6 +38,7 @@ const metric = (
   aggregateMedianCheckpointPercent: 50,
   aggregateMedianHoursToComplete: 2,
   aggregateMedianHoursToNextLesson: 1,
+  aggregateNextLessonTimingSampleCount: 4,
   ...overrides,
 });
 
@@ -119,5 +126,54 @@ describe("learning analytics presentation", () => {
     );
     expect(formatLearningAnalyticsPlayingTime(42 * 60)).toBe("42 min");
     expect(formatLearningAnalyticsPlayingTime(8)).toBe("8 s");
+  });
+
+  it("builds a course-wide activity scale without converting counts to rates", () => {
+    const reports = buildLessonAnalyticsLessonReports([
+      metric({ completed: 3, started: 12 }),
+      metric({
+        curriculumKey: "curriculum-2",
+        completed: 8,
+        lessonId: "lesson-2-v2",
+        lessonSortOrder: 2,
+        started: 4,
+      }),
+    ]);
+
+    expect(buildLearningAnalyticsActivityScale(reports)).toEqual({
+      maxValue: 12,
+    });
+    expect(getLearningAnalyticsActivityWidth(6, 12)).toBe(50);
+    expect(getLearningAnalyticsActivityWidth(0, 12)).toBe(0);
+    expect(getLearningAnalyticsActivityWidth(4, 0)).toBe(0);
+  });
+
+  it("ranks pause insights by the aggregate observed median", () => {
+    const reports = buildLessonAnalyticsLessonReports([
+      metric({
+        aggregateMedianHoursToNextLesson: 1,
+        aggregateNextLessonTimingSampleCount: 4,
+      }),
+      metric({
+        aggregateMedianHoursToNextLesson: 4,
+        aggregateNextLessonTimingSampleCount: 4,
+        curriculumKey: "curriculum-2",
+        lessonId: "lesson-2-v2",
+        lessonSortOrder: 2,
+      }),
+      metric({
+        aggregateMedianHoursToNextLesson: 8,
+        aggregateNextLessonTimingSampleCount: 1,
+        curriculumKey: "curriculum-3",
+        lessonId: "lesson-3-v2",
+        lessonSortOrder: 3,
+      }),
+    ]);
+
+    expect(
+      getLearningAnalyticsPauseInsights(reports).map(
+        (lesson) => lesson.position
+      )
+    ).toEqual([2, 1]);
   });
 });

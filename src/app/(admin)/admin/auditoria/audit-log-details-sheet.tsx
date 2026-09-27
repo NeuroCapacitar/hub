@@ -127,8 +127,8 @@ export function AuditLogDetailsSheet({
         </SheetHeader>
         <ScrollArea className="min-h-0 flex-1 overscroll-contain">
           <div className="grid gap-3 p-4 sm:p-5">
-            <Card density="compact" size="sm">
-              <CardHeader className="border-b" density="compact">
+            <Card className="gap-0 rounded-card py-0" size="sm">
+              <CardHeader className="gap-1 border-b px-4 py-2 pb-2">
                 <CardTitle as="h2">Resumo do evento</CardTitle>
               </CardHeader>
               <CardContent className="px-4 py-3">
@@ -166,8 +166,8 @@ export function AuditLogDetailsSheet({
               </CardContent>
             </Card>
 
-            <Card density="compact" size="sm">
-              <CardHeader className="border-b" density="compact">
+            <Card className="gap-0 rounded-card py-0" size="sm">
+              <CardHeader className="gap-1 border-b px-4 py-2 pb-2">
                 <CardTitle as="h2">Alterações registradas</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-2 px-4 py-3">
@@ -209,8 +209,8 @@ export function AuditLogDetailsSheet({
             </Card>
 
             {log.metadata.reason || context.length > 0 ? (
-              <Card density="compact" size="sm">
-                <CardHeader className="border-b" density="compact">
+              <Card className="gap-0 rounded-card py-0" size="sm">
+                <CardHeader className="gap-1 border-b px-4 py-2 pb-2">
                   <CardTitle as="h2">Contexto</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-3 px-4 py-3 text-sm">
@@ -238,8 +238,8 @@ export function AuditLogDetailsSheet({
               </Card>
             ) : null}
 
-            <Card density="compact" size="sm">
-              <CardHeader className="border-b" density="compact">
+            <Card className="gap-0 rounded-card py-0" size="sm">
+              <CardHeader className="gap-1 border-b px-4 py-2 pb-2">
                 <CardTitle as="h2">Referências técnicas</CardTitle>
               </CardHeader>
               <CardContent className="px-4 py-3">

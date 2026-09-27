@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
+import { getServerEnv } from "@/lib/env";
 import { route } from "@/lib/routes";
 import { getCurrentSession } from "@/lib/session";
 import { SignInForm } from "./sign-in-form";
@@ -25,6 +26,7 @@ export default async function SignInPage({
   searchParams: Promise<{ returnTo?: string | string[] | undefined }>;
 }): Promise<React.JSX.Element> {
   await connection();
+  const supportEmail = getServerEnv().SUPPORT_EMAIL ?? null;
   const [{ returnTo }, session] = await Promise.all([
     searchParams,
     getCurrentSession(),
@@ -51,7 +53,7 @@ export default async function SignInPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0">
-          <SignInForm returnTo={safeReturnTo} />
+          <SignInForm returnTo={safeReturnTo} supportEmail={supportEmail} />
         </CardContent>
       </Card>
     </AuthShell>

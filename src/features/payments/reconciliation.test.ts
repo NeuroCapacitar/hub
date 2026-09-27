@@ -91,6 +91,7 @@ describe("Asaas reconciliation", () => {
     const confirmedPayment = {
       ...payment,
       refunds: [],
+      paymentDate: "2026-09-25",
       status: "RECEIVED",
     };
     const transactionQueries: Array<{
@@ -130,6 +131,10 @@ describe("Asaas reconciliation", () => {
       })
     );
     expect(dependencies.enqueueOutboxMessage).toHaveBeenCalledOnce();
+    const providerDateUpdate = transactionQueries.find(({ text }) =>
+      text.includes("provider_payment_date = coalesce")
+    );
+    expect(providerDateUpdate?.values?.at(-1)).toBe("2026-09-25");
     expect(
       transactionQueries.some(({ text }) =>
         text.includes("set status = 'paid'")
@@ -648,7 +653,7 @@ describe("Asaas reconciliation", () => {
     expect(
       transactionQueries
         .find(({ text }) => text.includes("payment_installment_count"))
-        ?.values?.at(-1)
+        ?.values?.at(-2)
     ).toBe(3);
     expect(
       transactionQueries.find(({ text }) =>
@@ -980,7 +985,7 @@ describe("Asaas reconciliation", () => {
     expect(
       transactionQueries
         .find(({ text }) => text.includes("paid_amount_in_cents"))
-        ?.values?.at(-2)
+        ?.values?.at(-3)
     ).toBe(false);
   });
 
@@ -1027,7 +1032,7 @@ describe("Asaas reconciliation", () => {
     expect(
       transactionQueries
         .find(({ text }) => text.includes("paid_amount_in_cents"))
-        ?.values?.at(-2)
+        ?.values?.at(-3)
     ).toBe(false);
   });
 
@@ -1065,7 +1070,7 @@ describe("Asaas reconciliation", () => {
     const evidenceUpdate = transactionQueries.find(({ text }) =>
       text.includes("paid_amount_in_cents")
     );
-    expect(evidenceUpdate?.values?.at(-2)).toBe(false);
+    expect(evidenceUpdate?.values?.at(-3)).toBe(false);
     expect(evidenceUpdate?.values?.at(-1)).toBeNull();
     expect(
       transactionQueries.find(({ text }) =>

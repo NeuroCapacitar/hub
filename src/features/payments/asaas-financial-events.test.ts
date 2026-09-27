@@ -16,6 +16,66 @@ const pendingOrder: AsaasFinancialOrderSnapshot = {
 };
 
 describe("Asaas financial event matrix", () => {
+  it("records a newly created charge without granting course access", () => {
+    const decision = decideAsaasFinancialEvent({
+      payload: paymentPayload({
+        billingType: "PIX",
+        event: "PAYMENT_CREATED",
+        status: "PENDING",
+        value: 100,
+      }),
+      snapshot: pendingOrder,
+    });
+
+    expect(decision).toMatchObject({
+      action: "apply",
+      effect: "none",
+      reviewReason: null,
+      updates: { providerPaymentStatus: "PENDING" },
+    });
+  });
+
+  it("prefers the provider payment date and keeps it as a date-only value", () => {
+    const decision = decideAsaasFinancialEvent({
+      payload: {
+        event: "PAYMENT_CONFIRMED",
+        payment: {
+          billingType: "PIX",
+          checkoutSession: "checkout_1",
+          confirmedDate: "2026-09-25",
+          customerPaymentDate: "2026-09-24",
+          externalReference: "order_123e4567-e89b-12d3-a456-426614174000",
+          id: "payment_1",
+          paymentDate: "2026-09-23",
+          status: "CONFIRMED",
+          value: 100,
+        },
+      },
+      snapshot: pendingOrder,
+    });
+
+    expect(decision.updates.providerPaymentDate).toBe("2026-09-24");
+  });
+
+  it("ignores malformed provider payment dates instead of inventing one", () => {
+    const decision = decideAsaasFinancialEvent({
+      payload: {
+        event: "PAYMENT_CONFIRMED",
+        payment: {
+          billingType: "PIX",
+          confirmedDate: "2026-02-30",
+          externalReference: "order_123e4567-e89b-12d3-a456-426614174000",
+          id: "payment_1",
+          status: "CONFIRMED",
+          value: 100,
+        },
+      },
+      snapshot: pendingOrder,
+    });
+
+    expect(decision.updates.providerPaymentDate).toBeUndefined();
+  });
+
   it("classifies credit card capture refusal as operational failure without access", () => {
     const decision = decideAsaasFinancialEvent({
       payload: {

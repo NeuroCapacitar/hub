@@ -4,7 +4,7 @@ import {
 } from "@/features/certificates/template-image-contract";
 import { AUTH_MEDIA_MAX_BYTES } from "@/features/storage/auth-media-image-contract";
 import { MAX_BANNER_BYTES } from "@/features/storage/banner-image";
-import { MAX_ORIGINAL_COVER_BYTES } from "@/features/storage/course-cover";
+import { MAX_COURSE_COVER_UPLOAD_BYTES } from "@/features/storage/course-cover";
 import { sanitizeR2FileName } from "@/features/storage/r2-objects";
 import type { AuthPermission } from "@/lib/auth-policy";
 
@@ -25,7 +25,7 @@ const STAGED_ADMIN_IMAGE_CATALOG = {
   },
   "course-cover": {
     aggregateType: "course",
-    maxBytes: MAX_ORIGINAL_COVER_BYTES,
+    maxBytes: MAX_COURSE_COVER_UPLOAD_BYTES,
   },
   "dashboard-banner": {
     aggregateType: "dashboard-banner",

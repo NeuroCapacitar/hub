@@ -1,19 +1,26 @@
 import "server-only";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { getPool } from "@/db";
+import { purgeRevokedCertificatePreview } from "@/features/certificates/artifact-reconciliation";
+import {
+  CERTIFICATE_CODE_RANDOM_BYTE_LENGTH,
+  encodeCertificateCode,
+  hashCertificateVerificationCode,
+} from "@/features/certificates/certificate-code";
 import {
   type CertificateReasonCode,
   parseCertificateReasonCode,
 } from "@/features/certificates/reasons";
 import {
+  CURRENT_CERTIFICATE_RENDERER_VERSION,
   parseCertificateRenderSnapshot,
   parseCertificateTemplateDraft,
 } from "@/features/certificates/render-snapshot";
 import { renderCertificatePdf } from "@/features/certificates/rendering";
 import {
   CERTIFICATE_RENDER_CLAIM_LEASE_MINUTES,
-  createCertificateCode,
+  REVOKED_CERTIFICATE_DATA_RETENTION_DAYS,
 } from "@/features/certificates/rules";
 import { lockEnrollmentAggregate } from "@/features/enrollments/enrollment-aggregate-lock";
 import { createCertificateRenderMessage } from "@/features/outbox/rules";
@@ -24,6 +31,7 @@ import {
 } from "@/features/storage/r2";
 import { getServerEnv } from "@/lib/env";
 import { CertificateDomainError } from "./errors";
+import { isCertificateSignatoryConfigured } from "./template-rules";
 
 const MAX_CERTIFICATE_CODE_ATTEMPTS = 3;
 const CERTIFICATE_RECONCILIATION_BATCH_SIZE = 100;
@@ -76,6 +84,7 @@ export interface CertificateRecord {
   issuerName?: string | null;
   pdfSha256?: string | null;
   pdfStorageKey?: string | null;
+  previewAvailable?: boolean;
   renderStatus: "failed" | "pending" | "ready";
   revokedAt: Date | null;
   revokedReasonCategory: CertificateReasonCode | null;
@@ -127,15 +136,14 @@ export const tryIssueAutomaticCompletionCertificate = async ({
   }>(
     `
        select ct.id, ct.version, ct.background_key, ct.spec,
-              coalesce(ct.signer_name, settings.certificate_signer_name) as signer_name,
-             coalesce(ct.signer_role, settings.certificate_signer_role) as signer_role,
-             ct.signature_key,
+              c.certificate_signer_name as signer_name,
+              c.certificate_signer_role as signer_role,
+              ct.signature_key,
               issuer.cnpj as issuer_cnpj, issuer.legal_name as issuer_legal_name,
               issuer.display_name as issuer_display_name
       from courses c
       join certificate_templates ct on ct.course_id = c.id and ct.status = 'published'
       join certificate_issuer_profiles issuer on issuer.id = 'global'
-      left join app_settings settings on settings.id = 'global'
       where c.id = $1 and c.certificate_enabled = true
       limit 1
     `,
@@ -143,6 +151,14 @@ export const tryIssueAutomaticCompletionCertificate = async ({
   );
   const templateSnapshot = template.rows[0];
   if (!templateSnapshot) {
+    return null;
+  }
+  if (
+    !isCertificateSignatoryConfigured(
+      templateSnapshot.signer_name,
+      templateSnapshot.signer_role
+    )
+  ) {
     return null;
   }
   const issuedAt = new Date().toISOString();
@@ -154,7 +170,9 @@ export const tryIssueAutomaticCompletionCertificate = async ({
   for (let attempt = 0; attempt < MAX_CERTIFICATE_CODE_ATTEMPTS; attempt += 1) {
     const savepoint = `certificate_code_attempt_${attempt}`;
     await client.query(`savepoint ${savepoint}`);
-    const candidateCode = createCertificateCode(randomUUID());
+    const candidateCode = encodeCertificateCode(
+      randomBytes(CERTIFICATE_CODE_RANDOM_BYTE_LENGTH)
+    );
     const renderSnapshot = parseCertificateRenderSnapshot({
       certificate: { code: candidateCode, issuedAt },
       completion: { completedAt: completionAt },
@@ -174,12 +192,20 @@ export const tryIssueAutomaticCompletionCertificate = async ({
         signerRole: templateSnapshot.signer_role,
         version: templateSnapshot.version,
       },
+      rendererVersion: CURRENT_CERTIFICATE_RENDERER_VERSION,
       version: 1,
     });
 
     try {
       const certificate = await client.query<{ code: string }>(
         `
+          with certificate_completion as (
+            update course_completions
+            set certificate_ever_issued = true,
+                updated_at = now()
+            where user_id = $1 and course_id = $2
+            returning id
+          )
           insert into certificates (
             user_id,
             course_id,
@@ -191,7 +217,8 @@ export const tryIssueAutomaticCompletionCertificate = async ({
             certificate_template_id,
             render_snapshot
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+          select $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb
+          from certificate_completion
           on conflict (user_id, course_id) where status = 'valid' do nothing
           returning code
         `,
@@ -406,8 +433,8 @@ const issueCertificate = async ({
         ct.version as template_version,
         ct.background_key,
         ct.spec,
-        coalesce(ct.signer_name, settings.certificate_signer_name) as signer_name,
-        coalesce(ct.signer_role, settings.certificate_signer_role) as signer_role,
+        c.certificate_signer_name as signer_name,
+        c.certificate_signer_role as signer_role,
         ct.signature_key,
         issuer.cnpj as issuer_cnpj,
         issuer.legal_name as issuer_legal_name,
@@ -421,7 +448,6 @@ const issueCertificate = async ({
        and cc.course_publication_id = cp.id
       join certificate_templates ct on ct.course_id = c.id and ct.status = 'published'
       join certificate_issuer_profiles issuer on issuer.id = 'global'
-      left join app_settings settings on settings.id = 'global'
       where u.id = $1
       limit 1
     `,
@@ -431,6 +457,13 @@ const issueCertificate = async ({
 
   if (!source) {
     throw new CertificateDomainError("Aluno ou curso nao localizado.");
+  }
+  if (
+    !isCertificateSignatoryConfigured(source.signer_name, source.signer_role)
+  ) {
+    throw new CertificateDomainError(
+      "O responsável pelo certificado não está configurado. Informe nome e cargo em Configurações do curso antes de emitir."
+    );
   }
 
   const issuedAt = new Date().toISOString();
@@ -448,7 +481,9 @@ const issueCertificate = async ({
   for (let attempt = 0; attempt < MAX_CERTIFICATE_CODE_ATTEMPTS; attempt += 1) {
     const savepoint = `certificate_code_attempt_${attempt}`;
     await client.query(`savepoint ${savepoint}`);
-    const certificateCode = createCertificateCode(randomUUID());
+    const certificateCode = encodeCertificateCode(
+      randomBytes(CERTIFICATE_CODE_RANDOM_BYTE_LENGTH)
+    );
     const renderSnapshot = parseCertificateRenderSnapshot({
       certificate: { code: certificateCode, issuedAt },
       completion: { completedAt: source.completed_at.toISOString() },
@@ -471,12 +506,20 @@ const issueCertificate = async ({
         signerRole: source.signer_role,
         version: source.template_version,
       },
+      rendererVersion: CURRENT_CERTIFICATE_RENDERER_VERSION,
       version: 1,
     });
 
     try {
       const certificate = await client.query<{ id: string }>(
         `
+          with certificate_completion as (
+            update course_completions
+            set certificate_ever_issued = true,
+                updated_at = now()
+            where user_id = $1 and course_id = $2
+            returning id
+          )
           insert into certificates (
             user_id,
             course_id,
@@ -489,7 +532,8 @@ const issueCertificate = async ({
             certificate_template_id,
             render_snapshot
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
+          select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb
+          from certificate_completion
           returning id
         `,
         [
@@ -598,6 +642,7 @@ export const reconcileHistoricalCourseCertificates = async ({
             from certificate_issuer_profiles issuer
             where issuer.id = 'global'
           )
+          and completion.certificate_ever_issued = false
           and not exists (
             select 1
             from certificates certificate
@@ -663,6 +708,7 @@ export const reconcileHistoricalCourseCertificates = async ({
             from certificate_issuer_profiles issuer
             where issuer.id = 'global'
           )
+          and completion.certificate_ever_issued = false
           and not exists (
             select 1
             from certificates certificate
@@ -763,9 +809,12 @@ export const issueManualCertificate = async ({
       `,
       [userId, courseId, publishedCoursePublicationId]
     );
-    const completion = await client.query<{ course_publication_id: string }>(
+    const completion = await client.query<{
+      certificate_ever_issued: boolean;
+      course_publication_id: string;
+    }>(
       `
-        select course_publication_id
+        select course_publication_id, certificate_ever_issued
         from course_completions
         where user_id = $1 and course_id = $2
         limit 1
@@ -775,6 +824,11 @@ export const issueManualCertificate = async ({
     const coursePublicationId = completion.rows[0]?.course_publication_id;
     if (!coursePublicationId) {
       throw new CertificateDomainError("Conclusao do curso nao localizada.");
+    }
+    if (completion.rows[0]?.certificate_ever_issued) {
+      throw new CertificateDomainError(
+        "Já houve uma emissão de certificado para essa conclusão. Não é possível emitir outra via pelo fluxo manual."
+      );
     }
     const certificate = await issueCertificate({
       actorUserId,
@@ -805,7 +859,7 @@ export const revokeCertificate = async ({
   certificateId: string;
   reasonCategory: string;
   reasonDetail: string;
-}): Promise<void> => {
+}): Promise<{ previewPurged: boolean }> => {
   const category = requireCertificateReason({ reasonCategory, reasonDetail });
 
   const pool = getPool();
@@ -846,6 +900,13 @@ export const revokeCertificate = async ({
   } finally {
     client.release();
   }
+
+  return {
+    previewPurged: await purgeRevokedCertificatePreview({
+      actorUserId,
+      certificateId,
+    }),
+  };
 };
 
 export const reissueCertificate = async ({
@@ -860,11 +921,12 @@ export const reissueCertificate = async ({
   certificateId: string;
   reasonCategory: string;
   reasonDetail: string;
-}): Promise<{ id: string }> => {
+}): Promise<{ id: string; previousPreviewPurged: boolean }> => {
   const category = requireCertificateReason({ reasonCategory, reasonDetail });
 
   const pool = getPool();
   const client = await pool.connect();
+  let replacement: { id: string } | null = null;
   try {
     await client.query("begin");
     const previousResult = await client.query<{
@@ -972,7 +1034,7 @@ export const reissueCertificate = async ({
         },
       });
     }
-    const replacement = await issueCertificate({
+    replacement = await issueCertificate({
       actorUserId,
       client,
       courseId: lockedPreviousCertificate.course_id,
@@ -983,13 +1045,22 @@ export const reissueCertificate = async ({
       userId: lockedPreviousCertificate.user_id,
     });
     await client.query("commit");
-    return replacement;
   } catch (error) {
     await client.query("rollback");
     throw error;
   } finally {
     client.release();
   }
+
+  if (!replacement) {
+    throw new Error("A reemissão não retornou o novo certificado.");
+  }
+
+  const previousPreviewPurged = await purgeRevokedCertificatePreview({
+    actorUserId,
+    certificateId,
+  });
+  return { ...replacement, previousPreviewPurged };
 };
 
 export const getCertificateByCode = async (
@@ -1029,9 +1100,13 @@ export const getCertificateByCode = async (
         status
       from certificates
       where code = $1
+        and (
+          status <> 'revoked'
+          or revoked_at > now() - ($2 * interval '1 day')
+        )
       limit 1
     `,
-    [code]
+    [code, REVOKED_CERTIFICATE_DATA_RETENTION_DAYS]
   );
   const row = rows[0];
 
@@ -1059,6 +1134,35 @@ export const getCertificateByCode = async (
   };
 };
 
+export interface RevokedCertificateTombstone {
+  revokedAt: Date;
+}
+
+export const getRevokedCertificateTombstoneByCode = async (
+  code: string
+): Promise<RevokedCertificateTombstone | null> => {
+  const { rows } = await getPool().query<{ revoked_at: Date }>(
+    `select revoked_at
+     from certificates
+     where code = $1
+       and status = 'revoked'
+       and revoked_at <= now() - ($2 * interval '1 day')
+     union all
+     select revoked_at
+     from certificate_revocation_tombstones
+     where code_hash = $3
+     limit 1`,
+    [
+      code,
+      REVOKED_CERTIFICATE_DATA_RETENTION_DAYS,
+      hashCertificateVerificationCode(code),
+    ]
+  );
+  const row = rows[0];
+
+  return row ? { revokedAt: row.revoked_at } : null;
+};
+
 export const getCertificatesForUser = async (
   userId: string
 ): Promise<CertificateRecord[]> => {
@@ -1068,6 +1172,7 @@ export const getCertificatesForUser = async (
     course_title_snapshot: string;
     workload_hours_snapshot: number;
     issued_at: Date;
+    preview_sha256: string | null;
     revoked_at: Date | null;
     revoked_reason_category: string | null;
     status: "revoked" | "valid";
@@ -1080,6 +1185,7 @@ export const getCertificatesForUser = async (
         course_title_snapshot,
         workload_hours_snapshot,
         issued_at,
+        preview_sha256,
         revoked_at,
         revoked_reason_category,
         render_status,
@@ -1097,6 +1203,7 @@ export const getCertificatesForUser = async (
     courseTitle: row.course_title_snapshot,
     workloadHours: row.workload_hours_snapshot,
     issuedAt: row.issued_at,
+    previewAvailable: row.preview_sha256 !== null,
     revokedAt: row.revoked_at,
     revokedReasonCategory:
       parseCertificateReasonCode(row.revoked_reason_category) ??

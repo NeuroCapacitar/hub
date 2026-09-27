@@ -56,6 +56,26 @@ describe("CertificateImageUploadField", () => {
     expect(createObjectURL).not.toHaveBeenCalled();
   });
 
+  it("associates the file input with a visible, focus-aware label", () => {
+    act(() => {
+      root.render(
+        <CertificateImageUploadField
+          imageUrl={null}
+          kind="background"
+          onFileSelect={vi.fn()}
+        />
+      );
+    });
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
+    const label = input?.closest("label");
+
+    expect(label?.textContent).toContain(
+      "Arraste ou clique para selecionar a imagem"
+    );
+    expect(label?.className).toContain("focus-within");
+  });
+
   it("rejects a signature above 2 MiB", () => {
     const onFileSelect = vi.fn();
     act(() => {
@@ -76,6 +96,6 @@ describe("CertificateImageUploadField", () => {
     act(() => input?.dispatchEvent(new Event("change", { bubbles: true })));
 
     expect(onFileSelect).not.toHaveBeenCalled();
-    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("2 MB"));
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("2 MiB"));
   });
 });

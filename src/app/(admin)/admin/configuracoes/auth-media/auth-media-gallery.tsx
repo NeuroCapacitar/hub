@@ -9,21 +9,21 @@ import {
 import { AlertCircleIcon, CloudUploadIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   createSortableAccessibility,
   useSortableSensors,
 } from "@/components/sortable-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   ResourceDropzoneEmpty,
-  ResourceItemSkeleton,
   ResourceListBody,
   ResourceListContainer,
   ResourceListHeader,
 } from "@/components/ui/resource-list";
+import { UploadProgressStatus } from "@/components/ui/upload-progress-status";
 import {
   deleteAuthMediaAction,
   reorderAuthMediaAction,
@@ -36,9 +36,15 @@ import { readAuthMediaFileSelection } from "@/features/auth-media/file-selection
 import type { AdminAuthMediaSlide } from "@/features/auth-media/types";
 import {
   AUTH_MEDIA_ACCEPT,
+  AUTH_MEDIA_MAX_BYTES,
   validateAuthMediaSourceRequest,
 } from "@/features/storage/auth-media-image-contract";
 import { uploadStagedAdminImage } from "@/features/storage/staged-image-upload-client";
+import {
+  isUploadAbortedError,
+  type UploadStatusPhase,
+  type UploadTransferProgress,
+} from "@/features/storage/xhr-upload";
 import { cn } from "@/lib/utils";
 import { SortableAuthMediaItem } from "./sortable-auth-media-item";
 
@@ -47,6 +53,54 @@ interface AuthMediaGalleryProps {
   readOnly?: boolean;
 }
 
+interface UploadingAuthMedia {
+  errorMessage?: string | undefined;
+  file: File;
+  id: string;
+  phase: UploadStatusPhase;
+  progress?: UploadTransferProgress | null | undefined;
+  retryable?: boolean;
+  status?: "error" | undefined;
+  targetSlideId?: string;
+}
+
+const beginAuthMediaUpload = (
+  current: UploadingAuthMedia[],
+  file: File,
+  id: string,
+  phase: UploadStatusPhase
+): UploadingAuthMedia[] => {
+  const existingUpload = current.find((upload) => upload.id === id);
+  if (!existingUpload) {
+    return [...current, { file, id, phase }];
+  }
+
+  return current.map((upload) =>
+    upload.id === id
+      ? {
+          ...upload,
+          errorMessage: undefined,
+          phase,
+          progress: undefined,
+          retryable: false,
+          status: undefined,
+        }
+      : upload
+  );
+};
+
+const getAuthMediaUploadErrorMessage = (
+  error: unknown,
+  phase: UploadStatusPhase
+): string => {
+  if (phase === "saving") {
+    return "Não foi possível confirmar se a imagem foi salva. Atualize a lista antes de tentar novamente.";
+  }
+  return error instanceof Error
+    ? error.message
+    : "Não foi possível enviar a imagem.";
+};
+
 export function AuthMediaGallery({
   initialSlides,
   readOnly = false,
@@ -54,16 +108,41 @@ export function AuthMediaGallery({
   const router = useRouter();
   const [slides, setSlides] = useState(initialSlides);
   const [pendingCropFiles, setPendingCropFiles] = useState<File[]>([]);
-  const [uploadingFiles, setUploadingFiles] = useState<
-    { file: File; id: string }[]
-  >([]);
+  const [uploadingFiles, setUploadingFiles] = useState<UploadingAuthMedia[]>(
+    []
+  );
+  const uploadAbortControllersRef = useRef(new Map<string, AbortController>());
   const [errors, setErrors] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const activeUploadCount = uploadingFiles.filter(
+    (upload) => upload.status !== "error"
+  ).length;
 
   useEffect(() => {
     setSlides(initialSlides);
+    const persistedSlideIds = new Set(initialSlides.map(({ id }) => id));
+    setUploadingFiles((current) =>
+      current.filter(
+        (upload) =>
+          !(
+            upload.status === "error" &&
+            upload.targetSlideId &&
+            persistedSlideIds.has(upload.targetSlideId)
+          )
+      )
+    );
   }, [initialSlides]);
+
+  useEffect(
+    () => () => {
+      for (const controller of uploadAbortControllersRef.current.values()) {
+        controller.abort();
+      }
+      uploadAbortControllersRef.current.clear();
+    },
+    []
+  );
 
   const sensors = useSortableSensors();
   const accessibility = createSortableAccessibility((id) => {
@@ -72,54 +151,156 @@ export function AuthMediaGallery({
   });
 
   const uploadFile = useCallback(
-    async (file: File): Promise<void> => {
-      if (slides.length >= AUTH_MEDIA_MAX_SLIDES) {
+    async (file: File, retryUploadId?: string): Promise<void> => {
+      if (slides.length + activeUploadCount >= AUTH_MEDIA_MAX_SLIDES) {
         setErrors(["Limite de cinco imagens atingido."]);
         return;
       }
 
-      const temporaryId = String(Date.now());
-      setUploadingFiles((current) => [...current, { file, id: temporaryId }]);
-      const toastId = toast.loading("Enviando imagem…");
+      const temporaryId = retryUploadId ?? crypto.randomUUID();
+      if (uploadAbortControllersRef.current.has(temporaryId)) {
+        return;
+      }
+      const abortController = new AbortController();
+      uploadAbortControllersRef.current.set(temporaryId, abortController);
+      let currentPhase: UploadStatusPhase = "preparing";
+      setUploadingFiles((current) =>
+        beginAuthMediaUpload(current, file, temporaryId, currentPhase)
+      );
+      let keepErrorRow = false;
 
       try {
-        const slideId = crypto.randomUUID();
+        const slideId = temporaryId;
         const imageUpload = await uploadStagedAdminImage({
           aggregateId: slideId,
           file,
+          onStatus: (status) => {
+            currentPhase = status.phase;
+            setUploadingFiles((current) =>
+              current.map((upload) =>
+                upload.id === temporaryId
+                  ? {
+                      ...upload,
+                      phase: status.phase,
+                      progress: status.progress,
+                      errorMessage: undefined,
+                      retryable: false,
+                      status: undefined,
+                    }
+                  : upload
+              )
+            );
+          },
           purpose: "auth-media",
+          signal: abortController.signal,
         });
+        setUploadingFiles((current) =>
+          current.map((upload) =>
+            upload.id === temporaryId
+              ? {
+                  ...upload,
+                  errorMessage: undefined,
+                  phase: "saving",
+                  progress: undefined,
+                  retryable: false,
+                  status: undefined,
+                }
+              : upload
+          )
+        );
+        currentPhase = "saving";
+        uploadAbortControllersRef.current.delete(temporaryId);
         const formData = new FormData();
         formData.set("imageUpload", JSON.stringify(imageUpload));
         formData.set("isActive", "on");
         formData.set("newSlideId", slideId);
         await saveAuthMediaAction(formData);
-        toast.success("Imagem adicionada à tela de acesso.", { id: toastId });
+        toast.success("Imagem adicionada à tela de acesso.");
         router.refresh();
       } catch (error: unknown) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível enviar a imagem.",
-          { id: toastId }
+        if (isUploadAbortedError(error, abortController.signal)) {
+          return;
+        }
+        const message = getAuthMediaUploadErrorMessage(error, currentPhase);
+        keepErrorRow = true;
+        if (currentPhase === "saving") {
+          router.refresh();
+        }
+        setUploadingFiles((current) =>
+          current.map((upload) =>
+            upload.id === temporaryId
+              ? {
+                  ...upload,
+                  errorMessage: message,
+                  phase: currentPhase,
+                  progress: undefined,
+                  retryable: currentPhase !== "saving",
+                  status: "error",
+                  targetSlideId: temporaryId,
+                }
+              : upload
+          )
         );
       } finally {
-        setUploadingFiles((current) =>
-          current.filter(({ id }) => id !== temporaryId)
-        );
+        if (
+          uploadAbortControllersRef.current.get(temporaryId) === abortController
+        ) {
+          uploadAbortControllersRef.current.delete(temporaryId);
+        }
+        if (!keepErrorRow) {
+          setUploadingFiles((current) =>
+            current.filter(({ id }) => id !== temporaryId)
+          );
+        }
       }
     },
-    [router, slides.length]
+    [activeUploadCount, router, slides.length]
   );
+
+  const retryUpload = async (uploadId: string): Promise<void> => {
+    if (activeUploadCount > 0 || pendingCropFiles.length > 0) {
+      return;
+    }
+    const upload = uploadingFiles.find(
+      (candidate) => candidate.id === uploadId && candidate.status === "error"
+    );
+    if (
+      !(upload?.retryable && upload.errorMessage) ||
+      uploadAbortControllersRef.current.has(uploadId)
+    ) {
+      return;
+    }
+    try {
+      await uploadFile(upload.file, upload.id);
+    } catch {
+      setErrors([`${upload.file.name}: Não foi possível retomar o envio.`]);
+    }
+  };
+
+  const discardUpload = (uploadId: string): void => {
+    setUploadingFiles((current) =>
+      current.filter((upload) => upload.id !== uploadId)
+    );
+  };
 
   const handleFileSelection = useCallback(
     (files: FileList | File[]) => {
       if (readOnly) {
         return;
       }
+      if (activeUploadCount > 0 || pendingCropFiles.length > 0) {
+        setErrors([
+          "Conclua os envios e recortes atuais antes de adicionar imagens.",
+        ]);
+        return;
+      }
       try {
         const selectedFiles = readAuthMediaFileSelection(files);
-        const availableSlots = AUTH_MEDIA_MAX_SLIDES - slides.length;
+        const availableSlots =
+          AUTH_MEDIA_MAX_SLIDES -
+          slides.length -
+          activeUploadCount -
+          pendingCropFiles.length;
         if (selectedFiles.length > availableSlots) {
           throw new Error(
             `Você pode adicionar apenas mais ${availableSlots} imagem(ns).`
@@ -143,7 +324,7 @@ export function AuthMediaGallery({
         ]);
       }
     },
-    [readOnly, slides.length]
+    [activeUploadCount, pendingCropFiles.length, readOnly, slides.length]
   );
 
   const handleFiles = useCallback(
@@ -151,13 +332,22 @@ export function AuthMediaGallery({
       if (readOnly) {
         return;
       }
-      if (slides.length >= AUTH_MEDIA_MAX_SLIDES) {
+      if (
+        slides.length + activeUploadCount + pendingCropFiles.length >=
+        AUTH_MEDIA_MAX_SLIDES
+      ) {
         setErrors(["Limite de cinco imagens atingido."]);
         return;
       }
       handleFileSelection(files);
     },
-    [handleFileSelection, readOnly, slides.length]
+    [
+      handleFileSelection,
+      activeUploadCount,
+      pendingCropFiles.length,
+      readOnly,
+      slides.length,
+    ]
   );
 
   const handleCropComplete = useCallback(
@@ -169,7 +359,7 @@ export function AuthMediaGallery({
   );
 
   const handleDragEnd = (event: DragEndEvent): void => {
-    if (readOnly || isPending) {
+    if (readOnly || isPending || activeUploadCount > 0) {
       return;
     }
     const { active, over } = event;
@@ -238,12 +428,7 @@ export function AuthMediaGallery({
   return (
     <div className="w-full">
       <ResourceListContainer
-        className={cn(
-          "p-3",
-          isDragging ? "border-primary bg-primary/5" : "",
-          (uploadingFiles.length > 0 || isPending) &&
-            "pointer-events-none opacity-50"
-        )}
+        className={cn("p-3", isDragging ? "border-primary bg-primary/5" : "")}
         onDragEnter={(event) => {
           event.preventDefault();
           setIsDragging(true);
@@ -263,12 +448,23 @@ export function AuthMediaGallery({
       >
         <ResourceListHeader
           actions={
-            !readOnly && slides.length < AUTH_MEDIA_MAX_SLIDES ? (
-              <div className="relative">
+            !readOnly &&
+            activeUploadCount === 0 &&
+            pendingCropFiles.length === 0 &&
+            slides.length + activeUploadCount + pendingCropFiles.length <
+              AUTH_MEDIA_MAX_SLIDES ? (
+              <label
+                className={cn(
+                  buttonVariants({ size: "sm", variant: "outline" }),
+                  "h-8 cursor-pointer px-3 focus-within:border-focus focus-within:outline-2 focus-within:outline-focus focus-within:outline-offset-2 focus-within:ring-2 focus-within:ring-background data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50"
+                )}
+              >
                 <input
                   accept={AUTH_MEDIA_ACCEPT}
-                  aria-label="Selecionar imagens da tela de acesso"
-                  className="absolute inset-0 cursor-pointer opacity-0"
+                  className="sr-only"
+                  disabled={
+                    activeUploadCount > 0 || pendingCropFiles.length > 0
+                  }
                   multiple
                   onChange={(event) => {
                     const files = event.currentTarget.files;
@@ -277,26 +473,20 @@ export function AuthMediaGallery({
                     }
                     event.currentTarget.value = "";
                   }}
-                  title="Enviar imagens"
                   type="file"
                 />
-                <Button
-                  className="pointer-events-none h-8 px-3"
-                  size="sm"
-                  variant="outline"
-                >
-                  <HugeiconsIcon
-                    aria-hidden="true"
-                    className="-ms-0.5 mr-1.5 opacity-60"
-                    icon={CloudUploadIcon}
-                    size={14}
-                  />
-                  Adicionar imagens
-                </Button>
-              </div>
+                <HugeiconsIcon
+                  aria-hidden="true"
+                  className="-ms-0.5 mr-1.5 opacity-60"
+                  icon={CloudUploadIcon}
+                  size={14}
+                />
+                Adicionar imagens
+              </label>
             ) : null
           }
           count={slides.length}
+          description={`Até ${AUTH_MEDIA_MAX_SLIDES} imagens · proporção 8:7 · JPG, PNG ou WebP · até ${Math.round(AUTH_MEDIA_MAX_BYTES / (1024 * 1024))} MiB por imagem.`}
           title="Imagens cadastradas"
         />
 
@@ -307,7 +497,9 @@ export function AuthMediaGallery({
               collisionDetection={closestCenter}
               id="auth-media-gallery-dnd"
               onDragEnd={handleDragEnd}
-              sensors={readOnly ? [] : sensors}
+              sensors={
+                readOnly || isPending || activeUploadCount > 0 ? [] : sensors
+              }
             >
               <SortableContext
                 items={slides}
@@ -324,8 +516,37 @@ export function AuthMediaGallery({
                 ))}
               </SortableContext>
             </DndContext>
-            {uploadingFiles.map(({ id }) => (
-              <ResourceItemSkeleton key={id} />
+            {uploadingFiles.map((upload) => (
+              <UploadProgressStatus
+                errorMessage={
+                  upload.status === "error" ? upload.errorMessage : undefined
+                }
+                fileName={upload.file.name}
+                key={upload.id}
+                onCancel={
+                  upload.status === "error" || upload.phase === "saving"
+                    ? undefined
+                    : () =>
+                        uploadAbortControllersRef.current
+                          .get(upload.id)
+                          ?.abort()
+                }
+                onDiscard={
+                  upload.status === "error"
+                    ? () => discardUpload(upload.id)
+                    : undefined
+                }
+                onRetry={
+                  upload.status === "error" &&
+                  upload.retryable &&
+                  activeUploadCount === 0 &&
+                  pendingCropFiles.length === 0
+                    ? () => retryUpload(upload.id)
+                    : undefined
+                }
+                phase={upload.phase}
+                progress={upload.progress}
+              />
             ))}
           </ResourceListBody>
         ) : (

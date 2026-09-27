@@ -7,8 +7,8 @@ const dependencies = vi.hoisted(() => ({
   getAdminCourseContentSignal: vi.fn(),
   getAdminCourseOperationalState: vi.fn(),
   getCertificateTemplatesForCourse: vi.fn(),
+  getCertificateIssuerProfileForPreview: vi.fn(),
   getServerEnv: vi.fn(),
-  hasCertificateIssuerProfile: vi.fn(),
   requirePermission: vi.fn(),
 }));
 
@@ -47,7 +47,8 @@ vi.mock("@/features/admin/server", () => ({
 vi.mock("@/features/certificates/templates", () => ({
   getCertificateTemplatesForCourse:
     dependencies.getCertificateTemplatesForCourse,
-  hasCertificateIssuerProfile: dependencies.hasCertificateIssuerProfile,
+  getCertificateIssuerProfileForPreview:
+    dependencies.getCertificateIssuerProfileForPreview,
 }));
 vi.mock("@/lib/env", () => ({ getServerEnv: dependencies.getServerEnv }));
 vi.mock("@/lib/auth-permissions", () => ({
@@ -56,14 +57,26 @@ vi.mock("@/lib/auth-permissions", () => ({
 vi.mock("@/lib/auth-policy", () => ({ canPerform: () => true }));
 vi.mock("./certificate-template-editor", () => ({
   CertificateTemplateEditor: ({
+    courseTitle,
     courseWorkloadHours,
+    issuerCnpj,
+    issuerConfigured,
+    issuerDisplayName,
     pendingCertificateReconciliationCount,
   }: {
+    courseTitle: string;
     courseWorkloadHours: number;
+    issuerCnpj: string | null;
+    issuerConfigured: boolean;
+    issuerDisplayName: string | null;
     pendingCertificateReconciliationCount: number;
   }) => (
     <div
+      data-course-title={courseTitle}
       data-course-workload-hours={courseWorkloadHours}
+      data-issuer-cnpj={issuerCnpj}
+      data-issuer-configured={issuerConfigured}
+      data-issuer-display-name={issuerDisplayName}
       data-pending-certificate-reconciliation={
         pendingCertificateReconciliationCount
       }
@@ -103,12 +116,17 @@ vi.mock("./course-content-panel", () => ({
   ),
 }));
 vi.mock("./course-dialogs-client", () => ({
-  CourseSettingsForm: () => <div>settings-form</div>,
+  CourseSettingsForm: () => (
+    <div data-course-settings-form="true">
+      settings-form <span>Disponibilidade</span>
+    </div>
+  ),
 }));
 vi.mock("./course-enrollments-table", () => ({
   CourseEnrollmentsTable: () => null,
 }));
 vi.mock("./course-management-tabs", () => ({
+  useCourseTabDirty: vi.fn(),
   CourseManagementTabs: ({
     certificate,
     content,
@@ -153,7 +171,7 @@ vi.mock("./course-overview", () => ({
     operationalState: { key: string };
     overviewSummary: {
       activeEnrollmentCount: number;
-      paidOrderCount: number;
+      confirmedSaleOrderCount: number;
       validCertificateCount: number;
     };
     publicationState: { hasDraft: boolean; hasPublished: boolean };
@@ -161,6 +179,7 @@ vi.mock("./course-overview", () => ({
   }) => (
     <div
       data-active-enrollments={overviewSummary.activeEnrollmentCount}
+      data-confirmed-sales={overviewSummary.confirmedSaleOrderCount}
       data-course-availability={courseAvailability.label}
       data-course-id={courseId}
       data-course-overview="true"
@@ -169,7 +188,6 @@ vi.mock("./course-overview", () => ({
       data-has-published={publicationState.hasPublished}
       data-module-count={moduleCount}
       data-operational-state={operationalState.key}
-      data-paid-orders={overviewSummary.paidOrderCount}
       data-total-lessons={contentSummary.totalLessons}
       data-valid-certificates={overviewSummary.validCertificateCount}
     >
@@ -194,7 +212,11 @@ vi.mock("./course-purchase-link", () => ({
   ),
 }));
 vi.mock("./course-availability-form", () => ({
-  CourseAvailabilityForm: () => <div data-availability-form />,
+  CourseRiskZone: () => (
+    <div data-course-risk-zone="true">
+      <button type="button">Arquivar curso</button>
+    </div>
+  ),
 }));
 
 import AdminCourseDetailPage from "./page";
@@ -239,7 +261,7 @@ beforeEach(() => {
     modules: [],
     overviewSummary: {
       activeEnrollmentCount: 57,
-      paidOrderCount: 83,
+      confirmedSaleOrderCount: 83,
       validCertificateCount: 41,
     },
     publicationState: { hasDraft: false, hasPublished: true },
@@ -258,7 +280,11 @@ beforeEach(() => {
     label: "Curso publicado",
     tone: "healthy",
   });
-  dependencies.hasCertificateIssuerProfile.mockResolvedValue(false);
+  dependencies.getCertificateIssuerProfileForPreview.mockResolvedValue({
+    cnpj: null,
+    configured: false,
+    displayName: null,
+  });
   dependencies.getServerEnv.mockReturnValue({
     NEXT_PUBLIC_APP_URL: "https://hub.example/base",
     PAYMENTS_CHECKOUT_MODE: "public",
@@ -280,7 +306,7 @@ describe("AdminCourseDetailPage overview", () => {
     });
     expect(markup).toContain('data-course-overview="true"');
     expect(markup).toContain('data-active-enrollments="57"');
-    expect(markup).toContain('data-paid-orders="83"');
+    expect(markup).toContain('data-confirmed-sales="83"');
     expect(markup).toContain('data-valid-certificates="41"');
     expect(markup).not.toContain('data-pending-certificate-reconciliation="7"');
     expect(markup).toContain('data-module-count="0"');
@@ -369,6 +395,11 @@ describe("AdminCourseDetailPage overview", () => {
 
 describe("AdminCourseDetailPage certificate", () => {
   it("passes the effective workload to the certificate preview", async () => {
+    dependencies.getCertificateIssuerProfileForPreview.mockResolvedValueOnce({
+      cnpj: "04.252.011/0001-10",
+      configured: true,
+      displayName: "Instituto Protea Educação Profissional",
+    });
     dependencies.getAdminCourseTabData.mockResolvedValue({
       tab: "certificate",
       course: {
@@ -380,7 +411,7 @@ describe("AdminCourseDetailPage certificate", () => {
       modules: [],
       overviewSummary: {
         activeEnrollmentCount: 0,
-        paidOrderCount: 0,
+        confirmedSaleOrderCount: 0,
         validCertificateCount: 0,
       },
       publicationState: { hasDraft: false, hasPublished: true },
@@ -394,6 +425,12 @@ describe("AdminCourseDetailPage certificate", () => {
     );
 
     expect(markup).toContain('data-course-workload-hours="20"');
+    expect(markup).toContain('data-course-title="Curso publico"');
+    expect(markup).toContain('data-issuer-configured="true"');
+    expect(markup).toContain('data-issuer-cnpj="04.252.011/0001-10"');
+    expect(markup).toContain(
+      'data-issuer-display-name="Instituto Protea Educação Profissional"'
+    );
   });
 });
 
@@ -425,7 +462,7 @@ describe("AdminCourseDetailPage header", () => {
       modules: [],
       overviewSummary: {
         activeEnrollmentCount: 0,
-        paidOrderCount: 0,
+        confirmedSaleOrderCount: 0,
         validCertificateCount: 0,
       },
       publicationState: { hasDraft: false, hasPublished: true },
@@ -522,6 +559,19 @@ describe("AdminCourseDetailPage purchase link", () => {
     expect(markup.match(/data-slot="card"/g)).toHaveLength(2);
     expect(markup).toContain("Disponibilidade");
     expect(markup).toContain("Configurações do curso");
+    expect(markup).not.toContain("Responsável pelo certificado");
+    expect(markup).toContain('data-course-risk-zone="true"');
+    expect(markup).toContain("bg-destructive/10");
+    expect(markup).toContain("sm:flex-row");
+    expect(markup.indexOf("Configurações do curso")).toBeLessThan(
+      markup.indexOf("Disponibilidade")
+    );
+    expect(markup.indexOf("Disponibilidade")).toBeLessThan(
+      markup.indexOf("Zona de risco")
+    );
+    expect(markup.indexOf("Arquivar interrompe vendas")).toBeLessThan(
+      markup.indexOf("Arquivar curso")
+    );
   });
 
   it("passes an unavailable state instead of a false link for an unpublished course", async () => {

@@ -1,6 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const STUDENT_DASHBOARD_GREETING_PATTERN =
+  /<header class="pt-4 md:hidden"><h1[^>]*>(?:Bom dia|Boa tarde|Boa noite|Olá), Júnior\.<\/h1><\/header>/;
+
 const dependencies = vi.hoisted(() => ({
   getActiveBannersData: vi.fn(),
   getStudentCourseCatalog: vi.fn(),
@@ -25,7 +28,9 @@ vi.mock("@/lib/session", () => ({
   requireSession: dependencies.requireSession,
 }));
 vi.mock("@/features/courses/course-cover-image", () => ({
-  CourseCoverImage: () => <div data-cover />,
+  CourseCoverImage: ({ zoomOnHover }: { zoomOnHover?: boolean }) => (
+    <div data-cover data-zoom-on-hover={zoomOnHover ? "true" : "false"} />
+  ),
 }));
 vi.mock("./student-banners-carousel", () => ({
   StudentBannersCarousel: () => <div data-banners />,
@@ -69,6 +74,8 @@ const getCardMarkup = (markup: string, title: string): string =>
     .split("<article ")
     .find((cardMarkup) => cardMarkup.includes(title))
     ?.split("</article>")[0] ?? "";
+const COURSE_COPY_SPLIT_RE =
+  /<h3 class="line-clamp-2[^"]*">[\s\S]*?<\/h3><p class="line-clamp-1[^"]*">/;
 
 describe("Student dashboard availability", () => {
   beforeEach(() => {
@@ -78,6 +85,183 @@ describe("Student dashboard availability", () => {
       user: { id: "student-1" },
     });
     dependencies.getActiveBannersData.mockResolvedValue({ banners: [] });
+  });
+
+  it("highlights the next lesson when one active course is available", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        completedCount: 2,
+        courseId: "course-active",
+        expiresAt: new Date("2026-12-31T23:59:59.000Z"),
+        isEnrolled: true,
+        nextLessonDurationSeconds: 720,
+        nextLessonId: "lesson-next",
+        nextLessonTitle: "Comunicação em situações difíceis",
+        nextModuleTitle: "Fundamentos da comunicação",
+        progressPercent: 40,
+        slug: "curso-ativo",
+        title: "Curso ativo de fundamentos",
+        totalCount: 5,
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+
+    expect(markup).toContain("Continue aprendendo");
+    expect(markup).toContain("Próximo passo");
+    expect(markup).toContain("Comunicação em situações difíceis");
+    expect(markup).toContain("12min");
+    expect(markup).toContain('href="/app/aulas/lesson-next"');
+    expect(markup).toContain("Continuar aula");
+    expect(markup).toContain("Ver trilha");
+    expect(markup).not.toContain("Retome sua jornada no ponto em que parou.");
+
+    const continueCard = getCardMarkup(markup, "Curso ativo de fundamentos");
+    expect(continueCard).toContain(
+      "lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
+    );
+    expect(continueCard).toContain("aspect-video");
+    expect(continueCard).toContain("rounded-media");
+    expect(continueCard).toContain("group-hover:scale-[1.04]");
+    expect(continueCard).toContain(
+      'class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:gap-3"'
+    );
+    expect(
+      continueCard.match(/w-full min-w-0 whitespace-normal/g)
+    ).toHaveLength(2);
+  });
+
+  it("shows the full greeting in the mobile dashboard content", async () => {
+    dependencies.requireSession.mockResolvedValue({
+      role: "student",
+      user: { id: "student-1", name: "Júnior da Silva" },
+    });
+    dependencies.getStudentCourseCatalog.mockResolvedValue([]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+
+    expect(markup).toMatch(STUDENT_DASHBOARD_GREETING_PATTERN);
+  });
+
+  it("applies the shared cover zoom to Continue Learning media", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        courseId: "course-with-thumbnail",
+        expiresAt: new Date("2026-12-31T23:59:59.000Z"),
+        isEnrolled: true,
+        nextLessonId: "lesson-next",
+        nextLessonTitle: "Próxima aula",
+        slug: "curso-com-capa",
+        thumbnailUrl: "/course.webp",
+        title: "Curso com capa",
+        totalCount: 2,
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+    const continueCard = getCardMarkup(markup, "Curso com capa");
+
+    expect(continueCard).toContain('data-zoom-on-hover="true"');
+  });
+
+  it("does not choose a single course when multiple courses are active", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        courseId: "course-active-1",
+        expiresAt: new Date("2026-12-31T23:59:59.000Z"),
+        isEnrolled: true,
+        lessonCount: 7,
+        nextLessonDurationSeconds: 600,
+        nextLessonId: "lesson-next-1",
+        nextLessonTitle: "Aula um",
+        nextModuleTitle: "Módulo um",
+        progressPercent: 20,
+        slug: "curso-ativo-1",
+        title: "Curso ativo um",
+        workloadHours: 5,
+      },
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        courseId: "course-active-2",
+        expiresAt: new Date("2026-12-31T23:59:59.000Z"),
+        isEnrolled: true,
+        nextLessonDurationSeconds: 900,
+        nextLessonId: "lesson-next-2",
+        nextLessonTitle: "Aula dois",
+        nextModuleTitle: "Módulo dois",
+        progressPercent: 40,
+        slug: "curso-ativo-2",
+        title: "Curso ativo dois",
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+
+    expect(markup).toContain("Retome sua jornada no ponto em que parou.");
+    expect(markup).not.toContain("Próximo passo");
+    expect(markup).toContain("Curso ativo um");
+    expect(markup).toContain("Curso ativo dois");
+
+    const activeCardMarkup = getCardMarkup(markup, "Curso ativo um");
+    const statusBadgePosition = activeCardMarkup.indexOf(
+      'class="pointer-events-none absolute top-2 left-2 z-20"'
+    );
+    expect(statusBadgePosition).toBeGreaterThan(-1);
+    expect(statusBadgePosition).toBeLessThan(activeCardMarkup.indexOf("<h3"));
+    expect(activeCardMarkup).toContain("group-hover:scale-[1.04]");
+    expect(activeCardMarkup).toContain('class="grid w-full grid-cols-2 gap-2"');
+    expect(activeCardMarkup).toContain("w-full min-w-0 justify-center");
+    expect(activeCardMarkup).toContain("0/0 obrigatórias");
+    expect(activeCardMarkup).toContain(
+      'class="flex min-w-0 flex-1 flex-col gap-2"'
+    );
+    expect(
+      activeCardMarkup.indexOf('class="flex min-w-0 flex-1 flex-col gap-2"')
+    ).toBeLessThan(activeCardMarkup.indexOf('role="progressbar"'));
+    expect(activeCardMarkup.indexOf("0/0 obrigatórias")).toBeLessThan(
+      activeCardMarkup.indexOf("Continuar")
+    );
+    expect(activeCardMarkup).not.toContain("7 aulas");
+    expect(activeCardMarkup).not.toContain("5h");
+  });
+
+  it("explains when the next lesson is waiting for scheduled release", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        courseId: "course-scheduled",
+        expiresAt: new Date("2026-12-31T23:59:59.000Z"),
+        isEnrolled: true,
+        nextLessonDurationSeconds: null,
+        nextLessonId: null,
+        nextLessonTitle: null,
+        nextModuleTitle: null,
+        nextReleaseAt: new Date("2026-10-02T15:00:00.000Z"),
+        progressPercent: 40,
+        slug: "curso-programado",
+        title: "Curso programado",
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+
+    expect(markup).toContain("A próxima aula estará disponível em");
+    expect(markup).toContain('href="/app/cursos/course-scheduled"');
+    expect(markup).toContain("Ver trilha");
+    expect(markup).not.toContain("Continuar aula");
   });
 
   it("uses a modal for free course acquisition", async () => {
@@ -96,10 +280,37 @@ describe("Student dashboard availability", () => {
     ]);
 
     const markup = renderToStaticMarkup(await StudentDashboardPage());
+    const cardMarkup = getCardMarkup(markup, "Curso gratuito");
 
     expect(markup).toContain("Inscrever-se grátis");
     expect(markup).toContain('aria-haspopup="dialog"');
     expect(markup).not.toContain(">Adquirir acesso<");
+    expect(cardMarkup).toContain("3 aulas");
+    expect(cardMarkup).toContain("2h");
+  });
+
+  it("shows the course description inside the student card", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        availabilityPreset: "available",
+        courseId: "course-described",
+        description: "Uma apresentação breve para orientar o aluno.",
+        priceInCents: 15_000,
+        slug: "curso-com-descricao",
+        title: "Curso com descrição",
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+    const cardMarkup = getCardMarkup(markup, "Curso com descrição");
+
+    expect(cardMarkup).toContain(
+      "Uma apresentação breve para orientar o aluno."
+    );
+    expect(cardMarkup).toContain("line-clamp-2");
+    expect(cardMarkup).toMatch(COURSE_COPY_SPLIT_RE);
+    expect(markup).toContain("@container/course-card");
   });
 
   it("opens the purchase summary from the purchasable card surface", async () => {
@@ -120,6 +331,7 @@ describe("Student dashboard availability", () => {
     expect(cardMarkup).toContain(
       'aria-label="Abrir resumo do Curso Curso pago"'
     );
+    expect(cardMarkup).toContain("pointer-events-auto");
     expect(cardMarkup).not.toContain('href="/comprar/curso-pago"');
   });
 
@@ -148,6 +360,12 @@ describe("Student dashboard availability", () => {
     );
     expect(markup).toContain("Novo curso");
     expect(markup).toContain("Inscrições pausadas");
+    expect(getCardMarkup(markup, "Curso futuro")).toContain(
+      'data-variant="outline"'
+    );
+    expect(getCardMarkup(markup, "Curso pausado")).toContain(
+      'data-variant="outline"'
+    );
     expect(markup).toContain("Quero ser avisada");
     expect(markup).toContain("Cancelar aviso");
     expect(markup).not.toContain("Ver detalhes");
@@ -164,8 +382,10 @@ describe("Student dashboard availability", () => {
         accessStatus: "expired",
         availabilityPreset: "available",
         courseId: "course-expired",
+        lessonCount: 3,
         slug: "curso-expirado",
         title: "Curso expirado",
+        workloadHours: 2,
       },
     ]);
 
@@ -176,6 +396,8 @@ describe("Student dashboard availability", () => {
     expect(markup).not.toContain("Acesso requer suporte");
     expect(cardMarkup).toContain("Acesso expirado");
     expect(cardMarkup).toContain("Renovar acesso");
+    expect(cardMarkup).not.toContain("3 aulas");
+    expect(cardMarkup).not.toContain("2h");
   });
 
   it("keeps revoked access in a support-only section", async () => {
@@ -185,8 +407,10 @@ describe("Student dashboard availability", () => {
         accessStatus: "revoked",
         availabilityPreset: "sales_paused",
         courseId: "course-revoked",
+        lessonCount: 4,
         slug: "curso-revogado",
         title: "Curso revogado",
+        workloadHours: 6,
       },
     ]);
 
@@ -197,7 +421,36 @@ describe("Student dashboard availability", () => {
     expect(markup).not.toContain("Em breve");
     expect(cardMarkup).toContain("Acesso encerrado");
     expect(cardMarkup).toContain("Falar com suporte");
+    expect(cardMarkup).not.toContain("4 aulas");
+    expect(cardMarkup).not.toContain("6h");
     expect(cardMarkup).not.toContain("Inscrições pausadas");
+  });
+
+  it("hides lesson metrics for completed courses", async () => {
+    dependencies.getStudentCourseCatalog.mockResolvedValue([
+      {
+        ...course,
+        accessStatus: "active",
+        availabilityPreset: "available",
+        completedCount: 4,
+        courseId: "course-completed",
+        isEnrolled: true,
+        lessonCount: 4,
+        progressPercent: 100,
+        slug: "curso-concluido",
+        title: "Curso concluído",
+        totalCount: 4,
+        workloadHours: 3,
+      },
+    ]);
+
+    const markup = renderToStaticMarkup(await StudentDashboardPage());
+    const cardMarkup = getCardMarkup(markup, "Curso concluído");
+
+    expect(markup).toContain("Cursos concluídos");
+    expect(cardMarkup).toContain("Curso concluído");
+    expect(cardMarkup).not.toContain("4 aulas");
+    expect(cardMarkup).not.toContain("3h");
   });
 
   it("keeps normal active access neutral instead of using the default orange badge", async () => {
@@ -255,7 +508,8 @@ describe("Student dashboard availability", () => {
     const expiringCard = getCardMarkup(markup, "Curso expirando");
     const completedCard = getCardMarkup(markup, "Curso concluído");
 
-    expect(expiringCard).toContain("Acesso expira em");
+    expect(expiringCard).toContain("Expira em");
+    expect(expiringCard).not.toContain("Acesso expira em");
     expect(expiringCard).toContain('data-variant="warning"');
     expect(completedCard).toContain("Curso concluído");
     expect(completedCard).toContain('data-variant="learning"');

@@ -50,8 +50,6 @@ describe("AdminSettingsPage", () => {
     });
     dependencies.getAdminSettingsData.mockResolvedValue({
       settings: {
-        certificateSignerName: "Maria",
-        certificateSignerRole: "Diretora",
         issuerCnpj: "04.252.011/0001-10",
         issuerDisplayName: "Empresa",
         issuerLegalName: "Empresa LTDA",
@@ -72,7 +70,9 @@ describe("AdminSettingsPage", () => {
     expect(markup).toContain("Emissão de certificados");
     expect(markup).not.toContain("Perfil e assinatura");
     expect(markup).toContain("Instituição emissora");
-    expect(markup).toContain("Assinatura padrão");
+    expect(markup).not.toContain("Assinatura padrão");
+    expect(markup).not.toContain('name="certificateSignerName"');
+    expect(markup).not.toContain('name="certificateSignerRole"');
     expect(markup).toContain("Perfil pronto");
     expect(markup).not.toContain("Ver histórico");
     expect(markup).not.toContain("Última alteração em");
@@ -84,6 +84,8 @@ describe("AdminSettingsPage", () => {
     expect(markup).toContain("Banners renderizados");
     expect(markup).toContain("Mídias de acesso renderizadas");
     expect(markup).toContain("FAQs renderizadas");
+    expect(markup).toContain('href="/admin/configuracoes/design-system"');
+    expect(markup).toContain("Sistema visual");
     expect(markup).not.toContain("JMVStream");
     expect(dependencies.requirePermission).toHaveBeenCalledWith("viewSettings");
   });

@@ -42,8 +42,12 @@ export function LessonSidebarActions({
       }
 
       const formData = new FormData(form);
-      formData.set("status", status);
       setErrorMessage(null);
+      if (formData.get("resourceUploadPending") === "on") {
+        toast.error("Aguarde o fim dos uploads de anexos antes de salvar.");
+        return;
+      }
+      formData.set("status", status);
 
       const toastId = toast.loading("Salvando aula…");
 
@@ -52,7 +56,7 @@ export function LessonSidebarActions({
           const result = await saveLessonAction(formData);
           if (!result.ok) {
             setErrorMessage(result.message);
-            toast.error(result.message, { id: toastId });
+            toast.dismiss(toastId);
             return;
           }
 
@@ -60,7 +64,7 @@ export function LessonSidebarActions({
         } catch {
           const message = "Não foi possível salvar a aula. Tente novamente.";
           setErrorMessage(message);
-          toast.error(message, { id: toastId });
+          toast.dismiss(toastId);
         }
       });
     },

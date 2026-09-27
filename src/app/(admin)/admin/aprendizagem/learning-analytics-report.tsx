@@ -1,6 +1,7 @@
 import {
   Alert02Icon,
   Analytics01Icon,
+  ArrowRight01Icon,
   BookOpen01Icon,
   Download01Icon,
   MoreHorizontalIcon,
@@ -8,6 +9,7 @@ import {
   ViewIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import Link from "next/link";
 import { AdminMetricCard } from "@/app/(admin)/admin/admin-metric-card";
 import { FinanceHelp } from "@/components/admin/finance-help";
 import { Button } from "@/components/ui/button";
@@ -40,8 +42,10 @@ import {
   formatLearningAnalyticsHours,
   formatLearningAnalyticsPercent,
   formatLearningAnalyticsPlayingTime,
+  getLearningAnalyticsActivityWidth,
 } from "@/features/learning-analytics/presentation";
 import type {
+  LearningAnalyticsActivityScale,
   LearningAnalyticsCourseOption,
   LearningAnalyticsKpis,
   LessonAnalyticsLessonReport,
@@ -126,7 +130,7 @@ function LearningAnalyticsKpisSection({
 
   return (
     <section aria-labelledby="learning-report-heading">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-x-4 gap-y-12 sm:grid-cols-2 xl:grid-cols-4">
         <AdminMetricCard
           helper="Aulas ativas na publicação vigente."
           icon={BookOpen01Icon}
@@ -159,7 +163,83 @@ function LearningAnalyticsKpisSection({
   );
 }
 
+function LearningAnalyticsPauseInsights({
+  courseId,
+  insights,
+  lessonPageSize,
+  period,
+}: {
+  courseId: string;
+  insights: LessonAnalyticsLessonReport[];
+  lessonPageSize: number;
+  period: LearningAnalyticsPeriod;
+}): React.JSX.Element | null {
+  if (insights.length === 0) {
+    return null;
+  }
+
+  return (
+    <section aria-labelledby="learning-pause-insights-heading">
+      <div className="mb-6">
+        <h2 className="type-section-title" id="learning-pause-insights-heading">
+          Pausas observadas
+        </h2>
+        <p className="type-body-sm mt-1 text-muted-foreground">
+          Medianas observadas entre a conclusão e o início da próxima Aula no
+          período. Não representam bloqueio do Curso.
+        </p>
+      </div>
+      <div className="divide-y divide-border/50 rounded-surface border bg-card">
+        {insights.map((lesson) => {
+          const lessonPage = Math.ceil(lesson.position / lessonPageSize);
+          const lessonHref =
+            getCoursePageHref(courseId, period, lessonPage) +
+            "#lesson-row-" +
+            String(lesson.position);
+
+          return (
+            <div
+              className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+              key={lesson.curriculumKey}
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-sm">
+                  Aula {formatLessonPosition(lesson.position)} ·{" "}
+                  {lesson.lessonTitle}
+                </p>
+                <p className="mt-1 truncate text-muted-foreground text-xs">
+                  {lesson.moduleTitle}
+                </p>
+                <p className="mt-2 text-muted-foreground text-xs">
+                  Mediana observada:{" "}
+                  {formatLearningAnalyticsHours(
+                    lesson.aggregate.medianHoursToNextLesson
+                  )}{" "}
+                  · n={lesson.aggregate.nextLessonTimingSampleCount} observações
+                </p>
+              </div>
+              <Button asChild size="sm" variant="outline">
+                <Link href={lessonHref}>
+                  Ver na tabela
+                  <HugeiconsIcon
+                    aria-hidden="true"
+                    data-icon="inline-end"
+                    icon={ArrowRight01Icon}
+                    size={16}
+                    strokeWidth={2}
+                  />
+                </Link>
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function LearningAnalyticsLessonsTable({
+  activityScale,
   course,
   lessons,
   page,
@@ -167,6 +247,7 @@ function LearningAnalyticsLessonsTable({
   totalLessonCount,
   totalPages,
 }: {
+  activityScale: LearningAnalyticsActivityScale;
   course: LearningAnalyticsCourseOption;
   lessons: LessonAnalyticsLessonReport[];
   page: number;
@@ -175,9 +256,19 @@ function LearningAnalyticsLessonsTable({
   totalPages: number;
 }): React.JSX.Element {
   return (
-    <>
+    <div className="grid gap-3">
+      <p
+        className="type-meta text-muted-foreground"
+        id="learning-activity-note"
+      >
+        Atividade: inícios e conclusões registrados no período; não é uma taxa
+        de conclusão.
+      </p>
       <div className="overflow-x-auto rounded-lg border">
-        <Table className="min-w-[1040px]">
+        <Table
+          aria-describedby="learning-activity-note"
+          className="min-w-[960px]"
+        >
           <TableCaption className="sr-only">
             Desempenho das Aulas do Curso {course.title}
           </TableCaption>
@@ -185,12 +276,7 @@ function LearningAnalyticsLessonsTable({
             <TableRow>
               <TableHead className="whitespace-nowrap">Ordem</TableHead>
               <TableHead>Aula</TableHead>
-              <TableHead className="whitespace-nowrap text-right">
-                Iniciaram
-              </TableHead>
-              <TableHead className="whitespace-nowrap text-right">
-                Concluíram
-              </TableHead>
+              <TableHead className="min-w-[220px]">Atividade</TableHead>
               <TableHead className="whitespace-nowrap text-right">
                 Checkpoint
               </TableHead>
@@ -215,7 +301,10 @@ function LearningAnalyticsLessonsTable({
           <TableBody>
             {lessons.length > 0 ? (
               lessons.map((lesson) => (
-                <TableRow key={lesson.curriculumKey}>
+                <TableRow
+                  id={`lesson-row-${lesson.position}`}
+                  key={lesson.curriculumKey}
+                >
                   <TableCell className="font-mono text-muted-foreground text-xs">
                     Aula {formatLessonPosition(lesson.position)}
                   </TableCell>
@@ -229,11 +318,8 @@ function LearningAnalyticsLessonsTable({
                       </p>
                     </div>
                   </TableRowHeader>
-                  <TableCell className="text-right tabular-nums">
-                    {lesson.aggregate.started}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {lesson.aggregate.completed}
+                  <TableCell>
+                    <LessonActivityCell lesson={lesson} scale={activityScale} />
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatLearningAnalyticsPercent(
@@ -268,7 +354,7 @@ function LearningAnalyticsLessonsTable({
               ))
             ) : (
               <TableRow>
-                <TableCell className="h-56 p-0" colSpan={10}>
+                <TableCell className="h-56 p-0" colSpan={9}>
                   <Empty className="rounded-none border-0 p-8">
                     <EmptyHeader>
                       <EmptyMedia variant="icon">
@@ -293,7 +379,7 @@ function LearningAnalyticsLessonsTable({
         </Table>
       </div>
       {totalLessonCount > 0 && (page > 1 || page < totalPages) ? (
-        <div className="mt-4 flex justify-end">
+        <div className="flex justify-end">
           <nav
             aria-label="Paginação do relatório de aprendizagem"
             className="flex gap-2"
@@ -315,29 +401,91 @@ function LearningAnalyticsLessonsTable({
           </nav>
         </div>
       ) : null}
-    </>
+    </div>
+  );
+}
+
+function LessonActivityCell({
+  lesson,
+  scale,
+}: {
+  lesson: LessonAnalyticsLessonReport;
+  scale: LearningAnalyticsActivityScale;
+}): React.JSX.Element {
+  return (
+    <div className="grid min-w-[220px] gap-1.5 py-0.5">
+      <LessonActivityBar
+        label="Inícios"
+        maximum={scale.maxValue}
+        value={lesson.aggregate.started}
+        variant="started"
+      />
+      <LessonActivityBar
+        label="Conclusões"
+        maximum={scale.maxValue}
+        value={lesson.aggregate.completed}
+        variant="completed"
+      />
+    </div>
+  );
+}
+
+function LessonActivityBar({
+  label,
+  maximum,
+  value,
+  variant,
+}: {
+  label: string;
+  maximum: number;
+  value: number;
+  variant: "completed" | "started";
+}): React.JSX.Element {
+  const width = getLearningAnalyticsActivityWidth(value, maximum);
+  const barClassName = variant === "started" ? "bg-chart-1" : "bg-chart-2";
+
+  return (
+    <div className="grid grid-cols-[5rem_minmax(4rem,1fr)_auto] items-center gap-2">
+      <span className="type-meta text-muted-foreground">{label}</span>
+      <span
+        aria-hidden="true"
+        className="h-1.5 overflow-hidden rounded-full bg-muted/70"
+      >
+        <span
+          className={`block h-full rounded-full ${barClassName}`}
+          style={{ width: `${width}%` }}
+        />
+      </span>
+      <span className="text-xs tabular-nums">{value}</span>
+    </div>
   );
 }
 
 export function LearningAnalyticsReport({
+  activityScale,
   course,
   courses,
   exportHref,
   kpis,
+  lessonPageSize,
   lessons,
   page,
   period,
+  pauseInsights,
   selectedCourseId,
   totalLessonCount,
   totalPages,
 }: {
+  activityScale: LearningAnalyticsActivityScale;
   course: LearningAnalyticsCourseOption;
   courses: LearningAnalyticsCourseOption[];
   exportHref: string | null;
   kpis: LearningAnalyticsKpis;
+  lessonPageSize: number;
   lessons: LessonAnalyticsLessonReport[];
   page: number;
   period: LearningAnalyticsPeriod;
+  pauseInsights: LessonAnalyticsLessonReport[];
   selectedCourseId: string;
   totalLessonCount: number;
   totalPages: number;
@@ -379,7 +527,14 @@ export function LearningAnalyticsReport({
         </div>
       </section>
       <LearningAnalyticsKpisSection kpis={kpis} />
+      <LearningAnalyticsPauseInsights
+        courseId={course.id}
+        insights={pauseInsights}
+        lessonPageSize={lessonPageSize}
+        period={period}
+      />
       <LearningAnalyticsLessonsTable
+        activityScale={activityScale}
         course={course}
         lessons={lessons}
         page={page}

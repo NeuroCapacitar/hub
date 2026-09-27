@@ -66,7 +66,7 @@ describe("R2 lesson objects", () => {
         fileName: "apostila.pdf",
         sizeBytes: 151 * 1024 * 1024,
       })
-    ).toThrow("Arquivo maior que 150 MB.");
+    ).toThrow("Arquivo maior que 150 MiB.");
   });
 
   it("validates generated image previews before signing uploads", () => {

@@ -54,6 +54,30 @@ describe("enrollment access read model", () => {
     ).resolves.toEqual({ courseId: "course-1", kind: "allowed" });
   });
 
+  it("does not let optional lessons block a required lesson in the same course", async () => {
+    query.mockResolvedValue({
+      rows: [
+        {
+          content_release_mode: "full_access",
+          content_release_started_at: null,
+          course_id: "course-1",
+          is_completed: false,
+          release_delay_days: 0,
+          sequence_available: true,
+        },
+      ],
+    });
+
+    await expect(
+      resolveLessonAccess({ lessonId: "required-next", userId: "student-1" })
+    ).resolves.toEqual({ courseId: "course-1", kind: "allowed" });
+
+    const sql = query.mock.calls.at(-1)?.[0] as string;
+    expect(sql).toContain("prior_lesson.is_required = true");
+    expect(sql).toContain("completed_module.course_id = c.id");
+    expect(sql).toContain("completed_prior_module.course_id = c.id");
+  });
+
   it("returns a temporal lock until the exact release boundary", async () => {
     const now = new Date("2026-09-04T12:00:00.000Z");
     query.mockResolvedValue({

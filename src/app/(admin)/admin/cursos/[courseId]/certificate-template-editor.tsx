@@ -46,7 +46,10 @@ import {
   enableCertificateForCourseAction,
 } from "@/features/admin/actions";
 import { reconcileHistoricalCertificatesAction } from "@/features/certificates/actions";
-import type { CertificateTemplateSpec } from "@/features/certificates/template-rules";
+import {
+  type CertificateTemplateSpec,
+  isCertificateSignatoryConfigured,
+} from "@/features/certificates/template-rules";
 import {
   type CertificateTemplateEditorTemplate,
   CertificateTemplateForm,
@@ -69,10 +72,12 @@ const CertificateActivationMenuItem = ({
   canEnable,
   certificateEnabled,
   courseId,
+  disabledMessage,
 }: {
   canEnable: boolean;
   certificateEnabled: boolean;
   courseId: string;
+  disabledMessage: string;
 }): React.JSX.Element => {
   if (certificateEnabled) {
     return (
@@ -94,19 +99,17 @@ const CertificateActivationMenuItem = ({
       </form>
     );
   }
-  return (
-    <DropdownMenuItem disabled>
-      Publique um template para ativar o certificado
-    </DropdownMenuItem>
-  );
+  return <DropdownMenuItem disabled>{disabledMessage}</DropdownMenuItem>;
 };
 
 const PendingCertificateReconciliation = ({
   count,
   courseId,
+  courseSignatoryConfigured,
 }: {
   count: number;
   courseId: string;
+  courseSignatoryConfigured: boolean;
 }): React.JSX.Element | null => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -138,12 +141,18 @@ const PendingCertificateReconciliation = ({
           {count} conclusões aguardam certificado
         </p>
         <p className="text-muted-foreground text-xs">
-          A emissão ocorre em lotes de até 100.
+          {courseSignatoryConfigured
+            ? "A emissão ocorre em lotes de até 100."
+            : "Configure o responsável em Configurações do curso. O Curso também precisa ter um modelo publicado antes da emissão."}
         </p>
       </div>
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <Button disabled={isPending} size="sm" variant="outline">
+          <Button
+            disabled={isPending || !courseSignatoryConfigured}
+            size="sm"
+            variant="outline"
+          >
             Emitir certificados pendentes
           </Button>
         </AlertDialogTrigger>
@@ -171,16 +180,26 @@ const PendingCertificateReconciliation = ({
 export function CertificateTemplateEditor({
   certificateEnabled,
   courseId,
+  courseTitle,
   courseWorkloadHours = 0,
+  issuerCnpj,
   issuerConfigured,
+  issuerDisplayName,
   pendingCertificateReconciliationCount = 0,
+  signerName,
+  signerRole,
   templates,
 }: {
   certificateEnabled: boolean;
   courseId: string;
+  courseTitle: string;
   courseWorkloadHours?: number;
+  issuerCnpj: string | null;
   issuerConfigured: boolean;
+  issuerDisplayName: string | null;
   pendingCertificateReconciliationCount?: number;
+  signerName?: string | null;
+  signerRole?: string | null;
   templates: Array<
     CertificateTemplateEditorTemplate & { spec: CertificateTemplateSpec }
   >;
@@ -188,24 +207,46 @@ export function CertificateTemplateEditor({
   const draft = templates.find((template) => template.status === "draft");
   const active = templates.find((template) => template.status === "published");
   const editable = draft ?? active;
+  const courseSignatoryConfigured = isCertificateSignatoryConfigured(
+    signerName,
+    signerRole
+  );
   const status = getCertificateEditorStatus({
     certificateEnabled,
     hasDraft: Boolean(draft),
     hasPublished: Boolean(active),
+    signatoryConfigured: courseSignatoryConfigured,
   });
-  const canEnable = Boolean(active && issuerConfigured);
+  const canEnable = Boolean(
+    active && issuerConfigured && courseSignatoryConfigured
+  );
+  let activationDisabledMessage =
+    "Configure nome e cargo em Configurações do curso";
+  if (!active) {
+    activationDisabledMessage =
+      "Publique um template para ativar o certificado";
+  }
+  if (!issuerConfigured) {
+    activationDisabledMessage = "Configure o perfil emissor antes de ativar";
+  }
 
   return (
-    <Card density="compact">
+    <Card className="gap-0 py-0">
       <PendingCertificateReconciliation
         count={pendingCertificateReconciliationCount}
         courseId={courseId}
+        courseSignatoryConfigured={courseSignatoryConfigured}
       />
       <CertificateTemplateForm
         courseId={courseId}
+        courseTitle={courseTitle}
         courseWorkloadHours={courseWorkloadHours}
         hasPublishedTemplate={Boolean(active)}
+        issuerCnpj={issuerCnpj}
         issuerConfigured={issuerConfigured}
+        issuerDisplayName={issuerDisplayName}
+        signerName={signerName ?? null}
+        signerRole={signerRole ?? null}
         status={status}
         template={editable}
       >
@@ -226,6 +267,7 @@ export function CertificateTemplateEditor({
                     canEnable={canEnable}
                     certificateEnabled={certificateEnabled}
                     courseId={courseId}
+                    disabledMessage={activationDisabledMessage}
                   />
                 </DropdownMenuGroup>
               </DropdownMenuContent>

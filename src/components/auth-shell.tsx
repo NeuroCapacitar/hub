@@ -43,7 +43,7 @@ export function AuthShell({
             fallback={
               <div
                 aria-hidden="true"
-                className="absolute inset-3 rounded-xl bg-muted/40"
+                className="absolute inset-3 rounded-media bg-muted/40"
               />
             }
           >

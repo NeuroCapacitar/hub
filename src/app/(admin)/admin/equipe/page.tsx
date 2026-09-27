@@ -1,16 +1,9 @@
 import Link from "next/link";
+import { FinanceHelp } from "@/components/admin/finance-help";
 import { StaffPromotionDialog } from "@/components/admin/staff-promotion-dialog";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { getStaffMembers } from "@/features/admin/staff-server";
 import { requirePermission } from "@/lib/auth-permissions";
 import { StaffAccessTable } from "./staff-access-table";
@@ -24,27 +17,36 @@ export default async function StaffPage(): Promise<React.JSX.Element> {
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader title="Equipe" />
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle as="h2">Contas com acesso administrativo</CardTitle>
-            <CardDescription>
-              Admins têm acesso total. O acesso do Suporte combina a leitura
-              administrativa padrão com as permissões delegáveis marcadas pelo
-              Admin. Adicione uma conta à equipe somente depois de revisar a
-              alteração.
-            </CardDescription>
-            <CardAction className="flex flex-wrap gap-2">
+        <PageHeader
+          actions={
+            <>
+              <StaffPromotionDialog />
               <Button asChild variant="outline">
                 <Link href="/admin/alunos">Ver Alunos</Link>
               </Button>
-              <StaffPromotionDialog />
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            <StaffAccessTable actorUserId={session.user.id} members={members} />
-          </CardContent>
-        </Card>
+            </>
+          }
+          description="Consulte os membros e ajuste as permissões do Suporte."
+          title="Equipe"
+        />
+        <section
+          aria-labelledby="staff-table-title"
+          className="grid min-w-0 gap-6"
+        >
+          <div className="flex items-center gap-2">
+            <h2 className="type-section-title" id="staff-table-title">
+              Contas com acesso administrativo
+            </h2>
+            <FinanceHelp
+              description="Admins têm acesso total. O Suporte combina leituras administrativas padrão com permissões delegáveis."
+              details={[
+                "Adicione uma conta à equipe somente depois de revisar a alteração.",
+              ]}
+              title="Permissões da equipe"
+            />
+          </div>
+          <StaffAccessTable actorUserId={session.user.id} members={members} />
+        </section>
       </div>
     </PageContainer>
   );

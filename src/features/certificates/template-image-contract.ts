@@ -27,7 +27,7 @@ export const validateCertificateImageFile = (
       ? MAX_CERTIFICATE_BACKGROUND_BYTES
       : MAX_CERTIFICATE_SIGNATURE_BYTES;
   if (file.size > maxBytes) {
-    const maxMegabytes = maxBytes / (1024 * 1024);
-    throw new Error(`A imagem deve ter no maximo ${maxMegabytes} MB.`);
+    const maxMebibytes = maxBytes / (1024 * 1024);
+    throw new Error(`A imagem deve ter no maximo ${maxMebibytes} MiB.`);
   }
 };

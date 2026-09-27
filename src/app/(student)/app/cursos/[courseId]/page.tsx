@@ -74,19 +74,7 @@ export default async function StudentCourseOverviewPage({
   }
 
   let primaryAction: React.JSX.Element | null = null;
-  if (data.certificateCode) {
-    primaryAction = (
-      <Button asChild className="h-full w-full px-6 sm:w-auto" size="sm">
-        <Link
-          href={route(`/certificados/${data.certificateCode}`)}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          Ver certificado
-        </Link>
-      </Button>
-    );
-  } else if (data.nextLessonId) {
+  if (data.nextLessonId) {
     primaryAction = (
       <Button asChild className="h-full w-full px-6 sm:w-auto" size="sm">
         <Link

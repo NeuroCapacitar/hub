@@ -31,7 +31,7 @@ interface SupportRequestDialogProps {
   triggerVariant?: "default" | "ghost" | "outline" | "secondary";
 }
 
-const defaultSubject = "Preciso de ajuda com meu acesso";
+const defaultSubject = "Preciso de ajuda";
 
 export function SupportRequestDialog({
   children,
@@ -42,7 +42,7 @@ export function SupportRequestDialog({
   triggerSize = "default",
   triggerVariant = "outline",
 }: SupportRequestDialogProps): React.JSX.Element {
-  const subject = courseTitle ? `Suporte sobre ${courseTitle}` : defaultSubject;
+  const subject = courseTitle ? "Suporte sobre meu curso" : defaultSubject;
 
   let triggerElement: React.ReactNode = null;
   if (triggerMode === "asChild") {
@@ -96,6 +96,8 @@ export function SupportRequestDialog({
         <AutoCloseDialogForm
           action={sendSupportRequestAction}
           className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+          pendingMessage="Registrando pedido…"
+          successMessage="Pedido de suporte registrado."
         >
           <DialogBody>
             <FieldGroup>
@@ -105,10 +107,11 @@ export function SupportRequestDialog({
               <Field>
                 <FieldLabel htmlFor="support-subject">Assunto</FieldLabel>
                 <Input
+                  defaultValue={subject}
                   id="support-subject"
                   maxLength={160}
                   name="subject"
-                  placeholder={subject}
+                  placeholder="Resuma o assunto do seu pedido"
                   required
                 />
               </Field>

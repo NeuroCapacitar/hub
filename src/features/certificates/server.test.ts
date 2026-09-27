@@ -5,12 +5,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const dependencies = vi.hoisted(() => ({
   createR2ObjectReadUrl: vi.fn(),
   getPool: vi.fn(),
+  purgeRevokedCertificatePreview: vi.fn().mockResolvedValue(true),
   renderCertificatePdf: vi.fn(),
   uploadPrivateR2ObjectIfAbsent: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/db", () => ({ getPool: dependencies.getPool }));
+vi.mock("@/features/certificates/artifact-reconciliation", () => ({
+  purgeRevokedCertificatePreview: dependencies.purgeRevokedCertificatePreview,
+}));
 vi.mock("@/features/certificates/rendering", () => ({
   renderCertificatePdf: dependencies.renderCertificatePdf,
 }));
@@ -26,6 +30,7 @@ import {
   assertCertificateReissueTargetAllowed,
   getCertificateByCode,
   getCertificateOperationsForUser,
+  getRevokedCertificateTombstoneByCode,
   issueCompletionCertificateIfEligible,
   issueManualCertificate,
   reconcileHistoricalCourseCertificates,
@@ -37,7 +42,7 @@ import {
 
 const UUID_PATTERN = /^[0-9a-f-]{36}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
-const CERTIFICATE_CODE_PATTERN = /^PRT-[0-9A-F]{32}$/;
+const CERTIFICATE_CODE_PATTERN = /^[A-Za-z0-9_-]{21}[AQgw]$/;
 
 describe("certificate reissue authority", () => {
   it("reuses the canonical enrollment aggregate lock", async () => {
@@ -143,6 +148,83 @@ const renderSnapshot = {
 } as const;
 
 describe("certificate lifecycle reasons", () => {
+  it("blocks manual issue for a course without an explicit signatory", async () => {
+    const query = vi.fn((statement: string) => {
+      if (statement.includes("from enrollments")) {
+        return { rows: [{ id: "enrollment-1" }] };
+      }
+      if (
+        statement.includes("from certificates") &&
+        statement.includes("order by issued_at")
+      ) {
+        return { rows: [] };
+      }
+      if (
+        statement.includes("from course_publications") &&
+        statement.includes("status = 'published'")
+      ) {
+        return { rows: [{ id: "publication-current" }] };
+      }
+      if (statement.includes("insert into course_completions")) {
+        return { rows: [] };
+      }
+      if (
+        statement.includes("from course_completions") &&
+        statement.includes("course_publication_id")
+      ) {
+        return { rows: [{ course_publication_id: "publication-origin" }] };
+      }
+      if (
+        statement.includes("from users u") &&
+        statement.includes("join certificate_templates")
+      ) {
+        return {
+          rows: [
+            {
+              background_key: "templates/background.webp",
+              completed_at: new Date("2026-06-10T15:30:00.000Z"),
+              course_title: "Curso",
+              issuer_cnpj: "00.000.000/0001-00",
+              issuer_display_name: "Emissora",
+              issuer_legal_name: "Emissora LTDA",
+              publication_course_title: "Curso histórico",
+              publication_workload_hours: 8,
+              signature_key: null,
+              signer_name: null,
+              signer_role: null,
+              spec: {
+                backgroundKey: "templates/background.webp",
+                fields: renderSnapshot.template.fields,
+              },
+              student_name: "Aluno",
+              template_id: renderSnapshot.template.id,
+              template_version: 1,
+              workload_hours: 8,
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+    dependencies.getPool.mockReturnValue({
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    });
+
+    await expect(
+      issueManualCertificate({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        reasonCategory: "other",
+        reasonDetail: "Revisão do caso.",
+        userId: "student-1",
+      })
+    ).rejects.toThrow("responsável pelo certificado não está configurado");
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("insert into certificates"),
+      expect.anything()
+    );
+  });
+
   it("uses the persisted completion date and effective course workload in manual snapshots", async () => {
     const completedAt = new Date("2026-06-10T15:30:00.000Z");
     const query = vi.fn((statement: string, _values?: unknown[]) => {
@@ -182,8 +264,8 @@ describe("certificate lifecycle reasons", () => {
               issuer_legal_name: "Emissora LTDA",
               publication_course_title: "Curso histórico",
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: renderSnapshot.template.backgroundKey,
                 fields: renderSnapshot.template.fields,
@@ -213,13 +295,25 @@ describe("certificate lifecycle reasons", () => {
       userId: "student-1",
     });
 
+    const sourceSelect = query.mock.calls.find(([statement]) =>
+      statement.includes("from users u")
+    )?.[0];
+    expect(sourceSelect).toContain("c.certificate_signer_name as signer_name");
+    expect(sourceSelect).toContain("c.certificate_signer_role as signer_role");
+    expect(sourceSelect).not.toContain("ct.signer_name");
+    expect(sourceSelect).not.toContain("app_settings");
+
     const certificateInsert = query.mock.calls.find(([statement]) =>
       statement.includes("insert into certificates")
+    );
+    expect(certificateInsert?.[0]).toContain(
+      "set certificate_ever_issued = true"
     );
     const values = certificateInsert?.[1] as unknown[] | undefined;
     const snapshot = JSON.parse(String(values?.[9])) as {
       completion: { completedAt: string };
       course: { workloadHours: number };
+      rendererVersion: number;
     };
 
     expect(values?.[3]).toMatch(CERTIFICATE_CODE_PATTERN);
@@ -228,6 +322,7 @@ describe("certificate lifecycle reasons", () => {
     expect(values?.[6]).toBe(24);
     expect(snapshot.completion.completedAt).toBe(completedAt.toISOString());
     expect(snapshot.course.workloadHours).toBe(24);
+    expect(snapshot.rendererVersion).toBe(2);
   });
 
   it("retries a manual code collision inside the existing transaction", async () => {
@@ -275,8 +370,8 @@ describe("certificate lifecycle reasons", () => {
               issuer_display_name: "Emissora",
               issuer_legal_name: "Emissora LTDA",
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: renderSnapshot.template.fields,
@@ -355,6 +450,97 @@ describe("certificate lifecycle reasons", () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
+  it("does not issue again after a revoked certificate record has been purged", async () => {
+    const query = vi.fn((statement: string) => {
+      if (statement === "begin" || statement === "commit") {
+        return { rows: [] };
+      }
+      if (statement.includes("from enrollments")) {
+        return { rows: [{ id: "enrollment-1" }] };
+      }
+      if (
+        statement.includes("from certificates") &&
+        statement.includes("order by issued_at")
+      ) {
+        return { rows: [] };
+      }
+      if (
+        statement.includes("from course_publications") &&
+        statement.includes("status = 'published'")
+      ) {
+        return { rows: [{ id: "publication-current" }] };
+      }
+      if (
+        statement.includes("from course_completions") &&
+        statement.includes("course_publication_id")
+      ) {
+        return {
+          rows: [
+            {
+              certificate_ever_issued: true,
+              course_publication_id: "publication-origin",
+            },
+          ],
+        };
+      }
+      if (
+        statement.includes("from users u") &&
+        statement.includes("join certificate_templates")
+      ) {
+        return {
+          rows: [
+            {
+              background_key: "templates/background.webp",
+              completed_at: new Date("2026-06-10T15:30:00.000Z"),
+              course_title: "Curso",
+              issuer_cnpj: "00.000.000/0001-00",
+              issuer_display_name: "Emissora",
+              issuer_legal_name: "Emissora LTDA",
+              publication_course_title: "Curso histórico",
+              signature_key: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
+              spec: {
+                backgroundKey: renderSnapshot.template.backgroundKey,
+                fields: renderSnapshot.template.fields,
+              },
+              student_name: "Aluno",
+              template_id: renderSnapshot.template.id,
+              template_version: 1,
+              workload_hours: 8,
+            },
+          ],
+        };
+      }
+      if (statement.includes("insert into certificates")) {
+        return { rows: [{ id: "incorrect-duplicate" }] };
+      }
+      return { rows: [] };
+    });
+    const release = vi.fn();
+    dependencies.getPool.mockReturnValue({
+      connect: vi.fn().mockResolvedValue({ query, release }),
+    });
+
+    await expect(
+      issueManualCertificate({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        reasonCategory: "other",
+        reasonDetail: "Tentativa após a retenção.",
+        userId: "student-1",
+      })
+    ).rejects.toThrow(
+      "Já houve uma emissão de certificado para essa conclusão"
+    );
+
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("insert into certificates"),
+      expect.anything()
+    );
+    expect(release).toHaveBeenCalledOnce();
+  });
+
   it("reissues the latest revoked certificate without rewriting its history", async () => {
     const release = vi.fn();
     const replacementId = "certificate-replacement";
@@ -407,8 +593,8 @@ describe("certificate lifecycle reasons", () => {
               issuer_display_name: "Emissora",
               issuer_legal_name: "Emissora LTDA",
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: renderSnapshot.template.fields,
@@ -444,7 +630,10 @@ describe("certificate lifecycle reasons", () => {
         reasonCategory: "identity_correction",
         reasonDetail: "Nome corrigido após revogação anterior.",
       })
-    ).resolves.toEqual({ id: replacementId });
+    ).resolves.toEqual({
+      id: replacementId,
+      previousPreviewPurged: true,
+    });
 
     const insert = query.mock.calls.find(([statement]) =>
       statement.includes("insert into certificates")
@@ -544,6 +733,13 @@ describe("certificate lifecycle reasons", () => {
         "certificate-1",
       ])
     );
+    expect(dependencies.purgeRevokedCertificatePreview).toHaveBeenCalledWith({
+      actorUserId: "support-1",
+      certificateId: "certificate-1",
+    });
+    expect(
+      dependencies.purgeRevokedCertificatePreview.mock.invocationCallOrder[0]
+    ).toBeGreaterThan(query.mock.invocationCallOrder[3] ?? 0);
     expect(release).toHaveBeenCalledOnce();
   });
 
@@ -572,7 +768,7 @@ describe("certificate lifecycle reasons", () => {
     });
     expect(query).toHaveBeenCalledWith(
       expect.not.stringContaining("revoked_reason\n      from"),
-      ["PRT-12345678"]
+      ["PRT-12345678", 60]
     );
   });
 
@@ -603,10 +799,89 @@ describe("certificate lifecycle reasons", () => {
       issuerCnpj: "00.000.000/0001-00",
       issuerName: "Emissora",
     });
+    expect(query.mock.calls[0]?.[0]).toContain(
+      "revoked_at > now() - ($2 * interval '1 day')"
+    );
+    expect(query.mock.calls[0]?.[1]).toEqual([
+      "PRT-1234567890ABCDEF1234567890ABCDEF",
+      60,
+    ]);
+  });
+
+  it("looks up expired revoked codes by digest without reading certificate claims", async () => {
+    const code = "PRT-REVOKED-EXPIRED";
+    const revokedAt = new Date("2026-07-22T12:00:00.000Z");
+    const query = vi
+      .fn()
+      .mockResolvedValue({ rows: [{ revoked_at: revokedAt }] });
+    dependencies.getPool.mockReturnValue({ query });
+
+    await expect(getRevokedCertificateTombstoneByCode(code)).resolves.toEqual({
+      revokedAt,
+    });
+
+    expect(query.mock.calls[0]?.[0]).toContain(
+      "from certificate_revocation_tombstones"
+    );
+    expect(query.mock.calls[0]?.[0]).not.toContain("student_name_snapshot");
+    expect(query.mock.calls[0]?.[0]).not.toContain("course_title_snapshot");
+    expect(query.mock.calls[0]?.[1]).toEqual([
+      code,
+      60,
+      createHash("sha256").update(code).digest("hex"),
+    ]);
   });
 });
 
 describe("automatic completion certificate retries", () => {
+  it("does not issue a certificate for a legacy published template missing signatory data", async () => {
+    const query = vi.fn((statement: string) => {
+      if (statement.includes("join certificate_templates")) {
+        return Promise.resolve({
+          rows: [
+            {
+              background_key: renderSnapshot.template.backgroundKey,
+              id: renderSnapshot.template.id,
+              issuer_cnpj: renderSnapshot.issuer.cnpj,
+              issuer_display_name: renderSnapshot.issuer.displayName,
+              issuer_legal_name: renderSnapshot.issuer.legalName,
+              signature_key: null,
+              signer_name: "Dra. Maria",
+              signer_role: null,
+              spec: {
+                backgroundKey: renderSnapshot.template.backgroundKey,
+                fields: renderSnapshot.template.fields,
+              },
+              version: renderSnapshot.template.version,
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    await expect(
+      tryIssueAutomaticCompletionCertificate({
+        client: { query } as never,
+        courseId: "course-1",
+        coursePublicationId: "publication-1",
+        courseTitle: "Curso",
+        completedAt: new Date("2026-07-22T12:00:00.000Z"),
+        studentName: "Aluno",
+        userId: "student-1",
+        workloadHours: 8,
+      })
+    ).resolves.toBeNull();
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("insert into certificates"),
+      expect.anything()
+    );
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("insert into outbox_messages"),
+      expect.anything()
+    );
+  });
+
   it("snapshots the effective course workload when issuing automatically", async () => {
     const query = vi.fn((statement: string, _values?: unknown[]) => {
       if (statement.includes("join certificate_templates")) {
@@ -649,16 +924,26 @@ describe("automatic completion certificate retries", () => {
       })
     ).resolves.toBe("PRT-OVERRIDE");
 
+    expect(
+      query.mock.calls.some(
+        ([statement]) =>
+          statement.includes("c.certificate_signer_name as signer_name") &&
+          statement.includes("c.certificate_signer_role as signer_role")
+      )
+    ).toBe(true);
+
     const insert = query.mock.calls.find(([statement]) =>
       statement.includes("insert into certificates")
     );
     const values = insert?.[1] as unknown[] | undefined;
     const snapshot = JSON.parse(String(values?.[8])) as {
       course: { workloadHours: number };
+      rendererVersion: number;
     };
 
     expect(values?.[6]).toBe(8);
     expect(snapshot.course.workloadHours).toBe(8);
+    expect(snapshot.rendererVersion).toBe(2);
   });
 
   it("retries a public code collision without aborting the surrounding transaction", async () => {
@@ -678,8 +963,8 @@ describe("automatic completion certificate retries", () => {
               issuer_display_name: renderSnapshot.issuer.displayName,
               issuer_legal_name: renderSnapshot.issuer.legalName,
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: renderSnapshot.template.fields,
@@ -736,8 +1021,8 @@ describe("automatic completion certificate retries", () => {
               issuer_display_name: renderSnapshot.issuer.displayName,
               issuer_legal_name: renderSnapshot.issuer.legalName,
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: renderSnapshot.template.fields,
@@ -797,8 +1082,8 @@ describe("automatic completion certificate retries", () => {
               issuer_display_name: "Emissora",
               issuer_legal_name: "Emissora LTDA",
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: [
@@ -854,6 +1139,12 @@ describe("automatic completion certificate retries", () => {
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("join certificate_templates"),
       ["course-1"]
+    );
+    const automaticCertificateInsert = query.mock.calls.find(([statement]) =>
+      statement.includes("insert into certificates")
+    );
+    expect(automaticCertificateInsert?.[0]).toContain(
+      "set certificate_ever_issued = true"
     );
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("insert into outbox_messages"),
@@ -976,8 +1267,8 @@ describe("automatic completion certificate retries", () => {
               issuer_legal_name: "Emissora Atual LTDA",
               publication_workload_hours: 12,
               signature_key: null,
-              signer_name: null,
-              signer_role: null,
+              signer_name: renderSnapshot.template.signerName,
+              signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey: "templates/background.webp",
                 fields: renderSnapshot.template.fields,
@@ -1053,6 +1344,9 @@ describe("automatic completion certificate retries", () => {
     expect(candidateCall?.[0]).toContain(
       "order by completion.completed_at, completion.id"
     );
+    expect(candidateCall?.[0]).toContain(
+      "completion.certificate_ever_issued = false"
+    );
     expect(candidateCall?.[0]).toContain("not exists");
     expect(candidateCall?.[0]).not.toContain("status = 'valid'");
     const certificateInsert = query.mock.calls.find(([statement]) =>
@@ -1081,6 +1375,12 @@ describe("automatic completion certificate retries", () => {
       "certificate-1",
       JSON.stringify({ origin: "admin_reconciliation" }),
     ]);
+    const remainingCall = query.mock.calls.find(([statement]) =>
+      statement.includes("count(*)::int as remaining")
+    );
+    expect(remainingCall?.[0]).toContain(
+      "completion.certificate_ever_issued = false"
+    );
     expect(release).toHaveBeenCalledTimes(2);
   });
 });
@@ -1345,5 +1645,14 @@ describe("certificate rendering assets", () => {
         expect.stringMatching(UUID_PATTERN),
       ]
     );
+  });
+
+  it("looks up Base64URL codes without normalizing case or characters", async () => {
+    const code = "AAECAwQFBgcICQoLDA0ODw";
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    dependencies.getPool.mockReturnValue({ query });
+
+    await expect(getCertificateByCode(code)).resolves.toBeNull();
+    expect(query).toHaveBeenCalledWith(expect.any(String), [code, 60]);
   });
 });

@@ -35,7 +35,8 @@ const emptyOperations = {
     failedRefundCount: 0,
     pendingPaymentReviewCount: 0,
     pendingRefundCount: 0,
-    pendingRevenueInCents: 0,
+    activeCheckoutCount: 0,
+    activeCheckoutPotentialInCents: 0,
     refundedOrderCount: 0,
     uncertainCheckoutCount: 0,
     uncertainRefundCount: 0,
@@ -113,8 +114,8 @@ beforeEach(() => {
     activeEnrollments: 0,
     courses: 0,
     failedWebhooks: 0,
-    paidOrders: 0,
-    paidRevenueInCents: 0,
+    confirmedSaleOrders: 0,
+    grossConfirmedSalesRevenueInCents: 0,
     pendingOrders: 0,
     retryableWebhooks: 0,
     students: 0,
@@ -134,7 +135,7 @@ beforeEach(() => {
     totalCount: 0,
     totals: {
       paidOrderCount: 0,
-      paidRevenueInCents: 0,
+      grossConfirmedSalesRevenueInCents: 0,
       totalEnrollmentCount: 0,
     },
   });
@@ -198,7 +199,7 @@ describe("AdminPage", () => {
 
     const markup = renderToStaticMarkup(await AdminPage());
 
-    expect(markup).toContain("Resumo do dia");
+    expect(markup).toContain("Resumo da operação");
     expect(markup).toContain("Contexto de acompanhamento");
     expect(markup).not.toContain("Pendências para resolver");
     expect(markup).not.toContain("Conteúdo e certificados");
@@ -210,6 +211,74 @@ describe("AdminPage", () => {
     expect(markup).not.toContain('href="/admin/configuracoes"');
     expect(dependencies.getAdminOverview).toHaveBeenCalledOnce();
     expect(dependencies.getAdminDashboardProjection).toHaveBeenCalledOnce();
+  });
+
+  it("routes checkout-paid and refund alerts to their filtered order queues", async () => {
+    dependencies.requirePermission.mockResolvedValue({ role: "admin" });
+    dependencies.getAdminDashboardProjection.mockResolvedValue({
+      courseHealth: emptyCourseHealth,
+      operations: {
+        ...emptyOperations,
+        financial: {
+          ...emptyOperations.financial,
+          activeCheckoutCount: 3,
+          activeCheckoutPotentialInCents: 75_000,
+          oldestActiveCheckoutAt: new Date(
+            Date.now() - 5 * 24 * 60 * 60 * 1000
+          ),
+          checkoutPaidAwaitingConfirmationCount: 2,
+          checkoutPaidAwaitingConfirmationExposureInCents: 25_800,
+          oldestCheckoutPaidAwaitingConfirmationAt: new Date(
+            Date.now() - 7 * 60 * 60 * 1000
+          ),
+          disputedOrderCount: 4,
+          disputedOrderExposureInCents: 88_000,
+          oldestDisputeAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+          failedRefundCount: 1,
+          failedRefundExposureInCents: 12_300,
+          oldestFailedRefundAt: new Date(Date.now() - (4 * 60 + 1) * 60 * 1000),
+          pendingRefundCount: 4,
+          pendingRefundExposureInCents: 48_000,
+          oldestPendingRefundAt: new Date(Date.now() - 26 * 60 * 60 * 1000),
+          pendingPaymentReviewCount: 2,
+          pendingPaymentReviewExposureInCents: 13_000,
+          oldestPendingPaymentReviewAt: new Date(
+            Date.now() - 51 * 60 * 60 * 1000
+          ),
+          uncertainCheckoutCount: 3,
+          uncertainCheckoutExposureInCents: 38_700,
+          oldestUncertainCheckoutAt: new Date(Date.now() - 30 * 60 * 60 * 1000),
+          uncorrelatedOrderCount: 1,
+          uncorrelatedOrderExposureInCents: 12_900,
+          oldestUncorrelatedOrderAt: new Date(
+            Date.now() - (8 * 24 + 1) * 60 * 60 * 1000
+          ),
+          uncertainRefundCount: 3,
+          uncertainRefundExposureInCents: 25_000,
+          oldestUncertainRefundAt: new Date(Date.now() - 49 * 60 * 60 * 1000),
+        },
+      },
+      recentCertificates: [],
+      recentComments: [],
+      recentOrders: [],
+    });
+
+    const markup = renderToStaticMarkup(await AdminPage());
+
+    expect(markup).toContain("Checkout pago, aguardando confirmação");
+    expect(markup).toContain("checkout=paid-awaiting-confirmation");
+    expect(markup).toContain("Checkouts ativos sem cobrança");
+    expect(markup).toContain("checkout=active");
+    expect(markup).toContain("refundStatus=failed");
+    expect(markup).toContain("refundStatus=uncertain");
+    expect(markup).toContain("refundStatus=open");
+    expect(markup).toContain("Mais antigo: há 4 h.");
+    expect(markup).toContain("123,00");
+    expect(markup).toContain("não perda nem débito confirmado");
+    expect(markup).toContain("paymentEvidence=uncorrelated");
+    expect(markup).toContain("Mais antigo: há 2 dias.");
+    expect(markup).toContain("Mais antigo: há 8 dias.");
+    expect(markup).toContain("Pedidos em disputa");
   });
 
   it("keeps recent activity as compact tables", async () => {
@@ -353,8 +422,8 @@ describe("AdminPage", () => {
       activeEnrollments: 12,
       courses: 3,
       failedWebhooks: 2,
-      paidOrders: 18,
-      paidRevenueInCents: 180_000,
+      confirmedSaleOrders: 18,
+      grossConfirmedSalesRevenueInCents: 180_000,
       pendingOrders: 4,
       retryableWebhooks: 1,
       students: 25,
@@ -402,7 +471,8 @@ describe("AdminPage", () => {
         financial: {
           ...emptyOperations.financial,
           pendingPaymentReviewCount: 2,
-          pendingRevenueInCents: 45_000,
+          activeCheckoutCount: 3,
+          activeCheckoutPotentialInCents: 45_000,
         },
         integrations: {
           ...emptyOperations.integrations,
@@ -456,9 +526,13 @@ describe("AdminPage", () => {
     expect(markup).toContain("Certificados pendentes");
     expect(markup).toContain("Certificados sem emissão");
     expect(markup).toContain("Concluído em");
+    expect(markup).toContain("divide-y divide-border/50");
+    expect(markup).not.toContain("bg-muted/10");
     expect(markup).toContain("Webhooks em retry");
     expect(markup).toContain("Eventos de e-mail em dead letter");
     expect(markup).toContain("Acessos vencendo em 30 dias");
+    expect(markup).toContain("Potencial em checkouts ativos");
+    expect(markup).toContain("3 checkouts ativos");
     expect(markup).toContain("Solicitações de suporte");
     expect(markup).toContain("Entregue");
     expect(markup).toContain('href="/admin/operacao#jmvstream"');

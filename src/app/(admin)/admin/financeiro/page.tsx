@@ -1,31 +1,19 @@
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  type AdminFinancialOrderSearchParams,
+  getAdminFinancialOrderQuery,
+} from "@/features/admin/financial-order-query";
 import {
   type AdminFinancialPeriod,
   isAdminFinancialPeriod,
 } from "@/features/admin/financial-period";
-import {
-  type AdminOrderCheckoutFilter,
-  type AdminOrderPaymentMethodFilter,
-  type AdminOrderStatusFilter,
-  isAdminOrderCheckoutFilter,
-  isAdminOrderPaymentMethodFilter,
-  isAdminOrderStatusFilter,
-} from "@/features/admin/order-filters";
 import {
   getAdminFinancialAnalysisData,
   getAdminFinancialOrdersData,
   getAdminFinancialOverviewData,
   getAdminStatementImportHistory,
   getAdminStatementImportProgress,
-  MAX_ADMIN_ORDER_PAGE,
 } from "@/features/admin/server";
 import { requirePermission } from "@/lib/auth-permissions";
 import { canPerform } from "@/lib/auth-policy";
@@ -40,59 +28,11 @@ export const dynamic = "force-dynamic";
 const readSearchParameter = (value: string | string[] | undefined): string =>
   Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 
-interface FinancialSearchParams {
-  checkout?: string | string[] | undefined;
-  page?: string | string[] | undefined;
-  paymentMethod?: string | string[] | undefined;
+interface FinancialSearchParams extends AdminFinancialOrderSearchParams {
   period?: string | string[] | undefined;
-  q?: string | string[] | undefined;
   reviewPage?: string | string[] | undefined;
-  status?: string | string[] | undefined;
   tab?: string | string[] | undefined;
 }
-
-const getOrderQuery = (
-  searchParams: FinancialSearchParams
-): {
-  checkout?: AdminOrderCheckoutFilter | undefined;
-  page: number;
-  paymentMethod?: AdminOrderPaymentMethodFilter | undefined;
-  search: string;
-  status?: AdminOrderStatusFilter | undefined;
-} => {
-  const search = readSearchParameter(searchParams.q).trim();
-  const requestedCheckout = readSearchParameter(searchParams.checkout).trim();
-  const requestedPaymentMethod = readSearchParameter(
-    searchParams.paymentMethod
-  ).trim();
-  const requestedStatus = readSearchParameter(searchParams.status).trim();
-  const requestedPage = Number.parseInt(
-    readSearchParameter(searchParams.page),
-    10
-  );
-
-  const status = isAdminOrderStatusFilter(requestedStatus)
-    ? requestedStatus
-    : undefined;
-  const checkout =
-    isAdminOrderCheckoutFilter(requestedCheckout) &&
-    (!status || status === "pending")
-      ? requestedCheckout
-      : undefined;
-
-  return {
-    checkout,
-    page:
-      Number.isSafeInteger(requestedPage) && requestedPage > 0
-        ? Math.min(MAX_ADMIN_ORDER_PAGE, requestedPage)
-        : 1,
-    paymentMethod: isAdminOrderPaymentMethodFilter(requestedPaymentMethod)
-      ? requestedPaymentMethod
-      : undefined,
-    search,
-    status,
-  };
-};
 
 const getReviewPage = (searchParams: FinancialSearchParams): number => {
   const requestedPage = Number.parseInt(
@@ -143,10 +83,12 @@ export default async function AdminFinancePage({
   const {
     page: orderPage,
     checkout: orderCheckout,
+    paymentEvidence: orderPaymentEvidence,
     paymentMethod: orderPaymentMethod,
     search: orderSearch,
     status: orderStatus,
-  } = getOrderQuery(resolvedSearchParams);
+    refundStatus: orderRefundStatus,
+  } = getAdminFinancialOrderQuery(resolvedSearchParams);
   const reviewPage = getReviewPage(resolvedSearchParams);
   const financialPeriod = getFinancialPeriod(resolvedSearchParams);
   const requestedTab = readSearchParameter(resolvedSearchParams.tab).trim();
@@ -167,6 +109,7 @@ export default async function AdminFinancePage({
     session,
     "manageFinancialReviews"
   );
+  const canViewOperations = canPerform(session, "viewOperations");
   const canExecuteRefund = canPerform(session, "executeRefund");
 
   const [
@@ -183,7 +126,9 @@ export default async function AdminFinancePage({
       ? getAdminFinancialOrdersData({
           checkout: orderCheckout,
           page: orderPage,
+          paymentEvidence: orderPaymentEvidence,
           paymentMethod: orderPaymentMethod,
+          refundStatus: orderRefundStatus,
           search: orderSearch,
           status: orderStatus,
         })
@@ -204,9 +149,7 @@ export default async function AdminFinancePage({
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
-        <PageHeader title="Financeiro" />
-
-        <FinancialTabs
+        <PageHeader
           actions={
             canManageFinancialOperations ? (
               <FinancialOperationsMenu
@@ -215,6 +158,10 @@ export default async function AdminFinancePage({
               />
             ) : null
           }
+          title="Financeiro"
+        />
+
+        <FinancialTabs
           analysis={
             analysisData ? (
               <FinancialAnalysis analytics={analysisData.analytics} />
@@ -222,31 +169,37 @@ export default async function AdminFinancePage({
           }
           orders={
             ordersData ? (
-              <Card>
-                <CardHeader className="pb-4">
-                  <CardTitle as="h2" className="text-base">
+              <section
+                aria-labelledby="financial-orders-title"
+                className="grid gap-6"
+              >
+                <div>
+                  <h2
+                    className="type-section-title"
+                    id="financial-orders-title"
+                  >
                     Pedidos
-                  </CardTitle>
-                  <CardDescription className="mt-1">
+                  </h2>
+                  <p className="mt-1 text-muted-foreground text-sm">
                     Busque, filtre e abra um pedido para consultar detalhes e
                     ações.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <FinancialOrdersTable
-                    canExecuteRefund={canExecuteRefund}
-                    canManageFinancialOperations={canManageFinancialOperations}
-                    checkout={orderCheckout}
-                    hasNextPage={ordersData.ordersHasNextPage}
-                    orders={ordersData.orders}
-                    page={orderPage}
-                    paymentMethod={orderPaymentMethod}
-                    search={orderSearch}
-                    status={orderStatus}
-                    totalCount={ordersData.ordersTotalCount}
-                  />
-                </CardContent>
-              </Card>
+                  </p>
+                </div>
+                <FinancialOrdersTable
+                  canExecuteRefund={canExecuteRefund}
+                  canManageFinancialOperations={canManageFinancialOperations}
+                  checkout={orderCheckout}
+                  hasNextPage={ordersData.ordersHasNextPage}
+                  orders={ordersData.orders}
+                  page={orderPage}
+                  paymentEvidence={orderPaymentEvidence}
+                  paymentMethod={orderPaymentMethod}
+                  refundStatus={orderRefundStatus}
+                  search={orderSearch}
+                  status={orderStatus}
+                  totalCount={ordersData.ordersTotalCount}
+                />
+              </section>
             ) : null
           }
           overview={
@@ -255,7 +208,7 @@ export default async function AdminFinancePage({
                 canExecuteRefund={canExecuteRefund}
                 canManageFinancialOperations={canManageFinancialOperations}
                 canManageFinancialReviews={canManageFinancialReviews}
-                canViewGlobalAudit={canPerform(session, "viewGlobalAudit")}
+                canViewOperations={canViewOperations}
                 coursesRevenue={overviewData.coursesRevenue}
                 financialHealth={overviewData.financialHealth}
                 paymentReviews={overviewData.paymentReviews}

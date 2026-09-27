@@ -94,7 +94,10 @@ export interface StudentCatalogCourseCard extends CourseOfferSummaryData {
   isInterested: boolean;
   launchDate: string | null;
   launchLandingUrl: string | null;
+  nextLessonDurationSeconds: number | null;
   nextLessonId: string | null;
+  nextLessonTitle: string | null;
+  nextModuleTitle: string | null;
   nextReleaseAt: Date | null;
   progressPercent: number;
   revokedReason: string | null;
@@ -122,6 +125,7 @@ export interface FaqItem {
 
 export interface ModuleWithLessons {
   availableAt: Date | null;
+  completedRequiredLessonCount: number;
   id: string;
   lessons: Array<{
     id: string;
@@ -131,7 +135,9 @@ export interface ModuleWithLessons {
     isCompleted: boolean;
     isAvailable: boolean;
   }>;
+  pendingOptionalLessonCount: number;
   releaseState: "available" | "invalid" | "time_locked";
+  requiredLessonCount: number;
   sortOrder: number;
   title: string;
 }
@@ -229,6 +235,11 @@ export interface StudentLessonData {
   nextLessonId: string | null;
   previousLessonId: string | null;
   progressPercent: number;
+  requiredLessonProgress: {
+    completedCount: number;
+    percent: number;
+    totalCount: number;
+  };
 }
 
 export type StudentLessonWorkspaceResult =
@@ -343,6 +354,20 @@ const COMPATIBLE_LESSON_WATCH_PROGRESS_JOIN = `
       ) lwp on true
 `;
 
+const getCourseScopedLessonCompletionJoin = (
+  userIdReference: "e.user_id" | "$1"
+): string => `
+      left join lateral (
+        select min(lp.completed_at) as completed_at
+        from lesson_progress lp
+        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
+        join modules completed_module on completed_module.id = completed_lesson.module_id
+        where lp.user_id = ${userIdReference}
+          and completed_module.course_id = c.id
+          and completed_lesson.curriculum_key = l.curriculum_key
+      ) lp on true
+`;
+
 type StudentCourseModuleAggregate = StudentCourseModule & {
   completedLessonIds: string[];
   lessonIds: string[];
@@ -366,11 +391,14 @@ type StudentCatalogCourseAggregate = StudentCatalogCourseCard & {
   moduleIds: Set<string>;
   requiredLessonIds: string[];
   lessons: Array<{
+    durationSeconds: number;
     id: string;
     moduleId: string;
+    moduleTitle: string;
     moduleReleaseDelayDays: number;
     moduleSortOrder: number;
     sortOrder: number;
+    title: string;
   }>;
 };
 
@@ -451,12 +479,24 @@ const mapModules = (rows: LessonRow[]): ModuleWithLessons[] => {
     const existingModule = modules.get(row.module_id);
     const moduleData = existingModule ?? {
       availableAt: null,
+      completedRequiredLessonCount: 0,
       id: row.module_id,
+      pendingOptionalLessonCount: 0,
       releaseState: "available" as const,
+      requiredLessonCount: 0,
       title: row.module_title,
       sortOrder: row.module_sort_order,
       lessons: [],
     };
+
+    if (row.is_required !== false) {
+      moduleData.requiredLessonCount += 1;
+      if (row.completed_at) {
+        moduleData.completedRequiredLessonCount += 1;
+      }
+    } else if (!row.completed_at) {
+      moduleData.pendingOptionalLessonCount += 1;
+    }
 
     moduleData.lessons.push({
       id: row.lesson_id,
@@ -523,13 +563,7 @@ export const getStudentCourses = async (
       left join lessons l on l.module_id = m.id
         and l.course_publication_id = cp.id
         and l.status = 'active'
-      left join lateral (
-        select min(lp.completed_at) as completed_at
-        from lesson_progress lp
-        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
-        where lp.user_id = e.user_id
-          and completed_lesson.curriculum_key = l.curriculum_key
-      ) lp on true
+      ${getCourseScopedLessonCompletionJoin("e.user_id")}
       where e.user_id = $1
         and e.status = 'active'
         and e.starts_at <= now()
@@ -645,9 +679,18 @@ const resolveCatalogNextLesson = ({
   course: StudentCatalogCourseAggregate;
   diagnostics: ReturnType<typeof createContentReleaseDiagnostics>;
   now: Date;
-}): { nextLessonId: string | null; nextReleaseAt: Date | null } => {
+}): {
+  nextLessonDurationSeconds: number | null;
+  nextLessonId: string | null;
+  nextLessonTitle: string | null;
+  nextModuleTitle: string | null;
+  nextReleaseAt: Date | null;
+} => {
   const completedLessonIds = course.completedLessonIds;
+  let nextLessonDurationSeconds: number | null = null;
   let nextLessonId: string | null = null;
+  let nextLessonTitle: string | null = null;
+  let nextModuleTitle: string | null = null;
   let nextReleaseAt: Date | null = null;
 
   const orderedLessons = [...course.lessons].sort(
@@ -675,7 +718,13 @@ const resolveCatalogNextLesson = ({
         moduleId: lesson.moduleId,
         reason: classifyContentReleaseError(error),
       });
-      return { nextLessonId: null, nextReleaseAt: null };
+      return {
+        nextLessonDurationSeconds: null,
+        nextLessonId: null,
+        nextLessonTitle: null,
+        nextModuleTitle: null,
+        nextReleaseAt: null,
+      };
     }
 
     if (release.kind === "time_locked") {
@@ -698,10 +747,19 @@ const resolveCatalogNextLesson = ({
       })
     ) {
       nextLessonId = lesson.id;
+      nextLessonDurationSeconds = lesson.durationSeconds;
+      nextLessonTitle = lesson.title;
+      nextModuleTitle = lesson.moduleTitle;
     }
   }
 
-  return { nextLessonId, nextReleaseAt };
+  return {
+    nextLessonDurationSeconds,
+    nextLessonId,
+    nextLessonTitle,
+    nextModuleTitle,
+    nextReleaseAt,
+  };
 };
 
 export const getStudentCourseCatalog = async (
@@ -728,9 +786,11 @@ export const getStudentCourseCatalog = async (
     launch_landing_url: string | null;
     is_required: boolean | null;
     lesson_id: string | null;
+    lesson_title: string;
     lesson_sort_order: number | null;
     module_release_delay_days: number | null;
     module_id: string | null;
+    module_title: string;
     module_sort_order: number | null;
     payment_allow_credit_card: boolean;
     payment_allow_pix: boolean;
@@ -790,9 +850,11 @@ export const getStudentCourseCatalog = async (
           where csi.course_id = c.id and csi.user_id = $1
         ) as is_interested,
         l.id as lesson_id,
+        l.title as lesson_title,
         l.is_required,
         l.sort_order as lesson_sort_order,
         m.id as module_id,
+        m.title as module_title,
         m.release_delay_days as module_release_delay_days,
         m.sort_order as module_sort_order,
         coalesce(l.duration_seconds, 0) as duration_seconds,
@@ -810,13 +872,7 @@ export const getStudentCourseCatalog = async (
       left join lessons l on l.module_id = m.id
         and l.course_publication_id = cv.id
         and l.status = 'active'
-      left join lateral (
-        select min(lp.completed_at) as completed_at
-        from lesson_progress lp
-        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
-        where lp.user_id = $1
-          and completed_lesson.curriculum_key = l.curriculum_key
-      ) lp on true
+      ${getCourseScopedLessonCompletionJoin("$1")}
       where c.catalog_visibility = 'listed'
          or (
            c.status = 'active'
@@ -868,6 +924,9 @@ export const getStudentCourseCatalog = async (
       totalCount: 0,
       totalDurationSeconds: 0,
       nextLessonId: null,
+      nextLessonDurationSeconds: null,
+      nextLessonTitle: null,
+      nextModuleTitle: null,
       nextReleaseAt: null,
       paymentAllowCreditCard: row.payment_allow_credit_card,
       paymentAllowPix: row.payment_allow_pix,
@@ -895,11 +954,14 @@ export const getStudentCourseCatalog = async (
         typeof row.module_release_delay_days === "number"
       ) {
         course.lessons.push({
+          durationSeconds: row.duration_seconds,
           id: row.lesson_id,
           moduleId: row.module_id,
+          moduleTitle: row.module_title,
           moduleReleaseDelayDays: row.module_release_delay_days,
           moduleSortOrder: row.module_sort_order,
           sortOrder: row.lesson_sort_order,
+          title: row.lesson_title,
         });
       }
       if (row.completed_at && row.is_enrolled) {
@@ -924,7 +986,13 @@ export const getStudentCourseCatalog = async (
           diagnostics: createContentReleaseDiagnostics(),
           now: course.decisionNow,
         })
-      : { nextLessonId: null, nextReleaseAt: null };
+      : {
+          nextLessonDurationSeconds: null,
+          nextLessonId: null,
+          nextLessonTitle: null,
+          nextModuleTitle: null,
+          nextReleaseAt: null,
+        };
 
     return {
       accessDurationMonths: course.accessDurationMonths,
@@ -958,6 +1026,9 @@ export const getStudentCourseCatalog = async (
         ...course.durationSecondsPerLesson.values(),
       ].reduce((sum, s) => sum + Math.max(0, s), 0),
       nextLessonId: next.nextLessonId,
+      nextLessonDurationSeconds: next.nextLessonDurationSeconds,
+      nextLessonTitle: next.nextLessonTitle,
+      nextModuleTitle: next.nextModuleTitle,
       nextReleaseAt: next.nextReleaseAt,
     };
   });
@@ -1411,13 +1482,7 @@ const getEnrolledCourseOverview = async ({
       left join lessons l on l.module_id = m.id
         and l.course_publication_id = cp.id
         and l.status = 'active'
-      left join lateral (
-        select min(lp.completed_at) as completed_at
-        from lesson_progress lp
-        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
-        where lp.user_id = e.user_id
-          and completed_lesson.curriculum_key = l.curriculum_key
-      ) lp on true
+      ${getCourseScopedLessonCompletionJoin("e.user_id")}
       ${COMPATIBLE_LESSON_WATCH_PROGRESS_JOIN}
       where e.user_id = $1
         and c.id = $2
@@ -1890,13 +1955,7 @@ const getEnrolledLessonWorkspace = async ({
       join lessons l on l.module_id = m.id
         and l.course_publication_id = cp.id
         and l.status = 'active'
-      left join lateral (
-        select min(lp.completed_at) as completed_at
-        from lesson_progress lp
-        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
-        where lp.user_id = e.user_id
-          and completed_lesson.curriculum_key = l.curriculum_key
-      ) lp on true
+      ${getCourseScopedLessonCompletionJoin("e.user_id")}
       ${COMPATIBLE_LESSON_WATCH_PROGRESS_JOIN}
       where e.status = 'active'
         and e.starts_at <= now()
@@ -1990,6 +2049,7 @@ const getEnrolledLessonWorkspace = async ({
       },
       modules: visibleModules,
       progressPercent: progress.percent,
+      requiredLessonProgress: progress,
       nextLessonId: visibleLessonIds[lessonIndex + 1] ?? null,
       previousLessonId: visibleLessonIds[lessonIndex - 1] ?? null,
     },
@@ -2064,7 +2124,15 @@ const getPreviewLessonWorkspace = async ({
   }
 
   const lessonIds = rows.map((row) => row.lesson_id);
+  const requiredLessonIds = rows
+    .filter((row) => row.is_required !== false)
+    .map((row) => row.lesson_id);
   const lessonIndex = lessonIds.indexOf(lessonId);
+  const requiredLessonProgress = calculateCourseProgress({
+    completedLessonIds: [],
+    lessonIds,
+    requiredLessonIds,
+  });
   const video = await resolveStudentLessonVideo(activeLesson);
 
   return {
@@ -2102,6 +2170,7 @@ const getPreviewLessonWorkspace = async ({
         })),
       })),
       progressPercent: 0,
+      requiredLessonProgress,
       nextLessonId: lessonIds[lessonIndex + 1] ?? null,
       previousLessonId: lessonIds[lessonIndex - 1] ?? null,
     },
@@ -2239,13 +2308,7 @@ const completeLessonInTransaction = async ({
       join lessons l on l.module_id = m.id
         and l.course_publication_id = cp.id
         and l.status = 'active'
-      left join lateral (
-        select min(lp.completed_at) as completed_at
-        from lesson_progress lp
-        join lessons completed_lesson on completed_lesson.id = lp.lesson_id
-        where lp.user_id = e.user_id
-          and completed_lesson.curriculum_key = l.curriculum_key
-      ) lp on true
+      ${getCourseScopedLessonCompletionJoin("e.user_id")}
       left join certificates cert on cert.user_id = e.user_id
         and cert.course_id = c.id
       where c.id = $2

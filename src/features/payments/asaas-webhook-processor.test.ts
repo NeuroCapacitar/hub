@@ -262,6 +262,31 @@ const resolvedPreparation = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe("Asaas webhook processor", () => {
+  it("persists the provider payment date without replacing Hub confirmation time", async () => {
+    const { context, queries } = createContext();
+    const processor = createAsaasWebhookProcessor({
+      applyPaidAccess: vi.fn(async () => undefined),
+      applyRevocation: vi.fn(async () => true),
+      enqueueMessage: vi.fn(async () => ({ id: null, inserted: false })),
+      resolveIdentity: vi.fn(),
+    });
+
+    await processEvent(
+      processor,
+      createPaymentEvent("PAYMENT_CREATED", {
+        paymentDate: "2026-09-20",
+        status: "PENDING",
+      }),
+      context
+    );
+
+    const paymentUpdate = queries.find(({ text }) =>
+      text.includes("provider_payment_date = coalesce")
+    );
+    expect(paymentUpdate?.text).toContain("$31::date");
+    expect(paymentUpdate?.values?.at(-1)).toBe("2026-09-20");
+  });
+
   it.each([
     ["PAYMENT_REFUNDED", "REFUNDED", "payment_refund"],
     ["PAYMENT_CHARGEBACK_DISPUTE", "DISPUTE", "payment_dispute"],
@@ -494,7 +519,7 @@ describe("Asaas webhook processor", () => {
     const paymentUpdate = queries.find(({ text }) =>
       text.includes("payment_installment_count")
     );
-    expect(paymentUpdate?.values?.at(-1)).toBe(3);
+    expect(paymentUpdate?.values?.at(-2)).toBe(3);
   });
 
   it("reviews an installment above the order snapshot limit without granting access", async () => {

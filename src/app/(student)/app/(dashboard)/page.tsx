@@ -23,7 +23,12 @@ import {
 } from "@/components/ui/empty";
 import { Progress } from "@/components/ui/progress";
 import { getActiveBannersData } from "@/features/banners/server";
+import {
+  COURSE_CARD_GRID_CLASS,
+  CourseCardLayout,
+} from "@/features/courses/course-card-layout";
 import { CourseCoverImage } from "@/features/courses/course-cover-image";
+import { COURSE_COVER_HOVER_ZOOM_CLASS } from "@/features/courses/course-cover-motion";
 import { CourseInterestButton } from "@/features/courses/course-interest-button";
 import {
   formatCourseWorkloadHours,
@@ -36,7 +41,9 @@ import type { StudentCatalogCourseCard } from "@/features/courses/server";
 import { getStudentCourseCatalog } from "@/features/courses/server";
 import { route } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
+import { getStudentDashboardGreeting } from "@/lib/student-dashboard-greeting";
 import { cn } from "@/lib/utils";
+import { ContinueLearningCard } from "./continue-learning-card";
 import { CoursePurchaseDialog } from "./course-purchase-dialog";
 import { FreeCourseEnrollmentDialog } from "./free-course-enrollment-dialog";
 import { StudentBannersCarousel } from "./student-banners-carousel";
@@ -63,29 +70,51 @@ export default async function StudentDashboardPage(): Promise<React.JSX.Element>
   const courses = await getStudentCourseCatalog(session.user.id);
   const groups = groupStudentCatalogCourses(courses);
   const { banners } = await getActiveBannersData();
+  const dashboardTitle =
+    session.role === "student"
+      ? getStudentDashboardGreeting(session.user.name)
+      : "Seu espaço de aprendizagem";
 
-  const _nextCourse = groups.active[0] ?? groups.completed[0] ?? courses[0];
+  const featuredActiveCourse =
+    groups.active.length === 1 &&
+    (groups.active[0]?.nextLessonId || groups.active[0]?.nextReleaseAt)
+      ? groups.active[0]
+      : null;
+  let activeCoursesContent: React.JSX.Element | null = null;
+  if (featuredActiveCourse) {
+    activeCoursesContent = (
+      <ContinueLearningCard course={featuredActiveCourse} />
+    );
+  } else if (groups.active.length > 0) {
+    activeCoursesContent = (
+      <CourseSection
+        courses={groups.active}
+        description="Retome sua jornada no ponto em que parou."
+        sectionId="student-courses-active"
+        title="Continue aprendendo"
+      />
+    );
+  }
 
   return (
     <PageContainer className="min-h-screen bg-background text-foreground">
       <div className="flex flex-col gap-8">
         {banners.length > 0 && <StudentBannersCarousel banners={banners} />}
 
-        <PageHeader title="Seu espaço de aprendizagem" />
+        <PageHeader title={dashboardTitle} visibleHeading={false} />
 
-        <div className="flex flex-col gap-12 pt-4">
+        {session.role === "student" ? (
+          <header className="pt-4 md:hidden">
+            <h1 className="type-page-title text-balance">{dashboardTitle}</h1>
+          </header>
+        ) : null}
+
+        <div className="flex flex-col gap-12">
           {courses.length === 0 ? (
             <EmptyCoursesState />
           ) : (
             <>
-              {groups.active.length > 0 ? (
-                <CourseSection
-                  courses={groups.active}
-                  description="Retome sua jornada no ponto em que parou."
-                  sectionId="student-courses-active"
-                  title="Continue aprendendo"
-                />
-              ) : null}
+              {activeCoursesContent}
 
               {groups.completed.length > 0 ? (
                 <CourseSection
@@ -229,7 +258,7 @@ function CourseGrid({
   courses: StudentCatalogCourseCard[];
 }): React.JSX.Element {
   return (
-    <div className="flex flex-wrap gap-5">
+    <div className={COURSE_CARD_GRID_CLASS}>
       {courses.map((course) => (
         <CourseCard course={course} key={course.courseId} />
       ))}
@@ -291,12 +320,43 @@ const getCatalogCardBadge = (course: StudentCatalogCourseCard) => {
   };
 };
 
+function isCourseCardSurfaceInteractive(
+  course: StudentCatalogCourseCard
+): boolean {
+  return course.accessStatus !== "revoked";
+}
+
+function CourseCardFallback({
+  interactive,
+  title,
+}: {
+  interactive: boolean;
+  title: string;
+}): React.JSX.Element {
+  return (
+    <div
+      className={cn(
+        "absolute inset-0 flex items-center justify-center bg-linear-to-br from-card via-card/95 to-primary/20",
+        interactive && COURSE_COVER_HOVER_ZOOM_CLASS
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className="select-none font-black text-6xl text-card-foreground/10 leading-none tracking-tight"
+      >
+        {getInitials(title)}
+      </span>
+    </div>
+  );
+}
+
 function CourseCard({
   course,
 }: {
   course: StudentCatalogCourseCard;
 }): React.JSX.Element {
   const hasActiveAccess = course.accessStatus === "active";
+  const isCardInteractive = isCourseCardSurfaceInteractive(course);
   const canOpenOfferDialog =
     !hasActiveAccess &&
     course.accessStatus !== "revoked" &&
@@ -339,116 +399,62 @@ function CourseCard({
     );
   }
 
-  return (
-    <article className="group relative flex aspect-[24/25] w-full max-w-[340px] flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-colors hover:border-primary/45">
-      <div className="absolute inset-0 z-0">
-        {course.thumbnailUrl ? (
-          <CourseCoverImage
-            alt=""
-            blurDataUrl={course.coverBlurDataUrl}
-            className="opacity-70 transition-transform duration-500 group-hover:scale-105"
-            sizes="340px"
-            src={course.thumbnailUrl}
+  const media = (
+    <>
+      {course.thumbnailUrl ? (
+        <CourseCoverImage
+          alt=""
+          blurDataUrl={course.coverBlurDataUrl}
+          sizes="320px"
+          src={course.thumbnailUrl}
+          zoomOnHover={isCardInteractive}
+        />
+      ) : (
+        <CourseCardFallback
+          interactive={isCardInteractive}
+          title={course.title}
+        />
+      )}
+      {hasActiveAccess ? null : (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
+          <HugeiconsIcon
+            aria-hidden="true"
+            className="text-card-foreground/80 drop-shadow-md"
+            icon={SquareLock02Icon}
+            size={36}
           />
-        ) : (
-          <>
-            <div className="absolute inset-0 bg-linear-to-br from-card via-card/95 to-primary/20" />
-            <div className="absolute top-[20%] -right-4 select-none opacity-10 transition-transform duration-500 group-hover:scale-105">
-              <span className="font-black text-[8rem] leading-none tracking-tighter">
-                {getInitials(course.title)}
-              </span>
-            </div>
-          </>
-        )}
-        <div className="absolute inset-0 bg-linear-to-b from-transparent via-card/80 to-card" />
-
-        {!hasActiveAccess && (
-          <div className="absolute inset-0 flex items-start justify-center bg-background/60 pt-24 backdrop-blur-[2px]">
-            <HugeiconsIcon
-              aria-hidden="true"
-              className="text-card-foreground/80 drop-shadow-md"
-              icon={SquareLock02Icon}
-              size={48}
-            />
-          </div>
-        )}
-      </div>
-
-      {offerCardTrigger}
-
-      <div
-        className={cn(
-          "relative z-10 flex min-h-0 flex-1 flex-col p-5 sm:p-6",
-          canOpenOfferDialog && "pointer-events-none"
-        )}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <Badge
-            className={
-              hasActiveAccess
-                ? ""
-                : "border-card-foreground/30 border-dashed bg-transparent text-card-foreground/80 hover:bg-transparent"
-            }
-            variant={accessBadge.variant}
-          >
-            {hasActiveAccess && (
-              <HugeiconsIcon
-                aria-hidden="true"
-                icon={CheckmarkCircle02Icon}
-                size={14}
-              />
-            )}
-            {accessBadge.label}
-          </Badge>
         </div>
+      )}
+    </>
+  );
+  const accessBadgeElement = (
+    <Badge
+      className={
+        hasActiveAccess
+          ? "shadow-sm"
+          : "border-card-foreground/30 border-dashed bg-card/95 text-card-foreground shadow-sm"
+      }
+      variant={accessBadge.variant}
+    >
+      {hasActiveAccess && (
+        <HugeiconsIcon
+          aria-hidden="true"
+          icon={CheckmarkCircle02Icon}
+          size={14}
+        />
+      )}
+      {accessBadge.label}
+    </Badge>
+  );
 
-        <div className="mt-auto pt-10">
-          <h3 className="line-clamp-2 font-bold text-lg">
-            {shouldLinkCardTitle ? (
-              <Link className="before:absolute before:inset-0" href={cardHref}>
-                {course.title}
-              </Link>
-            ) : (
-              <span>{course.title}</span>
-            )}
-          </h3>
-          <div className="mt-2 flex items-start gap-4">
-            <div className="flex-1">
-              {course.description ? (
-                <p className="line-clamp-2 text-card-foreground/70 text-sm leading-5">
-                  {course.description}
-                </p>
-              ) : null}
-            </div>
-            <div className="shrink-0 pt-0.5 text-right font-medium text-card-foreground/60 text-xs">
-              {course.lessonCount} aulas •{" "}
-              {formatCourseWorkloadHours(course.workloadHours)}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="relative z-20 flex shrink-0 flex-col justify-end p-5 pt-0 sm:p-6 sm:pt-0">
-        <div className="flex flex-col gap-5">
-          {hasActiveAccess ? (
-            <div>
-              <div className="mb-2 flex items-center justify-between text-card-foreground/60 text-xs">
-                <span>
-                  {course.completedCount}/{course.totalCount} obrigatórias
-                </span>
-                <span className="font-semibold text-card-foreground">
-                  {course.progressPercent}%
-                </span>
-              </div>
-              <Progress
-                aria-label={`Progresso no curso ${course.title}: ${course.progressPercent}%`}
-                className="h-1"
-                tone={course.progressPercent >= 100 ? "complete" : "active"}
-                value={course.progressPercent}
-              />
-            </div>
-          ) : null}
-
+  return (
+    <CourseCardLayout
+      interactive={isCardInteractive}
+      {...(canOpenOfferDialog
+        ? { contentClassName: "pointer-events-none" }
+        : {})}
+      actions={
+        <div className="pointer-events-auto relative z-20">
           <CourseAccessControls
             cardHref={cardHref}
             course={course}
@@ -456,8 +462,56 @@ function CourseCard({
             primaryHref={primaryHref}
           />
         </div>
+      }
+      badge={accessBadgeElement}
+      media={media}
+      overlay={offerCardTrigger}
+    >
+      <div className="flex min-h-full min-w-0 flex-1 flex-col gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <h3 className="line-clamp-2 font-bold text-lg leading-6">
+            {shouldLinkCardTitle ? (
+              <Link className="before:absolute before:inset-0" href={cardHref}>
+                {course.title}
+              </Link>
+            ) : (
+              course.title
+            )}
+          </h3>
+
+          {course.description ? (
+            <p className="line-clamp-1 text-card-foreground/70 text-sm leading-5">
+              {course.description}
+            </p>
+          ) : null}
+
+          {course.accessStatus === "none" ? (
+            <p className="font-medium text-card-foreground/60 text-xs">
+              {course.lessonCount} aulas ·{" "}
+              {formatCourseWorkloadHours(course.workloadHours)}
+            </p>
+          ) : null}
+        </div>
+        {hasActiveAccess ? (
+          <div>
+            <div className="mb-2 flex items-center justify-between text-card-foreground/60 text-xs">
+              <span>
+                {course.completedCount}/{course.totalCount} obrigatórias
+              </span>
+              <span className="font-semibold text-card-foreground">
+                {course.progressPercent}%
+              </span>
+            </div>
+            <Progress
+              aria-label={`Progresso no curso ${course.title}: ${course.progressPercent}%`}
+              className="h-1"
+              tone={course.progressPercent >= 100 ? "complete" : "active"}
+              value={course.progressPercent}
+            />
+          </div>
+        ) : null}
       </div>
-    </article>
+    </CourseCardLayout>
   );
 }
 
@@ -474,10 +528,10 @@ function CourseAccessControls({
 }): React.JSX.Element {
   if (hasActiveAccess) {
     return (
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="grid w-full grid-cols-2 gap-2">
         <Button
           asChild
-          className="flex-1 justify-start sm:justify-center"
+          className="w-full min-w-0 justify-center whitespace-normal"
           size="sm"
         >
           <Link href={primaryHref}>
@@ -496,7 +550,7 @@ function CourseAccessControls({
         </Button>
         <Button
           asChild
-          className="flex-1 justify-start sm:justify-center"
+          className="w-full min-w-0 justify-center whitespace-normal"
           size="sm"
           variant="secondary"
         >

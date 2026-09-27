@@ -120,8 +120,6 @@ describe("admin read projections", () => {
     query.mockResolvedValue({
       rows: [
         {
-          certificate_signer_name: "Responsável",
-          certificate_signer_role: "Diretora",
           cnpj: "04.252.011/0001-10",
           display_name: "Empresa",
           legal_name: "Empresa LTDA",
@@ -134,8 +132,6 @@ describe("admin read projections", () => {
 
     await expect(getAdminSettingsData()).resolves.toEqual({
       settings: {
-        certificateSignerName: "Responsável",
-        certificateSignerRole: "Diretora",
         issuerCnpj: "04.252.011/0001-10",
         issuerDisplayName: "Empresa",
         issuerLegalName: "Empresa LTDA",
@@ -148,7 +144,10 @@ describe("admin read projections", () => {
     expect(requirePermission).toHaveBeenCalledWith("viewSettings");
     expect(query).toHaveBeenCalledOnce();
     expect(String(query.mock.calls[0]?.[0]).toLowerCase()).toContain(
-      "full outer join"
+      "from certificate_issuer_profiles"
+    );
+    expect(String(query.mock.calls[0]?.[0]).toLowerCase()).not.toContain(
+      "app_settings"
     );
   });
 
@@ -157,8 +156,6 @@ describe("admin read projections", () => {
     query.mockResolvedValue({
       rows: [
         {
-          certificate_signer_name: null,
-          certificate_signer_role: null,
           cnpj: "04.252.011/0001-11",
           display_name: null,
           legal_name: "Empresa LTDA",
@@ -182,6 +179,28 @@ describe("admin read projections", () => {
     });
   });
 
+  it("treats whitespace-only issuer names as incomplete", async () => {
+    query.mockResolvedValue({
+      rows: [
+        {
+          cnpj: "04.252.011/0001-10",
+          display_name: "  ",
+          legal_name: " \t",
+          last_changed_actor_email: null,
+          last_changed_actor_name: null,
+          last_changed_at: null,
+        },
+      ],
+    });
+
+    await expect(getAdminSettingsData()).resolves.toMatchObject({
+      settings: {
+        issuerProfileComplete: false,
+        issuerProfileIssues: ["legal_name_missing", "display_name_missing"],
+      },
+    });
+  });
+
   it("keeps overview aggregates global", async () => {
     query.mockResolvedValue({
       rows: [
@@ -189,8 +208,8 @@ describe("admin read projections", () => {
           active_enrollments: 17,
           courses: 4,
           failed_webhooks: 23,
-          paid_orders: 31,
-          paid_revenue_in_cents: "123456",
+          confirmed_sale_orders: 31,
+          gross_confirmed_sales_revenue_in_cents: "123456",
           pending_orders: 9,
           retryable_webhooks: 0,
           students: 12,
@@ -202,8 +221,8 @@ describe("admin read projections", () => {
       activeEnrollments: 17,
       courses: 4,
       failedWebhooks: 23,
-      paidOrders: 31,
-      paidRevenueInCents: 123_456,
+      confirmedSaleOrders: 31,
+      grossConfirmedSalesRevenueInCents: 123_456,
       pendingOrders: 9,
       students: 12,
       retryableWebhooks: 0,
@@ -220,7 +239,7 @@ describe("admin read projections", () => {
     expect(aggregateSql).not.toContain("limit 8");
     expect(
       query.mock.calls.some(([sql]) =>
-        String(sql).toLowerCase().includes("sum(coalesce(paid_amount_in_cents")
+        String(sql).toLowerCase().includes("sum(paid_amount_in_cents)")
       )
     ).toBe(true);
   });
@@ -247,13 +266,16 @@ describe("admin read projections", () => {
         return {
           rows: [
             {
-              abandoned_checkout_orders: 6,
+              closed_checkout_attempts: 6,
+              active_checkout_count: 2,
+              active_checkout_potential_in_cents: "20000",
+              checkout_paid_awaiting_confirmation_count: 1,
               disputed_orders: 2,
               failed_webhooks: 1,
               paid_orders: 3,
-              paid_revenue_in_cents: "30000",
+              confirmed_sale_orders: 6,
+              gross_confirmed_sales_revenue_in_cents: "30000",
               pending_orders: 4,
-              pending_revenue_in_cents: "40000",
               refunded_orders: 1,
               retryable_webhooks: 4,
               total_orders: 10,
@@ -268,15 +290,18 @@ describe("admin read projections", () => {
     const data = await getAdminFinancialOverviewData();
 
     expect(data.financialHealth).toEqual({
-      abandonedCheckoutOrders: 6,
-      averagePaidTicketInCents: 10_000,
-      checkoutConversionPercent: 30,
+      closedCheckoutAttempts: 6,
+      activeCheckoutCount: 2,
+      activeCheckoutPotentialInCents: 20_000,
+      checkoutPaidAwaitingConfirmationCount: 1,
+      averageConfirmedSaleTicketInCents: 5000,
+      checkoutConversionPercent: 60,
       disputedOrders: 2,
       failedWebhooks: 1,
       paidOrders: 3,
-      paidRevenueInCents: 30_000,
+      confirmedSaleOrders: 6,
+      grossConfirmedSalesRevenueInCents: 30_000,
       pendingOrders: 4,
-      pendingRevenueInCents: 40_000,
       readyWebhooks: 0,
       refundedOrders: 1,
       retryableWebhooks: 4,
@@ -292,11 +317,19 @@ describe("admin read projections", () => {
     expect(healthSql).toContain("status = 'failed'");
     expect(healthSql).toContain("status = 'retryable'");
     expect(healthSql).toContain("ready_webhooks");
-    expect(healthSql).toContain("abandoned_checkout_orders");
-    expect(healthSql).toContain("checkout_status not in");
+    expect(healthSql).toContain("closed_checkout_attempts");
+    expect(healthSql).toContain("checkout_status in ('pending', 'creating')");
     expect(healthSql).toContain(
-      "sum(coalesce(paid_amount_in_cents, amount_in_cents))"
+      "upper(provider_checkout_status) is distinct from 'PAID'"
     );
+    expect(healthSql).toContain("provider_checkout_status");
+    expect(healthSql).toContain("checkout_status = 'active'");
+    expect(healthSql).toContain("provider_checkout_id is not null");
+    expect(healthSql).toContain("checkout_url is not null");
+    expect(healthSql).toContain("provider_payment_id is null");
+    expect(healthSql).toContain("provider_payment_status is null");
+    expect(healthSql).toContain("status in ('pending', 'cancelled')");
+    expect(healthSql).toContain("sum(paid_amount_in_cents)");
   });
 
   it("loads the overview and orders projections independently", async () => {
@@ -354,64 +387,75 @@ describe("admin read projections", () => {
   });
 
   it("projects period analysis with explicit gross, fee and refund values", async () => {
-    query.mockImplementation((sql: string) => {
-      if (sql.includes("gross_received_in_cents")) {
-        return {
-          rows: [
-            {
-              fees_in_cents: "500",
-              gross_received_in_cents: "10000",
-              paid_orders: 2,
-              pending_orders: 3,
-              pending_revenue_in_cents: "15000",
-              refunded_orders: 1,
-              refunded_revenue_in_cents: "500",
-            },
-          ],
-        };
+    query.mockImplementation(
+      (request: string | { text: string; values?: unknown[] }) => {
+        const sql = typeof request === "string" ? request : request.text;
+        if (sql.includes("gross_confirmed_sales_in_cents")) {
+          return {
+            rows: [
+              {
+                fees_in_cents: "500",
+                gross_confirmed_sales_in_cents: "10000",
+                active_checkout_count: 2,
+                active_checkout_potential_in_cents: "15000",
+                pending_partial_refund_review_count: 1,
+                provider_payment_date_fallback_orders: 1,
+                confirmed_sale_orders: 2,
+                refunded_orders: 1,
+                refunded_revenue_in_cents: "500",
+              },
+            ],
+          };
+        }
+        if (sql.includes("retryable_webhooks")) {
+          return { rows: [{}] };
+        }
+        return { rows: [] };
       }
-      if (sql.includes("retryable_webhooks")) {
-        return { rows: [{}] };
-      }
-      return { rows: [] };
-    });
+    );
 
     await expect(getAdminFinancialAnalysisData("30d")).resolves.toEqual({
       analytics: {
-        averageReceivedTicketInCents: 5000,
+        averageConfirmedSaleTicketInCents: 5000,
         estimatedNetRevenueInCents: 9000,
         feesInCents: 500,
-        grossReceivedInCents: 10_000,
+        grossConfirmedSalesInCents: 10_000,
         missingFeeEvidenceOrders: 0,
-        paidOrders: 2,
-        pendingOrders: 3,
-        pendingRevenueInCents: 15_000,
+        confirmedSaleOrders: 2,
+        pendingPartialRefundReviewCount: 1,
+        activeCheckoutCount: 2,
+        activeCheckoutPotentialInCents: 15_000,
         period: "30d",
         periodLabel: "Últimos 30 dias",
-        refundRatePercent: 50,
+        providerPaymentDateFallbackOrders: 1,
+        refundReceiptsRatioPercent: 50,
         refundedOrders: 1,
         refundedRevenueInCents: 500,
       },
     });
     expect(requirePermission).toHaveBeenCalledWith("viewFinancialAnalysis");
-    const analyticsSql = String(
-      query.mock.calls.find(([sql]) =>
-        String(sql).includes("gross_received_in_cents")
-      )?.[0]
+    const analyticsCall = query.mock.calls.find(([request]) =>
+      (typeof request === "string" ? request : request.text).includes(
+        "gross_confirmed_sales_in_cents"
+      )
     );
+    const analyticsSql =
+      typeof analyticsCall?.[0] === "string"
+        ? analyticsCall[0]
+        : ((analyticsCall?.[0] as { text: string } | undefined)?.text ?? "");
     expect(analyticsSql).toContain("with received_orders as");
-    expect(analyticsSql).toContain(
-      "coalesce(paid_amount_in_cents, amount_in_cents)"
-    );
-    expect(analyticsSql).toContain("status = 'pending'");
-    expect(analyticsSql).toContain("checkout_status not in");
-    expect(analyticsSql).toContain(
-      "coalesce(paid_at, created_at) <= $2::timestamptz"
-    );
+    expect(analyticsSql).toContain("sum(paid_amount_in_cents)");
+    expect(analyticsSql).toContain("paid_amount_in_cents is not null");
+    expect(analyticsSql).toContain("checkout_status = 'active'");
+    expect(analyticsSql).toContain("provider_checkout_id is not null");
+    expect(analyticsSql).toContain("checkout_url is not null");
+    expect(analyticsSql).toContain("provider_payment_id is null");
+    expect(analyticsSql).toContain("provider_payment_status is null");
+    expect(analyticsSql).toContain("provider_payment_date::timestamp");
+    expect(analyticsSql).toContain("'America/Sao_Paulo'");
+    expect(analyticsSql).toContain("type = 'partial_refund'");
     expect(
-      query.mock.calls.find(([sql]) =>
-        String(sql).includes("gross_received_in_cents")
-      )?.[1]
+      (analyticsCall?.[0] as { values?: unknown[] } | undefined)?.values
     ).toEqual([expect.any(Date), expect.any(Date)]);
   });
 
@@ -545,7 +589,7 @@ describe("admin read projections", () => {
           rows: [
             {
               active_enrollment_count: 2,
-              paid_order_count: 3,
+              confirmed_sale_order_count: 3,
               valid_certificate_count: 1,
             },
           ],
@@ -1112,7 +1156,7 @@ describe("admin read projections", () => {
             {
               course_id: courseId,
               course_title: "Course one",
-              paid_orders: 4,
+              confirmed_sale_orders: 4,
               total_orders: 5,
               total_revenue_in_cents: 51_600,
             },
@@ -1130,7 +1174,7 @@ describe("admin read projections", () => {
         {
           courseId,
           courseTitle: "Course one",
-          paidOrders: 4,
+          confirmedSaleOrders: 4,
           totalOrders: 5,
           totalRevenueInCents: 51_600,
         },
@@ -1142,9 +1186,7 @@ describe("admin read projections", () => {
     );
     expect(revenueCall?.[1]).toBeUndefined();
     expect(String(revenueCall?.[0])).toContain("group by c.id, c.title");
-    expect(String(revenueCall?.[0])).toContain(
-      "coalesce(o.paid_amount_in_cents, o.amount_in_cents)"
-    );
+    expect(String(revenueCall?.[0])).toContain("then o.paid_amount_in_cents");
     expect(requirePermission).toHaveBeenCalledWith("viewFinancials");
   });
 
@@ -1273,7 +1315,7 @@ describe("admin read projections", () => {
     expect(String(orderCall?.[0])).toContain("o.customer_name ilike");
   });
 
-  it("applies status and payment method filters before paginating orders", async () => {
+  it("applies status, payment method and refund filters before paginating orders", async () => {
     query.mockImplementation((sql: string) => {
       if (sql.includes("from orders o")) {
         return { rows: [] };
@@ -1286,18 +1328,75 @@ describe("admin read projections", () => {
       checkout: "open",
       page: 2,
       paymentMethod: "CREDIT_CARD",
+      refundStatus: "failed",
       status: "pending",
     });
 
     const orderCall = query.mock.calls.find(([sql]) =>
       String(sql).includes("from orders o")
     );
-    expect(orderCall?.[1]).toEqual(["pending", "CREDIT_CARD", 21, 20]);
-    expect(String(orderCall?.[0])).toContain("o.status = $1");
-    expect(String(orderCall?.[0])).toContain("upper(o.payment_method) = $2");
+    expect(orderCall?.[1]).toEqual([
+      "failed",
+      "pending",
+      "CREDIT_CARD",
+      21,
+      20,
+    ]);
+    expect(String(orderCall?.[0])).toContain("o.status = $2");
+    expect(String(orderCall?.[0])).toContain("rr.status = $1");
+    expect(String(orderCall?.[0])).toContain("upper(o.payment_method) = $3");
     expect(String(orderCall?.[0])).toContain(
-      "o.checkout_status not in ('failed', 'cancelled', 'expired')"
+      "o.checkout_status in ('pending', 'creating', 'active')"
     );
+    const countCall = query.mock.calls.find(([sql]) =>
+      String(sql).includes("select count(*)::int as total_count")
+    );
+    expect(String(countCall?.[0])).toContain(
+      "left join refund_requests rr on rr.order_id = o.id"
+    );
+  });
+
+  it("filters paid Asaas orders whose provider payment has no local correlation", async () => {
+    query.mockImplementation((sql: string) =>
+      sql.includes("from orders o") ? { rows: [] } : { rows: [] }
+    );
+
+    await getAdminFinancialOrdersData({
+      page: 1,
+      paymentEvidence: "uncorrelated",
+    });
+
+    const orderCall = query.mock.calls.find(([sql]) =>
+      String(sql).includes("from orders o")
+    );
+    expect(String(orderCall?.[0])).toContain("o.provider = 'asaas'");
+    expect(String(orderCall?.[0])).toContain("o.status = 'paid'");
+    expect(String(orderCall?.[0])).toContain("o.provider_payment_id is null");
+    expect(String(orderCall?.[0])).toContain(
+      "o.provider_installment_id is null"
+    );
+  });
+
+  it("keeps canceled and expired checkouts visible without restricting order status to pending", async () => {
+    query.mockImplementation((sql: string) =>
+      sql.includes("from orders o") ? { rows: [] } : { rows: [] }
+    );
+
+    await getAdminFinancialOrdersData({ checkout: "closed", page: 1 });
+
+    const orderCall = query.mock.calls.find(
+      ([sql, values]) =>
+        String(sql).includes("from orders o") &&
+        (values as unknown[]).length === 2
+    );
+    const sql = String(orderCall?.[0]);
+
+    expect(orderCall?.[1]).toEqual([21, 0]);
+    expect(sql).toContain("o.status in ('pending', 'cancelled')");
+    expect(sql).toContain(
+      "o.checkout_status in ('failed', 'cancelled', 'expired')"
+    );
+    expect(sql).not.toContain("o.status = $1");
   });
 
   it("keeps blank payment methods in the unknown bucket, not the other bucket", async () => {
@@ -1369,7 +1468,7 @@ describe("admin read projections", () => {
       rows: [
         {
           active_enrollment_count: 57,
-          paid_order_count: 83,
+          confirmed_sale_order_count: 83,
           valid_certificate_count: 41,
         },
       ],
@@ -1377,7 +1476,7 @@ describe("admin read projections", () => {
 
     await expect(getAdminCourseOverviewSummary(courseId)).resolves.toEqual({
       activeEnrollmentCount: 57,
-      paidOrderCount: 83,
+      confirmedSaleOrderCount: 83,
       validCertificateCount: 41,
     });
 
@@ -1395,7 +1494,7 @@ describe("admin read projections", () => {
     expect(sql).toContain("c.status = 'active'");
     expect(sql).toContain("cp.status = 'published'");
     expect(sql).toContain(
-      "count(*)::int from orders where course_id = $1 and status = 'paid'"
+      "count(*)::int from orders where course_id = $1 and status in ('paid', 'refunded', 'disputed')"
     );
     expect(sql).toContain(
       "count(*)::int from certificates where course_id = $1 and status = 'valid'"
@@ -1812,8 +1911,16 @@ describe("admin read projections", () => {
             {
               disputed_orders: 2,
               failed_refunds: 1,
+              failed_refund_exposure_in_cents: "12900",
+              oldest_failed_refund_at: new Date("2026-09-20T12:00:00.000Z"),
               pending_refunds: 4,
-              pending_revenue_in_cents: "45000",
+              pending_refund_exposure_in_cents: "51600",
+              oldest_pending_refund_at: new Date("2026-09-19T12:00:00.000Z"),
+              uncertain_refund_exposure_in_cents: "25800",
+              oldest_uncertain_refund_at: new Date("2026-09-18T12:00:00.000Z"),
+              active_checkout_count: 3,
+              active_checkout_potential_in_cents: "45000",
+              checkout_paid_awaiting_confirmation: 2,
               refunded_orders: 5,
             },
           ],
@@ -1956,9 +2063,17 @@ describe("admin read projections", () => {
       financial: {
         disputedOrderCount: 2,
         failedRefundCount: 1,
+        failedRefundExposureInCents: 12_900,
+        oldestFailedRefundAt: new Date("2026-09-20T12:00:00.000Z"),
         pendingPaymentReviewCount: 3,
         pendingRefundCount: 4,
-        pendingRevenueInCents: 45_000,
+        pendingRefundExposureInCents: 51_600,
+        oldestPendingRefundAt: new Date("2026-09-19T12:00:00.000Z"),
+        activeCheckoutCount: 3,
+        activeCheckoutPotentialInCents: 45_000,
+        uncertainRefundExposureInCents: 25_800,
+        oldestUncertainRefundAt: new Date("2026-09-18T12:00:00.000Z"),
+        checkoutPaidAwaitingConfirmationCount: 2,
         refundedOrderCount: 5,
         uncertainCheckoutCount: 6,
         uncertainRefundCount: 7,

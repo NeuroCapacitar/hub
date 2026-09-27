@@ -38,9 +38,17 @@ export default function PrivacyNoticePage(): React.JSX.Element {
           <p>
             Registros brutos ficam por até 12 meses e métricas agregadas por até
             13 meses. Mensagens enviadas pelo formulário de suporte ficam
-            registradas por até 90 dias para atendimento. Para exercer direitos
-            sobre seus dados, use o canal de suporte informado pela
-            NeuroCapacitar.
+            registradas por até 90 dias para atendimento. A prévia de um
+            Certificado é removida quando ele é revogado. O PDF e os dados
+            detalhados do certificado revogado são removidos após 60 dias. Para
+            continuar confirmando a revogação, o Hub mantém o hash do código e a
+            data enquanto a validação pública desse código estiver ativa. Na
+            conclusão do curso já registrada, conserva um marcador booleano de
+            emissão para impedir duplicidade. Esses marcadores não guardam o
+            código original ou o conteúdo do Certificado, mas o hash não é
+            tratado como dado anonimizado. O registro detalhado, nome, snapshot,
+            motivo e auditoria são removidos. Para exercer direitos sobre seus
+            dados, use o canal de suporte informado pela NeuroCapacitar.
           </p>
         </section>
       </article>

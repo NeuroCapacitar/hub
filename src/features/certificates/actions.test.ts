@@ -40,6 +40,11 @@ import { CertificateDomainError } from "./errors";
 describe("certificate server actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    dependencies.revokeCertificate.mockResolvedValue({ previewPurged: true });
+    dependencies.reissueCertificate.mockResolvedValue({
+      id: "certificate-new",
+      previousPreviewPurged: true,
+    });
     dependencies.requirePermission.mockResolvedValue({
       role: "admin",
       user: { id: "admin-1" },
@@ -161,6 +166,32 @@ describe("certificate server actions", () => {
     expect(dependencies.scheduleOutboxDrainAfterResponse).toHaveBeenCalledTimes(
       2
     );
+  });
+
+  it("keeps a committed revocation successful when preview cleanup needs retry", async () => {
+    dependencies.revokeCertificate.mockResolvedValue({ previewPurged: false });
+
+    await expect(
+      revokeCertificateAction({ status: "idle" }, validChangeFormData())
+    ).resolves.toEqual({
+      message: "Certificado revogado. A prévia será removida automaticamente.",
+      status: "success",
+    });
+  });
+
+  it("reports deferred preview cleanup after a successful reissue", async () => {
+    dependencies.reissueCertificate.mockResolvedValue({
+      id: "certificate-new",
+      previousPreviewPurged: false,
+    });
+
+    await expect(
+      reissueCertificateAction({ status: "idle" }, validChangeFormData())
+    ).resolves.toEqual({
+      message:
+        "Certificado reemitido. A prévia anterior será removida automaticamente.",
+      status: "success",
+    });
   });
 
   it("requires Admin and returns the typed historical reconciliation result", async () => {

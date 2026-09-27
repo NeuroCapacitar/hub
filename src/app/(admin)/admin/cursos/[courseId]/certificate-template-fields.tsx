@@ -58,14 +58,10 @@ interface CertificateTemplateFieldsProps {
   onFieldInteractionStart: (() => void) | undefined;
   onFieldSelect: (field: CertificateField | null) => void;
   onSignatureFileSelect: (file: File | null) => void;
-  onSignerNameChange: (value: string) => void;
-  onSignerRoleChange: (value: string) => void;
   selectedField: CertificateField | null;
   signatureFile: File | null;
   signatureImageName?: string | null | undefined;
   signaturePreviewUrl: string | null;
-  signerName: string;
-  signerRole: string;
 }
 
 type GeometryKey = "height" | "width" | "x" | "y";
@@ -376,13 +372,9 @@ const CertificateFieldInspector = ({
   onFieldInteractionStart,
   onFieldSelect,
   onSignatureFileSelect,
-  onSignerNameChange,
-  onSignerRoleChange,
   signatureFile,
   signatureImageName,
   signaturePreviewUrl,
-  signerName,
-  signerRole,
 }: Omit<
   CertificateTemplateFieldsProps,
   | "backgroundFile"
@@ -415,37 +407,6 @@ const CertificateFieldInspector = ({
           </p>
         </div>
       </div>
-
-      {field.field === "signerName" ? (
-        <InlinePropertyRow
-          htmlFor="certificate-signer-name"
-          label="Nome do responsável"
-        >
-          <Input
-            autoComplete="name"
-            className="h-10 text-base lg:h-7 lg:text-xs"
-            form={formId}
-            id="certificate-signer-name"
-            name="signerName"
-            onChange={(event) => onSignerNameChange(event.target.value)}
-            value={signerName}
-          />
-        </InlinePropertyRow>
-      ) : null}
-
-      {field.field === "signerRole" ? (
-        <InlinePropertyRow htmlFor="certificate-signer-role" label="Cargo">
-          <Input
-            autoComplete="organization-title"
-            className="h-10 text-base lg:h-7 lg:text-xs"
-            form={formId}
-            id="certificate-signer-role"
-            name="signerRole"
-            onChange={(event) => onSignerRoleChange(event.target.value)}
-            value={signerRole}
-          />
-        </InlinePropertyRow>
-      ) : null}
 
       {field.field === "signatureImage" ? (
         <InlinePropertyRow
@@ -609,10 +570,8 @@ const CertificateFieldInspector = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="Helvetica">Helvetica</SelectItem>
-                    <SelectItem value="Helvetica-Bold">
-                      Helvetica Bold
-                    </SelectItem>
+                    <SelectItem value="Helvetica">Inter</SelectItem>
+                    <SelectItem value="Helvetica-Bold">Inter Bold</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -684,14 +643,10 @@ export const CertificateTemplateFields = memo(
     onFieldSelect,
     onBackgroundFileSelect,
     onSignatureFileSelect,
-    onSignerNameChange,
-    onSignerRoleChange,
     selectedField,
     signatureFile,
     signatureImageName,
     signaturePreviewUrl,
-    signerName,
-    signerRole,
   }: CertificateTemplateFieldsProps): React.JSX.Element {
     const selected = fields.find((field) => field.field === selectedField);
     let inspector: React.JSX.Element;
@@ -705,13 +660,9 @@ export const CertificateTemplateFields = memo(
           onFieldInteractionStart={onFieldInteractionStart}
           onFieldSelect={(field) => onFieldSelect(field)}
           onSignatureFileSelect={onSignatureFileSelect}
-          onSignerNameChange={onSignerNameChange}
-          onSignerRoleChange={onSignerRoleChange}
           signatureFile={signatureFile}
           signatureImageName={signatureImageName}
           signaturePreviewUrl={signaturePreviewUrl}
-          signerName={signerName}
-          signerRole={signerRole}
         />
       );
     } else if (backgroundSelected) {
@@ -747,22 +698,6 @@ export const CertificateTemplateFields = memo(
               selectedFile={backgroundFile}
             />
           </div>
-        )}
-        {selectedField === "signerName" ? null : (
-          <input
-            form={formId}
-            name="signerName"
-            type="hidden"
-            value={signerName}
-          />
-        )}
-        {selectedField === "signerRole" ? null : (
-          <input
-            form={formId}
-            name="signerRole"
-            type="hidden"
-            value={signerRole}
-          />
         )}
         {inspector}
       </section>

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   commands: [] as Array<{ input: Record<string, unknown> }>,
   getServerEnv: vi.fn(),
+  send: vi.fn(),
   signed: [] as Array<{
     command: { input: Record<string, unknown> };
     options: Record<string, unknown>;
@@ -17,7 +18,13 @@ vi.mock("@/lib/env", () => ({ getServerEnv: state.getServerEnv }));
 vi.mock("@aws-sdk/client-s3", () => ({
   CopyObjectCommand: class {},
   DeleteObjectsCommand: class {},
-  GetObjectCommand: class {},
+  GetObjectCommand: class {
+    input: Record<string, unknown>;
+
+    constructor(input: Record<string, unknown>) {
+      this.input = input;
+    }
+  },
   HeadObjectCommand: class {},
   ListObjectsV2Command: class {},
   PutObjectCommand: class {
@@ -28,7 +35,9 @@ vi.mock("@aws-sdk/client-s3", () => ({
       state.commands.push(this);
     }
   },
-  S3Client: class {},
+  S3Client: class {
+    send = state.send;
+  },
 }));
 vi.mock("@aws-sdk/s3-request-presigner", () => ({
   getSignedUrl: vi.fn((_client, command, options) => {
@@ -40,6 +49,8 @@ vi.mock("@aws-sdk/s3-request-presigner", () => ({
 import {
   createLessonResourceUploadUrl,
   createLessonResourceUploadUrlForReference,
+  createR2ObjectReadUrl,
+  uploadPrivateR2Object,
 } from "./r2";
 
 const env = {
@@ -55,6 +66,7 @@ describe("R2 lesson resource signing", () => {
   beforeEach(() => {
     state.commands.length = 0;
     state.signed.length = 0;
+    state.send.mockReset().mockResolvedValue({});
     state.getServerEnv.mockReturnValue(env);
   });
 
@@ -100,5 +112,32 @@ describe("R2 lesson resource signing", () => {
       Key: reference.key,
     });
     expect(state.signed[0]?.command.input).not.toHaveProperty("ContentType");
+  });
+
+  it("signs a private cache policy for short-lived image reads", async () => {
+    await createR2ObjectReadUrl({
+      key: "certificates/templates/course-1/background.webp",
+      responseCacheControl: "private, max-age=240",
+    });
+
+    expect(state.signed[0]?.command.input).toMatchObject({
+      Bucket: "neuro-prod-private",
+      Key: "certificates/templates/course-1/background.webp",
+      ResponseCacheControl: "private, max-age=240",
+    });
+    expect(state.signed[0]?.options).toMatchObject({ expiresIn: 5 * 60 });
+  });
+
+  it("stores final image assets with private cache metadata before publication", async () => {
+    await uploadPrivateR2Object({
+      body: Buffer.from("image"),
+      contentType: "image/webp",
+      key: "certificates/templates/course-1/background.webp",
+    });
+
+    expect(state.commands[0]?.input).toMatchObject({
+      CacheControl: "private, max-age=240",
+      ContentType: "image/webp",
+    });
   });
 });

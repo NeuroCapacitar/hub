@@ -100,7 +100,7 @@ export function PaymentReviewHistorySheet({
               return (
                 <article
                   aria-labelledby={headingId}
-                  className="rounded-lg border p-4"
+                  className="rounded-card border p-4"
                   key={review.id}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -202,7 +202,7 @@ function PaymentReviewAmountComparison({
   }
 
   return (
-    <div className="mt-3 rounded-lg bg-muted/30 p-3">
+    <div className="mt-3 rounded-card bg-muted/30 p-3">
       <p className="font-medium text-sm">Comparação de valores</p>
       <dl className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
@@ -235,8 +235,8 @@ function PaymentReviewTechnicalDetails({
   technicalReason: string;
 }): React.JSX.Element {
   return (
-    <details className="mt-3 rounded-md border border-dashed p-3">
-      <summary className="cursor-pointer rounded-md font-medium text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+    <details className="mt-3 rounded-detail border border-dashed p-3">
+      <summary className="cursor-pointer rounded-detail font-medium text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
         Evidência técnica
       </summary>
       <dl className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -356,7 +356,7 @@ export function PaymentReviewOperation({
   };
 
   return (
-    <article aria-labelledby={headingId} className="rounded-lg border p-4">
+    <article aria-labelledby={headingId} className="rounded-card border p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-medium text-sm" id={headingId}>

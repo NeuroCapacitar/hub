@@ -95,8 +95,8 @@ export const getCourseAccessPresentation = ({
       tone: "expiring",
       label:
         daysUntilExpiration === 0
-          ? "Acesso expira hoje"
-          : `Acesso expira em ${daysUntilExpiration} ${
+          ? "Expira hoje"
+          : `Expira em ${daysUntilExpiration} ${
               daysUntilExpiration === 1 ? "dia" : "dias"
             }`,
       helper: "Priorize as próximas aulas deste curso.",
@@ -138,7 +138,7 @@ export const getStudentCatalogAccessPresentation = ({
       tone: "revoked",
       label:
         revokedReason === "payment_dispute"
-          ? "Acesso em analise"
+          ? "Acesso em análise"
           : "Acesso encerrado",
       helper: "Fale com o suporte para regularizar este acesso.",
     };

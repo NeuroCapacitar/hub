@@ -323,7 +323,6 @@ describe("admin authoring", () => {
     expect(providerStates).toEqual([
       { connectionHeld: false, transactionOpen: false },
       { connectionHeld: false, transactionOpen: false },
-      { connectionHeld: false, transactionOpen: false },
     ]);
     expect(query).toHaveBeenCalledWith("commit");
     expect(query).toHaveBeenCalledWith("rollback");
@@ -370,9 +369,9 @@ describe("admin authoring", () => {
       publishCoursePublication({ actorUserId: "admin-1", courseId: "course-1" })
     ).resolves.toBe("published");
 
-    expect(publishR2Object).toHaveBeenCalledWith(coverImage.original.key);
     expect(publishR2Object).toHaveBeenCalledWith(coverImage.variants.card.key);
     expect(publishR2Object).toHaveBeenCalledWith(coverImage.variants.thumb.key);
+    expect(publishR2Object).not.toHaveBeenCalledWith(coverImage.original.key);
     expect(
       query.mock.calls.some(([sql]) =>
         COURSE_ACTIVATION_UPDATE_PATTERN.test(String(sql))
@@ -823,6 +822,84 @@ describe("admin authoring", () => {
     );
   });
 
+  it("keeps the previous cover available for the public-cache grace period", async () => {
+    const courseId = "c989d54d-d13f-46a1-89ed-2069d7c1c45b";
+    const previousCover = {
+      variants: {
+        card: {
+          contentType: "image/webp",
+          height: 720,
+          key: "courses/course-1/cover/previous-card.webp",
+          sizeBytes: 10,
+          width: 1280,
+        },
+      },
+    };
+    const nextCover = {
+      variants: {
+        card: {
+          contentType: "image/webp",
+          height: 720,
+          key: "courses/course-1/cover/next-card.webp",
+          sizeBytes: 12,
+          width: 1280,
+        },
+      },
+    };
+    query.mockImplementation((sql: string) => {
+      if (sql.includes("select cover_image_json from courses")) {
+        return { rows: [{ cover_image_json: previousCover }] };
+      }
+      if (sql.includes("as should_publish")) {
+        return {
+          rows: [
+            {
+              access_duration_months: 12,
+              cover_image_json: previousCover,
+              description: null,
+              max_release_delay_days: 0,
+              payment_allow_credit_card: true,
+              payment_allow_pix: true,
+              payment_max_installment_count: 3,
+              price_in_cents: 1000,
+              sales_status: "closed",
+              should_publish: true,
+              title: "Curso existente",
+              workload_hours_override: null,
+            },
+          ],
+        };
+      }
+      return versioningQueryResult(sql) ?? { rows: [] };
+    });
+    uploadCourseCoverFile.mockResolvedValue(nextCover);
+    const formData = new FormData();
+    formData.set("courseId", courseId);
+    formData.set("title", "Curso existente");
+    formData.set("accessDurationMonths", "12");
+    formData.set("price", "10,00");
+    formData.set(
+      "coverUpload",
+      JSON.stringify({
+        aggregateId: courseId,
+        contentType: "image/png",
+        fileName: "cover.png",
+        key: `uploads/admin-images/admin-1/course/${courseId}/course-cover/upload.png`,
+        purpose: "course-cover",
+        sizeBytes: 1,
+      })
+    );
+
+    await saveCourse({ actorUserId: "admin-1", formData });
+
+    expect(deleteR2Objects).not.toHaveBeenCalledWith([
+      previousCover.variants.card.key,
+    ]);
+    expect(deletePublicR2Objects).not.toHaveBeenCalledWith([
+      previousCover.variants.card.key,
+    ]);
+  });
+
   it("rechecks a duration reduction after R2 and cleans a rejected upload outside database transactions", async () => {
     let currentMaxDelay = 0;
     let transactionOpen = false;
@@ -894,7 +971,7 @@ describe("admin authoring", () => {
       "O cronograma de conteúdo não cabe na duração comercial do Curso."
     );
 
-    expect(providerStates).toHaveLength(6);
+    expect(providerStates).toHaveLength(5);
     expect(
       providerStates.every(
         (state) => !(state.connectionHeld || state.transactionOpen)

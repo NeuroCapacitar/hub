@@ -106,7 +106,7 @@ export function CourseCoverCropDialog({
           <DialogTitle>Ajustar capa do curso</DialogTitle>
           <DialogDescription>
             Enquadre a imagem para o card do curso ({COURSE_COVER_CARD_WIDTH} ×{" "}
-            {COURSE_COVER_CARD_HEIGHT} px, proporção 24:25).
+            {COURSE_COVER_CARD_HEIGHT} px, proporção 16:9).
           </DialogDescription>
         </DialogHeader>
 

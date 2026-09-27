@@ -3,7 +3,13 @@ const SQL_WHITESPACE_PATTERN = /\s+/g;
 const EXPECTED_CLAIM_PAIR_CHECK =
   "(render_claim_token is null) = (render_claimed_at is null)";
 const EXPECTED_READY_ARTIFACT_CHECK =
-  "render_status <> 'ready' or (pdf_storage_key is not null and pdf_sha256 is not null and rendered_at is not null and render_claim_token is null)";
+  "render_status <> 'ready' or (pdf_storage_key is not null and pdf_sha256 is not null and rendered_at is not null and render_claim_token is null) or pdf_purged_at is not null";
+const EXPECTED_PDF_PURGED_STATE_CHECK =
+  "pdf_purged_at is null or (status = 'revoked' and pdf_storage_key is null and pdf_sha256 is null and render_claim_token is null)";
+const EXPECTED_PREVIEW_PURGED_STATE_CHECK =
+  "preview_purged_at is null or (status = 'revoked' and preview_sha256 is null)";
+const EXPECTED_REVOCATION_TOMBSTONE_CODE_HASH_CHECK =
+  "certificate_revocation_tombstones.code_hash ~ '^[a-f0-9]{64}$'";
 
 interface DrizzleSnapshotTable {
   checkConstraints?: Record<string, { value?: unknown }>;
@@ -68,6 +74,29 @@ const requireSnapshotColumn = ({
   }
 };
 
+const requireSnapshotCheck = ({
+  checkConstraints,
+  errors,
+  expected,
+  name,
+}: {
+  checkConstraints: Record<string, { value?: unknown }>;
+  errors: string[];
+  expected: string;
+  name: string;
+}): void => {
+  const check = checkConstraints[name];
+  if (!check) {
+    errors.push(`Snapshot sem check ${name}.`);
+    return;
+  }
+
+  const value = normalizeCheckExpression(String(check.value ?? ""));
+  if (value !== normalizeCheckExpression(expected)) {
+    errors.push(`Check ${name} diverge da expressao esperada.`);
+  }
+};
+
 const validateSchema = (schemaSource: string): string[] => {
   const errors: string[] = [];
   const expectedTokens = [
@@ -75,8 +104,12 @@ const validateSchema = (schemaSource: string): string[] => {
     '"certificate_template_status"',
     '"certificate_issuer_profiles"',
     '"certificate_templates"',
+    '"certificate_revocation_tombstones"',
+    '"certificate_ever_issued"',
     '"pdf_storage_key"',
     '"pdf_sha256"',
+    '"pdf_purged_at"',
+    '"preview_purged_at"',
     '"rendered_at"',
     '"render_status"',
     '"render_snapshot"',
@@ -84,6 +117,8 @@ const validateSchema = (schemaSource: string): string[] => {
     '"render_claimed_at"',
     '"certificates_render_claim_pair_check"',
     '"certificates_ready_artifact_check"',
+    '"certificates_pdf_purged_state_check"',
+    '"certificates_preview_purged_state_check"',
   ];
 
   for (const token of expectedTokens) {
@@ -111,11 +146,41 @@ const validateSnapshotAuthorities = (snapshot: DrizzleSnapshot): string[] => {
   if (!snapshot.tables["public.certificate_templates"]) {
     errors.push("Snapshot sem tabela public.certificate_templates.");
   }
+  if (!snapshot.tables["public.certificate_revocation_tombstones"]) {
+    errors.push(
+      "Snapshot sem tabela public.certificate_revocation_tombstones."
+    );
+  }
+  const completions = snapshot.tables["public.course_completions"];
+  if (!completions) {
+    errors.push("Snapshot sem tabela public.course_completions.");
+  } else if (!("certificate_ever_issued" in completions.columns)) {
+    errors.push(
+      "Snapshot de course_completions sem coluna certificate_ever_issued."
+    );
+  }
   if (!snapshot.enums["public.certificate_render_status"]) {
     errors.push("Snapshot sem enum public.certificate_render_status.");
   }
   if (!snapshot.enums["public.certificate_template_status"]) {
     errors.push("Snapshot sem enum public.certificate_template_status.");
+  }
+  const tombstones =
+    snapshot.tables["public.certificate_revocation_tombstones"];
+  if (tombstones) {
+    for (const name of ["code_hash", "revoked_at"]) {
+      if (!(name in tombstones.columns)) {
+        errors.push(
+          `Snapshot de certificate_revocation_tombstones sem coluna ${name}.`
+        );
+      }
+    }
+    requireSnapshotCheck({
+      checkConstraints: tombstones.checkConstraints ?? {},
+      errors,
+      expected: EXPECTED_REVOCATION_TOMBSTONE_CODE_HASH_CHECK,
+      name: "certificate_revocation_tombstones_code_hash_check",
+    });
   }
 
   return errors;
@@ -146,6 +211,8 @@ const validateSnapshot = (snapshot: DrizzleSnapshot): string[] => {
     "certificate_template_id",
     "pdf_storage_key",
     "pdf_sha256",
+    "pdf_purged_at",
+    "preview_purged_at",
     "rendered_at",
     "render_status",
     "render_snapshot",
@@ -167,30 +234,31 @@ const validateSnapshot = (snapshot: DrizzleSnapshot): string[] => {
   }
 
   const checks = certificates.checkConstraints ?? {};
-  const claimPairCheck = checks.certificates_render_claim_pair_check;
-  if (claimPairCheck) {
-    const value = normalizeCheckExpression(String(claimPairCheck.value ?? ""));
-    if (value !== normalizeCheckExpression(EXPECTED_CLAIM_PAIR_CHECK)) {
-      errors.push(
-        "Check certificates_render_claim_pair_check diverge da expressao esperada."
-      );
-    }
-  } else {
-    errors.push("Snapshot sem check certificates_render_claim_pair_check.");
-  }
+  const expectedChecks = [
+    {
+      expected: EXPECTED_CLAIM_PAIR_CHECK,
+      name: "certificates_render_claim_pair_check",
+    },
+    {
+      expected: EXPECTED_READY_ARTIFACT_CHECK,
+      name: "certificates_ready_artifact_check",
+    },
+    {
+      expected: EXPECTED_PDF_PURGED_STATE_CHECK,
+      name: "certificates_pdf_purged_state_check",
+    },
+    {
+      expected: EXPECTED_PREVIEW_PURGED_STATE_CHECK,
+      name: "certificates_preview_purged_state_check",
+    },
+  ] as const;
 
-  const readyArtifactCheck = checks.certificates_ready_artifact_check;
-  if (readyArtifactCheck) {
-    const value = normalizeCheckExpression(
-      String(readyArtifactCheck.value ?? "")
-    );
-    if (value !== normalizeCheckExpression(EXPECTED_READY_ARTIFACT_CHECK)) {
-      errors.push(
-        "Check certificates_ready_artifact_check diverge da expressao esperada."
-      );
-    }
-  } else {
-    errors.push("Snapshot sem check certificates_ready_artifact_check.");
+  for (const check of expectedChecks) {
+    requireSnapshotCheck({
+      checkConstraints: checks,
+      errors,
+      ...check,
+    });
   }
 
   return errors;

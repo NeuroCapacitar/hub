@@ -6,6 +6,9 @@ import {
   type CertificateTemplateSpec,
 } from "./template-rules";
 
+export const LEGACY_CERTIFICATE_RENDERER_VERSION = 1 as const;
+export const CURRENT_CERTIFICATE_RENDERER_VERSION = 2 as const;
+
 type VerticalAlign = "top" | "middle" | "bottom";
 
 const colorSchema = z.string().regex(/^#[0-9a-f]{6}$/i);
@@ -125,6 +128,12 @@ const certificateRenderSnapshotSchema = z
         version: z.number().int().positive(),
       })
       .strict(),
+    rendererVersion: z
+      .union([
+        z.literal(LEGACY_CERTIFICATE_RENDERER_VERSION),
+        z.literal(CURRENT_CERTIFICATE_RENDERER_VERSION),
+      ])
+      .optional(),
     version: z.literal(1),
   })
   .strict();

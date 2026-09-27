@@ -66,7 +66,7 @@ export function StaffAccessTable({
     <div className="rounded-lg border">
       <Table className="min-w-[900px]">
         <TableCaption className="sr-only">
-          Contas com acesso administrativo
+          Membros da equipe e respectivos níveis de acesso
         </TableCaption>
         <TableHeader>
           <TableRow>

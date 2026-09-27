@@ -456,7 +456,7 @@ export const seedE2e = async (): Promise<E2eFixture> => {
         ) values (
           'global',
           'Escola E2E Ltda',
-          '12.345.678/0001-90',
+          '12.345.678/0001-95',
           'Escola E2E'
         )
         on conflict (id) do nothing
@@ -466,11 +466,13 @@ export const seedE2e = async (): Promise<E2eFixture> => {
       `
         insert into courses (
           slug, title, price_in_cents, workload_hours, status, certificate_enabled,
-          catalog_visibility, sales_status
+          catalog_visibility, sales_status,
+          certificate_signer_name, certificate_signer_role
         )
         values (
           $1, 'Curso E2E', 1000, 2, 'active', false,
-          'listed'::course_catalog_visibility, 'open'::course_sales_status
+          'listed'::course_catalog_visibility, 'open'::course_sales_status,
+          'Responsável E2E', 'Especialista E2E'
         )
         returning id
       `,
@@ -618,11 +620,13 @@ export const seedE2e = async (): Promise<E2eFixture> => {
       `
         insert into courses (
           slug, title, price_in_cents, workload_hours, status,
-          certificate_enabled, catalog_visibility, sales_status
+          certificate_enabled, catalog_visibility, sales_status,
+          certificate_signer_name, certificate_signer_role
         )
         values (
           $1, $2, 0, 1, 'active', true,
-          'hidden'::course_catalog_visibility, 'closed'::course_sales_status
+          'hidden'::course_catalog_visibility, 'closed'::course_sales_status,
+          'Responsável E2E', 'Especialista E2E'
         )
         returning id
       `,

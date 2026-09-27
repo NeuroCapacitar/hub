@@ -13,6 +13,9 @@ const ADMIN_AUDIT_ACTION_LABELS: Record<string, string> = {
   "asaas_webhook.correlation_alert": "Alerta de correlação de webhook",
   "asaas_webhook.requeued": "Webhook reenfileirado",
   "certificate.artifact_reconciled": "Artefato do Certificado reconciliado",
+  "certificate.artifact_purged": "Artefato do Certificado removido",
+  "certificate.course_signatory_updated":
+    "Responsável pelo Certificado atualizado",
   "certificate.disabled": "Certificados desativados",
   "certificate.enabled": "Certificados habilitados",
   "certificate.issued": "Certificado emitido",

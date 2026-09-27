@@ -57,6 +57,7 @@ const PUBLICATION_PRESENTATION: Record<
 const VERSION_METRIC_COLUMNS: ReadonlyArray<{
   abbreviation: string;
   getValue: (metric: LessonAnalyticsVersionMetric) => string;
+  getSampleCount?: (metric: LessonAnalyticsVersionMetric) => number;
   label: string;
 }> = [
   {
@@ -73,6 +74,7 @@ const VERSION_METRIC_COLUMNS: ReadonlyArray<{
     abbreviation: "CM",
     getValue: (metric) =>
       formatLearningAnalyticsPercent(metric.medianCheckpointPercent),
+    getSampleCount: (metric) => metric.checkpointSampleCount,
     label: "Checkpoint mediano",
   },
   {
@@ -85,12 +87,14 @@ const VERSION_METRIC_COLUMNS: ReadonlyArray<{
     abbreviation: "TC",
     getValue: (metric) =>
       formatLearningAnalyticsHours(metric.medianHoursToComplete),
+    getSampleCount: (metric) => metric.completionTimingSampleCount,
     label: "Tempo mediano até concluir",
   },
   {
     abbreviation: "TP",
     getValue: (metric) =>
       formatLearningAnalyticsHours(metric.medianHoursToNextLesson),
+    getSampleCount: (metric) => metric.nextLessonTimingSampleCount,
     label: "Tempo mediano até próxima Aula",
   },
   {
@@ -177,7 +181,13 @@ function VersionMetricsTable({
                       className="px-0.5 text-right tabular-nums"
                       key={column.abbreviation}
                     >
-                      {column.getValue(metric)}
+                      <span>{column.getValue(metric)}</span>
+                      {column.getSampleCount &&
+                      column.getSampleCount(metric) > 0 ? (
+                        <span className="block text-[10px] text-muted-foreground">
+                          n={column.getSampleCount(metric)}
+                        </span>
+                      ) : null}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -264,7 +274,8 @@ export function LessonAnalyticsDetailsSheet({
                 Publicada é a versão vigente. Passe o cursor sobre as siglas
                 para ver o nome completo da métrica. TR é o tempo reproduzido
                 total: soma da reprodução normal no período, incluindo reprises.
-                O período selecionado é {periodLabel.toLowerCase()}.
+                CM, TC e TP mostram n, o número de observações usadas na
+                mediana. O período selecionado é {periodLabel.toLowerCase()}.
               </p>
               <div className="mt-4">
                 <VersionMetricsTable

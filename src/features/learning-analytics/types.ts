@@ -12,7 +12,10 @@ export interface LessonAnalyticsMetric {
   aggregateMedianCheckpointPercent: number | null;
   aggregateMedianHoursToComplete: number | null;
   aggregateMedianHoursToNextLesson: number | null;
+  aggregateNextLessonTimingSampleCount: number;
+  checkpointSampleCount: number;
   completed: number;
+  completionTimingSampleCount: number;
   courseAverageViewingPercent: number | null;
   courseId: string;
   coursePublicationId: string;
@@ -27,6 +30,7 @@ export interface LessonAnalyticsMetric {
   medianHoursToNextLesson: number | null;
   moduleSortOrder: number;
   moduleTitle: string;
+  nextLessonTimingSampleCount: number;
   playingSeconds: number;
   publicationNumber: number;
   publicationStatus: LessonAnalyticsPublicationStatus;
@@ -35,13 +39,16 @@ export interface LessonAnalyticsMetric {
 
 export interface LessonAnalyticsVersionMetric {
   activeEnrollments: number;
+  checkpointSampleCount: number;
   completed: number;
+  completionTimingSampleCount: number;
   errorCount: number;
   lessonTitle: string;
   medianCheckpointPercent: number | null;
   medianHoursToComplete: number | null;
   medianHoursToNextLesson: number | null;
   moduleTitle: string;
+  nextLessonTimingSampleCount: number;
   playingSeconds: number;
   publicationNumber: number;
   publicationStatus: LessonAnalyticsPublicationStatus;
@@ -55,6 +62,7 @@ export interface LessonAnalyticsLessonSummary {
   medianCheckpointPercent: number | null;
   medianHoursToComplete: number | null;
   medianHoursToNextLesson: number | null;
+  nextLessonTimingSampleCount: number;
   playingSeconds: number;
   started: number;
 }
@@ -75,6 +83,10 @@ export interface LearningAnalyticsKpis {
   lessonCount: number;
   lessonsWithErrors: number;
   lessonsWithoutStarts: number;
+}
+
+export interface LearningAnalyticsActivityScale {
+  maxValue: number;
 }
 
 export interface LearningAnalyticsCourseOption {

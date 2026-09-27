@@ -51,11 +51,24 @@ describe("AuditoriaPage", () => {
       })
     );
 
+    expect(markup).toContain("Auditoria administrativa");
+    expect(markup).toContain(
+      "Busque por ação, curso, responsável, e-mail ou identificador e abra os detalhes do evento."
+    );
     expect(markup).toContain("Eventos registrados");
+    expect(markup.indexOf("Auditoria administrativa")).toBeLessThan(
+      markup.indexOf("Eventos registrados")
+    );
+    expect(
+      markup.split(
+        "Busque por ação, curso, responsável, e-mail ou identificador e abra os detalhes do evento."
+      )
+    ).toHaveLength(2);
     expect(markup).toContain("Curso atualizado");
     expect(markup).toContain("Curso de exemplo");
     expect(markup).toContain("Administradora");
     expect(markup).toContain("07/09/2026");
+    expect(markup).toContain("1–1 de 26 eventos");
     expect(markup).toContain("Detalhes");
     expect(markup).toContain("Próximos");
     expect(markup).not.toContain("admin@example.test");

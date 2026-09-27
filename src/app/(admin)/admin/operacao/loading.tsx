@@ -8,13 +8,19 @@ const OPERATIONS_SECTION_SKELETON_KEYS = [
   "outbox",
   "signals",
 ] as const;
+const REMAINING_OPERATIONS_SECTION_SKELETON_KEYS =
+  OPERATIONS_SECTION_SKELETON_KEYS.slice(1);
 
 export default function Loading(): React.JSX.Element {
   return (
     <PageContainer>
-      <div aria-busy="true" className="flex flex-col gap-8" role="status">
+      <div aria-busy="true" className="flex flex-col gap-16" role="status">
         <span className="sr-only">Carregando operações e recuperação…</span>
-        {OPERATIONS_SECTION_SKELETON_KEYS.map((key) => (
+        <div className="flex flex-col gap-8">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-[360px] rounded-xl" />
+        </div>
+        {REMAINING_OPERATIONS_SECTION_SKELETON_KEYS.map((key) => (
           <Skeleton
             className="h-[360px] rounded-xl"
             key={`operations-section-${key}`}

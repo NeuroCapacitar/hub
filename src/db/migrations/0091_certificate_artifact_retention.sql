@@ -1,0 +1,6 @@
+ALTER TABLE "certificates" DROP CONSTRAINT "certificates_ready_artifact_check";--> statement-breakpoint
+ALTER TABLE "certificates" ADD COLUMN "pdf_purged_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "certificates" ADD COLUMN "preview_purged_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "certificates" ADD CONSTRAINT "certificates_pdf_purged_state_check" CHECK ("certificates"."pdf_purged_at" is null or ("certificates"."status" = 'revoked' and "certificates"."render_status" = 'ready' and "certificates"."pdf_storage_key" is null and "certificates"."pdf_sha256" is not null and "certificates"."rendered_at" is not null and "certificates"."render_claim_token" is null));--> statement-breakpoint
+ALTER TABLE "certificates" ADD CONSTRAINT "certificates_preview_purged_state_check" CHECK ("certificates"."preview_purged_at" is null or ("certificates"."status" = 'revoked' and "certificates"."preview_sha256" is null));--> statement-breakpoint
+ALTER TABLE "certificates" ADD CONSTRAINT "certificates_ready_artifact_check" CHECK ("certificates"."render_status" <> 'ready' or ("certificates"."pdf_storage_key" is not null and "certificates"."pdf_sha256" is not null and "certificates"."rendered_at" is not null and "certificates"."render_claim_token" is null) or "certificates"."pdf_purged_at" is not null);

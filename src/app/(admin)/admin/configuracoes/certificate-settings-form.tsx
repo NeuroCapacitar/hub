@@ -31,8 +31,6 @@ import { saveSettingsAction } from "@/features/admin/actions";
 import { formatCnpjInput } from "@/lib/cnpj";
 
 export interface CertificateSettingsFormValues {
-  certificateSignerName: string | null;
-  certificateSignerRole: string | null;
   issuerCnpj: string | null;
   issuerDisplayName: string | null;
   issuerLegalName: string | null;
@@ -174,39 +172,6 @@ function CertificateSettingsFields({
                 disabled={readOnly}
                 id="issuer-display-name"
                 name="issuerDisplayName"
-              />
-            </Field>
-          </div>
-        </FieldSet>
-
-        <FieldSet className="gap-4">
-          <FieldLegend variant="label">Assinatura padrão</FieldLegend>
-          <FieldDescription>
-            Usada quando o Curso não define uma assinatura própria.
-          </FieldDescription>
-          <div className="grid gap-5 md:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="certificate-signer-name">
-                Nome da assinatura
-              </FieldLabel>
-              <Input
-                autoComplete="name"
-                defaultValue={settings.certificateSignerName ?? ""}
-                disabled={readOnly}
-                id="certificate-signer-name"
-                name="certificateSignerName"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="certificate-signer-role">
-                Cargo da assinatura
-              </FieldLabel>
-              <Input
-                autoComplete="organization-title"
-                defaultValue={settings.certificateSignerRole ?? ""}
-                disabled={readOnly}
-                id="certificate-signer-role"
-                name="certificateSignerRole"
               />
             </Field>
           </div>

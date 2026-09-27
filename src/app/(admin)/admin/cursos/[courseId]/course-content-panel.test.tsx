@@ -59,6 +59,8 @@ const course: AdminCourse = {
   accessDurationMonths: 12,
   catalogVisibility: "listed",
   certificateEnabled: true,
+  certificateSignerName: null,
+  certificateSignerRole: null,
   coverImage: null,
   description: "Descrição",
   hasCommercialHistory: false,

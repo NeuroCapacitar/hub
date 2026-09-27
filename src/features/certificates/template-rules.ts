@@ -17,6 +17,17 @@ export const CERTIFICATE_FIELDS = [
 
 export type CertificateField = (typeof CERTIFICATE_FIELDS)[number];
 
+export const CERTIFICATE_SIGNER_NAME_MAX_LENGTH = 160;
+export const CERTIFICATE_SIGNER_ROLE_MAX_LENGTH = 120;
+
+export const isCertificateSignatoryConfigured = (
+  signerName: string | null | undefined,
+  signerRole: string | null | undefined
+): boolean => Boolean(signerName?.trim() && signerRole?.trim());
+
+export const CERTIFICATE_SIGNATORY_REQUIRED_MESSAGE =
+  "Informe nome e cargo do responsável em Configurações do curso antes de publicar ou ativar o Certificado.";
+
 export interface CertificateTemplateField {
   align: "center" | "left" | "right";
   color: string;

@@ -31,7 +31,7 @@ export function CoursesRevenueTable({
 }: CoursesRevenueTableProps): React.JSX.Element {
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border">
+      <div className="rounded-surface border">
         <Table className="min-w-[520px]">
           <TableCaption className="sr-only">
             Receita agregada por curso
@@ -40,10 +40,10 @@ export function CoursesRevenueTable({
             <TableRow>
               <TableHead scope="col">Curso</TableHead>
               <TableHead className="whitespace-nowrap text-right" scope="col">
-                Pagos / registrados
+                Pagamentos confirmados / pedidos
               </TableHead>
               <TableHead className="whitespace-nowrap text-right" scope="col">
-                Receita bruta paga
+                Vendas brutas confirmadas
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -55,7 +55,7 @@ export function CoursesRevenueTable({
                     {course.courseTitle}
                   </TableRowHeader>
                   <TableCell className="whitespace-nowrap text-right tabular-nums">
-                    {course.paidOrders} de {course.totalOrders}
+                    {course.confirmedSaleOrders} de {course.totalOrders}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-right font-medium tabular-nums">
                     {formatCurrencyInCents(course.totalRevenueInCents)}
@@ -71,10 +71,11 @@ export function CoursesRevenueTable({
                         <HugeiconsIcon aria-hidden="true" icon={Money01Icon} />
                       </EmptyMedia>
                       <EmptyTitle as="h3">
-                        Nenhum faturamento registrado
+                        Nenhuma venda com pagamento confirmado
                       </EmptyTitle>
                       <EmptyDescription>
-                        Ainda não há vendas de cursos processadas no histórico.
+                        Ainda não há pagamentos confirmados de cursos no
+                        histórico.
                       </EmptyDescription>
                     </EmptyHeader>
                   </Empty>

@@ -4,13 +4,6 @@ import { AdminSearchPill } from "@/components/admin/admin-search-pill";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   getSupportCourse,
@@ -73,6 +66,15 @@ export default async function SupportCourseStudentsPage({
     notFound();
   }
 
+  const activeEnrollmentLabel =
+    course.activeEnrollmentCount === 1
+      ? "matrícula ativa"
+      : "matrículas ativas";
+  const enrollmentDescription =
+    course.totalEnrollmentCount === 0
+      ? "Nenhuma matrícula registrada neste Curso."
+      : `${course.activeEnrollmentCount.toLocaleString("pt-BR")} ${activeEnrollmentLabel} de ${course.totalEnrollmentCount.toLocaleString("pt-BR")} no total neste Curso.`;
+
   return (
     <PageContainer>
       <div className="flex flex-col gap-8">
@@ -82,49 +84,42 @@ export default async function SupportCourseStudentsPage({
             { href: route("/admin/operacao/cursos"), label: "Cursos" },
             { label: course.title },
           ]}
+          description={enrollmentDescription}
           title="Alunos"
         />
 
-        <Card>
-          <CardHeader>
-            <CardTitle as="h2">Alunos matriculadas</CardTitle>
-            <CardDescription>
-              {course.activeEnrollmentCount} ativas de{" "}
-              {course.totalEnrollmentCount} matrículas neste Curso.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <form
-                action={`/admin/operacao/cursos/${courseId}/alunas`}
-                className="flex min-w-0 flex-1 basis-full gap-2 sm:max-w-xl sm:basis-auto"
-                method="get"
-              >
-                <label className="sr-only" htmlFor="support-student-search">
-                  Buscar alunos
-                </label>
-                <input name="page" type="hidden" value="1" />
-                <Input
-                  aria-label="Buscar alunos"
-                  autoComplete="off"
-                  className="min-w-0 flex-1"
-                  defaultValue={studentsPage.search}
-                  id="support-student-search"
-                  name="q"
-                  placeholder="Buscar por nome ou e-mail…"
-                />
-                <Button type="submit">Buscar</Button>
-              </form>
-              {studentsPage.search ? (
-                <AdminSearchPill href="?page=1" value={studentsPage.search} />
-              ) : null}
-            </div>
-            <SupportCourseStudentsTable
-              courseId={courseId}
-              students={studentsPage.students}
+        <section
+          aria-label={`Alunos matriculados no Curso ${course.title}`}
+          className="grid gap-4"
+        >
+          <form
+            action={`/admin/operacao/cursos/${courseId}/alunas`}
+            className="flex min-w-0 flex-1 basis-full gap-2 sm:max-w-xl sm:basis-auto"
+            method="get"
+          >
+            <label className="sr-only" htmlFor="support-student-search">
+              Buscar alunos
+            </label>
+            <input name="page" type="hidden" value="1" />
+            <Input
+              aria-label="Buscar alunos"
+              autoComplete="off"
+              className="min-w-0 flex-1"
+              defaultValue={studentsPage.search}
+              id="support-student-search"
+              name="q"
+              placeholder="Buscar por nome ou e-mail…"
             />
-          </CardContent>
-        </Card>
+            <Button type="submit">Buscar</Button>
+          </form>
+          {studentsPage.search ? (
+            <AdminSearchPill href="?page=1" value={studentsPage.search} />
+          ) : null}
+          <SupportCourseStudentsTable
+            courseId={courseId}
+            students={studentsPage.students}
+          />
+        </section>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
           <span aria-live="polite" className="text-muted-foreground text-sm">

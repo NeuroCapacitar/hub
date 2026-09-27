@@ -111,6 +111,7 @@ vi.mock("@/components/ui/button", () => ({
   }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props}>{children}</button>
   ),
+  buttonVariants: () => "mock-button",
 }));
 vi.mock("@/components/ui/resource-list", () => ({
   ResourceDropzoneEmpty: () => <div>empty</div>,
@@ -137,6 +138,10 @@ vi.mock("@/components/ui/resource-list", () => ({
 }));
 
 import { AuthMediaGallery } from "./auth-media-gallery";
+
+declare global {
+  var IS_REACT_ACT_ENVIRONMENT: boolean;
+}
 
 const stagedReference = {
   aggregateId: "c989d54d-d13f-46a1-89ed-2069d7c1c45b",
@@ -165,6 +170,7 @@ const renderGallery = (
 describe("AuthMediaGallery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     dependencies.uploadStagedAdminImage.mockResolvedValue(stagedReference);
     dependencies.saveAuthMediaAction.mockResolvedValue({
       slideId: stagedReference.aggregateId,
@@ -205,6 +211,190 @@ describe("AuthMediaGallery", () => {
       expect.any(FormData)
     );
     expect(dependencies.router.refresh).toHaveBeenCalledOnce();
+    act(() => root.unmount());
+  });
+
+  it("opens the auth media file picker from the visible button", () => {
+    const { container, root } = renderGallery();
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
+    const addTrigger = [...container.querySelectorAll("label")].find((label) =>
+      label.textContent?.includes("Adicionar imagens")
+    );
+    if (!(input && addTrigger)) {
+      throw new Error("Controle para adicionar imagens não encontrado.");
+    }
+    expect(addTrigger.contains(input)).toBe(true);
+    expect(addTrigger.className).toContain("focus-within");
+    const clickInput = vi.fn();
+    input.addEventListener("click", clickInput);
+
+    act(() => addTrigger.click());
+
+    expect(clickInput).toHaveBeenCalledOnce();
+    act(() => root.unmount());
+  });
+
+  it("keeps auth media upload errors inline with a retry action and no duplicate toast", async () => {
+    dependencies.uploadStagedAdminImage.mockRejectedValueOnce(
+      new Error("Falha de rede")
+    );
+    const { container, root } = renderGallery();
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) {
+      throw new Error("Seletor de imagem não encontrado.");
+    }
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["source"], "source.jpg", { type: "image/jpeg" })],
+    });
+    act(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+    const cropButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Confirmar recorte"
+    );
+
+    await act(async () => {
+      cropButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("cropped.webp");
+    expect(container.textContent).toContain("Falha de rede");
+    expect(
+      container.querySelector('[aria-label="Tentar novamente cropped.webp"]')
+    ).not.toBeNull();
+    expect(dependencies.toast.error).not.toHaveBeenCalled();
+    act(() => root.unmount());
+  });
+
+  it("retries a failed auth media transfer using the selected crop", async () => {
+    dependencies.uploadStagedAdminImage
+      .mockRejectedValueOnce(new Error("Falha de rede"))
+      .mockResolvedValueOnce(stagedReference);
+    const { container, root } = renderGallery();
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) {
+      throw new Error("Seletor de imagem não encontrado.");
+    }
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["source"], "source.jpg", { type: "image/jpeg" })],
+    });
+    act(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+    const cropButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Confirmar recorte"
+    );
+    await act(async () => {
+      cropButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const retryButton = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Tentar novamente cropped.webp"]'
+    );
+    expect(retryButton).not.toBeNull();
+    await act(async () => {
+      retryButton?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(dependencies.uploadStagedAdminImage).toHaveBeenCalledTimes(2);
+    const aggregateIds = dependencies.uploadStagedAdminImage.mock.calls.map(
+      ([input]) => (input as { aggregateId: string }).aggregateId
+    );
+    expect(new Set(aggregateIds).size).toBe(1);
+    expect(dependencies.saveAuthMediaAction).toHaveBeenCalledOnce();
+    expect(
+      container.querySelector('[aria-label="Tentar novamente cropped.webp"]')
+    ).toBeNull();
+    act(() => root.unmount());
+  });
+
+  it("does not offer automatic retry after an auth media save with an unknown outcome", async () => {
+    dependencies.saveAuthMediaAction.mockRejectedValueOnce(
+      new Error("Resposta indisponível")
+    );
+    const { container, root } = renderGallery();
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) {
+      throw new Error("Seletor de imagem não encontrado.");
+    }
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["source"], "source.jpg", { type: "image/jpeg" })],
+    });
+    act(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+    const cropButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Confirmar recorte"
+    );
+    await act(async () => {
+      cropButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain(
+      "Não foi possível confirmar se a imagem foi salva"
+    );
+    expect(
+      container.querySelector('[aria-label="Tentar novamente cropped.webp"]')
+    ).toBeNull();
+    expect(
+      container.querySelector('[aria-label="Descartar envio de cropped.webp"]')
+    ).not.toBeNull();
+    expect(dependencies.toast.error).not.toHaveBeenCalled();
+    act(() => root.unmount());
+  });
+
+  it("cancels the active R2 request without saving the auth image", async () => {
+    let uploadSignal: AbortSignal | undefined;
+    dependencies.uploadStagedAdminImage.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) => {
+        uploadSignal = signal;
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true }
+          );
+        });
+      }
+    );
+    const { container, root } = renderGallery();
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) {
+      throw new Error("Seletor de imagem não encontrado.");
+    }
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["source"], "source.jpg", { type: "image/jpeg" })],
+    });
+    act(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+    const cropButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Confirmar recorte"
+    );
+    await act(async () => {
+      cropButton?.click();
+      await Promise.resolve();
+    });
+
+    const cancelButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Cancelar"
+    );
+    expect(cancelButton).toBeDefined();
+    await act(async () => {
+      cancelButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(uploadSignal?.aborted).toBe(true);
+    expect(dependencies.saveAuthMediaAction).not.toHaveBeenCalled();
     act(() => root.unmount());
   });
 

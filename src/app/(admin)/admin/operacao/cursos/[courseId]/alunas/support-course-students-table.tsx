@@ -108,7 +108,7 @@ export function SupportCourseStudentsTable({
 }): React.JSX.Element {
   return (
     <DataTable
-      caption="Alunos matriculadas no curso"
+      caption="Alunos matriculados no curso"
       columns={columns}
       data={students.map((student) => ({ ...student, courseId }))}
       emptyDescription="Este Curso ainda não possui alunos matriculados."

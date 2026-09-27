@@ -2,6 +2,8 @@
  * @vitest-environment jsdom
  */
 
+import QRCode from "qrcode";
+import type { ComponentProps } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +12,7 @@ const {
   actionMocks,
   mediaQueryMocks,
   navigationMocks,
+  previewFontMock,
   stagedUploadMock,
   toastMocks,
 } = vi.hoisted(() => ({
@@ -22,6 +25,7 @@ const {
   },
   mediaQueryMocks: { matches: false },
   navigationMocks: { refresh: vi.fn() },
+  previewFontMock: vi.fn().mockResolvedValue(true),
   stagedUploadMock: vi.fn(),
   toastMocks: { error: vi.fn(), success: vi.fn() },
 }));
@@ -34,6 +38,9 @@ vi.mock("qrcode", () => ({
   default: {
     toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,AAAA"),
   },
+}));
+vi.mock("./certificate-preview-fonts", () => ({
+  loadCertificatePreviewFonts: previewFontMock,
 }));
 vi.mock("@/features/admin/actions", () => ({
   disableCertificateForCourseAction: actionMocks.disable,
@@ -76,7 +83,36 @@ vi.mock("@/features/certificates/template-crop-dialog", () => ({
 }));
 
 import { createDefaultCertificateTemplateFields } from "@/features/certificates/template-rules";
-import { CertificateTemplateEditor } from "./certificate-template-editor";
+import { CertificateTemplateEditor as CertificateTemplateEditorView } from "./certificate-template-editor";
+
+type CertificateTemplateEditorTestProps = Omit<
+  ComponentProps<typeof CertificateTemplateEditorView>,
+  "courseTitle" | "issuerCnpj" | "issuerDisplayName"
+> &
+  Partial<
+    Pick<
+      ComponentProps<typeof CertificateTemplateEditorView>,
+      "courseTitle" | "issuerCnpj" | "issuerDisplayName"
+    >
+  >;
+
+const CertificateTemplateEditor = ({
+  courseTitle = "Curso de Desenvolvimento",
+  issuerCnpj = "04.252.011/0001-10",
+  issuerDisplayName = "Instituto Protea Educação Profissional",
+  signerName = "Dra. Maria Fernanda de Albuquerque",
+  signerRole = "Responsável técnica",
+  ...props
+}: CertificateTemplateEditorTestProps): React.JSX.Element => (
+  <CertificateTemplateEditorView
+    courseTitle={courseTitle}
+    issuerCnpj={issuerCnpj}
+    issuerDisplayName={issuerDisplayName}
+    signerName={signerName}
+    signerRole={signerRole}
+    {...props}
+  />
+);
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -178,8 +214,6 @@ const draftTemplate = {
   backgroundUrl: "https://example.test/background.webp",
   signatureKey: "certificates/signature.webp",
   signatureUrl: "https://example.test/signature.webp",
-  signerName: "Dra. Maria",
-  signerRole: "Responsavel tecnica",
   spec: {
     backgroundKey: "certificates/background.webp",
     fields: createDefaultCertificateTemplateFields(),
@@ -259,7 +293,7 @@ describe("CertificateTemplateEditor", () => {
       new FormData(container.querySelector("form") ?? undefined).get(
         "signerName"
       )
-    ).toBe(draftTemplate.signerName);
+    ).toBeNull();
 
     const specBefore =
       container.querySelector<HTMLInputElement>('input[name="spec"]')?.value;
@@ -297,7 +331,12 @@ describe("CertificateTemplateEditor", () => {
           courseId="course-1"
           issuerConfigured
           pendingCertificateReconciliationCount={3}
-          templates={[draftTemplate]}
+          signerName="Dra. Maria"
+          signerRole="Responsável técnica"
+          templates={[
+            { ...draftTemplate, status: "published", version: 1 },
+            draftTemplate,
+          ]}
         />
       );
     });
@@ -332,7 +371,7 @@ describe("CertificateTemplateEditor", () => {
           courseId="course-1"
           issuerConfigured
           pendingCertificateReconciliationCount={0}
-          templates={[draftTemplate]}
+          templates={[{ ...draftTemplate, status: "published", version: 1 }]}
         />
       );
     });
@@ -341,8 +380,8 @@ describe("CertificateTemplateEditor", () => {
     );
   });
 
-  it("explains the issuer prerequisite and prevents premature publication", () => {
-    act(() => {
+  it("blocks preview editing while the issuer profile is incomplete", async () => {
+    await act(async () => {
       root.render(
         <CertificateTemplateEditor
           certificateEnabled={false}
@@ -351,14 +390,60 @@ describe("CertificateTemplateEditor", () => {
           templates={[]}
         />
       );
+      await Promise.resolve();
     });
 
     expect(container.textContent).toContain("Perfil emissor pendente");
-    expect(container.textContent).toContain("Dados curtos");
+    expect(container.textContent).not.toContain("Dados curtos");
+    expect(
+      container.querySelector('[data-preview-sample-toggle="true"]')
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-preview-blocked="true"]')
+    ).not.toBeNull();
+    expect(container.querySelector("[data-certificate-page]")).toBeNull();
+    expect(container.querySelector("[data-editor-field]")).toBeNull();
+    expect(container.textContent).toContain("Salvar rascunho");
+    selectField(container, "studentName");
+    expect(
+      container.querySelector('[data-field-inspector="studentName"]')
+    ).not.toBeNull();
     const publishButton = [...container.querySelectorAll("button")].find(
       (button) =>
         button.textContent?.toLocaleLowerCase().includes("publicar") &&
         !button.textContent?.includes("certificado neste curso")
+    );
+    expect(publishButton?.disabled).toBe(true);
+  });
+
+  it("explains the required course signatory and prevents publication when it is missing", async () => {
+    await act(async () => {
+      root.render(
+        <CertificateTemplateEditor
+          certificateEnabled={false}
+          courseId="course-1"
+          issuerConfigured
+          signerName=" "
+          signerRole={null}
+          templates={[draftTemplate]}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain(
+      "Responsável pelo certificado pendente"
+    );
+    expect(container.textContent).toContain("nome e cargo");
+    expect(
+      container.querySelector('[data-preview-blocked="true"]')
+    ).not.toBeNull();
+    expect(container.querySelector("[data-certificate-page]")).toBeNull();
+    expect(
+      container.querySelector('[data-preview-sample-toggle="true"]')
+    ).toBeNull();
+    const publishButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.includes("Salvar e publicar")
     );
     expect(publishButton?.disabled).toBe(true);
   });
@@ -368,8 +453,6 @@ describe("CertificateTemplateEditor", () => {
       backgroundUrl: "https://example.test/background.webp",
       signatureKey: null,
       signatureUrl: null,
-      signerName: null,
-      signerRole: null,
       spec: {
         backgroundKey: "certificates/background.webp",
         fields: [],
@@ -383,6 +466,8 @@ describe("CertificateTemplateEditor", () => {
           certificateEnabled
           courseId="course-1"
           issuerConfigured
+          signerName="Dra. Maria"
+          signerRole="Especialista"
           templates={[
             { ...baseTemplate, status: "published" },
             { ...baseTemplate, status: "draft", version: 2 },
@@ -442,13 +527,145 @@ describe("CertificateTemplateEditor", () => {
     expect(container.textContent).toContain("arte-certificado.webp");
   });
 
-  it("keeps signer and signature values in FormData while another field is selected", () => {
+  it("cancels the active background upload and restores the prior template state", async () => {
+    let uploadSignal: AbortSignal | undefined;
+    stagedUploadMock.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) => {
+        uploadSignal = signal;
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true }
+          );
+        });
+      }
+    );
+    act(() => {
+      root.render(
+        <CertificateTemplateEditor
+          certificateEnabled={false}
+          courseId="course-1"
+          issuerConfigured
+          templates={[]}
+        />
+      );
+    });
+    selectBackground(container);
+    const input = container.querySelector<HTMLInputElement>(
+      'input[data-upload-kind="background"]'
+    );
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["image"], "original.png", { type: "image/png" })],
+    });
+    act(() => input?.dispatchEvent(new Event("change", { bubbles: true })));
+    const confirmButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Confirmar recorte"
+    );
+    await act(async () => {
+      confirmButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(
+      container.querySelector('[data-certificate-upload-target="background"]')
+    ).not.toBeNull();
+    const cancelButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Cancelar"
+    );
+    expect(cancelButton).toBeDefined();
+    act(() => cancelButton?.click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(uploadSignal?.aborted).toBe(true);
+    expect(container.textContent).not.toContain("arte-certificado.webp");
+    expect(actionMocks.save).not.toHaveBeenCalled();
+  });
+
+  it("keeps template edits made during a failed image upload saveable", async () => {
+    let rejectUpload: (error: Error) => void = () => undefined;
+    stagedUploadMock.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectUpload = reject;
+        })
+    );
+    act(() => {
+      root.render(
+        <CertificateTemplateEditor
+          certificateEnabled={false}
+          courseId="course-1"
+          issuerConfigured
+          templates={[]}
+        />
+      );
+    });
+    selectBackground(container);
+    const input = container.querySelector<HTMLInputElement>(
+      'input[data-upload-kind="background"]'
+    );
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["image"], "original.png", { type: "image/png" })],
+    });
+    act(() => input?.dispatchEvent(new Event("change", { bubbles: true })));
+    const confirmButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Confirmar recorte"
+    );
+    await act(async () => {
+      confirmButton?.click();
+      await Promise.resolve();
+    });
+
+    const studentNameField = selectField(container, "studentName");
+    const specInput =
+      container.querySelector<HTMLInputElement>('input[name="spec"]');
+    const initialX = JSON.parse(specInput?.value ?? "{}").fields.find(
+      (field: { field: string }) => field.field === "studentName"
+    ).x;
+    act(() =>
+      studentNameField.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          key: "ArrowRight",
+        })
+      )
+    );
+    const editedX = JSON.parse(specInput?.value ?? "{}").fields.find(
+      (field: { field: string }) => field.field === "studentName"
+    ).x;
+    expect(editedX).not.toBe(initialX);
+
+    await act(async () => {
+      rejectUpload(new Error("network failure"));
+      await Promise.resolve();
+    });
+
+    const saveButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.includes("Salvar rascunho")
+    );
+    const savedSpec = JSON.parse(specInput?.value ?? "{}");
+    const savedX = savedSpec.fields.find(
+      (field: { field: string }) => field.field === "studentName"
+    ).x;
+
+    expect(saveButton?.disabled).toBe(false);
+    expect(savedX).toBe(editedX);
+  });
+
+  it("keeps the signature image in the template but leaves signer values out", () => {
     act(() => {
       root.render(
         <CertificateTemplateEditor
           certificateEnabled
           courseId="course-1"
           issuerConfigured
+          signerName="Dra. Maria"
+          signerRole="Responsável técnica"
           templates={[draftTemplate]}
         />
       );
@@ -458,8 +675,8 @@ describe("CertificateTemplateEditor", () => {
     const form = container.querySelector("form");
     expect(form).not.toBeNull();
     const data = new FormData(form ?? undefined);
-    expect(data.get("signerName")).toBe("Dra. Maria");
-    expect(data.get("signerRole")).toBe("Responsavel tecnica");
+    expect(data.get("signerName")).toBeNull();
+    expect(data.get("signerRole")).toBeNull();
     expect(data.get("signatureKey")).toBe("certificates/signature.webp");
     selectField(container, "signatureImage");
     expect(
@@ -495,7 +712,7 @@ describe("CertificateTemplateEditor", () => {
     expect(
       container.querySelector('[data-field-inspector="signerRole"]')
     ).not.toBeNull();
-    expect(container.querySelector("#certificate-signer-role")).not.toBeNull();
+    expect(container.querySelector("#certificate-signer-role")).toBeNull();
   });
 
   it("adds the signer role field when editing a legacy template that lacks it", () => {
@@ -576,26 +793,78 @@ describe("CertificateTemplateEditor", () => {
     ).not.toBeNull();
   });
 
-  it("toggles the preview between short and long sample data", () => {
-    act(() => {
+  it("uses saved certificate details with one deterministic long preview sample", async () => {
+    await act(async () => {
       root.render(
         <CertificateTemplateEditor
           certificateEnabled
           courseId="course-1"
+          courseTitle="Formação em Segurança do Trabalho"
+          issuerCnpj="04.252.011/0001-10"
           issuerConfigured
-          templates={[draftTemplate]}
+          issuerDisplayName="Instituto Protea Educação Profissional"
+          signerName="Dra. Fernanda Albuquerque"
+          signerRole="Responsável técnica"
+          templates={[
+            {
+              ...draftTemplate,
+              spec: {
+                ...draftTemplate.spec,
+                fields: draftTemplate.spec.fields.map((field) =>
+                  field.field === "signerName" || field.field === "signerRole"
+                    ? { ...field, visible: true }
+                    : field
+                ),
+              },
+            },
+          ]}
         />
       );
+      await Promise.resolve();
     });
-    expect(container.textContent).toContain("Botox");
-    const toggle = container.querySelector<HTMLButtonElement>(
-      '[data-preview-sample-toggle="true"]'
-    );
-    expect(toggle?.textContent).toContain("Dados curtos");
-    act(() => toggle?.click());
-    expect(toggle?.textContent).toContain("Dados longos");
-    expect(container.textContent).toContain(
-      "Especialização em Técnicas Avançadas"
+
+    expect(
+      container.querySelector('[data-preview-sample-toggle="true"]')
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-preview-text-field="courseTitle"]')
+        ?.textContent
+    ).toBe("Formação em Segurança do Trabalho");
+    expect(
+      container.querySelector('[data-preview-text-field="issuerName"]')
+        ?.textContent
+    ).toBe("Instituto Protea Educação Profissional");
+    expect(
+      container.querySelector('[data-preview-text-field="issuerCnpj"]')
+        ?.textContent
+    ).toBe("04.252.011/0001-10");
+    expect(
+      container.querySelector('[data-preview-text-field="signerName"]')
+        ?.textContent
+    ).toBe("Dra. Fernanda Albuquerque");
+    expect(
+      container.querySelector('[data-preview-text-field="signerRole"]')
+        ?.textContent
+    ).toBe("Responsável técnica");
+    expect(
+      container.querySelector('[data-preview-text-field="studentName"]')
+        ?.textContent
+    ).toBe("Ana Carolina de Souza e Silva");
+    expect(
+      container.querySelector('[data-preview-text-field="completedAt"]')
+        ?.textContent
+    ).toBe("22 de jul. de 2026");
+    expect(
+      container.querySelector('[data-preview-text-field="issuedAt"]')
+        ?.textContent
+    ).toBe("22 de jul. de 2026");
+    expect(
+      container.querySelector('[data-preview-text-field="validationCode"]')
+        ?.textContent
+    ).toBe("AAECAwQFBgcICQoLDA0ODw");
+    expect(QRCode.toDataURL).toHaveBeenCalledWith(
+      "https://hub.example.test/certificados/AAECAwQFBgcICQoLDA0ODw",
+      { margin: 1 }
     );
   });
 
@@ -652,6 +921,8 @@ describe("CertificateTemplateEditor", () => {
             certificateEnabled
             courseId="course-1"
             issuerConfigured
+            signerName="Dra. Maria"
+            signerRole="Responsável técnica"
             templates={[draftTemplate]}
           />
         );
@@ -730,6 +1001,44 @@ describe("CertificateTemplateEditor", () => {
     ).toBe("above");
   });
 
+  it("shows Inter font names while keeping the legacy values in the template", async () => {
+    await act(async () => {
+      root.render(
+        <CertificateTemplateEditor
+          certificateEnabled
+          courseId="course-1"
+          issuerConfigured
+          templates={[draftTemplate]}
+        />
+      );
+      await Promise.resolve();
+    });
+
+    selectField(container, "studentName");
+    expect(
+      container.querySelector<HTMLButtonElement>("#studentName-font")
+        ?.textContent
+    ).toContain("Inter Bold");
+
+    selectField(container, "courseTitle");
+    expect(
+      container.querySelector<HTMLButtonElement>("#courseTitle-font")
+        ?.textContent
+    ).toContain("Inter");
+
+    const serializedSpec =
+      container.querySelector<HTMLInputElement>('input[name="spec"]')?.value;
+    const spec = JSON.parse(serializedSpec ?? "{}") as {
+      fields: Array<{ field: string; font?: string }>;
+    };
+    expect(spec.fields.find(({ field }) => field === "studentName")?.font).toBe(
+      "Helvetica-Bold"
+    );
+    expect(spec.fields.find(({ field }) => field === "courseTitle")?.font).toBe(
+      "Helvetica"
+    );
+  });
+
   it("centers only the requested axis from the global toolbar", () => {
     act(() => {
       root.render(
@@ -768,8 +1077,8 @@ describe("CertificateTemplateEditor", () => {
     expect(selected).toMatchObject({ x: 15, y: 47.5 });
   });
 
-  it("fits a selected text field to its measured content", () => {
-    act(() => {
+  it("fits a selected text field to its measured content", async () => {
+    await act(async () => {
       root.render(
         <CertificateTemplateEditor
           certificateEnabled
@@ -778,6 +1087,7 @@ describe("CertificateTemplateEditor", () => {
           templates={[draftTemplate]}
         />
       );
+      await Promise.resolve();
     });
     selectField(container, "studentName");
 
@@ -1475,6 +1785,8 @@ describe("CertificateTemplateEditor", () => {
           certificateEnabled
           courseId="course-1"
           issuerConfigured
+          signerName="Dra. Maria"
+          signerRole="Responsável técnica"
           templates={[overlappingTemplate]}
         />
       );
@@ -1636,7 +1948,7 @@ describe("CertificateTemplateEditor", () => {
     expect(submittedBackgrounds[1]).toBeNull();
   });
 
-  it("publishes the current crop, signature, and closed signer values without resending files", async () => {
+  it("publishes the crop and signature image without submitting course signer values", async () => {
     const submissions: FormData[] = [];
     actionMocks.publish.mockImplementation((_state, data: FormData) => {
       submissions.push(data);
@@ -1651,6 +1963,8 @@ describe("CertificateTemplateEditor", () => {
           certificateEnabled
           courseId="course-1"
           issuerConfigured
+          signerName="Dra. Maria"
+          signerRole="Responsável técnica"
           templates={[draftTemplate]}
         />
       );
@@ -1690,15 +2004,6 @@ describe("CertificateTemplateEditor", () => {
       signatureInput?.dispatchEvent(new Event("change", { bubbles: true }));
       await Promise.resolve();
     });
-    const signer = container.querySelector<HTMLInputElement>(
-      'input[name="signerName"]'
-    );
-    act(() => {
-      if (signer) {
-        setInputValue(signer, "Dra. Atualizada");
-      }
-    });
-
     const publish = [...container.querySelectorAll("button")].find((button) =>
       button.textContent?.includes("Salvar e publicar")
     );
@@ -1709,7 +2014,8 @@ describe("CertificateTemplateEditor", () => {
     expect(
       JSON.parse(String(submissions[0]?.get("signatureUpload"))).fileName
     ).toBe("nova-assinatura.png");
-    expect(submissions[0]?.get("signerName")).toBe("Dra. Atualizada");
+    expect(submissions[0]?.has("signerName")).toBe(false);
+    expect(submissions[0]?.has("signerRole")).toBe(false);
 
     await act(async () => publish?.click());
     expect(submissions[1]?.has("backgroundUpload")).toBe(false);
@@ -1771,7 +2077,7 @@ describe("CertificateTemplateEditor", () => {
     ).not.toBeNull();
   });
 
-  it("preserves current signer and selected images after validation fails", async () => {
+  it("preserves selected template images after validation fails", async () => {
     actionMocks.save.mockResolvedValue({
       fieldErrors: { template: "Revise os campos destacados." },
       message: "Template invalido.",
@@ -1822,21 +2128,13 @@ describe("CertificateTemplateEditor", () => {
       signatureInput?.dispatchEvent(new Event("change", { bubbles: true }));
       await Promise.resolve();
     });
-    const signer = container.querySelector<HTMLInputElement>(
-      'input[name="signerName"]'
-    );
-    act(() => {
-      if (signer) {
-        setInputValue(signer, "Dra. Mantida");
-      }
-    });
-
     const save = [...container.querySelectorAll("button")].find((button) =>
       button.textContent?.includes("Salvar rascunho")
     );
     await act(async () => save?.click());
 
-    expect(signer?.value).toBe("Dra. Mantida");
+    expect(container.querySelector('input[name="signerName"]')).toBeNull();
+    expect(container.querySelector('input[name="signerRole"]')).toBeNull();
     expect(container.textContent).toContain("assinatura-atual.png");
     selectBackground(container);
     expect(container.textContent).toContain("arte-certificado.webp");
@@ -1921,22 +2219,18 @@ describe("CertificateTemplateEditor", () => {
         />
       );
     });
-    selectField(container, "signerName");
-    const signer = container.querySelector<HTMLInputElement>(
-      'input[name="signerName"]'
+    selectField(container, "studentName");
+    const geometryInput = container.querySelector<HTMLInputElement>(
+      'input[type="number"]'
     );
-    act(() => signer?.focus());
-    expect(document.activeElement).toBe(signer);
-    act(() => {
-      if (signer) {
-        setInputValue(signer, "Dra. Teclado");
-      }
-    });
+    act(() => geometryInput?.focus());
+    expect(document.activeElement).toBe(geometryInput);
     const form = container.querySelector("form");
     await act(async () => form?.requestSubmit());
     expect(actionMocks.save).toHaveBeenCalledOnce();
     expect(actionMocks.publish).not.toHaveBeenCalled();
     const submitted = actionMocks.save.mock.calls[0]?.[1] as FormData;
-    expect(submitted.get("signerName")).toBe("Dra. Teclado");
+    expect(submitted.has("signerName")).toBe(false);
+    expect(submitted.has("signerRole")).toBe(false);
   });
 });

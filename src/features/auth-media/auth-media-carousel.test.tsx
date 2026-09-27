@@ -5,6 +5,7 @@
 import { act, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { cn } from "@/lib/utils";
 import { AuthMediaCarousel } from "./auth-media-carousel";
 
 const carouselState = vi.hoisted(() => {
@@ -72,15 +73,20 @@ vi.mock("@/components/ui/carousel", () => ({
     children,
     className,
   }: React.HTMLAttributes<HTMLDivElement>) => (
-    <div className={className} data-slot="carousel-content">
-      {children}
+    <div className="overflow-hidden" data-slot="carousel-content">
+      <div className={cn("flex", "-ml-4", className)} data-carousel-track>
+        {children}
+      </div>
     </div>
   ),
   CarouselItem: ({
     children,
     className,
   }: React.HTMLAttributes<HTMLDivElement>) => (
-    <div className={className} data-slot="carousel-item">
+    <div
+      className={cn("min-w-0 shrink-0 grow-0 basis-full", "pl-4", className)}
+      data-slot="carousel-item"
+    >
       {children}
     </div>
   ),
@@ -91,13 +97,16 @@ vi.mock("next/image", () => ({
     onError,
     sizes,
     src,
+    className,
   }: {
+    className?: string;
     onError?: () => void;
     sizes?: string;
     src: string;
   }) => (
     <button
       aria-label="Imagem de teste"
+      className={className}
       data-auth-media-image
       data-image-sizes={sizes}
       data-src={src}
@@ -153,6 +162,29 @@ afterEach(() => {
 });
 
 describe("AuthMediaCarousel", () => {
+  it("keeps full-bleed slides aligned inside one rounded viewport mask", () => {
+    const { container, root } = renderCarousel({ desktop: true });
+    const viewport = container.querySelector<HTMLElement>(
+      "[data-auth-media-viewport]"
+    );
+    const track = container.querySelector<HTMLElement>("[data-carousel-track]");
+    const slide = container.querySelector<HTMLElement>(
+      "[data-slot=carousel-item]"
+    );
+    const image = container.querySelector<HTMLElement>(
+      "[data-auth-media-image]"
+    );
+
+    expect(viewport?.classList.contains("overflow-hidden")).toBe(true);
+    expect(viewport?.classList.contains("rounded-media")).toBe(true);
+    expect(track?.classList.contains("ml-0")).toBe(true);
+    expect(track?.classList.contains("-ml-4")).toBe(false);
+    expect(slide?.classList.contains("pl-0")).toBe(true);
+    expect(slide?.classList.contains("pl-4")).toBe(false);
+    expect(image?.classList.contains("rounded-media")).toBe(false);
+    act(() => root.unmount());
+  });
+
   it("does not render or request media below the desktop breakpoint", () => {
     const { container, root } = renderCarousel({ desktop: false });
 

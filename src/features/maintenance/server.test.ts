@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   getPool: vi.fn(),
+  reconcileDashboardBannerStorage: vi.fn().mockResolvedValue(0),
+  reconcileCourseCoverStorage: vi.fn().mockResolvedValue(0),
   pruneEmailDeliveryRecords: vi.fn().mockResolvedValue({
     events: 0,
     messages: 0,
@@ -32,6 +34,12 @@ vi.mock("@/features/auth-media/storage", () => ({
 vi.mock("@/features/storage/staged-image-reconciliation", () => ({
   reconcileStagedAdminImageUploads:
     dependencies.reconcileStagedAdminImageUploads,
+}));
+vi.mock("@/features/admin/banner-storage-reconciliation", () => ({
+  reconcileDashboardBannerStorage: dependencies.reconcileDashboardBannerStorage,
+}));
+vi.mock("@/features/storage/course-cover-reconciliation", () => ({
+  reconcileCourseCoverStorage: dependencies.reconcileCourseCoverStorage,
 }));
 vi.mock("@/features/storage/lesson-resource-upload-cleanup", () => ({
   reconcileExpiredLessonResourceUploads:
@@ -77,6 +85,8 @@ describe("runMaintenance", () => {
     dependencies.reconcileCertificateTemplateAssets.mockResolvedValue(9);
     dependencies.reconcileStagedAdminImageUploads.mockResolvedValue(8);
     dependencies.reconcileExpiredLessonResourceUploads.mockResolvedValue(10);
+    dependencies.reconcileDashboardBannerStorage.mockResolvedValue(15);
+    dependencies.reconcileCourseCoverStorage.mockResolvedValue(16);
     dependencies.pruneEmailDeliveryRecords.mockResolvedValueOnce({
       events: 13,
       messages: 14,
@@ -97,6 +107,8 @@ describe("runMaintenance", () => {
 
     await expect(runMaintenance()).resolves.toEqual({
       authMediaObjectsReconciled: 0,
+      courseCoverObjectsReconciled: 16,
+      dashboardBannerObjectsReconciled: 15,
       certificateTemplateAssetsRemoved: 9,
       checkoutReservationsRemoved: 10,
       deadlineReached: false,
@@ -108,7 +120,7 @@ describe("runMaintenance", () => {
       learningAnalyticsAggregated: 5,
       learningAnalyticsEventsRemoved: 6,
       leaseLost: false,
-      revokedCertificateArtifactsReconciled: 7,
+      revokedCertificateCleanupItemsReconciled: 7,
       stagedAdminImagesRemoved: 8,
       supportRequestsRemoved: 12,
       webhookPayloadsSanitized: 11,
@@ -188,6 +200,8 @@ describe("runMaintenance", () => {
           authMediaObjectsReconciled: 0,
           certificateTemplateAssetsRemoved: 9,
           checkoutReservationsRemoved: 10,
+          courseCoverObjectsReconciled: 16,
+          dashboardBannerObjectsReconciled: 15,
           deadlineReached: false,
           expiredRateLimitsRemoved: 7,
           expiredSessionsRemoved: 2,
@@ -197,7 +211,7 @@ describe("runMaintenance", () => {
           learningAnalyticsAggregated: 5,
           learningAnalyticsEventsRemoved: 6,
           leaseLost: false,
-          revokedCertificateArtifactsReconciled: 7,
+          revokedCertificateCleanupItemsReconciled: 7,
           stagedAdminImagesRemoved: 8,
           supportRequestsRemoved: 12,
           webhookPayloadsSanitized: 11,

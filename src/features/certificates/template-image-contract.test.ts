@@ -21,7 +21,7 @@ describe("validateCertificateImageFile", () => {
         image(MAX_CERTIFICATE_BACKGROUND_BYTES + 1),
         "background"
       )
-    ).toThrow("10 MB");
+    ).toThrow("10 MiB");
   });
 
   it("uses the signature limit from the shared contract", () => {
@@ -36,7 +36,7 @@ describe("validateCertificateImageFile", () => {
         image(MAX_CERTIFICATE_SIGNATURE_BYTES + 1),
         "signature"
       )
-    ).toThrow("2 MB");
+    ).toThrow("2 MiB");
   });
 
   it("rejects unsupported MIME types", () => {

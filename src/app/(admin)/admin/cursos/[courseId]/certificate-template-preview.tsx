@@ -7,7 +7,9 @@ import type {
   CertificateField,
   CertificateTemplateField,
 } from "@/features/certificates/template-rules";
+import { formatDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { loadCertificatePreviewFonts } from "./certificate-preview-fonts";
 import { certificateTemplateFieldLabels } from "./certificate-template-field-labels";
 import {
   type CertificateFieldGeometry,
@@ -22,31 +24,16 @@ import {
   getCertificatePreviewTextStyle,
 } from "./certificate-template-preview-layout";
 
-const samples = {
-  long: {
-    completedAt: "22 de julho de 2026",
-    courseTitle: "Especialização em Técnicas Avançadas de Harmonização Facial",
-    issuedAt: "22 de julho de 2026",
-    issuerCnpj: "12.345.678/0001-90",
-    issuerName: "Instituto Protea Educação Profissional",
-    signerName: "Dra. Maria Fernanda de Albuquerque",
-    signerRole: "Responsável técnica",
-    studentName: "Ana Carolina de Souza e Silva",
-    validationCode: "PRT-12345678",
-    workloadHours: "120 horas",
-  },
-  short: {
-    completedAt: "22/07/2026",
-    courseTitle: "Botox",
-    issuedAt: "22/07/2026",
-    issuerCnpj: "12.345.678/0001-90",
-    issuerName: "Protea",
-    signerName: "Dra. Ana",
-    signerRole: "Especialista",
-    studentName: "Ana",
-    validationCode: "PRT-123",
-    workloadHours: "8 horas",
-  },
+const PREVIEW_SAMPLE_DATE = new Date("2026-07-22T12:00:00.000Z");
+const PREVIEW_SAMPLE_CODE = "AAECAwQFBgcICQoLDA0ODw";
+const PREVIEW_SAMPLE_VALIDATION_URL = `https://hub.example.test/certificados/${PREVIEW_SAMPLE_CODE}`;
+
+const dynamicPreviewSamples = {
+  completedAt: formatDate(PREVIEW_SAMPLE_DATE),
+  issuedAt: formatDate(PREVIEW_SAMPLE_DATE),
+  studentName: "Ana Carolina de Souza e Silva",
+  validationCode: PREVIEW_SAMPLE_CODE,
+  workloadHours: "120 horas",
 } as const;
 
 interface CertificateFieldDirection {
@@ -183,6 +170,7 @@ const measureTextContent = (
 
 export function CertificateTemplatePreview({
   backgroundUrl,
+  courseTitle,
   courseWorkloadHours,
   fields,
   fitContentRequest,
@@ -195,13 +183,15 @@ export function CertificateTemplatePreview({
   onOverflowFieldsChange,
   overlapFields,
   signatureUrl,
+  issuerCnpj,
+  issuerDisplayName,
   signerName,
   signerRole,
   selectedField,
   backgroundSelected,
-  variant,
 }: {
   backgroundUrl: string | null;
+  courseTitle: string;
   courseWorkloadHours?: number;
   fields: CertificateTemplateField[];
   fitContentRequest?: {
@@ -222,34 +212,48 @@ export function CertificateTemplatePreview({
   onBackgroundSelect?: () => void;
   onOverflowFieldsChange?: (fields: CertificateField[]) => void;
   overlapFields: ReadonlySet<CertificateTemplateField["field"]>;
+  issuerCnpj: string;
+  issuerDisplayName: string;
   signatureUrl: string | null;
   signerName: string;
   signerRole: string;
   selectedField?: CertificateTemplateField["field"] | null;
   backgroundSelected?: boolean;
-  variant: "long" | "short";
 }): React.JSX.Element {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [renderedWidth, setRenderedWidth] = useState(0);
+  const [fontStatus, setFontStatus] = useState<
+    "loading" | "loaded" | "unavailable"
+  >("loading");
   const overflowFieldsRef = useRef<Set<CertificateTemplateField["field"]>>(
     new Set()
   );
   const pageRef = useRef<HTMLDivElement>(null);
   const values = useMemo(
     () => ({
-      ...samples[variant],
+      ...dynamicPreviewSamples,
+      courseTitle,
+      issuerCnpj,
+      issuerName: issuerDisplayName,
       workloadHours:
         courseWorkloadHours === undefined
-          ? samples[variant].workloadHours
+          ? dynamicPreviewSamples.workloadHours
           : `${courseWorkloadHours} horas`,
-      signerName: signerName.trim() || samples[variant].signerName,
-      signerRole: signerRole.trim() || samples[variant].signerRole,
+      signerName: signerName.trim(),
+      signerRole: signerRole.trim(),
     }),
-    [courseWorkloadHours, signerName, signerRole, variant]
+    [
+      courseTitle,
+      courseWorkloadHours,
+      issuerCnpj,
+      issuerDisplayName,
+      signerName,
+      signerRole,
+    ]
   );
 
   useEffect(() => {
-    QRCode.toDataURL("https://hub.example.test/certificados/PRT-12345678", {
+    QRCode.toDataURL(PREVIEW_SAMPLE_VALIDATION_URL, {
       margin: 1,
     })
       .then(setQrDataUrl)
@@ -257,8 +261,27 @@ export function CertificateTemplatePreview({
   }, []);
 
   useEffect(() => {
+    let isMounted = true;
+    const loadFonts = async (): Promise<void> => {
+      const loaded = await loadCertificatePreviewFonts(document.fonts);
+      if (isMounted) {
+        setFontStatus(loaded ? "loaded" : "unavailable");
+      }
+    };
+    loadFonts().catch(() => {
+      if (isMounted) {
+        setFontStatus("unavailable");
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const page = pageRef.current;
-    if (!page || renderedWidth <= 0) {
+    if (fontStatus !== "loaded" || !page || renderedWidth <= 0) {
       return;
     }
 
@@ -295,7 +318,7 @@ export function CertificateTemplatePreview({
     }
     overflowFieldsRef.current = nextOverflowFields;
     onOverflowFieldsChange?.([...nextOverflowFields]);
-  }, [fields, onOverflowFieldsChange, renderedWidth, values]);
+  }, [fields, fontStatus, onOverflowFieldsChange, renderedWidth, values]);
 
   useEffect(() => {
     const page = pageRef.current;
@@ -312,7 +335,11 @@ export function CertificateTemplatePreview({
   const lastFitRequestIdRef = useRef(0);
   useEffect(() => {
     const request = fitContentRequest;
-    if (!request || request.id <= lastFitRequestIdRef.current) {
+    if (
+      fontStatus !== "loaded" ||
+      !request ||
+      request.id <= lastFitRequestIdRef.current
+    ) {
       return;
     }
 
@@ -359,6 +386,7 @@ export function CertificateTemplatePreview({
     onFieldInteractionEnd?.(true);
   }, [
     fields,
+    fontStatus,
     fitContentRequest,
     onFieldGeometryChange,
     onFieldInteractionEnd,
@@ -481,7 +509,7 @@ export function CertificateTemplatePreview({
           return (
             <p
               className={cn(
-                "pointer-events-none absolute overflow-hidden text-pretty break-words",
+                "pointer-events-none absolute overflow-hidden break-words",
                 overlapClassName
               )}
               data-overlap={overlapMarker}
@@ -667,6 +695,24 @@ export function CertificateTemplatePreview({
           />
         ) : null}
       </div>
+      {fontStatus === "loading" ? (
+        <p
+          aria-live="polite"
+          className="pointer-events-none absolute right-2 bottom-2 left-2 rounded-md bg-background/90 px-2 py-1 text-center text-muted-foreground text-xs"
+          role="status"
+        >
+          Carregando a fonte da prévia…
+        </p>
+      ) : null}
+      {fontStatus === "unavailable" ? (
+        <p
+          className="pointer-events-none absolute right-2 bottom-2 left-2 rounded-md bg-warning/90 px-2 py-1 text-center font-medium text-warning-foreground text-xs"
+          role="alert"
+        >
+          Não foi possível carregar Inter. A prévia pode diferir do PDF e a
+          validação de texto está suspensa.
+        </p>
+      ) : null}
       {overflowFieldLabels.length > 0 ? (
         <p
           aria-live="polite"

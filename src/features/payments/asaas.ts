@@ -45,7 +45,9 @@ export interface AsaasPayment {
   billingType: string;
   checkoutSession: string | null;
   clientPaymentDate?: string;
+  confirmedDate?: string;
   customer: string;
+  customerPaymentDate?: string;
   dueDate?: string;
   externalReference: string | null;
   id: string;

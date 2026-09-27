@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
+last_verified_commit: c10f0d2
 ---
 
 # Documentação do Hub
@@ -83,6 +83,10 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 
 ### Revisões
 
+- [Pesquisa de versionamento de templates de Certificado e publicações de Curso](reviews/2026-09-25-certificate-template-and-course-versioning-research.md)
+- [Pesquisa de migração do código público de Certificado para Base64URL](reviews/2026-09-25-certificate-code-base64url-migration-research.md)
+- [Pesquisa do código público de validação de Certificado](reviews/2026-09-25-certificate-validation-code-research.md)
+- [Pesquisa de paridade entre preview e PDF de Certificado](reviews/2026-09-25-certificate-preview-renderer-parity-research.md)
 - [Remediação direta das instruções de skills e AGENTS.md em 2026-09-06](reviews/2026-09-06-instructions-remediation.md)
 - [Auditoria consolidada de skills e AGENTS.md em 2026-09-06](reviews/2026-09-06-skills-audit.md)
 - [Auditoria dos AGENTS.md](reviews/2026-09-06-agents-files-audit.md)
@@ -128,8 +132,9 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 
 - [Plano mestre de remediação da prontidão de Production](superpowers/plans/2026-08-23-production-readiness-remediation-sprints.md)
 
-### Plano de manutenção proposto
+### Planos de manutenção
 
+- [Plano aprovado de migração do código de Certificado para Base64URL](superpowers/plans/2026-09-25-certificate-code-base64url-migration.md)
 - [Sprints finais de remediação da liberação por Módulo](superpowers/plans/2026-09-06-module-content-release-final-remediation-sprints.md)
 - [Sprints de limpeza e organização do repositório](superpowers/plans/2026-09-03-repository-cleanup-sprints.md)
 

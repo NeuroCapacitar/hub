@@ -8,7 +8,6 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { redirect } from "next/navigation";
 import { PanelLayout } from "@/components/panel-layout";
-import { SupportSidebarItem } from "@/components/support-sidebar-item";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -21,6 +20,7 @@ import { isPreviewRole } from "@/features/courses/preview";
 import { getStudentCourses } from "@/features/courses/server";
 import { route } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
+import { getStudentDashboardGreeting } from "@/lib/student-dashboard-greeting";
 
 export default async function StudentLayout({
   children,
@@ -33,10 +33,15 @@ export default async function StudentLayout({
 
   const courses =
     session.role === "student" ? await getStudentCourses(session.user.id) : [];
+  const studentDashboardGreeting =
+    session.role === "student"
+      ? getStudentDashboardGreeting(session.user.name)
+      : undefined;
 
   return (
     <PanelLayout
       navContent={<StudentNav courses={courses} />}
+      {...(studentDashboardGreeting ? { studentDashboardGreeting } : {})}
       userEmail={session.user.email}
       userImage={(session.user as { image?: string | null }).image ?? null}
       userName={session.user.name}
@@ -136,19 +141,15 @@ function StudentNav({
         <SidebarGroupLabel>Suporte</SidebarGroupLabel>
         <SidebarGroupContent>
           <SidebarMenu>
-            <SupportSidebarItem />
             <SidebarMenuItem>
-              <SidebarMenuLink
-                href={route("/app/perguntas-frequentes")}
-                tooltip="Perguntas frequentes"
-              >
+              <SidebarMenuLink href={route("/app/ajuda")} tooltip="Ajuda">
                 <HugeiconsIcon
                   aria-hidden="true"
                   icon={HelpCircleIcon}
                   size={18}
                   strokeWidth={1.5}
                 />
-                <span>Perguntas frequentes</span>
+                <span>Ajuda</span>
               </SidebarMenuLink>
             </SidebarMenuItem>
           </SidebarMenu>

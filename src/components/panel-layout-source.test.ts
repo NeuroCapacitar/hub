@@ -22,14 +22,18 @@ describe("PanelLayout", () => {
     expect(source).toContain("<BrandLogo");
   });
 
-  it("renders the current page title in the shared shell header", async () => {
+  it("keeps a shell title for compact pages and uses ancestor breadcrumbs for headed pages", async () => {
     const source = await readFile(
       new URL("./panel-layout.tsx", import.meta.url),
       "utf8"
     );
 
-    expect(source).toContain("getPanelRouteMeta(pathname)");
+    expect(source).toContain("getPanelRouteMeta(pathname,");
+    expect(source).toContain("studentDashboardGreeting");
     expect(source).toContain("<PanelBreadcrumb");
+    expect(source).toContain("hasVisiblePageHeading");
+    expect(source).toContain("currentTitle: pageMeta.title");
+    expect(source).toContain("pageMeta.mobilePageHeading");
     expect(source).toContain("{pageMeta.title}");
   });
 });

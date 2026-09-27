@@ -48,6 +48,8 @@ describe("LearningAnalyticsPage", () => {
       {
         activeEnrollments: 2,
         completed: 1,
+        checkpointSampleCount: 1,
+        completionTimingSampleCount: 1,
         courseId: "course-1",
         coursePublicationId: "publication-2",
         courseTitle: "Curso de exemplo",
@@ -62,6 +64,7 @@ describe("LearningAnalyticsPage", () => {
         medianHoursToNextLesson: null,
         moduleSortOrder: 1,
         moduleTitle: "Módulo 1",
+        nextLessonTimingSampleCount: 0,
         playingSeconds: 1800,
         publicationNumber: 2,
         publicationStatus: "published",
@@ -69,10 +72,13 @@ describe("LearningAnalyticsPage", () => {
         aggregateMedianCheckpointPercent: 45,
         aggregateMedianHoursToComplete: 1.75,
         aggregateMedianHoursToNextLesson: null,
+        aggregateNextLessonTimingSampleCount: 0,
       },
       {
         activeEnrollments: 2,
         completed: 2,
+        checkpointSampleCount: 0,
+        completionTimingSampleCount: 1,
         courseId: "course-1",
         coursePublicationId: "publication-2",
         courseTitle: "Curso de exemplo",
@@ -87,6 +93,7 @@ describe("LearningAnalyticsPage", () => {
         medianHoursToNextLesson: 1,
         moduleSortOrder: 1,
         moduleTitle: "Módulo 1",
+        nextLessonTimingSampleCount: 1,
         playingSeconds: 2400,
         publicationNumber: 2,
         publicationStatus: "published",
@@ -94,10 +101,13 @@ describe("LearningAnalyticsPage", () => {
         aggregateMedianCheckpointPercent: null,
         aggregateMedianHoursToComplete: 4,
         aggregateMedianHoursToNextLesson: 1,
+        aggregateNextLessonTimingSampleCount: 3,
       },
       {
         activeEnrollments: 0,
         completed: 0,
+        checkpointSampleCount: 1,
+        completionTimingSampleCount: 1,
         courseId: "course-1",
         coursePublicationId: "publication-1",
         courseTitle: "Curso de exemplo",
@@ -112,6 +122,7 @@ describe("LearningAnalyticsPage", () => {
         medianHoursToNextLesson: null,
         moduleSortOrder: 1,
         moduleTitle: "Módulo 1 antigo",
+        nextLessonTimingSampleCount: 0,
         playingSeconds: 900,
         publicationNumber: 1,
         publicationStatus: "retired",
@@ -119,6 +130,7 @@ describe("LearningAnalyticsPage", () => {
         aggregateMedianCheckpointPercent: 45,
         aggregateMedianHoursToComplete: 1.75,
         aggregateMedianHoursToNextLesson: null,
+        aggregateNextLessonTimingSampleCount: 0,
       },
     ]);
 
@@ -133,10 +145,16 @@ describe("LearningAnalyticsPage", () => {
     expect(markup).toContain("Segunda aula");
     expect(markup).toContain("Aula 01");
     expect(markup).toContain("Aula 02");
+    expect(markup).toContain("Atividade");
+    expect(markup).toContain("Inícios");
+    expect(markup).toContain("Conclusões");
+    expect(markup).toContain("não é uma taxa de conclusão");
     expect(markup).not.toContain("Publicação vigente · v2");
     expect(markup).not.toContain("1–2 de 2 Aulas");
     expect(markup).toContain("Aulas sem início");
     expect(markup).toContain("Visualização média do Curso");
+    expect(markup).toContain("Pausas observadas");
+    expect(markup).toContain("Ver na tabela");
     expect(markup).toContain("Tempo reproduzido");
     expect(markup).toContain("Visualização média do Curso: 63%");
     expect(markup).toContain('data-slot="progress"');

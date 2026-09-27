@@ -57,6 +57,18 @@ describe("certificate migration catalog", () => {
     ).toEqual([]);
   });
 
+  it("backfills the issuance guard and stops if a historical certificate lacks its completion", async () => {
+    const migration = await readFile(
+      join(migrationsPath, "0093_certificate_issuance_guard.sql"),
+      "utf8"
+    );
+
+    expect(migration).toContain('"certificate_ever_issued"');
+    expect(migration).toContain("RAISE EXCEPTION");
+    expect(migration).toContain('UPDATE "course_completions"');
+    expect(migration).toContain('FROM "certificates" certificate');
+  });
+
   it("detects misplaced legacy and incomplete render-claim declarations", async () => {
     const { schemaSource, snapshot } = await loadCurrentCatalog();
     const invalidSnapshot = structuredClone(snapshot) as {
@@ -133,6 +145,14 @@ describe("certificate migration catalog", () => {
       value:
         '"certificates"."render_status" <> \'ready\' or "certificates"."pdf_storage_key" is not null or "certificates"."pdf_sha256" is not null or "certificates"."rendered_at" is not null or "certificates"."render_claim_token" is null',
     };
+    checks.certificates_pdf_purged_state_check = {
+      value:
+        '"certificates"."pdf_purged_at" is null or "certificates"."status" = \'revoked\'',
+    };
+    checks.certificates_preview_purged_state_check = {
+      value:
+        '"certificates"."preview_purged_at" is null or "certificates"."preview_sha256" is null',
+    };
 
     const result = validateCertificateCatalogParity({
       schemaSource,
@@ -144,6 +164,12 @@ describe("certificate migration catalog", () => {
     );
     expect(result.errors).toContain(
       "Check certificates_ready_artifact_check diverge da expressao esperada."
+    );
+    expect(result.errors).toContain(
+      "Check certificates_pdf_purged_state_check diverge da expressao esperada."
+    );
+    expect(result.errors).toContain(
+      "Check certificates_preview_purged_state_check diverge da expressao esperada."
     );
   });
 });

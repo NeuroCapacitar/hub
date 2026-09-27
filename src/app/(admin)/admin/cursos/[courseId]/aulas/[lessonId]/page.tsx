@@ -192,7 +192,8 @@ export default async function AdminLessonEditPage({
                   </TabsContent>
 
                   <TabsContent
-                    className="m-0 border-none p-0 focus-visible:ring-0"
+                    className="m-0 border-none p-0 focus-visible:ring-0 data-[state=inactive]:hidden"
+                    forceMount
                     value="attachments"
                   >
                     <LessonResourcesFields

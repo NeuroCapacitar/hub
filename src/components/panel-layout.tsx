@@ -54,6 +54,7 @@ import type { AppRole } from "@/lib/session";
 interface PanelLayoutProps {
   readonly children: ReactNode;
   readonly navContent: ReactNode;
+  readonly studentDashboardGreeting?: string | undefined;
   readonly userEmail: string;
   readonly userImage?: string | null;
   readonly userName: string;
@@ -159,6 +160,7 @@ export function PanelLayout(props: PanelLayoutProps): JSX.Element {
 function PanelLayoutInner({
   children,
   navContent,
+  studentDashboardGreeting,
   userEmail,
   userName,
   userImage,
@@ -171,13 +173,19 @@ function PanelLayoutInner({
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const fallbackPageMeta = useMemo(
-    () => getPanelRouteMeta(pathname),
-    [pathname]
+    () =>
+      getPanelRouteMeta(pathname, {
+        studentDashboardGreeting,
+      }),
+    [pathname, studentDashboardGreeting]
   );
   const [pageMeta, setPageMeta] = useState(fallbackPageMeta);
-  const [hasVisiblePageHeading, setHasVisiblePageHeading] = useState(false);
+  const [hasVisiblePageHeading, setHasVisiblePageHeading] = useState(
+    fallbackPageMeta.visibleHeading
+  );
   useEffect(() => {
     setPageMeta(fallbackPageMeta);
+    setHasVisiblePageHeading(fallbackPageMeta.visibleHeading);
   }, [fallbackPageMeta]);
   const setPanelTitle = useCallback(
     (title: string, ancestors?: readonly PanelBreadcrumbItem[]) => {
@@ -195,7 +203,7 @@ function PanelLayoutInner({
           return current;
         }
 
-        return { ancestors: nextAncestors, title };
+        return { ...current, ancestors: nextAncestors, title };
       });
     },
     [fallbackPageMeta]
@@ -354,11 +362,24 @@ function PanelLayoutInner({
                   onClick={() => setFocusMode(false)}
                 />
                 {!hasVisiblePageHeading && (
-                  <h1 className="sr-only">{pageMeta.title}</h1>
+                  <h1
+                    className={
+                      pageMeta.mobilePageHeading
+                        ? "sr-only max-md:hidden"
+                        : "sr-only"
+                    }
+                  >
+                    {pageMeta.title}
+                  </h1>
                 )}
                 <PanelBreadcrumb
                   ancestors={pageMeta.ancestors}
-                  currentTitle={pageMeta.title}
+                  {...(pageMeta.compactTitle
+                    ? { compactCurrentTitle: pageMeta.compactTitle }
+                    : {})}
+                  {...(hasVisiblePageHeading
+                    ? {}
+                    : { currentTitle: pageMeta.title })}
                 />
               </div>
 

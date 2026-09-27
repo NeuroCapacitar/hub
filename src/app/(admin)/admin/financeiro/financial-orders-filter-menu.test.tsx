@@ -2,7 +2,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   FinancialOrdersFilterMenu,
+  getCheckoutFilterHref,
   getOrdersFilterHref,
+  getOrdersFilterMenuHref,
 } from "./financial-orders-filter-menu";
 
 describe("FinancialOrdersFilterMenu", () => {
@@ -82,5 +84,77 @@ describe("FinancialOrdersFilterMenu", () => {
     expect(markup).toContain("status=pending");
     expect(markup).toContain("paymentMethod=PIX");
     expect(markup).toContain("Remover filtro Checkout: Em aberto");
+  });
+
+  it("does not narrow the closed checkout filter to pending orders", () => {
+    const href = getCheckoutFilterHref({
+      checkout: "closed",
+      paymentMethod: "PIX",
+      refundStatus: "failed",
+      search: "Student",
+    });
+
+    expect(href).toBe(
+      "/admin/financeiro?tab=orders&checkout=closed&q=Student&paymentMethod=PIX&refundStatus=failed"
+    );
+    expect(href).not.toContain("status=pending");
+  });
+
+  it("encodes payment-correlation filters with the orders tab", () => {
+    expect(
+      getOrdersFilterHref({
+        paymentEvidence: "uncorrelated",
+        search: "",
+        status: "paid",
+      })
+    ).toBe(
+      "/admin/financeiro?tab=orders&status=paid&paymentEvidence=uncorrelated"
+    );
+  });
+
+  it("keeps payment evidence only with paid orders and no checkout filter", () => {
+    const currentFilters = {
+      paymentEvidence: "uncorrelated" as const,
+      search: "student",
+    };
+
+    expect(
+      getOrdersFilterMenuHref(
+        { checkout: "open", status: "pending" },
+        currentFilters
+      )
+    ).toBe(
+      "/admin/financeiro?tab=orders&checkout=open&q=student&status=pending"
+    );
+    expect(
+      getOrdersFilterMenuHref({ status: "refunded" }, currentFilters)
+    ).toBe("/admin/financeiro?tab=orders&q=student&status=refunded");
+    expect(getOrdersFilterMenuHref({ status: "paid" }, currentFilters)).toBe(
+      "/admin/financeiro?tab=orders&q=student&status=paid&paymentEvidence=uncorrelated"
+    );
+  });
+
+  it("uses the payment-evidence option label in the active filter", () => {
+    const markup = renderToStaticMarkup(
+      <FinancialOrdersFilterMenu
+        paymentEvidence="uncorrelated"
+        search=""
+        status="paid"
+      />
+    );
+
+    expect(markup).toContain("Vínculo: Pagamento sem vínculo");
+  });
+
+  it("shows the refund state as a removable filter", () => {
+    const markup = renderToStaticMarkup(
+      <FinancialOrdersFilterMenu refundStatus="failed" search="" />
+    );
+
+    expect(markup).toContain("Reembolso: Falhou");
+    expect(markup).toContain("Remover filtro Reembolso: Falhou");
+    expect(
+      getOrdersFilterHref({ refundStatus: "failed", search: "" })
+    ).toContain("refundStatus=failed");
   });
 });

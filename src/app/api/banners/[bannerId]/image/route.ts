@@ -23,7 +23,13 @@ export async function GET(
     return new NextResponse("Not Found", { status: 404 });
   }
 
-  const signedUrl = await createR2ObjectReadUrl({ key: banner.image_url });
+  const signedUrl = await createR2ObjectReadUrl({
+    key: banner.image_url,
+    responseCacheControl: "private, max-age=240",
+  });
 
-  return NextResponse.redirect(signedUrl);
+  const response = NextResponse.redirect(signedUrl);
+  response.headers.set("Cache-Control", "private, max-age=240");
+  response.headers.set("Vary", "Cookie");
+  return response;
 }

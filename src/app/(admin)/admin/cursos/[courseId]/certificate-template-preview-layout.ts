@@ -1,3 +1,4 @@
+import { CERTIFICATE_FONT_LINE_HEIGHT_RATIO } from "@/features/certificates/font-metrics";
 import type { CertificateTemplateField } from "@/features/certificates/template-rules";
 import { CERTIFICATE_PAGE } from "@/features/certificates/template-rules";
 
@@ -5,9 +6,8 @@ const POINTS_PER_MILLIMETER = 72 / 25.4;
 export const CERTIFICATE_PAGE_WIDTH_POINTS =
   CERTIFICATE_PAGE.width * POINTS_PER_MILLIMETER;
 
-// PDFKit and browsers use different font engines. This fixed ratio is the
-// closest stable browser approximation of PDFKit's built-in Helvetica leading.
-export const CERTIFICATE_PREVIEW_LINE_HEIGHT = 1.15;
+export const CERTIFICATE_PREVIEW_LINE_HEIGHT =
+  CERTIFICATE_FONT_LINE_HEIGHT_RATIO;
 
 const getVerticalAlignItems = (
   verticalAlign: CertificateTemplateField["verticalAlign"]
