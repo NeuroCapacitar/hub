@@ -26,7 +26,7 @@ export function CertificatePreviewThumbnail({
             size={32}
             strokeWidth={1.4}
           />
-          <span className="text-xs">Prévia indisponível</span>
+          <span className="text-foreground text-xs">Prévia indisponível</span>
         </div>
       ) : (
         <Image

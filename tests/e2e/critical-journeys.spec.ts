@@ -37,8 +37,9 @@ const CADASTRO_RETURN_TO_PATTERN = /\/cadastro\?returnTo=/;
 const CERTIFICATE_EMAIL_IDEMPOTENCY_PATTERN =
   /^email\.certificate-issued\/([0-9a-f-]{36})\/v1$/;
 const CERTIFICATE_CODE_LABEL_PATTERN = /Código do certificado:/;
-const CERTIFICATE_CODE_PATTERN = /^PRT-[0-9A-F]{32}$/;
+const CERTIFICATE_CODE_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 const CERTIFICATE_STATUS_PATTERN = /Status: (Preparando|Disponível)/;
+const CERTIFICATE_HISTORY_BUTTON_PATTERN = /^Histórico \(\d+\)$/;
 const SCHEDULED_RELEASE_PATTERN = /Em breve/;
 const LOCKED_LESSON_SCREENREADER_PATTERN = /^Aula bloqueada:/;
 const CHECKOUT_PREPARING_PATTERN =
@@ -1282,11 +1283,19 @@ test("student certificates expose canonical links and lifecycle states safely @m
   await expect(failedViewLink).toHaveAttribute("target", "_blank");
   await expect(failedViewLink).toHaveAttribute("rel", "noopener noreferrer");
 
-  const revokedCard = page
+  await page
+    .getByRole("button", { name: CERTIFICATE_HISTORY_BUTTON_PATTERN })
+    .click();
+  const certificateHistory = page.getByRole("dialog", {
+    name: "Histórico de certificados",
+  });
+  const revokedCard = certificateHistory
     .getByRole("article")
     .filter({ hasText: fixture.certificate.revoked.code });
   await expect(
-    revokedCard.getByLabel("Status: Revogado", { exact: true })
+    revokedCard.getByRole("alert", {
+      name: "Aviso de certificado revogado",
+    })
   ).toBeVisible();
   await expect(
     revokedCard.getByRole("link", { name: DOWNLOAD_PDF_PATTERN })
