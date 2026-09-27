@@ -40,6 +40,7 @@ const CERTIFICATE_CODE_LABEL_PATTERN = /Código do certificado:/;
 const CERTIFICATE_CODE_PATTERN = /^PRT-[0-9A-F]{32}$/;
 const CERTIFICATE_STATUS_PATTERN = /Status: (Preparando|Disponível)/;
 const SCHEDULED_RELEASE_PATTERN = /Em breve/;
+const LOCKED_LESSON_SCREENREADER_PATTERN = /^Aula bloqueada:/;
 const CHECKOUT_PREPARING_PATTERN =
   /Preparando seu checkout|Ainda estamos preparando seu checkout/;
 
@@ -674,7 +675,7 @@ test("expired and revoked access explain the next action", async ({ page }) => {
   await page.context().clearCookies();
   await signIn(page, accessFixture.studentWithRevokedAccess, APP_URL_PATTERN);
   await expect(
-    page.getByText("Acesso em analise", { exact: true })
+    page.getByText("Acesso em análise", { exact: true })
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Falar com suporte" })
@@ -685,11 +686,14 @@ test("sequencing keeps a future lesson locked", async ({ page }) => {
   const fixture = await readFixture();
   await signIn(page, fixture.studentWithGrant, APP_URL_PATTERN);
   await page.goto(`/app/aulas/${fixture.course.lessonOneId}`);
-  await expect(
-    page
-      .getByRole("complementary")
-      .getByText("Continue a sequência", { exact: true })
-  ).toBeVisible();
+  const sequenceLockTooltip =
+    "Conclua as aulas obrigatórias anteriores para liberar a sequência.";
+  const sequenceLockIndicator = page
+    .getByRole("complementary")
+    .getByRole("img", { name: sequenceLockTooltip });
+  await expect(sequenceLockIndicator).toBeVisible();
+  await sequenceLockIndicator.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(sequenceLockTooltip);
   await page.goto(`/app/aulas/${fixture.course.lessonTwoId}`);
   await expect(
     page.getByRole("heading", { name: "Não encontramos essa página" })
@@ -709,9 +713,15 @@ test("mobile lesson navigation exposes the course outline and locked lessons @mo
     .filter({ hasText: "Conteúdo do curso" });
   await mobileNavigation.locator("summary").click();
   await expect(mobileNavigation.getByText("Segunda aula")).toBeVisible();
+  const sequenceLockTooltip =
+    "Conclua as aulas obrigatórias anteriores para liberar a sequência.";
+  const sequenceLockIndicator = mobileNavigation.getByRole("img", {
+    name: sequenceLockTooltip,
+  });
+  await expect(sequenceLockIndicator).toBeVisible();
   await expect(
-    mobileNavigation.getByText("Continue a sequência", { exact: true })
-  ).toBeVisible();
+    mobileNavigation.getByText(LOCKED_LESSON_SCREENREADER_PATTERN)
+  ).toBeAttached();
 });
 
 test("completion persists and advances to the next lesson", async ({
@@ -1197,15 +1207,23 @@ test("student certificates expose canonical links and lifecycle states safely @m
   ).toHaveCount(0);
   await expect(
     pendingCard.getByRole("link", {
+      exact: true,
       name: fixture.certificate.pending.courseTitle,
     })
   ).toHaveAttribute(
     "href",
     `/certificados/${fixture.certificate.pending.code}`
   );
-  await expect(
-    pendingCard.getByRole("button", { name: "Copiar link" })
-  ).toBeVisible();
+  const pendingViewLink = pendingCard.getByRole("link", {
+    exact: true,
+    name: `Visualizar certificado de ${fixture.certificate.pending.courseTitle}`,
+  });
+  await expect(pendingViewLink).toHaveAttribute(
+    "href",
+    `/certificados/${fixture.certificate.pending.code}`
+  );
+  await expect(pendingViewLink).toHaveAttribute("target", "_blank");
+  await expect(pendingViewLink).toHaveAttribute("rel", "noopener noreferrer");
 
   const readyCard = page
     .getByRole("article")
@@ -1227,9 +1245,16 @@ test("student certificates expose canonical links and lifecycle states safely @m
       name: fixture.certificate.ready.courseTitle,
     })
   ).toHaveAttribute("href", `/certificados/${fixture.certificate.ready.code}`);
-  await expect(
-    readyCard.getByRole("button", { name: "Copiar link" })
-  ).toBeVisible();
+  const readyViewLink = readyCard.getByRole("link", {
+    exact: true,
+    name: `Visualizar certificado de ${fixture.certificate.ready.courseTitle}`,
+  });
+  await expect(readyViewLink).toHaveAttribute(
+    "href",
+    `/certificados/${fixture.certificate.ready.code}`
+  );
+  await expect(readyViewLink).toHaveAttribute("target", "_blank");
+  await expect(readyViewLink).toHaveAttribute("rel", "noopener noreferrer");
 
   const failedCard = page
     .getByRole("article")
@@ -1242,12 +1267,20 @@ test("student certificates expose canonical links and lifecycle states safely @m
   ).toHaveCount(0);
   await expect(
     failedCard.getByRole("link", {
+      exact: true,
       name: fixture.certificate.failed.courseTitle,
     })
   ).toHaveAttribute("href", `/certificados/${fixture.certificate.failed.code}`);
-  await expect(
-    failedCard.getByRole("button", { name: "Copiar link" })
-  ).toBeVisible();
+  const failedViewLink = failedCard.getByRole("link", {
+    exact: true,
+    name: `Visualizar certificado de ${fixture.certificate.failed.courseTitle}`,
+  });
+  await expect(failedViewLink).toHaveAttribute(
+    "href",
+    `/certificados/${fixture.certificate.failed.code}`
+  );
+  await expect(failedViewLink).toHaveAttribute("target", "_blank");
+  await expect(failedViewLink).toHaveAttribute("rel", "noopener noreferrer");
 
   const revokedCard = page
     .getByRole("article")
@@ -1260,15 +1293,23 @@ test("student certificates expose canonical links and lifecycle states safely @m
   ).toHaveCount(0);
   await expect(
     revokedCard.getByRole("link", {
+      exact: true,
       name: fixture.certificate.revoked.courseTitle,
     })
   ).toHaveAttribute(
     "href",
     `/certificados/${fixture.certificate.revoked.code}`
   );
-  await expect(
-    revokedCard.getByRole("button", { name: "Copiar link" })
-  ).toBeVisible();
+  const revokedViewLink = revokedCard.getByRole("link", {
+    exact: true,
+    name: `Visualizar certificado de ${fixture.certificate.revoked.courseTitle}`,
+  });
+  await expect(revokedViewLink).toHaveAttribute(
+    "href",
+    `/certificados/${fixture.certificate.revoked.code}`
+  );
+  await expect(revokedViewLink).toHaveAttribute("target", "_blank");
+  await expect(revokedViewLink).toHaveAttribute("rel", "noopener noreferrer");
 
   await assertNoBlockingAccessibilityViolations(page, "student certificates");
 });

@@ -9,6 +9,8 @@ const fixturePath = resolve(
 const ADMIN_URL_PATTERN = /\/admin$/;
 const APP_URL_PATTERN = /\/app$/;
 const COURSE_ACTION_NAME_PATTERN = /^(Iniciar curso|Continuar curso)$/;
+const STUDENT_GREETING_PATTERN =
+  /^(Bom dia|Boa tarde|Boa noite|Olá)(, .+)?[.!]$/;
 const MAX_TAB_STEPS = 100;
 
 interface E2eCredentials {
@@ -74,7 +76,9 @@ test("login pode ser concluído somente com teclado", async ({ page }) => {
 
   await signInWithKeyboard(page, fixture.studentWithGrant, APP_URL_PATTERN);
   await expect(
-    page.getByRole("heading", { name: "Seu espaço de aprendizagem" })
+    page.getByRole("heading", {
+      name: STUDENT_GREETING_PATTERN,
+    })
   ).toBeVisible();
 });
 
