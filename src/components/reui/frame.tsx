@@ -120,19 +120,6 @@ function FramePanel({
   );
 }
 
-function FrameHeader({ className, ...props }: React.ComponentProps<"header">) {
-  return (
-    <header
-      className={cn(
-        "flex flex-col gap-(--frame-panel-header-gap) px-(--frame-panel-header-px) py-(--frame-panel-header-py)",
-        className
-      )}
-      data-slot="frame-panel-header"
-      {...props}
-    />
-  );
-}
-
 function FrameTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -143,38 +130,4 @@ function FrameTitle({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-function FrameDescription({
-  className,
-  ...props
-}: React.ComponentProps<"div">) {
-  return (
-    <div
-      className={cn("text-muted-foreground text-sm", className)}
-      data-slot="frame-panel-description"
-      {...props}
-    />
-  );
-}
-
-function FrameFooter({ className, ...props }: React.ComponentProps<"footer">) {
-  return (
-    <footer
-      className={cn(
-        "flex flex-col gap-(--frame-panel-footer-gap) px-(--frame-panel-footer-px) py-(--frame-panel-footer-py)",
-        className
-      )}
-      data-slot="frame-panel-footer"
-      {...props}
-    />
-  );
-}
-
-export {
-  Frame,
-  FrameDescription,
-  FrameFooter,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-  frameVariants,
-};
+export { Frame, FramePanel, FrameTitle, frameVariants };
