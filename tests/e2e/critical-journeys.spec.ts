@@ -25,6 +25,7 @@ const fixturePath = resolve(
 );
 const ADMIN_URL_PATTERN = /\/admin$/;
 const APP_URL_PATTERN = /\/app$/;
+const STUDENT_HELP_URL_PATTERN = /\/app\/ajuda$/;
 const OPEN_ORDER_DETAILS_NAME_PATTERN = /Abrir detalhes do pedido de /;
 const STUDENT_SEARCH_PLACEHOLDER_PATTERN = /Buscar/;
 const SUPPORT_CODE_PATTERN = /Código de suporte/;
@@ -100,6 +101,18 @@ const signIn = async (
     page.off("pageerror", capturePageError);
   }
 };
+
+test("retired student FAQ path redirects to the Ajuda page", async ({
+  page,
+}) => {
+  const fixture = await readFixture();
+  await signIn(page, fixture.studentWithGrant, APP_URL_PATTERN);
+
+  await page.goto("/app/perguntas-frequentes");
+
+  await expect(page).toHaveURL(STUDENT_HELP_URL_PATTERN);
+  await expect(page.getByRole("heading", { name: "Ajuda" })).toBeVisible();
+});
 
 test("landing CTA handoff creates one checkout and activation @mobile", async ({
   page,
