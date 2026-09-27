@@ -66,6 +66,7 @@ export function CertificateCard({
             <CardTitle as="h2" className="text-balance" id={titleId}>
               <Link
                 href={certificateLinks.publicHref}
+                prefetch={false}
                 rel="noopener noreferrer"
                 target="_blank"
               >
@@ -101,6 +102,7 @@ export function CertificateCard({
                 <Link
                   aria-label={`Baixar PDF de ${certificate.courseTitle}`}
                   href={certificateLinks.pdfHref}
+                  prefetch={false}
                 >
                   <HugeiconsIcon
                     aria-hidden="true"
@@ -124,6 +126,7 @@ export function CertificateCard({
               <Link
                 aria-label={`Visualizar certificado de ${certificate.courseTitle}`}
                 href={certificateLinks.publicHref}
+                prefetch={false}
                 rel="noopener noreferrer"
                 target="_blank"
               >

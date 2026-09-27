@@ -19,14 +19,14 @@ export function CertificatePreviewThumbnail({
       data-certificate-preview="true"
     >
       {hasError ? (
-        <div className="flex h-full flex-col items-center justify-center gap-2 rounded-sm bg-muted/50 px-4 text-center text-muted-foreground">
+        <div className="flex h-full flex-col items-center justify-center gap-2 rounded-sm bg-muted/50 px-4 text-center text-surface-warm-foreground">
           <HugeiconsIcon
             aria-hidden="true"
             icon={Certificate01Icon}
             size={32}
             strokeWidth={1.4}
           />
-          <span className="text-foreground text-xs">Prévia indisponível</span>
+          <span className="text-xs">Prévia indisponível</span>
         </div>
       ) : (
         <Image

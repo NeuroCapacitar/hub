@@ -40,6 +40,7 @@ export function CertificateHistoryCard({
             <CardTitle as="h3" className="mt-1.5 text-balance" id={titleId}>
               <Link
                 href={certificateLinks.publicHref}
+                prefetch={false}
                 rel="noopener noreferrer"
                 target="_blank"
               >
@@ -58,6 +59,7 @@ export function CertificateHistoryCard({
             <Link
               aria-label={`Visualizar certificado de ${certificate.courseTitle}`}
               href={certificateLinks.publicHref}
+              prefetch={false}
               rel="noopener noreferrer"
               target="_blank"
             >
