@@ -59,6 +59,7 @@ const createSession = (overrides: Partial<AppSession> = {}): AppSession => ({
   user: {
     email: "aluno@example.com",
     id: "student-1",
+    image: null,
     name: "Aluno",
   },
   ...overrides,

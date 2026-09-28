@@ -263,7 +263,7 @@ describe("ResetPasswordForm", () => {
     );
   });
 
-  it("uses safe generic text for a malformed JSON error body", async () => {
+  it("uses safe recovery guidance for a malformed server error body", async () => {
     dependencies.fetch.mockResolvedValue(
       new Response("{malformed", {
         headers: { "Content-Type": "application/json" },
@@ -279,10 +279,12 @@ describe("ResetPasswordForm", () => {
     });
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      "Não foi possível atualizar a senha. Tente novamente."
+      "Não foi possível concluir a recuperação. Solicite um novo link e tente novamente."
     );
     expect(container.querySelector("form")).not.toBeNull();
-    expect(container.querySelector('a[href="/recuperar-senha"]')).toBeNull();
+    expect(
+      container.querySelector('a[href="/recuperar-senha"]')
+    ).not.toBeNull();
     expect(getButton(container, "Salvar senha").disabled).toBe(false);
     expect(container.textContent).not.toContain("{malformed");
   });
@@ -305,7 +307,7 @@ describe("ResetPasswordForm", () => {
     expect(getButton(container, "Salvar senha").disabled).toBe(false);
   });
 
-  it("reports a server failure for HTTP 500 without offering a new link", async () => {
+  it("offers a new recovery link when the reset follow-up fails after submission", async () => {
     dependencies.fetch.mockResolvedValue(new Response(null, { status: 500 }));
     act(() => root.render(<ResetPasswordForm token="valid-token" />));
     fillValidPasswords(container);
@@ -316,9 +318,12 @@ describe("ResetPasswordForm", () => {
     });
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      "Não foi possível atualizar a senha. Tente novamente."
+      "Não foi possível concluir a recuperação. Solicite um novo link e tente novamente."
     );
-    expect(container.querySelector('a[href="/recuperar-senha"]')).toBeNull();
+    expect(
+      container.querySelector('a[href="/recuperar-senha"]')
+    ).not.toBeNull();
+    expect(container.querySelector("form")).not.toBeNull();
     expect(getButton(container, "Salvar senha").disabled).toBe(false);
   });
 

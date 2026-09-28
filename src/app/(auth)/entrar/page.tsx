@@ -9,7 +9,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
+import {
+  getGoogleOAuthCallbackUrl,
+  getSafeAuthReturnTo,
+} from "@/lib/auth-return-to";
 import { getServerEnv } from "@/lib/env";
 import { route } from "@/lib/routes";
 import { getCurrentSession } from "@/lib/session";
@@ -23,15 +26,40 @@ export const dynamic = "force-dynamic";
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ returnTo?: string | string[] | undefined }>;
+  searchParams: Promise<{
+    emailVerified?: string | string[] | undefined;
+    error?: string | string[] | undefined;
+    returnTo?: string | string[] | undefined;
+  }>;
 }): Promise<React.JSX.Element> {
   await connection();
-  const supportEmail = getServerEnv().SUPPORT_EMAIL ?? null;
-  const [{ returnTo }, session] = await Promise.all([
-    searchParams,
-    getCurrentSession(),
-  ]);
+  const env = getServerEnv();
+  const supportEmail = env.SUPPORT_EMAIL ?? null;
+  const googleLoginEnabled = Boolean(
+    env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+  );
+  const [{ emailVerified: emailVerifiedValues, error, returnTo }, session] =
+    await Promise.all([searchParams, getCurrentSession()]);
   const safeReturnTo = getSafeAuthReturnTo(returnTo);
+  const emailVerificationFailed =
+    (emailVerifiedValues === "1" ||
+      (Array.isArray(emailVerifiedValues) &&
+        emailVerifiedValues.length === 1 &&
+        emailVerifiedValues[0] === "1")) &&
+    (typeof error === "string"
+      ? error.length > 0
+      : Array.isArray(error) && error.length > 0);
+  const emailVerified =
+    emailVerifiedValues === "1" ||
+    (Array.isArray(emailVerifiedValues) &&
+      emailVerifiedValues.length === 1 &&
+      emailVerifiedValues[0] === "1")
+      ? !emailVerificationFailed
+      : false;
+  const googleOAuthCallbackUrl = getGoogleOAuthCallbackUrl({
+    appUrl: env.BETTER_AUTH_URL,
+    returnTo: safeReturnTo,
+  });
 
   if (session && !(session.role === "student" && session.platformBlockedAt)) {
     redirect(
@@ -53,7 +81,14 @@ export default async function SignInPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0">
-          <SignInForm returnTo={safeReturnTo} supportEmail={supportEmail} />
+          <SignInForm
+            emailVerificationFailed={emailVerificationFailed}
+            emailVerified={emailVerified}
+            googleLoginEnabled={googleLoginEnabled}
+            googleOAuthCallbackUrl={googleOAuthCallbackUrl}
+            returnTo={safeReturnTo}
+            supportEmail={supportEmail}
+          />
         </CardContent>
       </Card>
     </AuthShell>

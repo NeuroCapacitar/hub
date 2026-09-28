@@ -94,6 +94,7 @@ describe("outbox email delivery", () => {
       rows: [
         {
           has_credential: false,
+          has_google_account: false,
           student_email: "current@example.test",
         },
       ],
@@ -119,6 +120,9 @@ describe("outbox email delivery", () => {
     expect(query).toHaveBeenCalledWith(
       expect.stringMatching(PAID_ASAAS_ORDER_PATTERN),
       ["order-1", "user-1"]
+    );
+    expect(String(query.mock.calls[0]?.[0])).toContain(
+      "accounts.password is not null"
     );
     expect(requestPasswordReset).toHaveBeenCalledWith({
       asResponse: false,
@@ -190,6 +194,7 @@ describe("outbox email delivery", () => {
         rows: [
           {
             has_credential: "false",
+            has_google_account: false,
             student_email: 123,
           },
         ],
@@ -224,6 +229,7 @@ describe("outbox email delivery", () => {
         rows: [
           {
             has_credential: true,
+            has_google_account: false,
             student_email: "current@example.test",
           },
         ],
@@ -248,12 +254,83 @@ describe("outbox email delivery", () => {
     expect(dependencies.sendAccessReleasedEmail).not.toHaveBeenCalled();
   });
 
+  it("does not send a password-activation link when an enabled Google login already exists", async () => {
+    const requestPasswordReset = vi.fn();
+    dependencies.getPool.mockReturnValue({
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            has_credential: false,
+            has_google_account: true,
+            student_email: "google-only@example.test",
+          },
+        ],
+      }),
+    });
+    dependencies.getServerEnv.mockReturnValue({
+      BETTER_AUTH_SECRET: "auth-secret",
+      BETTER_AUTH_URL: "https://auth.example.test",
+      GOOGLE_CLIENT_ID: "google-client-id",
+      GOOGLE_CLIENT_SECRET: "google-client-secret",
+    });
+    dependencies.getAuth.mockReturnValue({
+      api: { requestPasswordReset },
+    });
+
+    await deliverOutboxMessage({
+      aggregateId: "order-1",
+      aggregateType: "order",
+      attempts: 1,
+      id: "outbox-activation",
+      idempotencyKey: "auth.account-activation/order-1/v1",
+      payload: { orderId: "order-1", userId: "user-1" },
+      payloadVersion: 1,
+      topic: "auth.account-activation",
+    });
+
+    expect(requestPasswordReset).not.toHaveBeenCalled();
+  });
+
+  it("keeps email activation when a Google account exists but the provider is disabled", async () => {
+    const requestPasswordReset = vi
+      .fn()
+      .mockImplementation(invokePasswordResetCallback);
+    dependencies.getPool.mockReturnValue({
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            has_credential: false,
+            has_google_account: true,
+            student_email: "google-only@example.test",
+          },
+        ],
+      }),
+    });
+    dependencies.getAuth.mockReturnValue({
+      api: { requestPasswordReset },
+    });
+
+    await deliverOutboxMessage({
+      aggregateId: "order-1",
+      aggregateType: "order",
+      attempts: 1,
+      id: "outbox-activation",
+      idempotencyKey: "auth.account-activation/order-1/v1",
+      payload: { orderId: "order-1", userId: "user-1" },
+      payloadVersion: 1,
+      topic: "auth.account-activation",
+    });
+
+    expect(requestPasswordReset).toHaveBeenCalledOnce();
+  });
+
   it("classifies Better Auth failures without exposing their cause", async () => {
     dependencies.getPool.mockReturnValue({
       query: vi.fn().mockResolvedValue({
         rows: [
           {
             has_credential: false,
+            has_google_account: false,
             student_email: "private@example.test",
           },
         ],
@@ -291,6 +368,7 @@ describe("outbox email delivery", () => {
         rows: [
           {
             has_credential: false,
+            has_google_account: false,
             student_email: "private@example.test",
           },
         ],
@@ -333,6 +411,7 @@ describe("outbox email delivery", () => {
         rows: [
           {
             has_credential: false,
+            has_google_account: false,
             student_email: "missing@example.test",
           },
         ],
@@ -372,6 +451,7 @@ describe("outbox email delivery", () => {
             rows: [
               {
                 has_credential: false,
+                has_google_account: false,
                 student_email:
                   parameters[0] === "order-success"
                     ? "success@example.test"

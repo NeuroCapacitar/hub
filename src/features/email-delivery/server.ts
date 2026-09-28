@@ -4,6 +4,7 @@ import type { HostedEmailTemplateName } from "@/features/email/templates-contrac
 
 export const EMAIL_DELIVERY_TOPIC_TAGS = {
   "auth.account-activation": "auth_account_activation",
+  "auth.email-verification": "auth_email_verification",
   "auth.password-reset": "auth_password_reset",
   "email.access-expiry-warning": "email_access_expiry_warning",
   "email.access-released": "email_access_released",
@@ -13,12 +14,15 @@ export const EMAIL_DELIVERY_TOPIC_TAGS = {
 } as const;
 
 export type EmailDeliveryTopic = keyof typeof EMAIL_DELIVERY_TOPIC_TAGS;
+export type EmailDeliveryTemplateAlias =
+  | HostedEmailTemplateName
+  | "auth-email-verification";
 
 export interface EmailDeliveryContext {
   correlationId: string;
   idempotencyKey: string;
   outboxMessageId?: string;
-  templateAlias: HostedEmailTemplateName;
+  templateAlias: EmailDeliveryTemplateAlias;
   topic: EmailDeliveryTopic;
 }
 

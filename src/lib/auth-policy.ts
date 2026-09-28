@@ -223,14 +223,53 @@ export const isBlockedAuthEndpoint = ({
   allowPublicSignUp,
   method,
   pathSegments,
+  requestSignUp,
 }: {
   allowPublicSignUp: boolean;
   method: string;
   pathSegments: string[];
+  requestSignUp?: boolean;
 }): boolean =>
   !allowPublicSignUp &&
   method.toUpperCase() === "POST" &&
-  pathSegments.join("/") === "sign-up/email";
+  (pathSegments.join("/") === "sign-up/email" ||
+    (pathSegments.join("/") === "sign-in/social" && requestSignUp === true));
+
+export const getGoogleOAuthSignUpPolicy = (allowPublicSignUp: boolean) => ({
+  disableImplicitSignUp: true as const,
+  disableIdTokenSignIn: true,
+  disableSignUp: !allowPublicSignUp,
+});
+
+export const getGoogleOAuthProviderConfig = ({
+  allowPublicSignUp,
+  clientId,
+  clientSecret,
+}: {
+  allowPublicSignUp: boolean;
+  clientId: string | undefined;
+  clientSecret: string | undefined;
+}) => {
+  const normalizedClientId = clientId?.trim();
+  const normalizedClientSecret = clientSecret?.trim();
+
+  if (!(normalizedClientId || normalizedClientSecret)) {
+    return null;
+  }
+
+  if (!(normalizedClientId && normalizedClientSecret)) {
+    throw new Error(
+      "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together."
+    );
+  }
+
+  return {
+    clientId: normalizedClientId,
+    clientSecret: normalizedClientSecret,
+    overrideUserInfoOnSignIn: true,
+    ...getGoogleOAuthSignUpPolicy(allowPublicSignUp),
+  };
+};
 
 export const getBootstrapAdminDecision = ({
   authorization,
@@ -301,25 +340,37 @@ const E2E_PASSWORD_RESET_RATE_LIMIT = {
   max: 100,
   window: 10,
 } as const;
+const E2E_EMAIL_VERIFICATION_RATE_LIMIT = {
+  max: 100,
+  window: 10,
+} as const;
+const EMAIL_VERIFICATION_RATE_LIMIT = {
+  max: 3,
+  window: 3600,
+} as const;
+
+interface BetterAuthRateLimitConfig {
+  customRules: Partial<
+    Record<
+      "/request-password-reset" | "/send-verification-email" | "/sign-in/email",
+      { max: number; window: number }
+    >
+  >;
+}
 
 export const getBetterAuthRateLimitConfig = (
   isE2eTestMode: boolean
-):
-  | {
-      customRules: {
-        "/request-password-reset": typeof E2E_PASSWORD_RESET_RATE_LIMIT;
-        "/sign-in/email": typeof E2E_SIGN_IN_RATE_LIMIT;
-      };
-    }
-  | undefined =>
-  isE2eTestMode
+): BetterAuthRateLimitConfig => ({
+  customRules: isE2eTestMode
     ? {
-        customRules: {
-          "/request-password-reset": E2E_PASSWORD_RESET_RATE_LIMIT,
-          "/sign-in/email": E2E_SIGN_IN_RATE_LIMIT,
-        },
+        "/request-password-reset": E2E_PASSWORD_RESET_RATE_LIMIT,
+        "/send-verification-email": E2E_EMAIL_VERIFICATION_RATE_LIMIT,
+        "/sign-in/email": E2E_SIGN_IN_RATE_LIMIT,
       }
-    : undefined;
+    : {
+        "/send-verification-email": EMAIL_VERIFICATION_RATE_LIMIT,
+      },
+});
 
 export const getResolvedBetterAuthInfraConfig = ({
   apiKey,

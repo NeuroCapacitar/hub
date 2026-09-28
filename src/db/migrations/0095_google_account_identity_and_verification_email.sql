@@ -1,0 +1,2 @@
+ALTER TYPE "public"."email_delivery_topic" ADD VALUE 'auth.email-verification' BEFORE 'auth.password-reset';--> statement-breakpoint
+ALTER TYPE "public"."email_template_alias" ADD VALUE 'auth-email-verification' BEFORE 'auth-password-reset';

@@ -824,6 +824,77 @@ describe("transactional email", () => {
     });
   });
 
+  it("sends a branded verification email with plain text and an opaque idempotency key", async () => {
+    process.env = { ...STAGING_TEST_ENV };
+    send.mockResolvedValue({ data: { id: "email_123" }, error: null });
+    const databaseNow = new Date("2026-09-28T12:00:00.000Z");
+    let emailMessageId = "";
+    let requestFingerprint = "";
+    clientQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockImplementationOnce((_statement, values) => {
+        emailMessageId = String(values?.[0] ?? "");
+        requestFingerprint = String(values?.[4] ?? "");
+        return Promise.resolve({ rows: [] });
+      })
+      .mockImplementationOnce(async () => ({
+        rows: [
+          {
+            accepted_at: null,
+            automatic_retry_deadline_at: null,
+            database_now: databaseNow,
+            first_provider_attempt_at: null,
+            id: emailMessageId,
+            provider_message_id: null,
+            request_fingerprint: requestFingerprint,
+            status: "sending",
+          },
+        ],
+      }))
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    poolQuery.mockResolvedValueOnce({ rows: [{ accepted_at: databaseNow }] });
+    const sendVerificationEmail = Reflect.get(
+      await import("./server"),
+      "sendEmailVerificationEmail"
+    );
+    expect(sendVerificationEmail).toBeTypeOf("function");
+    if (typeof sendVerificationEmail !== "function") {
+      return;
+    }
+
+    const verificationUrl =
+      "https://preview.neurocapacitar.com.br/api/auth/verify-email?token=raw-verification-token";
+    await sendVerificationEmail({
+      to: "allowed@example.test",
+      userName: "Aluno de teste",
+      verificationUrl,
+    });
+
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        html: expect.stringContaining("Confirme seu e-mail"),
+        subject: expect.stringContaining("Confirme seu e-mail"),
+        text: expect.stringContaining(verificationUrl),
+        tags: [
+          { name: "hub_topic", value: "auth_email_verification" },
+          { name: "hub_correlation", value: expect.any(String) },
+        ],
+        to: "allowed@example.test",
+      }),
+      { idempotencyKey: expect.any(String) }
+    );
+    expect(JSON.stringify(send.mock.calls[0]?.[1])).not.toContain(
+      "raw-verification-token"
+    );
+    expect(JSON.stringify(clientQuery.mock.calls)).not.toContain(
+      "raw-verification-token"
+    );
+    expect(JSON.stringify(clientQuery.mock.calls)).not.toContain(
+      "allowed@example.test"
+    );
+  });
+
   it("sends the password reset hosted template with the activation idempotency key", async () => {
     process.env.RESEND_API_KEY = "re_test";
     process.env.RESEND_FROM_EMAIL = "PROTEA-R <noreply@example.test>";

@@ -1,0 +1,54 @@
+# Graphify corpus: application/operational code, tests, current
+# product/architecture docs, and deployment configuration. Historical reviews, research and old plans stay
+# out so they cannot compete with the canonical sources in docs/README.md.
+# Graphify explicitly re-ingests graphify-out/memory/ despite ignore rules for
+# its local feedback loop; only source-verified, non-sensitive answers belong there.
+*
+!src/
+!src/**
+!scripts/
+!scripts/**
+!tests/
+!tests/**
+!docs/
+!docs/README.md
+!docs/architecture.md
+!docs/decisions.md
+!docs/domain/
+!docs/domain/**
+!docs/adr/
+!docs/adr/**
+!docs/integrations/
+!docs/integrations/**
+!docs/operations/
+!docs/operations/**
+!README.md
+!PRODUCT.md
+!CONTEXT.md
+!DESIGN.md
+!package.json
+!components.json
+!drizzle.config.ts
+!next.config.ts
+!vercel.json
+!.mcp.json
+!.github/
+!.github/workflows/
+!.github/workflows/**
+
+# Media and generated evidence are not needed for code architecture and should
+# not be sent through semantic document processing.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.svg
+*.pdf
+*.mp4
+*.mov
+*.webm
+*.mp3
+*.wav
+*.m4a
+*.ogg

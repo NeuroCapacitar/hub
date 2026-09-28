@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { GoogleAuthButton } from "@/components/google-auth-button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -22,9 +23,17 @@ const getAuthRedirectPath = (returnTo: string | null): string => {
 };
 
 export function SignInForm({
+  emailVerificationFailed = false,
+  emailVerified = false,
+  googleLoginEnabled = false,
+  googleOAuthCallbackUrl,
   returnTo = null,
   supportEmail = null,
 }: {
+  emailVerificationFailed?: boolean;
+  emailVerified?: boolean;
+  googleLoginEnabled?: boolean;
+  googleOAuthCallbackUrl?: string;
   returnTo?: string | null;
   supportEmail?: string | null;
 } = {}): React.JSX.Element {
@@ -101,6 +110,26 @@ export function SignInForm({
 
   return (
     <form onSubmit={handleSubmit}>
+      {emailVerified ? (
+        <Alert aria-live="polite" className="mb-5">
+          <AlertDescription>
+            E-mail confirmado. Agora você pode entrar com Google.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {emailVerificationFailed ? (
+        <Alert aria-live="polite" className="mb-5" variant="destructive">
+          <AlertDescription>
+            Este link não pôde ser confirmado. Solicite outro e tente novamente.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {googleLoginEnabled && googleOAuthCallbackUrl ? (
+        <GoogleAuthButton
+          callbackUrl={googleOAuthCallbackUrl}
+          label="Entrar com Google"
+        />
+      ) : null}
       <FieldGroup className="gap-5">
         <Field>
           <FieldLabel htmlFor="email">E-mail</FieldLabel>

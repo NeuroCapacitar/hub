@@ -3,17 +3,17 @@
 import Link from "next/link";
 import type { FormEvent } from "react";
 import { useState } from "react";
+import { GoogleAuthButton } from "@/components/google-auth-button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
+import { getAuthSignInPath, getSafeAuthReturnTo } from "@/lib/auth-return-to";
 import {
   getNewPasswordValidationError,
   PASSWORD_MIN_LENGTH,
 } from "@/lib/password-policy";
-import { route } from "@/lib/routes";
 import { isSuccessfulSignUpPayload } from "./sign-up-result";
 
 const getAuthRedirectPath = (returnTo: string | null): string => {
@@ -26,18 +26,18 @@ const getAuthRedirectPath = (returnTo: string | null): string => {
 };
 
 export function SignUpForm({
+  googleLoginEnabled = false,
+  googleOAuthCallbackUrl,
   returnTo = null,
 }: {
+  googleLoginEnabled?: boolean;
+  googleOAuthCallbackUrl?: string;
   returnTo?: string | null;
 } = {}): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const safeReturnTo = getSafeAuthReturnTo(returnTo);
-  const signInHref = safeReturnTo
-    ? route(
-        `/entrar?${new URLSearchParams({ returnTo: safeReturnTo }).toString()}`
-      )
-    : route("/entrar");
+  const signInHref = getAuthSignInPath(safeReturnTo);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -109,6 +109,13 @@ export function SignUpForm({
 
   return (
     <form onSubmit={handleSubmit}>
+      {googleLoginEnabled && googleOAuthCallbackUrl ? (
+        <GoogleAuthButton
+          callbackUrl={googleOAuthCallbackUrl}
+          label="Criar conta com Google"
+          requestSignUp
+        />
+      ) : null}
       <FieldGroup className="gap-5">
         <Field>
           <FieldLabel htmlFor="name">Nome completo</FieldLabel>

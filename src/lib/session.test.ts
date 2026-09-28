@@ -16,14 +16,18 @@ vi.mock("next/navigation", () => ({ redirect: dependencies.redirect }));
 vi.mock("@/db", () => ({ getDb: dependencies.getDb }));
 vi.mock("@/lib/auth", () => ({ getAuth: dependencies.getAuth }));
 
-import { recordLastAccess, requireRole } from "./session";
+import { getCurrentSession, recordLastAccess, requireRole } from "./session";
 
-const setDatabaseIdentity = (role: "admin" | "student" | "support") => {
+const setDatabaseIdentity = (
+  role: "admin" | "student" | "support",
+  userImage: string | null = null
+) => {
   const limit = vi.fn().mockResolvedValue([
     {
       platformBlockedAt: null,
       platformBlockedReason: null,
       role,
+      userImage,
     },
   ]);
   dependencies.getDb.mockReturnValue({
@@ -77,6 +81,31 @@ describe("requireRole", () => {
 
     await expect(requireRole(["student"])).resolves.toMatchObject({
       role: "student",
+    });
+  });
+});
+
+describe("getCurrentSession", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dependencies.getAuth.mockReturnValue({
+      api: {
+        getSession: vi.fn().mockResolvedValue({
+          user: {
+            email: "student@example.com",
+            id: "student-user",
+            name: "Student User",
+          },
+        }),
+      },
+    });
+  });
+
+  it("includes the persisted user image in the app session", async () => {
+    setDatabaseIdentity("student", "https://images.example.test/student.jpg");
+
+    await expect(getCurrentSession()).resolves.toMatchObject({
+      user: { image: "https://images.example.test/student.jpg" },
     });
   });
 });

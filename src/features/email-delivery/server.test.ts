@@ -15,6 +15,12 @@ const context: EmailDeliveryContext = {
   templateAlias: "certificate-issued",
   topic: "email.certificate-issued",
 };
+const verificationContext = {
+  correlationId: "0198d6f4-c2a5-7000-8000-000000000002",
+  idempotencyKey: "auth.email-verification/opaque-digest/v1",
+  templateAlias: "auth-email-verification",
+  topic: "auth.email-verification",
+} as unknown as EmailDeliveryContext;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
 describe("email request fingerprint and tags", () => {
@@ -52,6 +58,16 @@ describe("email request fingerprint and tags", () => {
     expect(() =>
       buildResendLifecycleTags({ ...context, correlationId: "student-1" })
     ).toThrow("correlation");
+  });
+
+  it("uses a closed Resend tag for user-requested email verification", () => {
+    expect(buildResendLifecycleTags(verificationContext)).toEqual([
+      { name: "hub_topic", value: "auth_email_verification" },
+      {
+        name: "hub_correlation",
+        value: verificationContext.correlationId,
+      },
+    ]);
   });
 });
 

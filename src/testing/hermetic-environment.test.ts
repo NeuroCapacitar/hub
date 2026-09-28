@@ -6,6 +6,8 @@ describe("hermetic test environment", () => {
     expect(
       createHermeticTestEnvironment({
         DATABASE_URL: "postgresql://ambient.example/hub",
+        GOOGLE_CLIENT_ID: "ambient-google-client-id",
+        GOOGLE_CLIENT_SECRET: "ambient-google-client-secret",
         NODE_ENV: "test",
         PATH: "C:\\tools",
         RESEND_API_KEY: "ambient-resend-key",

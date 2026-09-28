@@ -342,6 +342,31 @@ mas não copia o padrão global. Snapshots já emitidos permanecem imutáveis. N
 será criado cadastro reutilizável de signatários sem necessidade operacional
 comprovada.
 
+## DEC-DISC-020
+
+**Tema:** login Google, cadastro social explícito e vínculo de Conta.
+**Estado:** aprovado pelo produto em 2026-09-27; implementação por fases.
+
+O login Google em `/entrar` autentica uma Conta existente e não cria Conta por
+si só. Cadastro social só pode ser iniciado explicitamente em `/cadastro` e
+segue `AUTH_PUBLIC_SIGNUP_ENABLED`; cria apenas Conta e Perfil Student, sem
+Pedido, Concessão ou Matrícula. O vínculo automático exige e-mail verificado
+pelo Google e prova local prévia, não atualiza e-mail/nome/papel e falha fechado
+se os candidatos exato/canônico forem ambíguos. Não há bypass de
+`requireLocalEmailVerified:false`, confiança especial de provider ou uso dos
+tokens Google para escopos de produto; os tokens OAuth são cifrados.
+Quando disponível, a foto Google preenche `users.image` somente se a Conta
+local ainda não tiver imagem; o nome, e-mail, papel e uma imagem já escolhida
+permanecem intactos. O avatar dessa Conta é exibido no menu do painel.
+
+Verificação global de e-mail permanece desligada. Contas locais não verificadas
+podem solicitar uma confirmação pontual com resposta anti-enumeração e limite
+de envio; cadastro e login não enviam mensagens automaticamente. O checkout
+permanece guest-first: confirmação financeira concede acesso, mas o e-mail é
+confirmado pelo primeiro acesso enviado à caixa cadastrada, não pelo Asaas.
+Esses fluxos preservam [DEC-DISC-007](#dec-disc-007) e
+[REG-IDA-005/006](domain/identity-and-authorization.md).
+
 ## Outras ratificações necessárias
 
 - tratamento de compra pública com e-mail já pertencente a Admin/Suporte;

@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
-import { getAdminLandingPath } from "@/lib/auth-policy";
-import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
+import { resolvePostAuthRedirect } from "@/lib/auth-redirect";
 import { createCorrelationId, logOperationalEvent } from "@/lib/observability";
 import { getCurrentSession, recordLastAccess } from "@/lib/session";
 
 export const GET = async (request: Request): Promise<NextResponse> => {
   const searchParams = new URL(request.url).searchParams;
   const returnToValues = searchParams.getAll("returnTo");
-  const safeReturnTo =
-    returnToValues.length === 1 ? getSafeAuthReturnTo(returnToValues[0]) : null;
+  const returnTo = returnToValues.length === 1 ? returnToValues[0] : null;
   const session = await getCurrentSession();
 
   if (!session) {
     return NextResponse.json({ redirectTo: "/entrar" }, { status: 401 });
   }
 
-  if (session.role === "student" && session.platformBlockedAt) {
+  const redirect = resolvePostAuthRedirect(session, returnTo);
+  if (redirect.kind === "blocked") {
     return NextResponse.json({ error: "blocked" }, { status: 403 });
   }
 
@@ -32,9 +31,6 @@ export const GET = async (request: Request): Promise<NextResponse> => {
   }
 
   return NextResponse.json({
-    redirectTo:
-      session.role === "student"
-        ? (safeReturnTo ?? "/app")
-        : (getAdminLandingPath(session) ?? "/app"),
+    redirectTo: redirect.destination,
   });
 };

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveGoogleEmailCandidate } from "@/lib/email-identity";
 import { parseBuyerIdentity } from "./buyer-identity";
 
 describe("parseBuyerIdentity", () => {
@@ -92,5 +93,40 @@ describe("parseBuyerIdentity", () => {
         name: "\u{1f9d1}".repeat(121),
       })
     ).toBeNull();
+  });
+});
+
+describe("Google account email reconciliation", () => {
+  it("accepts one exact or buyer-canonical local identity and rejects ambiguity", () => {
+    expect(
+      resolveGoogleEmailCandidate({
+        googleEmail: "Buyer@Example.com",
+        candidates: [{ userId: "user-1", email: "buyer@example.com" }],
+      })
+    ).toEqual({ kind: "unique", userId: "user-1" });
+
+    expect(
+      resolveGoogleEmailCandidate({
+        googleEmail: "First.Last+course@googlemail.com",
+        candidates: [{ userId: "user-2", email: "firstlast@gmail.com" }],
+      })
+    ).toEqual({ kind: "unique", userId: "user-2" });
+
+    expect(
+      resolveGoogleEmailCandidate({
+        googleEmail: "Buyer+course@outlook.com",
+        candidates: [
+          { userId: "user-3", email: "buyer@outlook.com" },
+          { userId: "user-4", email: "BUYER+course@outlook.com" },
+        ],
+      })
+    ).toEqual({ kind: "ambiguous" });
+
+    expect(
+      resolveGoogleEmailCandidate({
+        googleEmail: "new@example.com",
+        candidates: [],
+      })
+    ).toEqual({ kind: "none" });
   });
 });

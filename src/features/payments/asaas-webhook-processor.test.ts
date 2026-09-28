@@ -1288,6 +1288,7 @@ describe("Asaas webhook processor", () => {
 
     expect(resolveIdentity).toHaveBeenCalledWith({
       client: context.client,
+      googleProviderEnabled: false,
       order: {
         buyerIdentityStatus: "pending",
         courseId: COURSE_ID,

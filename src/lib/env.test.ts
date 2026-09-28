@@ -206,6 +206,27 @@ describe("server environment", () => {
     expect(getServerEnv().AUTH_PUBLIC_SIGNUP_ENABLED).toBe(false);
   });
 
+  it("exposes a complete optional Google OAuth credential pair", () => {
+    setEnv("NODE_ENV", "development");
+    setEnv("GOOGLE_CLIENT_ID", "google-client-id-fixture");
+    setEnv("GOOGLE_CLIENT_SECRET", "google-client-secret-fixture");
+
+    expect(getServerEnv()).toMatchObject({
+      GOOGLE_CLIENT_ID: "google-client-id-fixture",
+      GOOGLE_CLIENT_SECRET: "google-client-secret-fixture",
+    });
+  });
+
+  it("rejects a partial Google OAuth credential pair without echoing values", () => {
+    setEnv("NODE_ENV", "development");
+    setEnv("GOOGLE_CLIENT_ID", "google-client-id-fixture");
+    setEnv("GOOGLE_CLIENT_SECRET", undefined);
+
+    expect(() => getServerEnv()).toThrow(
+      "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together."
+    );
+  });
+
   it("only permits E2E mode in CI", () => {
     setEnv("NODE_ENV", "development");
     setEnv("E2E_TEST_MODE", "true");

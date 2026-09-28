@@ -34,6 +34,11 @@ interface SupportRequestEmailProps {
   subject: string;
 }
 
+interface EmailVerificationProps {
+  name: string;
+  verificationUrl: string;
+}
+
 const styles = {
   body: {
     backgroundColor: "#f7f3ef",
@@ -112,6 +117,29 @@ export const PasswordResetEmail = ({
         </Button>
       </Section>
     ) : null}
+  </EmailShell>
+);
+
+export const EmailVerificationEmail = ({
+  name,
+  verificationUrl,
+}: EmailVerificationProps): React.JSX.Element => (
+  <EmailShell preview={`Confirme seu e-mail no ${PLATFORM_NAME}.`}>
+    <Heading>Confirme seu e-mail</Heading>
+    <Text style={styles.text}>Olá, {name}.</Text>
+    <Text style={styles.text}>
+      Você pediu para confirmar o e-mail desta Conta antes de vinculá-la ao
+      Google. Use o botão abaixo para confirmar; o link expira em uma hora.
+    </Text>
+    <Section>
+      <Button href={verificationUrl} style={styles.button}>
+        Confirmar e-mail
+      </Button>
+    </Section>
+    <Text style={styles.muted}>
+      Se você não pediu esta confirmação, ignore esta mensagem. Nenhuma senha ou
+      dado da Conta será alterado.
+    </Text>
   </EmailShell>
 );
 

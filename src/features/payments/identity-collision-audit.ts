@@ -1,5 +1,5 @@
 import { getPool } from "@/db";
-import { normalizeBuyerEmail } from "./buyer-identity";
+import { normalizeBuyerEmail } from "@/lib/email-identity";
 
 export interface BuyerIdentityAuditCandidate {
   email: string;
@@ -46,17 +46,26 @@ export const findBuyerIdentityCollisions = (
 
 export const scanBuyerIdentityCollisions = async ({
   batchSize = DEFAULT_AUDIT_BATCH_SIZE,
+  queryUsers,
 }: {
   batchSize?: number;
+  queryUsers?: (
+    cursor: string,
+    batchSize: number
+  ) => Promise<readonly BuyerIdentityAuditCandidate[]>;
 } = {}): Promise<BuyerIdentityCollision[]> => {
   const boundedBatchSize = Math.min(
     MAX_AUDIT_BATCH_SIZE,
     Math.max(1, Math.trunc(batchSize))
   );
-  const candidates: BuyerIdentityAuditCandidate[] = [];
-  let cursor = "";
+  const readUsers = async (
+    cursor: string,
+    limit: number
+  ): Promise<readonly BuyerIdentityAuditCandidate[]> => {
+    if (queryUsers) {
+      return await queryUsers(cursor, limit);
+    }
 
-  for (let batch = 0; batch < MAX_AUDIT_BATCHES; batch += 1) {
     const { rows } = await getPool().query<{
       email: string;
       user_id: string;
@@ -68,17 +77,23 @@ export const scanBuyerIdentityCollisions = async ({
         order by id::text asc
         limit $2
       `,
-      [cursor, boundedBatchSize]
+      [cursor, limit]
     );
+    return rows.map((row) => ({ email: row.email, userId: row.user_id }));
+  };
+
+  const candidates: BuyerIdentityAuditCandidate[] = [];
+  let cursor = "";
+
+  for (let batch = 0; batch < MAX_AUDIT_BATCHES; batch += 1) {
+    const rows = await readUsers(cursor, boundedBatchSize);
 
     if (rows.length === 0) {
       break;
     }
 
-    candidates.push(
-      ...rows.map((row) => ({ email: row.email, userId: row.user_id }))
-    );
-    const nextCursor = rows.at(-1)?.user_id;
+    candidates.push(...rows);
+    const nextCursor = rows.at(-1)?.userId;
     if (!nextCursor || nextCursor === cursor) {
       throw new Error("A auditoria de identidade não avançou o cursor.");
     }

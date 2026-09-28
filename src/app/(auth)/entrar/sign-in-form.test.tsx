@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const dependencies = vi.hoisted(() => ({
   assign: vi.fn(),
   fetch: vi.fn(),
+  signInSocial: vi.fn(),
   toastError: vi.fn(),
 }));
 
@@ -20,6 +21,9 @@ vi.mock("next/link", () => ({
 }));
 vi.mock("sonner", () => ({
   toast: { error: dependencies.toastError },
+}));
+vi.mock("@/lib/auth-client", () => ({
+  authClient: { signIn: { social: dependencies.signInSocial } },
 }));
 
 import { SignInForm } from "./sign-in-form";
@@ -135,6 +139,50 @@ describe("SignInForm", () => {
       expect.objectContaining({ credentials: "same-origin" })
     );
     expect(dependencies.assign).toHaveBeenCalledWith(COURSE_RETURN_TO);
+  });
+
+  it("starts Google login without requesting account creation", async () => {
+    dependencies.signInSocial.mockResolvedValue({
+      data: { url: "https://accounts.google.test" },
+    });
+    act(() =>
+      root.render(
+        <SignInForm
+          googleLoginEnabled
+          googleOAuthCallbackUrl="https://hub.example.test/oauth/callback?returnTo=%2Fcomprar%2Fcurso-gratis"
+          returnTo={COURSE_RETURN_TO}
+        />
+      )
+    );
+
+    const googleButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.includes("Entrar com Google")
+    );
+    expect(googleButton).toBeDefined();
+
+    await act(async () => {
+      googleButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(dependencies.signInSocial).toHaveBeenCalledWith({
+      callbackURL:
+        "https://hub.example.test/oauth/callback?returnTo=%2Fcomprar%2Fcurso-gratis",
+      errorCallbackURL:
+        "https://hub.example.test/oauth/callback?returnTo=%2Fcomprar%2Fcurso-gratis",
+      newUserCallbackURL:
+        "https://hub.example.test/oauth/callback?returnTo=%2Fcomprar%2Fcurso-gratis",
+      provider: "google",
+    });
+    expect(dependencies.signInSocial.mock.calls[0]?.[0]).not.toHaveProperty(
+      "requestSignUp"
+    );
+  });
+
+  it("hides the Google option when its provider is not configured", () => {
+    act(() => root.render(<SignInForm googleLoginEnabled={false} />));
+
+    expect(container.textContent).not.toContain("Entrar com Google");
   });
 
   it("offers the configured support email when access is blocked", async () => {

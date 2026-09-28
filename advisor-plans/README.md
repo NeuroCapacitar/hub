@@ -1,7 +1,7 @@
 ---
 status: index
 owner: product-and-engineering
-last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
+last_verified_commit: c0cddcce
 ---
 
 # Planos de aconselhamento
@@ -24,6 +24,8 @@ pessoa responsável autorize sua execução.
 | [Validação técnica de Curso gratuito](free-course-enrollment-analysis-2026-09-15.md) | Validação do relatório preliminar e decisões de domínio | proposed | plano de autoinscrição |
 | [Autoinscrição gratuita](free-course-enrollment-2026-09-15.md) | Curso gratuito, grants, handoff e segurança | implemented — Etapas 0–13 completas | — |
 | [Pesquisa da fonte de verdade do nome da plataforma](platform-brand-name-source-of-truth-research-2026-09-25.md) | Marca pública, perfil emissor, remetente e templates | research | decisão sobre necessidade de renomear sem deploy |
+| [Avaliação do Graphify local-first](graphify-source-validation-2026-09-27.md) | Viabilidade, riscos e teste local do grafo de código | piloto concluído — ferramenta auxiliar local; adoção mais ampla não recomendada | reavaliar se consultas CLI virarem atrito real |
+| [Login Google e cadastro social](google-login-implementation-plan-2026-09-27.md) | Separar login-only de signup social, preservar compra guest-first, ativar e vincular Conta com segurança | in progress — Etapas 0–5 concluídas/implementadas; migrations 0095/0096 aplicadas somente em Development; 52 testes Playwright passaram no Neon E2E isolado; Etapa 6 aguarda smoke OAuth real | [revisão do destino pós-login](google-oauth-post-login-redirect-review-2026-09-28.md), [segunda revisão](google-oauth-plan-second-review-2026-09-27.md), [verificação global ou específica](email-verification-purchase-proof-2026-09-27.md), [pesquisa técnica](google-oauth-best-practices-2026-09-27.md), [pesquisa UX de checkout](google-oauth-checkout-ux-review-2026-09-27.md) |
 | [Pesquisa do valor de checkout versus recebível](open-checkout-vs-receivable-kpi-research-2026-09-26.md) | Semântica financeira, status Asaas e valor em aberto | research | decisão sobre separar checkout ativo de cobrança pendente |
 | [Auditoria do sistema financeiro e métricas](finance-system-metrics-review-2026-09-26.md) | Métricas, fluxos Admin/Suporte e referências do mercado | implemented — projeção de cobranças Asaas reais ficou para decisão/escopo próprio | — |
 | [Capa 16:9 e CourseCards horizontais](2026-09-22-course-cover-16-9-and-cards-plan.md) | Upload de capa, CourseCards e fallback visual de Aula | implemented — sem commit | decisões ratificadas em 2026-09-22 |

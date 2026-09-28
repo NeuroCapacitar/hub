@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { normalizeBuyerEmail } from "./buyer-identity";
+import { normalizeBuyerEmail } from "@/lib/email-identity";
 
 export interface OrderIdentityQueryClient {
   query(queryText: string, values?: unknown[]): Promise<{ rows: unknown[] }>;
@@ -126,21 +126,56 @@ const requireEligibleStudent = (row: unknown): string => {
   return userId;
 };
 
-const hasCredentialAccount = async ({
+const hasUsableAuthenticationMethod = async ({
   client,
+  googleProviderEnabled,
   userId,
 }: {
   client: OrderIdentityQueryClient;
+  googleProviderEnabled: boolean;
   userId: string;
 }): Promise<boolean> => {
   const result = await client.query(
     `select id
      from accounts
-     where user_id = $1 and provider_id = 'credential'
+     where user_id = $1
+       and (
+         (provider_id = 'credential' and password is not null)
+         or (provider_id = 'google' and $2::boolean = true)
+       )
      limit 1`,
-    [userId]
+    [userId, googleProviderEnabled]
   );
   return getRowString(result.rows[0], "id") !== null;
+};
+
+const findExistingBuyerByEmail = async ({
+  client,
+  courseId,
+  emails,
+}: {
+  client: OrderIdentityQueryClient;
+  courseId: string;
+  emails: readonly string[];
+}): Promise<unknown> => {
+  const matches: unknown[] = [];
+  for (const email of emails) {
+    const match = await findEligibleUserByEmail({ client, courseId, email });
+    if (getRowString(match, "id")) {
+      matches.push(match);
+    }
+  }
+
+  const matchedUserIds = new Set(
+    matches
+      .map((match) => getRowString(match, "id"))
+      .filter((userId): userId is string => userId !== null)
+  );
+  if (matchedUserIds.size > 1) {
+    throw new LocalOrderIdentityError("order_identity_conflict");
+  }
+
+  return matches[0];
 };
 
 const linkPendingOrder = async ({
@@ -184,9 +219,11 @@ const linkPendingOrder = async ({
 
 export const resolveLocalOrderIdentity = async ({
   client,
+  googleProviderEnabled = false,
   order,
 }: {
   client: OrderIdentityQueryClient;
+  googleProviderEnabled?: boolean;
   order: LockedOrderIdentity;
 }): Promise<LocalOrderIdentityResult> => {
   if (order.userId) {
@@ -197,7 +234,11 @@ export const resolveLocalOrderIdentity = async ({
     });
     const userId = requireEligibleStudent(row);
     return {
-      activationRequired: !(await hasCredentialAccount({ client, userId })),
+      activationRequired: !(await hasUsableAuthenticationMethod({
+        client,
+        googleProviderEnabled,
+        userId,
+      })),
       userId,
     };
   }
@@ -206,11 +247,13 @@ export const resolveLocalOrderIdentity = async ({
     throw new LocalOrderIdentityError("order_identity_incomplete");
   }
 
+  const originalEmail = order.customerEmail.trim().toLowerCase();
   const normalizedEmail = normalizeBuyerEmail(order.customerEmail);
-  let userRow = await findEligibleUserByEmail({
+  const candidateEmails = [...new Set([originalEmail, normalizedEmail])];
+  let userRow = await findExistingBuyerByEmail({
     client,
     courseId: order.courseId,
-    email: normalizedEmail,
+    emails: candidateEmails,
   });
 
   if (!getRowString(userRow, "id")) {
@@ -230,17 +273,21 @@ export const resolveLocalOrderIdentity = async ({
         [insertedUserId]
       );
     }
-    userRow = await findEligibleUserByEmail({
+    userRow = await findExistingBuyerByEmail({
       client,
       courseId: order.courseId,
-      email: normalizedEmail,
+      emails: candidateEmails,
     });
   }
 
   const userId = requireEligibleStudent(userRow);
   await linkPendingOrder({ client, orderId: order.orderId, userId });
   return {
-    activationRequired: !(await hasCredentialAccount({ client, userId })),
+    activationRequired: !(await hasUsableAuthenticationMethod({
+      client,
+      googleProviderEnabled,
+      userId,
+    })),
     userId,
   };
 };

@@ -117,6 +117,26 @@ acionam reenvio ou alteram Conta, Matrícula ou Pedido. Retenção: eventos
 processados/ignorados 180 dias, dead letter 365 dias e mensagens terminais 365
 dias, em lotes de 500 e sem apagar mensagem com evento pendente.
 
+### Confirmação pontual de e-mail para vínculo Google
+
+Quando a pessoa solicita a confirmação para vincular uma Conta local não
+verificada, Better Auth chama o template React local `auth-email-verification`
+e registra o envio sob o tópico `auth.email-verification`. Esse template não
+depende de um Hosted Template no painel Resend. O pedido é limitado a três
+tentativas por hora; `sendOnSignUp` e `sendOnSignIn` permanecem desligados. A
+rota responde de modo genérico para Conta inexistente, já verificada ou envio
+aceito e mascara falhas de entrega sem revelar identidade.
+O handler público normaliza resultados, rate limit e falhas para HTTP 200 com
+`{ status: true }`; falhas técnicas são registradas somente com código
+operacional genérico, sem e-mail ou token.
+
+O link de uso único expira em uma hora. A URL/token não entra na outbox, logs ou
+fingerprint persistido: `email_messages` guarda apenas o HMAC do request, o
+tópico, o alias lógico e a correlação UUID. O envio continua sujeito à allowlist
+de destinatários Development/Staging e ao lifecycle de aceitação/webhook. A
+migration `0095_google_account_identity_and_verification_email` adiciona o
+tópico e alias locais; ela não cria nem altera templates remotos do Resend.
+
 ### Ownership e investigação
 
 O Resend é a autoridade para detalhes de aceitação, entrega, bounce, supressão,

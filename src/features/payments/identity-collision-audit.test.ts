@@ -63,4 +63,28 @@ describe("buyer identity collision audit", () => {
     expect(String(query.mock.calls[0]?.[0])).toContain("order by id::text asc");
     expect(String(query.mock.calls[0]?.[0])).not.toMatch(MUTATION_SQL_PATTERN);
   });
+
+  it("can scan through an explicitly supplied read-only client", async () => {
+    const queryUsers = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { email: "First.Last+course@gmail.com", userId: "user-1" },
+        { email: "firstlast@gmail.com", userId: "user-2" },
+      ])
+      .mockResolvedValueOnce([]);
+
+    await expect(
+      scanBuyerIdentityCollisions({ batchSize: 2, queryUsers })
+    ).resolves.toEqual([
+      {
+        canonicalEmail: "firstlast@gmail.com",
+        originalEmails: ["First.Last+course@gmail.com", "firstlast@gmail.com"],
+        userIds: ["user-1", "user-2"],
+      },
+    ]);
+
+    expect(queryUsers).toHaveBeenNthCalledWith(1, "", 2);
+    expect(queryUsers).toHaveBeenNthCalledWith(2, "user-2", 2);
+    expect(query).not.toHaveBeenCalled();
+  });
 });
