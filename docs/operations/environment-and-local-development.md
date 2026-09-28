@@ -300,6 +300,60 @@ mesma origem; essa precedência não se aplica ao Development comum.
 
 Bootstrap Admin em dev exige `INTERNAL_BOOTSTRAP_SECRET`; em produção a rota retorna 404.
 
+### Grafo local do código e da documentação (opcional)
+
+Graphify é uma ferramenta de desenvolvimento, não uma dependência do Hub nem
+parte do runtime/CI. A skill Codex do projeto está em
+`.codex/skills/graphify/`; o corpus permitido fica em `.graphifyignore`. Para
+instalar o CLI e o parser SQL opcional no perfil local:
+
+```powershell
+winget install astral-sh.uv
+uv tool install --force "graphifyy[sql,mcp]"
+```
+
+Se `uv` já estiver instalado, pule a primeira linha. O pacote Python oficial se
+chama `graphifyy`; o comando executável é `graphify`. No Codex, `$graphify .`
+gera o grafo local. A extração AST de código é local; documentos canônicos
+permitidos pelo `.graphifyignore` são enviados ao modelo da sessão Codex para a
+extração semântica. Não configure Gemini, Graphify Cloud ou outro backend sem
+aprovação explícita.
+Mesmo que `GEMINI_API_KEY` ou `GOOGLE_API_KEY` existam no ambiente local, não
+as use para extrair documentos do Hub sem autorização explícita; o fluxo deste
+projeto usa o modelo da sessão Codex.
+
+A skill versionada neste repositório foi instalada do Graphify `0.9.69`; os
+arquivos de referência foram conferidos contra `0.9.70`. A ferramenta local
+testada está em `0.9.70` com os extras SQL e MCP; proveniência e licenças estão
+em `.codex/skills/graphify/UPSTREAM.md`. Para atualizá-la, use
+uma worktree isolada e revise o diff do instalador upstream: ele também edita
+`AGENTS.md` e `.codex/hooks.json`. Preserve a orientação local do Hub e não
+reintroduza o hook PreToolUse no-op do Codex sem uma razão concreta.
+
+Os resultados ficam em `graphify-out/` (`graph.json`, `GRAPH_REPORT.md`,
+visualização HTML e cache), ignorados pelo Git e específicos da worktree. Não
+os force-add nem os use como autoridade; valide conclusões nas fontes do
+projeto. Para consultas pontuais, use `graphify query`, `graphify path` ou
+`graphify explain`. O extra MCP habilita `graphify-mcp graphify-out/graph.json`
+em hosts compatíveis; esse servidor stdio foi testado, mas não foi registrado
+no `.mcp.json` compartilhado: o grafo é local/ignorado e não existe ainda um
+bootstrap portátil que evite iniciar o servidor quando ele estiver ausente.
+Para atualizar relações de código depois de mudanças,
+`graphify update .`; para reprocessar documentos semânticos alterados, use
+`$graphify --update`.
+
+O recurso opcional `graphify save-result` grava perguntas e respostas em
+`graphify-out/memory/`; o detector do Graphify inclui esses arquivos em futuras
+extrações mesmo que `graphify-out/` esteja ignorado pelo Git. Use-o somente para
+respostas já conferidas nas fontes, sem PII ou segredos. Essa memória fica local
+à worktree e não substitui a documentação canônica.
+
+O `.graphifyignore` limita o corpus às áreas de código, scripts/testes e documentação
+canônica atual; revisões antigas, pesquisas, planos históricos e mídia ficam de
+fora. Revise essa lista antes de ampliar a indexação. O skill upstream traz
+comandos Bash; nesta estação Windows, adapte-os ao PowerShell em vez de executá-los
+literalmente.
+
 ## Manutenção técnica
 
 `GET /api/cron/maintenance` exige `CRON_SECRET` em produção e executa diariamente: expira sessões e rate limits, remove em lotes reservas Asaas pré-autorização abandonadas há mais de 15 minutos, sanitiza payloads de webhook Asaas vencidos há 30 dias, consolida analytics diários e remove eventos brutos após 12 meses e agregados após 13 meses. A limpeza de checkout exige estado canônico e checkout `pending`, zero tentativas e ausência completa de URL, IDs e estados do provedor. A sanitização troca somente o JSON bruto por `{}` e preserva os metadados operacionais. Ambas respeitam lease/deadline; a sanitização não disputa evento `processing` com lock vigente. Não executa anonimização ou pedidos de dados.
