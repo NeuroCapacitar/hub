@@ -1,8 +1,9 @@
 ---
-status: proposed
+status: in-progress
 owner: product-and-engineering
 last_verified_commit: c0cddcce
 second_reviewed_on: 2026-09-27
+implementation_started_from: e7b2641
 ---
 
 # Login Google com separação entre entrar e criar conta
@@ -26,6 +27,46 @@ second_reviewed_on: 2026-09-27
 - **Categoria:** security / feature / tests / docs
 - **Planejado em:** commit `c0cddcce`, 2026-09-27; segunda revisão independente em 2026-09-27
 - **Issue:** —
+
+### Acompanhamento da execução
+
+- **Commit pré-implementação:** `e7b2641`.
+- **Etapa 0:** concluída em Development. O preflight read-only retornou
+  `safeToApply=true`, sem identidades Google duplicadas nem colisões de e-mail
+  canônico. As migrations `0095`/`0096` foram aplicadas pelo runner guardado;
+  ledger e catálogo confirmaram os dois enums e o índice único. Staging e
+  Production não foram acessados.
+- **Etapa 1:** implementada. Inclui par opcional de credenciais com validação,
+  bloqueio server-side de signup social explícito quando a flag está desligada,
+  política Better Auth testada, matching exato/canônico com rejeição de
+  ambiguidade em `src/lib/email-identity.ts` e credenciais Google proibidas em
+  Preview. Testes da etapa, `typecheck`, lint e documentação passaram.
+- **Etapa 2:** implementada e verificada. O provider é condicional, criptografa
+  tokens, conserva o gate de linking verificado, expõe só disponibilidade
+  booleana no servidor e usa confirmação pontual com lifecycle/e-mail sem
+  persistir token. OAuth continua sem credenciais externas; migrations `0095` e
+  `0096` foram aplicadas e verificadas somente em Development.
+- **Etapa 3:** implementada e verificada em código/testes. Login e cadastro
+  social estão separados; callback reaplica autorização; cancelamento retorna ao
+  login; erros externos são genéricos; confirmação de e-mail só abre por ação
+  explícita e recebe resposta anti-enumeração uniforme.
+- **Etapa 4:** implementada e verificada. Reset de senha ativa e verifica a
+  Conta somente após confirmação do Better Auth; reconciliação guest compara
+  e-mail original/canonizado e abre revisão em conflito; ativação distingue
+  senha utilizável de Google vinculado com provider ativo.
+- **Etapa 5:** implementada e verificada em integração in-process com adapter
+  de memória e endpoint de token Google simulado. A suíte prova login-only sem
+  criação, cadastro explícito/flag desligada, vínculo verificado, falha
+  fechada para Conta local não verificada e reconciliação da compra para a mesma
+  identidade. Playwright browser E2E não foi executado porque falta
+  `E2E_DATABASE_URL` isolada.
+- **Etapa 6:** suíte E2E concluída; homologação OAuth real pendente. Os 52
+  testes Playwright passaram em 5,6 minutos usando o projeto Neon isolado
+  fornecido para esta execução. URL direta, pooler, segredo Better Auth
+  sintético e variáveis de isolamento foram usados apenas no processo; nenhum
+  segredo foi gravado no repositório ou em `.env.local`. Credenciais Google
+  foram neutralizadas no E2E, então ainda falta validar callback/consentimento
+  com o Google em navegador. Staging/Production não foram acessados.
 
 ## Por que isso importa
 
@@ -314,12 +355,14 @@ plugins: [...infraPlugins, nextCookies()],
    detalhes em Development com a confirmação read-only já exigida pelo script.
    Não publicar Google até essas colisões serem resolvidas ou explicitamente
    excluídas da reconciliação.
-3. Adicionar ao schema Drizzle e migration o índice único
+3. Adicionar ao schema Drizzle e gerar migrations para: (a) os enums de tópico
+   e alias locais do lifecycle de e-mail `auth.email-verification` e
+   `auth-email-verification`; e (b) o índice único
    `accounts_provider_account_unique_idx` em `(provider_id, account_id)`.
-   Essa migration é uma nova dependência do plano: Better Auth 1.6.25 lê a
-   identidade pelo par e insere o vínculo; o schema atual não garante
-   unicidade sob concorrência.
-4. Aplicar a migration somente no banco Development autorizado; conferir
+   Separar as migrations permite que o valor enum esteja commitado antes de o
+   runtime gravá-lo; o índice protege contra callbacks concorrentes.
+4. Aplicar as migrations somente no banco Development autorizado quando o
+   preflight retornar `safeToApply=true`; conferir
    `db:migrations:check` e consulta pós-migration. Staging/Production não fazem
    parte desta execução e precisam de aprovação própria, preflight próprio e
    runbook correspondente.
@@ -327,8 +370,9 @@ plugins: [...infraPlugins, nextCookies()],
 **Verificar:**
 
 ```powershell
+bun run db:preflight:google-identities
 bun run db:migrations:check
-bun run test -- src/db/course-certificate-signatory-migration.test.ts src/features/payments/identity-collision-audit.test.ts
+bun run test -- src/db/google-social-auth-migration.test.ts src/features/payments/identity-collision-audit.test.ts
 ```
 
 Esperado: pré-flight sem conflito ou parada explícita; migration registrada no
@@ -392,7 +436,10 @@ escrita.
    `googleLoginEnabled`; nunca enviar client secret nem tornar credenciais
    `NEXT_PUBLIC_*`.
 8. Configurar `emailVerification.sendVerificationEmail` para uma ação de
-   confirmação solicitada pelo usuário, mantendo
+   confirmação solicitada pelo usuário. O e-mail usa React local e o lifecycle
+   `email_messages` com fingerprint HMAC, tópico/alias allowlisted e sem token
+   ou URL persistidos; limitar o endpoint a três pedidos por hora. Manter
+   `emailVerification.expiresIn` em uma hora. Também manter
    `emailAndPassword.requireEmailVerification` desativado e
    `emailVerification.sendOnSignUp`/`sendOnSignIn` falsos. Não transformar a
    confirmação pontual em gate global.
@@ -409,6 +456,15 @@ inicia como hoje; credenciais parciais falham no preflight; par completo constr�
 o provider; nenhum segredo aparece em erro/HTML/log.
 
 ### Etapa 3 — Separar Google login de Google signup na interface e callback
+
+**Status: implementada; provider ainda desativado sem credenciais e sem
+homologação OAuth real.** A rota de signup desabilitada não renderiza campos nem
+CTA social; callback e confirmação foram exercidos por testes com provider/API
+simulados. A tela de erro oferece o botão “Enviar link de confirmação” e só
+mostra o formulário após a ação. `send-verification-email` retorna o mesmo
+HTTP 200 `{ status: true }` para inexistência, Conta confirmada, envio aceito,
+rate limit ou falha interna; o código Better Auth de erro no callback do link é
+reduzido a estado genérico.
 
 1. Em `/entrar`, adicionar botão “Entrar com Google” somente quando o provider
    está configurado; iniciar `authClient.signIn.social({provider:"google"})`
@@ -447,7 +503,7 @@ o provider; nenhum segredo aparece em erro/HTML/log.
 **Verificar:**
 
 ```powershell
-bun run test -- "src/app/(auth)/entrar/sign-in-form.test.tsx" "src/app/(auth)/cadastro/sign-up-form.test.tsx" src/app/api/auth/redirect/route.test.ts
+bun run test -- "src/app/(auth)/entrar/sign-in-form.test.tsx" "src/app/(auth)/cadastro/sign-up-form.test.tsx" "src/app/(auth)/oauth/callback" "src/app/api/auth/[...all]/route.test.ts" src/app/api/auth/redirect/route.test.ts
 bun run typecheck
 ```
 
@@ -457,6 +513,15 @@ Student é deslogado; erros não enumeram Conta; resposta JSON atual de email
 continua sem regressão.
 
 ### Etapa 4 — Garantir a reconciliação segura do primeiro acesso pago
+
+**Status: implementada e verificada em código/testes; ainda sem prova OAuth
+real ou alterações de banco.** `onPasswordReset` marca o e-mail local como
+verificado por `users.id` somente depois da gravação da credencial; falha tenta
+revogar sessões antigas, retorna erro genérico e a tela oferece nova recuperação.
+A reconciliação guest compara o e-mail original e o canonizado, bloqueando
+colisão de IDs com revisão. Um hash de senha ou Google vinculado com credenciais
+Google ativas conta como método de entrada; caso contrário, o outbox envia
+ativação por senha após o pagamento.
 
 1. Adicionar `emailAndPassword.onPasswordReset` com atualização idempotente de
    `users.email_verified=true` somente depois de Better Auth consumir o token
@@ -491,7 +556,7 @@ continua sem regressão.
 **Verificar:**
 
 ```powershell
-bun run test -- src/features/payments/order-identity.test.ts src/features/outbox/delivery.test.ts
+bun run test -- src/lib/auth.test.ts src/features/payments/order-identity.test.ts src/features/payments/apply-authoritative-financial-evidence.test.ts src/features/payments/asaas-webhook-processor.test.ts src/features/payments/reconciliation.test.ts src/features/outbox/delivery.test.ts "src/app/(auth)/redefinir-senha/reset-password-form.test.tsx"
 bun run typecheck
 ```
 
@@ -503,6 +568,15 @@ auditoria e matrícula seguem idempotentes; lookup de email ambíguo falha sem
 duplicar identidade.
 
 ### Etapa 5 — Provar os fluxos sem depender de credencial Google real
+
+**Status: integração executada e verificada sem Google externo.**
+`src/lib/google-oauth-flow.test.ts` usa Better Auth com memory adapter, a mesma
+política do provider e um fetch que aceita somente o endpoint de token fake;
+qualquer URL externa inesperada falha o teste. A suíte cobre também a
+reconciliação da compra guest com a identidade criada pelo Google. O Playwright
+de `critical-journeys.spec.ts` ficou pendente porque não há `E2E_DATABASE_URL`
+descartável; não usar a branch compartilhada Development nem Staging como banco
+E2E.
 
 1. Usar um provider simulado/fake no teste de integração Better Auth (ou um seam
    de teste pequeno e explícito) para exercer a callback completa. Não acessar
@@ -543,12 +617,15 @@ duplicar identidade.
 **Verificar:**
 
 ```powershell
-bun run test -- src/app/api/auth/[...all]/route.test.ts src/app/api/auth/redirect/route.test.ts "src/app/(auth)" src/features/payments/order-identity.test.ts src/features/outbox/delivery.test.ts
-bun run test -- tests/e2e/critical-journeys.spec.ts
+bun run test -- src/lib/google-oauth-flow.test.ts src/lib/auth.test.ts src/app/api/auth/[...all]/route.test.ts src/app/api/auth/redirect/route.test.ts "src/app/(auth)" src/features/payments/order-identity.test.ts src/features/payments/apply-authoritative-financial-evidence.test.ts src/features/outbox/delivery.test.ts
 bun run typecheck
 bun run check
 bun run docs:check
 ```
+
+O browser E2E de `tests/e2e/critical-journeys.spec.ts` deve ser executado na
+Etapa 6 somente com `E2E_DATABASE_URL` descartável. Não apontar Playwright à
+branch compartilhada Development, Staging ou Production.
 
 Esperado: unit/component/route tests e E2E relevante passam; OAuth e checkout
 preservam o mesmo `users.id`; índice evita vínculo duplicado; lint/typecheck/docs

@@ -1,4 +1,4 @@
-import { normalizeBuyerEmail } from "@/features/payments/buyer-identity";
+import { normalizeBuyerEmail } from "@/lib/email-identity";
 import { PASSWORD_MIN_LENGTH } from "@/lib/password-policy";
 
 export interface StagingAdminSeedAccount {

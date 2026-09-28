@@ -96,6 +96,8 @@ históricos foram removidos. Smokes e testes manuais usam exclusivamente
 | `BETTER_AUTH_TRUSTED_ORIGINS` | origens extras | `parseTrustedOrigins` | não |
 | `BETTER_AUTH_URL` | explícita em Production; derivada do hostname Vercel em Preview | Better Auth | não |
 | `AUTH_PUBLIC_SIGNUP_ENABLED` | opcional, default `false` | rota Better Auth | não |
+| `GOOGLE_CLIENT_ID` | OAuth Google opcional; deve ser configurado junto com `GOOGLE_CLIENT_SECRET` | Better Auth | identificador; server-only |
+| `GOOGLE_CLIENT_SECRET` | OAuth Google opcional; deve ser configurado junto com `GOOGLE_CLIENT_ID`; proibido em Preview | Better Auth | sim |
 | `BETTER_AUTH_API_KEY` | Infra opcional | Dash/Sentinel | sim |
 | `BETTER_AUTH_API_URL` | Infra opcional | Dash/Sentinel | não |
 | `BETTER_AUTH_KV_URL` | Infra opcional | Dash/Sentinel | pode conter credencial |
@@ -207,6 +209,19 @@ credenciais de provider. Não coloque JWT em `JMVSTREAM_AUTH_RESOURCE`. `E2E_TES
 login no banco efêmero da CI. O seed e o teardown E2E recusam operações R2 se
 `E2E_R2_BUCKET_NAME` estiver ausente ou não for exatamente igual a `R2_BUCKET_NAME`; nunca
 confirme um bucket de produção.
+
+### OAuth Google opcional
+
+`GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` ficam ausentes em conjunto para
+manter o provider desligado; um par incompleto faz a validação do ambiente
+falhar sem exibir o valor configurado. Não use prefixo `NEXT_PUBLIC_` nem
+reutilize credenciais entre ambientes. Preview proíbe ambos. Em Development,
+configure o URI autorizado do tipo Web Client como
+`${BETTER_AUTH_URL}/api/auth/callback/google` (por exemplo, localhost); o Hub
+usa apenas os escopos padrão `openid`, `email` e `profile`. Não adicione
+credenciais Development a Staging/Production sem autorização operacional
+separada. A migration de unicidade da identidade Google precisa ser aplicada em
+Development antes de configurar o primeiro Client ID.
 
 ### Separação por fase
 

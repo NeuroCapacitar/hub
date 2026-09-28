@@ -328,6 +328,7 @@ describe("Asaas reconciliation", () => {
     expect(gateway.calls.getCustomer).toEqual(["cus-public"]);
     expect(dependencies.resolveLocalOrderIdentity).toHaveBeenCalledWith({
       client,
+      googleProviderEnabled: false,
       order: {
         buyerIdentityStatus: "pending",
         courseId: "course-1",

@@ -11,6 +11,7 @@ import {
   LocalOrderIdentityError,
   resolveLocalOrderIdentity,
 } from "@/features/payments/order-identity";
+import { getServerEnv } from "@/lib/env";
 
 export type BuyerIdentityReviewReason =
   | "buyer_identity_conflict"
@@ -221,8 +222,12 @@ export const applyConfirmedPaymentAccess = async ({
 
   let identity: Awaited<ReturnType<typeof resolveLocalOrderIdentity>>;
   try {
+    const env = getServerEnv();
     identity = await resolveIdentity({
       client,
+      googleProviderEnabled: Boolean(
+        env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+      ),
       order: {
         buyerIdentityStatus: order.buyerIdentityStatus,
         courseId: order.courseId,

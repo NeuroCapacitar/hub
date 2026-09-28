@@ -94,6 +94,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrations:check": "bun scripts/check-migrations.ts",
     "db:migrations:inspect": "bun scripts/inspect-migration-state.ts",
+    "db:preflight:google-identities": "bun --conditions=react-server scripts/preflight-google-identities.ts",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:e2e": "bun scripts/migrate-e2e.ts",
     "db:migrate:development": "bun scripts/migrate-development.ts",

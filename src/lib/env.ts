@@ -64,6 +64,8 @@ const serverEnvSchema = z.object({
     .transform((value) => value === "true"),
   HEALTHCHECK_SECRET: optionalNonEmptyString,
   INTERNAL_BOOTSTRAP_SECRET: optionalNonEmptyString,
+  GOOGLE_CLIENT_ID: optionalNonEmptyString,
+  GOOGLE_CLIENT_SECRET: optionalNonEmptyString,
   JMVSTREAM_API_BASE_URL: z.string().url().default("https://api.jmvstream.com"),
   JMVSTREAM_AUTH_RESOURCE: optionalNonEmptyString,
   JMVSTREAM_API_TOKEN: optionalNonEmptyString,
@@ -172,6 +174,12 @@ const validateServerEnvironment = (
   env: ServerEnvironment,
   rawEnvironment: RawEnvironment
 ): void => {
+  if (Boolean(env.GOOGLE_CLIENT_ID) !== Boolean(env.GOOGLE_CLIENT_SECRET)) {
+    throw new Error(
+      "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together."
+    );
+  }
+
   if (env.NODE_ENV === "production" && !env.BETTER_AUTH_SECRET) {
     throw new Error("BETTER_AUTH_SECRET is required in production.");
   }
@@ -257,6 +265,8 @@ export const getServerEnv = () => {
     DEVELOPMENT_EMAIL_RECIPIENT_ALLOWLIST:
       process.env.DEVELOPMENT_EMAIL_RECIPIENT_ALLOWLIST,
     E2E_TEST_MODE: process.env.E2E_TEST_MODE,
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     HEALTHCHECK_SECRET: process.env.HEALTHCHECK_SECRET,
     INTERNAL_BOOTSTRAP_SECRET: process.env.INTERNAL_BOOTSTRAP_SECRET,
     JMVSTREAM_API_BASE_URL: process.env.JMVSTREAM_API_BASE_URL,

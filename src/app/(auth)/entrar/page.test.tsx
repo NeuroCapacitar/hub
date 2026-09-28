@@ -20,13 +20,25 @@ vi.mock("@/lib/session", () => ({
 vi.mock("@/lib/env", () => ({ getServerEnv: dependencies.getServerEnv }));
 vi.mock("./sign-in-form", () => ({
   SignInForm: ({
+    googleLoginEnabled,
+    googleOAuthCallbackUrl,
+    emailVerified,
+    emailVerificationFailed,
     returnTo,
     supportEmail,
   }: {
+    googleLoginEnabled: boolean;
+    googleOAuthCallbackUrl: string;
+    emailVerified: boolean;
+    emailVerificationFailed: boolean;
     returnTo: string | null;
     supportEmail: string | null;
   }) => (
     <div
+      data-email-verification-failed={String(emailVerificationFailed)}
+      data-email-verified={String(emailVerified)}
+      data-google-callback-url={googleOAuthCallbackUrl}
+      data-google-login-enabled={String(googleLoginEnabled)}
       data-return-to={returnTo ?? "none"}
       data-support-email={supportEmail ?? "none"}
     >
@@ -44,6 +56,9 @@ describe("SignInPage", () => {
     vi.clearAllMocks();
     dependencies.connection.mockResolvedValue(undefined);
     dependencies.getServerEnv.mockReturnValue({
+      BETTER_AUTH_URL: "https://hub.example.test",
+      GOOGLE_CLIENT_ID: undefined,
+      GOOGLE_CLIENT_SECRET: undefined,
       SUPPORT_EMAIL: "support@example.test",
     });
     dependencies.getCurrentSession.mockResolvedValue(null);
@@ -65,6 +80,50 @@ describe("SignInPage", () => {
       "Entre para voltar ao Curso e confirmar sua inscrição gratuita."
     );
     expect(dependencies.redirect).not.toHaveBeenCalled();
+  });
+
+  it("passes only provider availability, never the Google client secret, to the form", async () => {
+    dependencies.getServerEnv.mockReturnValue({
+      BETTER_AUTH_URL: "https://hub.example.test",
+      GOOGLE_CLIENT_ID: "google-client-id-fixture",
+      GOOGLE_CLIENT_SECRET: "google-client-secret-fixture",
+      SUPPORT_EMAIL: "support@example.test",
+    });
+
+    const markup = renderToStaticMarkup(
+      await SignInPage({ searchParams: Promise.resolve({}) })
+    );
+
+    expect(markup).toContain('data-google-login-enabled="true"');
+    expect(markup).toContain(
+      'data-google-callback-url="https://hub.example.test/oauth/callback"'
+    );
+    expect(markup).not.toContain("google-client-secret-fixture");
+  });
+
+  it("recognizes the one-time email verification return without exposing a token", async () => {
+    const markup = renderToStaticMarkup(
+      await SignInPage({
+        searchParams: Promise.resolve({ emailVerified: "1" }),
+      })
+    );
+
+    expect(markup).toContain('data-email-verified="true"');
+  });
+
+  it("does not report a failed Better Auth email-verification redirect as success", async () => {
+    const markup = renderToStaticMarkup(
+      await SignInPage({
+        searchParams: Promise.resolve({
+          emailVerified: "1",
+          error: "TOKEN_EXPIRED",
+        }),
+      })
+    );
+
+    expect(markup).toContain('data-email-verified="false"');
+    expect(markup).toContain('data-email-verification-failed="true"');
+    expect(markup).not.toContain("TOKEN_EXPIRED");
   });
 
   it("redirects an authenticated Student to a valid return path", async () => {

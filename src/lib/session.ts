@@ -27,6 +27,7 @@ export interface AppSession {
     id: string;
     name: string;
     email: string;
+    image: string | null;
   };
 }
 
@@ -48,6 +49,7 @@ export const getCurrentSession = cache(async (): Promise<AppSession | null> => {
       role: profiles.role,
       supportPermissionGrants: profiles.supportPermissionGrants,
       supportPermissionViews: profiles.supportPermissionViews,
+      userImage: users.image,
     })
     .from(users)
     .leftJoin(profiles, eq(profiles.userId, users.id))
@@ -61,6 +63,7 @@ export const getCurrentSession = cache(async (): Promise<AppSession | null> => {
       id: session.user.id,
       name: session.user.name,
       email: session.user.email,
+      image: profile?.userImage ?? null,
     },
     role: profile?.role ?? "student",
     supportPermissionGrants: normalizeSupportPermissionGrants(

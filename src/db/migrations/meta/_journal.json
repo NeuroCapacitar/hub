@@ -666,6 +666,20 @@
       "when": 1790464348709,
       "tag": "0094_provider_payment_date",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1790566832774,
+      "tag": "0095_google_account_identity_and_verification_email",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1790566863367,
+      "tag": "0096_google_provider_account_identity_unique_index",
+      "breakpoints": true
     }
   ]
 }

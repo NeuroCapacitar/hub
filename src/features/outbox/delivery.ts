@@ -93,6 +93,7 @@ const createEmailDeliveryContext = (
 
 interface AccountActivationDeliveryData {
   hasCredential: boolean;
+  hasGoogleAccount: boolean;
   studentEmail: string;
 }
 
@@ -103,15 +104,17 @@ const parseAccountActivationDeliveryData = (
     return null;
   }
   const hasCredential = Reflect.get(row, "has_credential");
+  const hasGoogleAccount = Reflect.get(row, "has_google_account");
   const studentEmail = Reflect.get(row, "student_email");
   if (
     typeof hasCredential !== "boolean" ||
+    typeof hasGoogleAccount !== "boolean" ||
     typeof studentEmail !== "string" ||
     !studentEmail
   ) {
     return null;
   }
-  return { hasCredential, studentEmail };
+  return { hasCredential, hasGoogleAccount, studentEmail };
 };
 
 const getAccountActivationDeliveryData = async ({
@@ -129,7 +132,14 @@ const getAccountActivationDeliveryData = async ({
          from accounts
          where accounts.user_id = users.id
            and accounts.provider_id = 'credential'
-       ) as has_credential
+           and accounts.password is not null
+       ) as has_credential,
+       exists (
+         select 1
+         from accounts
+         where accounts.user_id = users.id
+           and accounts.provider_id = 'google'
+       ) as has_google_account
      from orders
      join users on users.id = orders.user_id
      where orders.id = $1
@@ -164,8 +174,13 @@ const deliverAccountActivation = async ({
   if (!data) {
     throw unavailableAggregate();
   }
-  if (!data.hasCredential) {
-    const env = getServerEnv();
+  const env = getServerEnv();
+  const googleProviderEnabled = Boolean(
+    env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+  );
+  const hasUsableSignInMethod =
+    data.hasCredential || (data.hasGoogleAccount && googleProviderEnabled);
+  if (!hasUsableSignInMethod) {
     const idempotencyKey = deriveAccountActivationEmailIdempotencyKey({
       authSecret: env.BETTER_AUTH_SECRET,
       outboxIdempotencyKey: message.idempotencyKey,

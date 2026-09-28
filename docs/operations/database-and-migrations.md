@@ -2,8 +2,8 @@
 status: canonical
 owner: engineering
 last_verified_commit: c10f0d2
-current_migration_tag: 0094_provider_payment_date
-migration_entry_count: 95
+current_migration_tag: 0096_google_provider_account_identity_unique_index
+migration_entry_count: 97
 schema_table_count: 51
 ---
 
@@ -51,6 +51,21 @@ editar o ledger, reordenar migrations ou executar SQL histórico desconhecido.
 Essa compatibilidade nunca é habilitada em Staging, Production ou E2E.
 `db:migrations:check` valida a cadeia local e `db:migrations:inspect` audita o banco
 somente para leitura.
+
+### Preflight de identidades Google em Development
+
+Antes de aplicar as migrations `0095`/`0096`, execute
+`bun run db:preflight:google-identities`. O comando exige
+`DATABASE_URL_DIRECT` e `DEVELOPMENT_DATABASE_HOST`, compara o host esperado e
+recusa o compute Production. Em uma transação `READ ONLY`, verifica pares
+duplicados de `(provider_id, account_id)` e colisões de `normalizeBuyerEmail`.
+O resultado traz somente hashes para e-mails/IDs externos; em colisões de
+provider lista IDs locais de linha/Conta para investigação. `safeToApply=false`
+interrompe a sequência. Não apague nem reassocie identidades automaticamente.
+
+Somente quando `safeToApply=true`, aplique em Development com
+`bun run db:migrate:development`. Esse procedimento nunca autoriza Staging ou
+Production; cada um exige alvo e preflight próprios e autorização operacional.
 
 ## Índice do histórico de liberação
 
@@ -218,6 +233,20 @@ integração financeira exercita a consulta em PostgreSQL descartável. A migrat
 foi aplicada ao Development em 2026-09-26 pelo runner guardado; a auditoria
 read-only confirmou a coluna e o registro Drizzle `0094`. Staging e Production
 não foram tocados.
+
+A migration `0095_google_account_identity_and_verification_email` adiciona os
+identificadores de lifecycle `auth.email-verification` e
+`auth-email-verification`; o link/token de confirmação não é persistido em
+`email_messages`. A migration `0096_google_provider_account_identity_unique_index`
+cria unicidade para `(accounts.provider_id, accounts.account_id)`, impedindo que
+callbacks concorrentes associem a mesma identidade externa a Contas diferentes.
+Antes de aplicar, execute `bun run db:preflight:google-identities`; colisões em
+qualquer dos dois conjuntos exigem investigação e interrompem a migration. A
+implementação atual não apaga nem reassocia linhas automaticamente. As duas
+migrations foram aplicadas ao Development em 2026-09-28 pelo runner guardado,
+após o preflight retornar `safeToApply=true` e zero colisões. A auditoria
+somente-leitura confirmou os dois registros no ledger Drizzle. Staging e
+Production não foram tocados.
 
 O runner de Development aplicou `0085` em 2026-09-17. A auditoria read-only
 confirmou o check `allowlist refinada e grants configuráveis limpos` e nenhum

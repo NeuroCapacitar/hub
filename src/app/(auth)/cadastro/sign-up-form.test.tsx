@@ -10,12 +10,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const dependencies = vi.hoisted(() => ({
   assign: vi.fn(),
   fetch: vi.fn(),
+  signInSocial: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
   default: ({ children, href }: { children: ReactNode; href: string }) => (
     <a href={href}>{children}</a>
   ),
+}));
+vi.mock("@/lib/auth-client", () => ({
+  authClient: { signIn: { social: dependencies.signInSocial } },
 }));
 
 import { SignUpForm } from "./sign-up-form";
@@ -143,5 +147,47 @@ describe("SignUpForm", () => {
       expect.objectContaining({ credentials: "same-origin" })
     );
     expect(dependencies.assign).toHaveBeenCalledWith(COURSE_RETURN_TO);
+  });
+
+  it("starts an explicit Google signup only from the signup form", async () => {
+    dependencies.signInSocial.mockResolvedValue({
+      data: { url: "https://accounts.google.test" },
+    });
+    act(() =>
+      root.render(
+        <SignUpForm
+          googleLoginEnabled
+          googleOAuthCallbackUrl="https://hub.example.test/oauth/callback?returnTo=%2Fcomprar%2Fcurso-gratis"
+          returnTo={COURSE_RETURN_TO}
+        />
+      )
+    );
+
+    const googleButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.includes("Criar conta com Google")
+    );
+    expect(googleButton).toBeDefined();
+
+    await act(async () => {
+      googleButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(dependencies.signInSocial).toHaveBeenCalledWith({
+      callbackURL:
+        "https://hub.example.test/oauth/callback?returnTo=%2Fcomprar%2Fcurso-gratis",
+      errorCallbackURL:
+        "https://hub.example.test/oauth/callback?returnTo=%2Fcomprar%2Fcurso-gratis",
+      newUserCallbackURL:
+        "https://hub.example.test/oauth/callback?returnTo=%2Fcomprar%2Fcurso-gratis",
+      provider: "google",
+      requestSignUp: true,
+    });
+  });
+
+  it("does not show Google signup when the provider is disabled", () => {
+    act(() => root.render(<SignUpForm googleLoginEnabled={false} />));
+
+    expect(container.textContent).not.toContain("Criar conta com Google");
   });
 });

@@ -25,6 +25,8 @@ const PASSWORD_TOO_LONG_MESSAGE =
 const INVALID_TOKEN_MESSAGE = "Link inválido ou expirado.";
 const NETWORK_ERROR_MESSAGE =
   "Não foi possível atualizar a senha. Tente novamente.";
+const RESET_COMPLETION_ERROR_MESSAGE =
+  "Não foi possível concluir a recuperação. Solicite um novo link e tente novamente.";
 
 async function getResetErrorCode(response: Response): Promise<unknown> {
   try {
@@ -94,6 +96,15 @@ export function ResetPasswordForm({
           setState({
             canRequestNewLink: true,
             message: INVALID_TOKEN_MESSAGE,
+            status: "error",
+          });
+          return;
+        }
+
+        if (response.status >= 500) {
+          setState({
+            canRequestNewLink: true,
+            message: RESET_COMPLETION_ERROR_MESSAGE,
             status: "error",
           });
           return;

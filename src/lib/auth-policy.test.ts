@@ -5,6 +5,7 @@ import {
   canPerform,
   getBetterAuthRateLimitConfig,
   getBootstrapAdminDecision,
+  getGoogleOAuthSignUpPolicy,
   getPasswordResetRedirectUrl,
   getResolvedBetterAuthInfraConfig,
   isBlockedAuthEndpoint,
@@ -33,6 +34,38 @@ describe("auth policy", () => {
         pathSegments: ["sign-up", "email"],
       })
     ).toBe(false);
+  });
+
+  it("blocks explicit Google sign-up when public registration is disabled", () => {
+    expect(
+      isBlockedAuthEndpoint({
+        allowPublicSignUp: false,
+        method: "POST",
+        pathSegments: ["sign-in", "social"],
+        requestSignUp: true,
+      })
+    ).toBe(true);
+  });
+
+  it("keeps Google login available without opting into account creation", () => {
+    expect(
+      isBlockedAuthEndpoint({
+        allowPublicSignUp: false,
+        method: "POST",
+        pathSegments: ["sign-in", "social"],
+      })
+    ).toBe(false);
+  });
+
+  it.each([
+    false,
+    true,
+  ])("keeps Google implicit sign-up disabled while explicit sign-up follows the public flag %s", (allowPublicSignUp) => {
+    expect(getGoogleOAuthSignUpPolicy(allowPublicSignUp)).toEqual({
+      disableImplicitSignUp: true,
+      disableIdTokenSignIn: true,
+      disableSignUp: !allowPublicSignUp,
+    });
   });
 
   it("requires a bootstrap secret outside production too", () => {
@@ -170,6 +203,51 @@ describe("auth policy", () => {
       )
   );
 
+  it("registers Google only with a complete server-side credential pair", async () => {
+    const policyModule = await import("./auth-policy");
+    const getProviderConfig = Reflect.get(
+      policyModule,
+      "getGoogleOAuthProviderConfig"
+    );
+    expect(getProviderConfig).toBeTypeOf("function");
+    if (typeof getProviderConfig !== "function") {
+      return;
+    }
+
+    expect(
+      getProviderConfig({
+        allowPublicSignUp: false,
+        clientId: undefined,
+        clientSecret: undefined,
+      })
+    ).toBeNull();
+
+    expect(() =>
+      getProviderConfig({
+        allowPublicSignUp: true,
+        clientId: "google-client-id-fixture",
+        clientSecret: undefined,
+      })
+    ).toThrow(
+      "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together."
+    );
+
+    expect(
+      getProviderConfig({
+        allowPublicSignUp: false,
+        clientId: "google-client-id-fixture",
+        clientSecret: "google-client-secret-fixture",
+      })
+    ).toEqual({
+      clientId: "google-client-id-fixture",
+      clientSecret: "google-client-secret-fixture",
+      disableIdTokenSignIn: true,
+      disableImplicitSignUp: true,
+      disableSignUp: true,
+      overrideUserInfoOnSignIn: true,
+    });
+  });
+
   it.each(
     permissionCases
   )("authorizes role %s for %s as %s", (role, permission, expected) => {
@@ -272,10 +350,15 @@ describe("auth policy", () => {
   });
 
   it("raises sign-in and password reset limits in isolated E2E mode", () => {
-    expect(getBetterAuthRateLimitConfig(false)).toBeUndefined();
+    expect(getBetterAuthRateLimitConfig(false)).toEqual({
+      customRules: {
+        "/send-verification-email": { max: 3, window: 3600 },
+      },
+    });
     expect(getBetterAuthRateLimitConfig(true)).toEqual({
       customRules: {
         "/request-password-reset": { max: 100, window: 10 },
+        "/send-verification-email": { max: 100, window: 10 },
         "/sign-in/email": { max: 100, window: 10 },
       },
     });

@@ -229,6 +229,53 @@ de token ausente preserva o link de recuperação exigido.
 
 As páginas `/` e `/entrar` aguardam uma requisição antes de resolver a sessão: uma Conta já autenticada é redirecionada para sua área, e essa leitura nunca ocorre durante o build.
 
+### REG-IDA-008 Login Google não cria Conta implicitamente
+
+**Contrato aprovado; Etapas 1–3 da implementação concluídas; ativação e
+homologação real ainda pendentes:** `/entrar` usa Google somente para
+autenticar uma Conta existente; o pedido de signup explícito nunca é
+enviado nessa rota. `disableImplicitSignUp` permanece ativo, e a opção de
+signup Google segue `AUTH_PUBLIC_SIGNUP_ENABLED`. `/cadastro` pode criar uma
+Conta Google somente quando a pessoa escolhe essa ação e o cadastro público
+está habilitado; esse fluxo cria apenas Conta, vínculo Google e Perfil Student,
+sem Pedido, Concessão ou Matrícula.
+
+O primeiro vínculo local usa o `sub` Google como identidade estável e exige
+`email_verified=true` no provider e `users.email_verified=true` local. Um
+endereço original ou canonizado pelo normalizador de Compradora só identifica
+uma Conta quando há um único candidato; conflito é rejeitado sem merge ou
+transferência. Linking não atualiza e-mail, nome, papel ou dados financeiros da
+Conta local. A foto do Google pode preencher `users.image` quando a Conta ainda
+não tem imagem; uma imagem já cadastrada prevalece. O avatar é lido da sessão
+server-side e exibido no menu da Conta. Tokens OAuth ficam cifrados no banco;
+não há escopos de produto nem ID-token sign-in.
+
+Depois de uma redefinição de senha concluída, `onPasswordReset` atualiza
+idempotentemente `users.email_verified=true` pelo ID da Conta, usando o link
+único enviado à caixa postal cadastrada como prova local de controle. A escrita
+ocorre depois da atualização da credencial pelo Better Auth. Se ela falhar, o
+callback registra apenas um código operacional genérico e falha a resposta; a
+tela não afirma sucesso e oferece solicitar outro link em `/recuperar-senha`.
+
+`emailAndPassword.requireEmailVerification` continua desligado para preservar
+cadastro por senha e o retorno da autoinscrição. A confirmação pontual do
+endereço para um vínculo Google só é enviada após pedido explícito, usa resposta
+anti-enumeração e rate limit, e não é acionada automaticamente em signup ou
+sign-in. Essa decisão está em
+[DEC-DISC-020](../decisions.md#dec-disc-020); compra pública continua
+guest-first conforme [DEC-DISC-007](../decisions.md#dec-disc-007).
+
+Na interface, `/entrar` inicia Google sem `requestSignUp`; `/cadastro` só mostra
+criação social quando cadastro público está habilitado e, quando está desligado,
+exibe apenas a indisponibilidade e um retorno seguro para entrar. O callback
+`/oauth/callback` nunca exibe mensagens/códigos crus do provider: sucesso usa
+`/api/auth/redirect` para reaplicar papel e bloqueio, e cancelamento volta ao
+login. A tentativa de confirmar e-mail é revelada por ação explícita; a rota
+`send-verification-email` normaliza respostas e falhas para HTTP 200 com
+`{ status: true }`, sem distinguir Conta inexistente, já confirmada, envio
+aceito, limite ou falha de entrega. O retorno do link distingue confirmação
+concluída de token inválido/expirado sem exibir o código Better Auth.
+
 ## Fronteira Admin e Aluno
 
 `getStudentPreviewMode`, `canAccessStudentRoute` e `canMutateStudentExperience`, em `src/features/courses/preview.ts`, permitem visualização controlada da experiência do Aluno. Preview de Admin não deve gravar progresso nem simular autorização real.
@@ -265,4 +312,6 @@ As páginas `/` e `/entrar` aguardam uma requisição antes de resolver a sessã
 - [DEC-DISC-014](../decisions.md#dec-disc-014): matriz granular de `support`,
   projeções por Curso e negações diretas implementadas; MFA administrativo está
   fora do escopo atual;
+- [DEC-DISC-020](../decisions.md#dec-disc-020): separação entre login Google,
+  cadastro social explícito, vínculo verificado e checkout guest-first;
 - racional histórico para Better Auth e autenticação por e-mail e senha não localizado.

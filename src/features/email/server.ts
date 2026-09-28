@@ -1,5 +1,7 @@
 import "server-only";
+import { createHmac, randomUUID } from "node:crypto";
 import { render } from "@react-email/components";
+import { createElement } from "react";
 import { Resend } from "resend";
 import { getPool } from "@/db";
 import { assertDevelopmentOrStagingEmailRecipientAllowed } from "@/features/email/development-recipient";
@@ -18,6 +20,7 @@ import { isAccountActivationEmailIdempotencyKey } from "@/lib/account-activation
 import { PLATFORM_NAME } from "@/lib/brand";
 import { getServerEnv, isIsolatedE2eRuntime } from "@/lib/env";
 import { resolveRuntimeEnvironment } from "@/lib/runtime-environment";
+import { EmailVerificationEmail } from "./templates";
 import type { HostedEmailTemplateVariables } from "./templates-contract";
 import {
   resolveHostedTemplateAlias,
@@ -25,10 +28,12 @@ import {
 } from "./templates-contract";
 
 interface SendEmailInput {
+  deliveryContext?: EmailDeliveryContext;
   idempotencyKey?: string;
   react: React.ReactNode;
   replyTo?: string;
   subject: string;
+  text?: string;
   to: string;
 }
 
@@ -97,10 +102,12 @@ const handleEmailProviderError = ({
 };
 
 export const sendTransactionalEmail = async ({
+  deliveryContext,
   idempotencyKey,
   react,
   replyTo,
   subject,
+  text,
   to,
 }: SendEmailInput): Promise<void> => {
   const env = getServerEnv();
@@ -122,8 +129,22 @@ export const sendTransactionalEmail = async ({
     html,
     ...(resolvedReplyTo ? { replyTo: resolvedReplyTo } : {}),
     subject,
+    ...(text ? { text } : {}),
+    ...(deliveryContext
+      ? { tags: buildResendLifecycleTags(deliveryContext) }
+      : {}),
     to,
   };
+  if (deliveryContext) {
+    await sendHostedEmailWithLifecycle({
+      apiKey: env.RESEND_API_KEY,
+      authSecret: env.BETTER_AUTH_SECRET,
+      context: deliveryContext,
+      email,
+    });
+    return;
+  }
+
   const { error } = await new Resend(env.RESEND_API_KEY).emails.send(
     email,
     ...(idempotencyKey ? [{ idempotencyKey }] : [])
@@ -135,6 +156,43 @@ export const sendTransactionalEmail = async ({
     ...(idempotencyKey ? { idempotencyKey } : {}),
   });
   return;
+};
+
+export const sendEmailVerificationEmail = async ({
+  to,
+  userName,
+  verificationUrl,
+}: {
+  to: string;
+  userName: string;
+  verificationUrl: string;
+}): Promise<void> => {
+  const env = getServerEnv();
+  const verificationDigest = createHmac("sha256", env.BETTER_AUTH_SECRET)
+    .update(verificationUrl)
+    .digest("hex");
+  const idempotencyKey = `auth.email-verification/${verificationDigest}/v1`;
+
+  await sendTransactionalEmail({
+    deliveryContext: {
+      correlationId: randomUUID(),
+      idempotencyKey,
+      templateAlias: "auth-email-verification",
+      topic: "auth.email-verification",
+    },
+    idempotencyKey,
+    react: createElement(EmailVerificationEmail, {
+      name: userName,
+      verificationUrl,
+    }),
+    subject: `Confirme seu e-mail no ${PLATFORM_NAME}`,
+    text: [
+      `Olá, ${userName}.`,
+      `Você pediu para confirmar o e-mail desta Conta antes de vinculá-la ao Google. O link expira em uma hora: ${verificationUrl}`,
+      "Se não pediu esta confirmação, ignore esta mensagem. Nenhuma senha ou dado da Conta será alterado.",
+    ].join("\n\n"),
+    to,
+  });
 };
 
 type ResendEmailInput = Parameters<

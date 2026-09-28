@@ -170,6 +170,7 @@ export const emailMessageStatusEnum = pgEnum("email_message_status", [
 ]);
 export const emailDeliveryTopicEnum = pgEnum("email_delivery_topic", [
   "auth.account-activation",
+  "auth.email-verification",
   "auth.password-reset",
   "email.access-released",
   "email.access-expiry-warning",
@@ -178,6 +179,7 @@ export const emailDeliveryTopicEnum = pgEnum("email_delivery_topic", [
   "email.support-request",
 ]);
 export const emailTemplateAliasEnum = pgEnum("email_template_alias", [
+  "auth-email-verification",
   "auth-password-reset",
   "access-released",
   "access-expiry-warning",
@@ -314,7 +316,13 @@ export const accounts = pgTable(
     password: text("password"),
     ...timestamps,
   },
-  (table) => [index("accounts_user_id_idx").on(table.userId)]
+  (table) => [
+    index("accounts_user_id_idx").on(table.userId),
+    uniqueIndex("accounts_provider_account_unique_idx").on(
+      table.providerId,
+      table.accountId
+    ),
+  ]
 );
 
 export const verifications = pgTable("verifications", {

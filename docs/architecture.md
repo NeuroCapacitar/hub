@@ -35,7 +35,7 @@ health, readiness e crons autenticados. A topologia completa está no
 
 - **Apresentação:** `src/app`, `src/components` e funções de apresentação em cada feature.
 - **Aplicação/domínio:** `src/features/<capacidade>`. Orquestra autorização, transação, regra e integração.
-- **Transversal:** `src/lib` para autenticação, sessão, autorização e ambiente.
+- **Transversal:** `src/lib` para autenticação, sessão, autorização, ambiente e normalização compartilhada da identidade por e-mail.
 - **Persistência:** `src/db/index.ts` (`getPool`, `getDb`), `src/db/schema.ts` e SQL explícito nas features.
 - **Externo:** clientes em `src/features/payments`, `src/features/jmvstream`, `src/features/storage` e `src/features/email`.
 

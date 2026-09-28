@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { getSafeAuthReturnTo } from "./auth-return-to";
+import {
+  getAuthSignInPath,
+  getEmailVerificationCallbackUrl,
+  getGoogleOAuthCallbackUrl,
+  getSafeAuthRedirectPath,
+  getSafeAuthReturnTo,
+} from "./auth-return-to";
 
 describe("getSafeAuthReturnTo", () => {
   it("accepts only the canonical internal purchase path", () => {
@@ -44,5 +50,67 @@ describe("getSafeAuthReturnTo", () => {
 
   it("rejects a return path above the length limit", () => {
     expect(getSafeAuthReturnTo(`/comprar/${"a".repeat(248)}`)).toBeNull();
+  });
+});
+
+describe("Google OAuth callback URLs", () => {
+  it("uses the configured application origin and preserves only a safe return path", () => {
+    expect(
+      getGoogleOAuthCallbackUrl({
+        appUrl: "https://hub.example.test/base/path?ignored=yes",
+        returnTo: "/comprar/curso-gratis",
+      })
+    ).toBe(
+      "https://hub.example.test/oauth/callback?returnTo=%2Fcomprar%2Fcurso-gratis"
+    );
+  });
+
+  it("omits an invalid return path from the OAuth callback", () => {
+    expect(
+      getGoogleOAuthCallbackUrl({
+        appUrl: "https://hub.example.test",
+        returnTo: "https://outside.example/",
+      })
+    ).toBe("https://hub.example.test/oauth/callback");
+  });
+
+  it("returns email verification to sign-in with a safe purchase return path", () => {
+    expect(
+      getEmailVerificationCallbackUrl({
+        appUrl: "https://hub.example.test",
+        returnTo: "/comprar/curso-gratis",
+      })
+    ).toBe(
+      "https://hub.example.test/entrar?emailVerified=1&returnTo=%2Fcomprar%2Fcurso-gratis"
+    );
+  });
+});
+
+describe("auth redirect destinations", () => {
+  it("builds a sign-in path with only a safe course return path", () => {
+    expect(getAuthSignInPath("/comprar/curso-gratis")).toBe(
+      "/entrar?returnTo=%2Fcomprar%2Fcurso-gratis"
+    );
+    expect(getAuthSignInPath("https://outside.example/escape")).toBe("/entrar");
+  });
+
+  it.each([
+    ["/admin", "/admin"],
+    ["/comprar/curso-gratis", "/comprar/curso-gratis"],
+    ["/app?tab=activity", "/app?tab=activity"],
+  ])("accepts an internal post-auth destination %s", (input, expected) => {
+    expect(getSafeAuthRedirectPath(input)).toBe(expected);
+  });
+
+  it.each([
+    "https://outside.example/escape",
+    "//outside.example/escape",
+    "/\\outside.example/escape",
+    "javascript:alert(1)",
+    "/admin\n",
+    null,
+    42,
+  ])("rejects an unsafe post-auth destination: %s", (value) => {
+    expect(getSafeAuthRedirectPath(value)).toBeNull();
   });
 });

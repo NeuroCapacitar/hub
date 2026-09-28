@@ -75,11 +75,17 @@ describe("POST /api/admin/uploads/images/upload", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ reference });
-    expect(dependencies.uploadStagedAdminImageFile).toHaveBeenCalledWith({
-      actorUserId: "admin-1",
-      file,
-      reference,
-    });
+    expect(dependencies.uploadStagedAdminImageFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "admin-1",
+        file: expect.objectContaining({
+          name: "capa.png",
+          size: 4,
+          type: "image/png",
+        }),
+        reference,
+      })
+    );
     expect(dependencies.confirmStagedAdminImageUpload).toHaveBeenCalledWith({
       actorUserId: "admin-1",
       reference,

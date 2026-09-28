@@ -36,7 +36,7 @@ export default async function AdminLayout({
         <AdminSidebarNav permissions={visibleNavigationPermissions} />
       }
       userEmail={session.user.email}
-      userImage={(session.user as { image?: string | null }).image ?? null}
+      userImage={session.user.image}
       userName={session.user.name}
       userRole={session.role}
     >

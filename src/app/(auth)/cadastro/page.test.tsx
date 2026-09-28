@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   connection: vi.fn(),
+  getServerEnv: vi.fn(),
   getCurrentSession: vi.fn(),
   redirect: vi.fn(),
 }));
@@ -16,9 +17,24 @@ vi.mock("@/components/auth-shell", () => ({
 vi.mock("@/lib/session", () => ({
   getCurrentSession: dependencies.getCurrentSession,
 }));
+vi.mock("@/lib/env", () => ({ getServerEnv: dependencies.getServerEnv }));
 vi.mock("./sign-up-form", () => ({
-  SignUpForm: ({ returnTo }: { returnTo: string | null }) => (
-    <div data-return-to={returnTo ?? "none"}>Sign-up form</div>
+  SignUpForm: ({
+    googleLoginEnabled,
+    googleOAuthCallbackUrl,
+    returnTo,
+  }: {
+    googleLoginEnabled: boolean;
+    googleOAuthCallbackUrl: string;
+    returnTo: string | null;
+  }) => (
+    <div
+      data-google-callback-url={googleOAuthCallbackUrl}
+      data-google-login-enabled={String(googleLoginEnabled)}
+      data-return-to={returnTo ?? "none"}
+    >
+      Sign-up form
+    </div>
   ),
 }));
 
@@ -30,6 +46,12 @@ describe("SignUpPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dependencies.connection.mockResolvedValue(undefined);
+    dependencies.getServerEnv.mockReturnValue({
+      AUTH_PUBLIC_SIGNUP_ENABLED: true,
+      BETTER_AUTH_URL: "http://localhost:3000",
+      GOOGLE_CLIENT_ID: undefined,
+      GOOGLE_CLIENT_SECRET: undefined,
+    });
     dependencies.getCurrentSession.mockResolvedValue(null);
     dependencies.redirect.mockImplementation((path: string) => {
       throw new Error(`redirect:${path}`);
@@ -48,6 +70,47 @@ describe("SignUpPage", () => {
       "Depois de criar sua conta, você voltará ao Curso para confirmar sua inscrição gratuita."
     );
     expect(dependencies.redirect).not.toHaveBeenCalled();
+  });
+
+  it("passes a public provider-availability boolean to the signup form", async () => {
+    dependencies.getServerEnv.mockReturnValue({
+      AUTH_PUBLIC_SIGNUP_ENABLED: true,
+      BETTER_AUTH_URL: "http://localhost:3000",
+      GOOGLE_CLIENT_ID: "google-client-id-fixture",
+      GOOGLE_CLIENT_SECRET: "google-client-secret-fixture",
+    });
+
+    const markup = renderToStaticMarkup(
+      await SignUpPage({ searchParams: Promise.resolve({}) })
+    );
+
+    expect(markup).toContain('data-google-login-enabled="true"');
+    expect(markup).toContain(
+      'data-google-callback-url="http://localhost:3000/oauth/callback"'
+    );
+    expect(markup).not.toContain("google-client-secret-fixture");
+  });
+
+  it("does not render signup fields when public signup is disabled", async () => {
+    dependencies.getServerEnv.mockReturnValue({
+      AUTH_PUBLIC_SIGNUP_ENABLED: false,
+      BETTER_AUTH_URL: "http://localhost:3000",
+      GOOGLE_CLIENT_ID: "google-client-id-fixture",
+      GOOGLE_CLIENT_SECRET: "google-client-secret-fixture",
+    });
+
+    const markup = renderToStaticMarkup(
+      await SignUpPage({
+        searchParams: Promise.resolve({ returnTo: COURSE_RETURN_TO }),
+      })
+    );
+
+    expect(markup).toContain("Cadastro indisponível");
+    expect(markup).toContain(
+      'href="/entrar?returnTo=%2Fcomprar%2Fcurso-gratis"'
+    );
+    expect(markup).not.toContain("Sign-up form");
+    expect(markup).not.toContain("Criar conta com Google");
   });
 
   it("redirects an authenticated Student to a valid return path", async () => {

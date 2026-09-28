@@ -86,10 +86,12 @@ terminaliza qualquer evento não concluído com código seguro.
 - payload externo é tolerante a campos adicionais.
 
 **Concorrência:** o processor correlaciona identificadores exatos, bloqueia o Pedido antes
-de ler seu snapshot e associa o Webhook por CAS. Para Conta com credencial, o acesso
-liberado grava `email.access-released`; sem credencial, grava
-`auth.account-activation`. Ambas as intenções entram na outbox antes do commit e usam
-chave idempotente por Pedido.
+de ler seu snapshot e associa o Webhook por CAS. Para Conta com hash de credencial local
+utilizável, ou com Google vinculado e provider Google configurado no ambiente atual, o
+acesso liberado grava `email.access-released`. Sem método de entrada utilizável, grava
+`auth.account-activation`, que envia a recuperação de senha depois do pagamento. O worker
+revalida credencial e vínculo Google/configuração antes de enviar o reset. Ambas as
+intenções entram na outbox antes do commit e usam chave idempotente por Pedido.
 
 ### REG-COM-003 Estado terminal não é sobrescrito silenciosamente
 
