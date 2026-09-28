@@ -245,8 +245,12 @@ qualquer dos dois conjuntos exigem investigação e interrompem a migration. A
 implementação atual não apaga nem reassocia linhas automaticamente. As duas
 migrations foram aplicadas ao Development em 2026-09-28 pelo runner guardado,
 após o preflight retornar `safeToApply=true` e zero colisões. A auditoria
-somente-leitura confirmou os dois registros no ledger Drizzle. Staging e
-Production não foram tocados.
+somente-leitura confirmou os dois registros no ledger Drizzle. Antes da promoção
+a Staging, o preflight somente-leitura também confirmou zero pares duplicados de
+identidade de provider e zero colisões de e-mail canônico. O workflow
+`Prepare Vercel staging` aplicou `0095`/`0096` em 2026-09-28; a auditoria
+somente-leitura confirmou `0096` no ledger e o índice único presente. Production
+não foi tocada.
 
 O runner de Development aplicou `0085` em 2026-09-17. A auditoria read-only
 confirmou o check `allowlist refinada e grants configuráveis limpos` e nenhum
