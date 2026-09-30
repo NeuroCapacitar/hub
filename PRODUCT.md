@@ -34,9 +34,11 @@ Os termos têm definição estrita no [glossário](CONTEXT.md).
 2. Curso gratuito valida preço zero, Publicação e cronograma; Student recebe autoinscrição sem Pedido ou Checkout, enquanto visitante segue para login/cadastro. O cadastro público só é aberto quando `AUTH_PUBLIC_SIGNUP_ENABLED=true` e, sozinho, cria apenas a Conta. Curso pago persiste o Pedido, o snapshot do cronograma e seus demais snapshots antes de criar o checkout hospedado Asaas com item inline; não existe produto remoto por Curso.
 3. Webhook autenticado entra em inbox durável e o worker atualiza o Pedido pago.
 4. Pagamento válido vincula a compra à Conta existente pelo e-mail local ou cria uma
-   Conta não verificada, depois cria Concessão e recompõe a Matrícula.
-5. Hub envia ativação ou aviso de acesso pela outbox; divergência financeira cria revisão
-   humana.
+   Conta não verificada, depois cria Concessão e recompõe a Matrícula. O pagamento não
+   verifica a posse do e-mail.
+5. Hub envia uma única confirmação de compra pela outbox: se a Conta não estiver
+   verificada, o CTA confirma o e-mail; caso contrário, conduz ao Curso. A confirmação
+   não define senha nem cria sessão. Divergência financeira cria revisão humana.
 
 A jornada pública implementada usa o link estável
 `/comprar/[slug]`, copiável pela administração e consumido pela landing page externa; o
@@ -61,6 +63,20 @@ autoinscrição após expiração foi ratificada pelo produto em 2026-09-16, con
 4. Vídeo, texto, materiais e comentários formam a experiência.
 5. A primeira Conclusão do Curso pode iniciar a emissão automática de Certificado conforme regra vigente; o Aluno acompanha preparo, disponibilidade ou falha. O Curso oferece a entrada contextual, `/app/certificados` mantém o arquivo global e `/certificados/[code]` é a página canônica de validação, preview, download e compartilhamento quando o documento está válido e pronto.
 6. Analytics técnico minimizado fica habilitado por padrão para melhoria das Aulas; o Aluno pode desligá-lo em Configurações sem afetar a jornada pedagógica.
+
+### Conta e acesso
+
+Dados pessoais e métodos de entrada ficam nas Configurações do papel: Student em
+`/app/configuracoes`; Admin e Support em `/admin/configuracoes`. Não existe rota
+separada para a Conta. Google é o método principal quando vinculado; a senha é
+opcional. Confirmação e troca de e-mail não iniciam sessão: uma troca exige
+prova do endereço atual e do novo, sem exigir autenticação recente, notifica
+ambos e invalida sessões anteriores.
+Fotos personalizadas de perfil ficam em storage privado e pertencem à Conta
+autenticada. Quando o acesso do Aluno à plataforma está suspenso, ele não pode
+entrar em nenhuma área interna, inclusive Configurações; a tela de entrada
+orienta a falar com o Suporte. Support sem `viewSettings` não acessa
+configurações globais.
 
 ### Operação
 

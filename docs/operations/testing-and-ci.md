@@ -112,6 +112,13 @@ Para testar somente integração, configure uma URL PostgreSQL descartável e
 execute `bun run test:certificates:integration`. Para E2E, use as URLs e os
 servidores locais definidos no `playwright.config.ts`.
 
+As Contas criadas pelo seed E2E são fixtures pré-verificadas para jornadas
+autenticadas. A jornada de cadastro público testa separadamente que nenhuma
+Conta, senha ou Matrícula existe antes da confirmação; em E2E o token de prova
+é derivado do challenge pela fixture de teste, sem envio de e-mail real.
+`E2E_TEST_MODE` suprime entregas Resend; entrega e conteúdo editorial devem ser
+homologados separadamente com destinatários controlados.
+
 O teste das projeções financeiras usa tabelas temporárias na conexão e exige
 `INTEGRATION_DATABASE_URL` apontando para `hub_integration` em `localhost` ou
 `127.0.0.1`; ele rejeita destinos remotos antes de conectar.

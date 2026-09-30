@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: c10f0d2
+last_verified_commit: abb3b3ecae681dd5eea4da839ace41e2b926431c
 ---
 
 # Documentação do Hub
@@ -83,6 +83,7 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 
 ### Revisões
 
+- [Revisão de UX das configurações de conta e métodos de entrada](reviews/2026-09-30-account-settings-ux-review.md)
 - [Pesquisa de versionamento de templates de Certificado e publicações de Curso](reviews/2026-09-25-certificate-template-and-course-versioning-research.md)
 - [Pesquisa de migração do código público de Certificado para Base64URL](reviews/2026-09-25-certificate-code-base64url-migration-research.md)
 - [Pesquisa do código público de validação de Certificado](reviews/2026-09-25-certificate-validation-code-research.md)
@@ -135,6 +136,7 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 ### Planos de manutenção
 
 - [Plano aprovado de migração do código de Certificado para Base64URL](superpowers/plans/2026-09-25-certificate-code-base64url-migration.md)
+- [Plano aceito de identidade, entrada social, convites e perfil](superpowers/plans/2026-09-29-identity-onboarding-profile.md)
 - [Sprints finais de remediação da liberação por Módulo](superpowers/plans/2026-09-06-module-content-release-final-remediation-sprints.md)
 - [Sprints de limpeza e organização do repositório](superpowers/plans/2026-09-03-repository-cleanup-sprints.md)
 

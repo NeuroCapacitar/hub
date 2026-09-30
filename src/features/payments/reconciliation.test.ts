@@ -77,7 +77,7 @@ describe("Asaas reconciliation", () => {
     vi.clearAllMocks();
     dependencies.applyPaymentRevocation.mockResolvedValue(true);
     dependencies.resolveLocalOrderIdentity.mockResolvedValue({
-      activationRequired: false,
+      emailVerified: true,
       userId: "user-1",
     });
   });
@@ -103,6 +103,18 @@ describe("Asaas reconciliation", () => {
         transactionQueries.push(values ? { text, values } : { text });
         if (text.includes("set status = 'paid'")) {
           return Promise.resolve({ rows: [{ id: "order-1" }] });
+        }
+        if (text.includes("from purchase_confirmation_intents")) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (text.includes("from outbox_messages as message")) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (text.includes("from users") && text.includes("email_verified")) {
+          return Promise.resolve({ rows: [{ email_verified: true }] });
+        }
+        if (text.includes("insert into purchase_confirmation_intents")) {
+          return Promise.resolve({ rows: [{ order_id: "order-1" }] });
         }
         return Promise.resolve(
           text.includes("from orders") ? { rows: [pendingOrder] } : { rows: [] }
@@ -162,6 +174,18 @@ describe("Asaas reconciliation", () => {
         transactionQueries.push(values ? { text, values } : { text });
         if (text.includes("set status = 'paid'")) {
           return Promise.resolve({ rows: [{ id: "order-1" }] });
+        }
+        if (text.includes("from purchase_confirmation_intents")) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (text.includes("from outbox_messages as message")) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (text.includes("from users") && text.includes("email_verified")) {
+          return Promise.resolve({ rows: [{ email_verified: true }] });
+        }
+        if (text.includes("insert into purchase_confirmation_intents")) {
+          return Promise.resolve({ rows: [{ order_id: "order-1" }] });
         }
         if (text.includes("type in ('event_anomaly'")) {
           return Promise.resolve({ rows: [{ id: "review-1" }] });
@@ -295,6 +319,18 @@ describe("Asaas reconciliation", () => {
         if (text.includes("set status = 'paid'")) {
           return Promise.resolve({ rows: [{ id: "order-1" }] });
         }
+        if (text.includes("from purchase_confirmation_intents")) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (text.includes("from outbox_messages as message")) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (text.includes("from users") && text.includes("email_verified")) {
+          return Promise.resolve({ rows: [{ email_verified: false }] });
+        }
+        if (text.includes("insert into purchase_confirmation_intents")) {
+          return Promise.resolve({ rows: [{ order_id: "order-1" }] });
+        }
         if (text.includes("provider_customer_id =")) {
           return Promise.resolve({ rows: [{ id: "order-1" }] });
         }
@@ -309,7 +345,7 @@ describe("Asaas reconciliation", () => {
       query: vi.fn().mockResolvedValue({ rows: [publicOrder] }),
     });
     dependencies.resolveLocalOrderIdentity.mockResolvedValue({
-      activationRequired: true,
+      emailVerified: false,
       userId: "new-user",
     });
     const gateway = new FakeAsaasGateway({ getPayment: confirmedPayment });
@@ -328,7 +364,6 @@ describe("Asaas reconciliation", () => {
     expect(gateway.calls.getCustomer).toEqual(["cus-public"]);
     expect(dependencies.resolveLocalOrderIdentity).toHaveBeenCalledWith({
       client,
-      googleProviderEnabled: false,
       order: {
         buyerIdentityStatus: "pending",
         courseId: "course-1",
@@ -347,7 +382,7 @@ describe("Asaas reconciliation", () => {
     expect(dependencies.enqueueOutboxMessage).toHaveBeenCalledWith({
       client,
       message: expect.objectContaining({
-        topic: "auth.account-activation",
+        topic: "email.purchase-confirmed",
       }),
     });
   });

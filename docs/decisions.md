@@ -19,16 +19,23 @@ Implementação não promove política a aprovada sozinha.
 ## DEC-DISC-001
 
 **Tema:** entrega de e-mail.
-**Estado:** implementado no fluxo Asaas.
+**Estado:** fluxo legado preservado; confirmação de compra nova implementada em código local, migration/template externos pendentes.
 
-A intenção durável de ativação guarda somente `userId` e `orderId`, sem outros dados
-pessoais, token ou URL de callback. No processamento, o worker resolve a Conta e chama Better Auth
-`requestPasswordReset`; o token nasce somente durante o envio. Falha de resolução ou
-entrega mantém a intenção elegível para retry, sem persistir o token.
+O caminho legado `auth.account-activation` ainda usa apenas `userId` e `orderId` e
+gera o token Better Auth no momento do envio; ele é mantido para mensagens v1
+históricas, não para novos Pedidos. Para novos pagamentos, `email.purchase-confirmed`
+é a única intenção por Pedido. O ledger `purchase_confirmation_intents` sobrevive
+à retenção da outbox, guarda apenas `orderId` e origem, e a migration registra como
+históricos Pedidos pagos com identidade resolvida para impedir reenvios tardios.
 
-`auth.account-activation` implementa a intenção sem PII e resolve os dados no delivery. O
-processor financeiro Asaas escolhe e enfileira essa intenção no mesmo commit do acesso.
-Os demais e-mails transacionais mantêm o contrato descrito em
+Quando a Conta está não verificada, um desafio `purchase_verification` separado,
+com finalidade, geração e expiração, é criado na mesma transação da Concessão e da
+intenção. O delivery resolve os dados atuais, gera um token HMAC no último momento
+e envia a mensagem de compra com CTA para confirmar. Para Conta verificada, a mesma
+intenção envia CTA de acesso. O desafio nunca cria sessão ou senha; reset de senha
+continua somente por solicitação explícita. Mensagens legadas são deduplicadas entre
+versões e não podem ser reprocessadas manualmente depois do corte. Os demais e-mails
+transacionais mantêm o contrato descrito em
 [Outbox e efeitos transacionais](operations/outbox-and-transactional-effects.md).
 
 ## DEC-DISC-002
@@ -85,7 +92,7 @@ Certificado tem snapshots, código público, estado válido/revogado e reemissã
 ## DEC-DISC-007
 
 **Tema:** identidade, verificação e recuperação.
-**Estado:** aprovado e implementado em código; homologação PostgreSQL/Sandbox pendente.
+**Estado:** aprovado; confirmação de compra implementada em código local; migration 0098, template Hosted e homologação PostgreSQL/Sandbox pendentes.
 
 No checkout autenticado, a Conta é a da sessão; o provider não pode alterar nome, e-mail,
 verificação ou credenciais. No checkout público, o Pedido nasce sem PII e o Asaas coleta
@@ -94,7 +101,9 @@ Asaas, persiste uma vez somente nome/e-mail necessários e registra Compradora =
 provider informa identidade pretendida, mas não verifica Conta.
 
 O e-mail normalizado vincula o Pedido a uma Conta Student existente ou cria Conta local
-não verificada; a ativação permite definir a senha. Conta existente não é sobrescrita.
+não verificada; o e-mail único `email.purchase-confirmed` confirma a compra e, quando
+necessário, a posse da caixa. Confirmação não cria credential ou sessão; a pessoa pode
+entrar com Google ou solicitar criar/redefinir uma senha separadamente. Conta existente não é sobrescrita.
 Identidade ausente, inválida, divergente, pertencente a Admin/Suporte, vinculada a Conta
 com bloqueio geral ou a Matrícula `revoked` no Curso não concede acesso: abre Revisão sem
 opção de aprovação e permite somente reembolso integral e nova compra elegível. Quando a
@@ -243,12 +252,14 @@ sessões existentes.
 **Tema:** e-mails fora da outbox.
 **Estado:** aprovado e ratificado em 2026-08-21 pelo responsável de produto.
 
-Somente a recuperação pública de senha permanece fora da outbox, por decisão de
-segurança: a URL contém token secreto e não deve ser persistida na fila. A falha de
-envio nesse caminho é apenas registrada em log e o Aluno precisa solicitar de novo.
-Ativação legada de conta e mensagem do formulário de suporte são entregues pela outbox
-com retentativa, idempotência e dead-letter; o suporte migrou para a outbox no PR do
-Sprint 1 de 2026-08-21, com o agregado `support_requests`.
+Somente a recuperação pública/criação de senha permanece fora da outbox, por
+decisão de segurança: a URL contém token secreto e não deve ser persistida na
+fila. A falha de envio nesse caminho é apenas registrada em log e a pessoa
+precisa solicitar de novo. Verificação de e-mail e convites internos de equipe
+usam desafios próprios do Hub com token gerado no delivery; confirmação de
+compra usa o mesmo padrão com ledger por Pedido. Ativação legada de conta e
+mensagem do formulário de suporte continuam na outbox para compatibilidade e
+retentativa.
 
 ## DEC-DISC-016
 
@@ -345,25 +356,60 @@ comprovada.
 ## DEC-DISC-020
 
 **Tema:** login Google, cadastro social explícito e vínculo de Conta.
-**Estado:** aprovado pelo produto em 2026-09-27; implementação por fases.
+**Estado:** aprovado pelo produto em 2026-09-27 e emendado em 2026-09-30;
+rollout e homologação externa ainda pendentes.
 
 O login Google em `/entrar` autentica uma Conta existente e não cria Conta por
 si só. Cadastro social só pode ser iniciado explicitamente em `/cadastro` e
 segue `AUTH_PUBLIC_SIGNUP_ENABLED`; cria apenas Conta e Perfil Student, sem
 Pedido, Concessão ou Matrícula. O vínculo automático exige e-mail verificado
 pelo Google e prova local prévia, não atualiza e-mail/nome/papel e falha fechado
-se os candidatos exato/canônico forem ambíguos. Não há bypass de
+se os candidatos exato/canônico forem ambíguos. Essa prova local vale para
+todos os primeiros vínculos; não há exceção por Gmail/Workspace, bypass de
 `requireLocalEmailVerified:false`, confiança especial de provider ou uso dos
-tokens Google para escopos de produto; os tokens OAuth são cifrados.
+tokens Google para escopos de produto. Better Auth 1.6.25 não expõe o hook de
+autorização condicional necessário para uma exceção por domínio; ela fica
+adiada até existir uma implementação suportada e testada. Os tokens OAuth são
+cifrados.
 Quando disponível, a foto Google preenche `users.image` somente se a Conta
 local ainda não tiver imagem; o nome, e-mail, papel e uma imagem já escolhida
 permanecem intactos. O avatar dessa Conta é exibido no menu do painel.
 
-Verificação global de e-mail permanece desligada. Contas locais não verificadas
-podem solicitar uma confirmação pontual com resposta anti-enumeração e limite
-de envio; cadastro e login não enviam mensagens automaticamente. O checkout
-permanece guest-first: confirmação financeira concede acesso, mas o e-mail é
-confirmado pelo primeiro acesso enviado à caixa cadastrada, não pelo Asaas.
+O login por senha exige e-mail verificado. Cadastro por e-mail coleta apenas
+nome e e-mail; antes da prova da caixa existe somente um cadastro pendente, sem
+Conta, senha, sessão, Pedido, Concessão ou Matrícula. Um POST explícito consome
+um desafio HMAC de uso único e só então cria uma Conta Student verificada, sem
+credencial nem sessão automática. Contas locais legadas não verificadas podem
+pedir uma confirmação com resposta anti-enumeração e limite de envio; a
+reivindicação invalida credenciais e sessões anteriores antes de verificar o
+endereço. O login não envia confirmação automaticamente; o cadastro por e-mail
+envia quando a pessoa o inicia explicitamente.
+
+Convites Admin/Suporte usam uma entidade interna própria, sem Better Auth
+Organization. Convite pendente não cria Conta nem papel; somente um POST
+explícito com token HMAC de uso único aplica a role. Conta Student existente
+perde a área de aprendizagem após aceitar, mas seus dados são preservados; o
+aceite não inicia sessão.
+
+Perfil e métodos pessoais fazem parte de Configurações: Student em
+`/app/configuracoes`; Admin/Support em `/admin/configuracoes`. Não existe rota
+separada para a Conta. Em `/admin/configuracoes`, quem não tem `viewSettings`
+acessa somente a própria Conta, sem carregar dados globais. Aluno com acesso à
+plataforma suspenso não pode acessar nenhuma rota interna, inclusive
+`/app/configuracoes`; a tela `/entrar` orienta contato com o Suporte. O guard de
+conta, as páginas Student e o endpoint privado de avatar aplicam a mesma regra.
+Troca de e-mail exige prova do endereço atual e do novo, aviso para os dois
+e-mails e revogação das sessões antigas, sem exigir sessão recente; os links
+não autenticam. Senha continua opcional e é criada server-side somente após
+confirmação, mantendo a proteção própria de sessão recente. Avatares
+personalizados ficam privados em R2, com a propriedade derivada da sessão e
+sem URL arbitrária; recorte manual é feito antes do envio e o reconciliador
+limpa objetos órfãos depois do período de segurança.
+
+O checkout permanece guest-first: confirmação financeira concede acesso, mas
+não comprova posse do e-mail e nunca marca `email_verified`. O código local
+envia confirmação de compra; migration 0098, template Hosted e homologação
+PostgreSQL permanecem gates de rollout da etapa 6 do plano de identidade.
 Esses fluxos preservam [DEC-DISC-007](#dec-disc-007) e
 [REG-IDA-005/006](domain/identity-and-authorization.md).
 

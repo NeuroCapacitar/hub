@@ -1,6 +1,7 @@
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db";
-import { profiles } from "@/db/schema";
+import { profiles, users } from "@/db/schema";
 import { getAuth } from "@/lib/auth";
 import { getBootstrapAdminDecision } from "@/lib/auth-policy";
 import { getServerEnv } from "@/lib/env";
@@ -37,6 +38,15 @@ export const POST = async (request: Request) => {
       password: body.password,
     },
   });
+
+  const verifiedUser = await getDb()
+    .update(users)
+    .set({ emailVerified: true, updatedAt: new Date() })
+    .where(eq(users.id, result.user.id))
+    .returning({ id: users.id });
+  if (verifiedUser.length !== 1) {
+    throw new Error("bootstrap_admin_user_verification_failed");
+  }
 
   await getDb()
     .insert(profiles)

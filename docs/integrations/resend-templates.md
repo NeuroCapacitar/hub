@@ -18,13 +18,14 @@ responsável pelo markup, plain text gerado, preview e versionamento editorial.
 
 ## Identidade visual
 
-As seis templates pertencem à família institucional NeuroCapacitar e podem
+Os dez templates pertencem à família institucional NeuroCapacitar e podem
 apresentar a identidade de conteúdo PROTEA-R quando o Curso for a entidade em
 foco. PROTEA-R não é o nome global da plataforma. O shell editorial usa canvas
 creme, faixa teal escura, acento laranja, card claro, CTA teal e rodapé
 institucional. Cada alias acrescenta uma variação semântica:
 segurança da conta, acesso liberado, atenção à expiração, abertura de vendas,
-conquista de certificado ou solicitação operacional de suporte.
+confirmação de compra, convite de equipe, conquista de certificado ou
+solicitação operacional de suporte.
 
 O asset oficial da marca é `public/brand/logo-negativo.svg`, referenciado no
 HTML Hosted por URL HTTPS absoluta:
@@ -57,9 +58,12 @@ Staging compartilha a estrutura Resend, mas a aplicação exige
 
 ## Aliases e estado atual
 
-Os seis templates foram criados e publicados em 2026-08-19 pela integração
-Resend, depois da validação estrutural e de variáveis. Nenhuma versão posterior
-está em draft nesta etapa.
+Os seis aliases originais foram criados e publicados em 2026-08-19 pela
+integração Resend, depois da validação estrutural e de variáveis. O alias
+`purchase-confirmed` foi adicionado ao contrato do Hub nesta mudança e ainda
+precisa ser criado, revisado e publicado manualmente no catálogo compartilhado
+antes de habilitar a nova entrega em Staging. Nenhuma migration ou build publica
+templates externamente.
 
 | Nome lógico | Alias | Estado |
 |---|---|---|
@@ -68,6 +72,10 @@ está em draft nesta etapa.
 | `access-expiry-warning` | `access-expiry-warning` | published |
 | `certificate-issued` | `certificate-issued` | published |
 | `course-sales-opened` | `course-sales-opened` | published |
+| `purchase-confirmed` | `purchase-confirmed` | pending manual creation/publication |
+| `email-change-confirmation` | `email-change-confirmation` | pending manual creation/publication |
+| `email-change-notice` | `email-change-notice` | pending manual creation/publication |
+| `staff-invitation` | `staff-invitation` | pending manual creation/publication |
 | `support-request` | `support-request` | published |
 
 Os IDs do Resend não são necessários no runtime e não devem ser espalhados pelo
@@ -82,7 +90,24 @@ código. O adapter resolve o alias canônico pelo nome lógico.
 | `access-expiry-warning` | `USER_NAME`, `COURSE_TITLE`, `DAYS_REMAINING`, `ACTION_URL` |
 | `certificate-issued` | `USER_NAME`, `COURSE_TITLE`, `CERTIFICATE_CODE`, `ACTION_URL` |
 | `course-sales-opened` | `USER_NAME`, `COURSE_TITLE`, `ACTION_URL` |
+| `purchase-confirmed` | `USER_NAME`, `COURSE_TITLE`, `ACTION_LABEL`, `ACTION_URL` |
+| `email-change-confirmation` | `USER_NAME`, `CURRENT_EMAIL`, `NEW_EMAIL`, `STEP_LABEL`, `ACTION_URL` |
+| `email-change-notice` | `USER_NAME`, `CURRENT_EMAIL`, `NEW_EMAIL`, `CHANGE_DATE`, `SUPPORT_EMAIL` |
+| `staff-invitation` | `INVITER_NAME`, `ROLE_LABEL`, `EXPIRES_AT`, `ACTION_URL` |
 | `support-request` | `STUDENT_NAME`, `STUDENT_EMAIL`, `COURSE_TITLE`, `SUPPORT_SUBJECT`, `MESSAGE` |
+
+`ACTION_LABEL` para `purchase-confirmed` aceita apenas `Confirmar e-mail` ou
+`Acessar Curso`. O Hub escolhe a ação conforme a verificação atual da Conta no
+momento da entrega; o template não decide autorização nem cria senha.
+
+`ROLE_LABEL` para `staff-invitation` aceita somente `Admin` ou `Suporte`.
+O link contém um token HMAC de uso único no fragmento da URL; o template não
+cria nem transforma esse token.
+
+`STEP_LABEL` para `email-change-confirmation` é limitada a
+`Confirmar e-mail atual` ou `Confirmar novo e-mail`. A troca requer as duas
+provas, não autentica pelo link e envia um aviso de conclusão aos dois
+endereços.
 
 `DAYS_REMAINING` é uma string já formatada como `1 dia` ou `7 dias`. O suporte
 usa fallback `Não informado` para `COURSE_TITLE`; `MESSAGE` fica limitado pelo

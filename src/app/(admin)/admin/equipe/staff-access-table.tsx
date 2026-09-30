@@ -122,8 +122,8 @@ export function StaffAccessTable({
                     </EmptyMedia>
                     <EmptyTitle as="h3">Nenhuma conta na equipe</EmptyTitle>
                     <EmptyDescription>
-                      Use Adicionar à equipe para encontrar um Aluno e revisar o
-                      acesso administrativo antes de confirmar.
+                      Convide alguém para a equipe. O acesso será aplicado
+                      somente depois que a pessoa aceitar o convite.
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>

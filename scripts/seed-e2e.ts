@@ -143,6 +143,12 @@ const createUser = async ({
   const userId = result.user.id;
 
   await getPool().query(
+    `update users
+     set email_verified = true, updated_at = now()
+     where id = $1`,
+    [userId]
+  );
+  await getPool().query(
     `
       insert into profiles (user_id, role, support_permission_grants, support_permission_views)
       values ($1, $2::role, $3::text[], $4::text[])

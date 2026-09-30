@@ -14,6 +14,8 @@ import {
   readFreeEnrollmentOutcome,
   readOrderOutcome,
   readPaymentEventCount,
+  readPendingSignupChallenge,
+  readSignupAccountOutcome,
   resetE2eAsaasCheckoutMutations,
   runAsaasWorker,
   sendPaidWebhook,
@@ -27,7 +29,7 @@ const ADMIN_URL_PATTERN = /\/admin$/;
 const APP_URL_PATTERN = /\/app$/;
 const STUDENT_HELP_URL_PATTERN = /\/app\/ajuda$/;
 const OPEN_ORDER_DETAILS_NAME_PATTERN = /Abrir detalhes do pedido de /;
-const STUDENT_SEARCH_PLACEHOLDER_PATTERN = /Buscar/;
+const SIGN_IN_EMAIL_VERIFICATION_URL_PATTERN = /\/entrar\?/;
 const SUPPORT_CODE_PATTERN = /Código de suporte/;
 const DOWNLOAD_PDF_PATTERN = /Baixar PDF/;
 const SENSITIVE_ERROR_PATTERN = /key|token|secret|postgres|database/i;
@@ -86,7 +88,7 @@ const signIn = async (
     await page.goto("/entrar", { waitUntil: "networkidle" });
     await page.getByLabel("E-mail").fill(credentials.email);
     await page.getByLabel("Senha").fill(credentials.password);
-    await page.getByRole("button", { name: "Entrar" }).click();
+    await page.getByRole("button", { exact: true, name: "Entrar" }).click();
     await expect(page).toHaveURL(expectedUrl, { timeout: 15_000 });
   } catch {
     const visibleError = await page
@@ -146,12 +148,12 @@ test("landing CTA handoff creates one checkout and activation @mobile", async ({
   await expect
     .poll(() => readOrderOutcome(attemptId))
     .toEqual({
-      activationCount: 1,
       activeEnrollmentCount: 1,
       accountLinked: true,
       buyerIdentityStatus: "resolved",
       enrollmentCount: 1,
       grantCount: 1,
+      purchaseConfirmationCount: 1,
       studentProfileCount: 1,
       status: "paid",
       unverifiedAccount: true,
@@ -387,10 +389,9 @@ test("login and password recovery do not enumerate accounts @mobile", async ({
   await expect(page.getByRole("status")).toHaveText(knownMessage ?? "");
 });
 
-test("public signup creates a student account without granting a course", async ({
+test("public signup verifies email before creating a Student account", async ({
   page,
 }) => {
-  const fixture = await readFixture();
   const suffix = crypto.randomUUID().replaceAll("-", "");
   const email = `cadastro-${suffix}@example.test`;
   const name = "Aluno de cadastro publico";
@@ -398,33 +399,50 @@ test("public signup creates a student account without granting a course", async 
   await page.goto("/cadastro");
   await page.getByLabel("Nome completo").fill(name);
   await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Senha", { exact: true }).fill("E2E-password-123!");
-  await page.getByLabel("Confirmar senha").fill("E2E-password-123!");
-  await page.getByRole("button", { name: "Criar conta" }).click();
-  await expect(page).toHaveURL(APP_URL_PATTERN);
-  await expect(page.getByText("Acesso expirado", { exact: true })).toHaveCount(
-    0
-  );
+  await expect(page.getByLabel("Senha", { exact: true })).toHaveCount(0);
+  await page
+    .getByRole("button", { exact: true, name: "Enviar link de confirmação" })
+    .click();
   await expect(
-    page.getByRole("button", {
-      exact: true,
-      name: "Abrir resumo do Curso Curso E2E",
-    })
+    page.getByRole("heading", { name: "Confira seu e-mail" })
   ).toBeVisible();
 
-  await page.context().clearCookies();
-  await signIn(page, fixture.admin, ADMIN_URL_PATTERN);
-  await page.goto("/admin/alunos");
-  await page.getByPlaceholder(STUDENT_SEARCH_PLACEHOLDER_PATTERN).fill(email);
-  await page.getByRole("button", { name: "Buscar" }).click();
-  await expect(page).toHaveURL(
-    new RegExp(`\\?page=1&q=${encodeURIComponent(email)}`)
+  const pendingSignup = await readPendingSignupChallenge(email);
+  expect(pendingSignup.courseSlug).toBeNull();
+  await expect
+    .poll(() => readSignupAccountOutcome(email))
+    .toEqual({
+      accountCount: 0,
+      credentialCount: 0,
+      emailVerified: false,
+      enrollmentGrantCount: 0,
+      sessionCount: 0,
+      studentProfileCount: 0,
+    });
+
+  await page.goto(
+    `/confirmar-email#token=${encodeURIComponent(pendingSignup.token)}`
   );
-  await expect(page.getByText(name, { exact: true })).toBeVisible();
-  await expect(page.getByText(email, { exact: true })).toBeVisible();
+  await page
+    .getByRole("button", { exact: true, name: "Confirmar e-mail" })
+    .click();
+  await expect(page).toHaveURL(SIGN_IN_EMAIL_VERIFICATION_URL_PATTERN);
+  const signInUrl = new URL(page.url());
+  expect(signInUrl.searchParams.get("emailVerified")).toBe("1");
+  await expect(page.getByText("E-mail confirmado")).toBeVisible();
+  await expect
+    .poll(() => readSignupAccountOutcome(email))
+    .toEqual({
+      accountCount: 1,
+      credentialCount: 0,
+      emailVerified: true,
+      enrollmentGrantCount: 0,
+      sessionCount: 0,
+      studentProfileCount: 1,
+    });
 });
 
-test("public free course signup returns to the handoff and enrolls without checkout @mobile", async ({
+test("free-course signup verifies email and preserves the handoff without enrolling @mobile", async ({
   page,
   request,
 }) => {
@@ -462,27 +480,48 @@ test("public free course signup returns to the handoff and enrolls without check
 
   await page.getByLabel("Nome completo").fill("Aluno de curso gratuito");
   await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Senha", { exact: true }).fill("E2E-password-123!");
-  await page.getByLabel("Confirmar senha").fill("E2E-password-123!");
-  await page.getByRole("button", { name: "Criar conta" }).click();
-
-  await expect(page).toHaveURL(new RegExp(`${expectedPurchasePath}$`));
-  await expect(
-    page.getByRole("button", { name: "Inscrever-se gratuitamente" })
-  ).toBeVisible();
+  await expect(page.getByLabel("Senha", { exact: true })).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Inscrever-se gratuitamente" })
+    .getByRole("button", { exact: true, name: "Enviar link de confirmação" })
     .click();
+  await expect(
+    page.getByRole("heading", { name: "Confira seu e-mail" })
+  ).toBeVisible();
 
-  await expect(page).toHaveURL(
-    new RegExp(`/app/cursos/${fixture.freeCourse.id}$`)
+  const pendingSignup = await readPendingSignupChallenge(email);
+  expect(pendingSignup.courseSlug).toBe(fixture.freeCourse.slug);
+  await expect
+    .poll(() => readSignupAccountOutcome(email))
+    .toEqual({
+      accountCount: 0,
+      credentialCount: 0,
+      emailVerified: false,
+      enrollmentGrantCount: 0,
+      sessionCount: 0,
+      studentProfileCount: 0,
+    });
+
+  await page.goto(
+    `/confirmar-email#token=${encodeURIComponent(pendingSignup.token)}`
   );
-  await expect(
-    page.getByRole("heading", { name: fixture.freeCourse.title })
-  ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Módulo gratuito E2E" }).getByRole("link")
-  ).toBeVisible();
+  await page
+    .getByRole("button", { exact: true, name: "Confirmar e-mail" })
+    .click();
+  await expect(page).toHaveURL(SIGN_IN_EMAIL_VERIFICATION_URL_PATTERN);
+  const signInUrl = new URL(page.url());
+  expect(signInUrl.searchParams.get("emailVerified")).toBe("1");
+  expect(signInUrl.searchParams.get("returnTo")).toBe(expectedPurchasePath);
+  await expect(page.getByText("E-mail confirmado")).toBeVisible();
+  await expect
+    .poll(() => readSignupAccountOutcome(email))
+    .toEqual({
+      accountCount: 1,
+      credentialCount: 0,
+      emailVerified: true,
+      enrollmentGrantCount: 0,
+      sessionCount: 0,
+      studentProfileCount: 1,
+    });
 
   expect(checkoutRequestCount).toBe(0);
   expect(await readE2eAsaasCheckoutMutationCount(request)).toBe(0);
@@ -495,11 +534,11 @@ test("public free course signup returns to the handoff and enrolls without check
     )
     .toEqual({
       accountCount: 1,
-      enrollmentCount: 1,
-      enrollmentStatus: "active",
-      freeEventCount: 1,
-      freeGrantCount: 1,
-      freeGrantStatus: "active",
+      enrollmentCount: 0,
+      enrollmentStatus: null,
+      freeEventCount: 0,
+      freeGrantCount: 0,
+      freeGrantStatus: null,
       orderCount: 0,
     });
 });

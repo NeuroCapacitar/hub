@@ -6,7 +6,7 @@ const dependencies = vi.hoisted(() => ({
   getDb: vi.fn(() => ({})),
   getServerEnv: vi.fn(),
   logOperationalEvent: vi.fn(),
-  sendEmailVerificationEmail: vi.fn(),
+  requestExistingAccountEmailVerification: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -22,8 +22,9 @@ vi.mock("better-auth/next-js", () => ({
   nextCookies: vi.fn(() => ({ name: "next-cookies" })),
 }));
 vi.mock("@/db", () => ({ getDb: dependencies.getDb }));
-vi.mock("@/features/email/server", () => ({
-  sendEmailVerificationEmail: dependencies.sendEmailVerificationEmail,
+vi.mock("@/features/account/email-challenges", () => ({
+  requestExistingAccountEmailVerification:
+    dependencies.requestExistingAccountEmailVerification,
 }));
 vi.mock("@/lib/auth-password-reset", () => ({
   sendBetterAuthPasswordResetEmail: vi.fn(),
@@ -139,7 +140,7 @@ describe("Better Auth Google configuration", () => {
   beforeEach(() => {
     dependencies.getDb.mockClear();
     dependencies.logOperationalEvent.mockClear();
-    dependencies.sendEmailVerificationEmail.mockReset();
+    dependencies.requestExistingAccountEmailVerification.mockReset();
   });
 
   it("does not register a Google provider without OAuth credentials", async () => {
@@ -148,7 +149,7 @@ describe("Better Auth Google configuration", () => {
     expect(options.socialProviders).toBeUndefined();
   });
 
-  it("keeps login-only policy, token protection and local linking safeguards", async () => {
+  it("keeps login-only policy, local linking safeguards and token protection", async () => {
     const options = await getAuthOptions(
       authEnvironment({
         GOOGLE_CLIENT_ID: "google-client-id-fixture",
@@ -180,6 +181,7 @@ describe("Better Auth Google configuration", () => {
       enabled: true,
       updateUserInfoOnLink: false,
     });
+    expect(accountLinking).not.toHaveProperty("requireLocalEmailVerified");
     expect(emailVerification).toMatchObject({
       autoSignInAfterVerification: false,
       sendOnSignIn: false,
@@ -187,33 +189,35 @@ describe("Better Auth Google configuration", () => {
     });
     expect(emailVerification.sendVerificationEmail).toBeTypeOf("function");
     expect(options.emailAndPassword).toMatchObject({
-      requireEmailVerification: false,
+      requireEmailVerification: true,
     });
     expect(accountLinking).not.toHaveProperty("trustedProviders");
 
     const sendVerification = emailVerification.sendVerificationEmail as (
       input: {
-        user: { email: string; name: string };
-        url: string;
+        user: { id: string };
       },
       request?: Request
     ) => Promise<void>;
-    const verificationUrl =
-      "http://localhost:3000/api/auth/verify-email?token=verification-fixture";
+    dependencies.requestExistingAccountEmailVerification.mockResolvedValue(
+      "queued"
+    );
+    const request = new Request(
+      "http://localhost:3000/api/auth/send-verification-email",
+      { headers: { "x-correlation-id": "request-correlation-id" } }
+    );
     await sendVerification(
       {
-        user: { email: "student@example.test", name: "Student Example" },
-        url: verificationUrl,
+        user: { id: "student-1" },
       },
-      new Request("http://localhost:3000/api/auth/send-verification-email", {
-        headers: { "x-correlation-id": "request-correlation-id" },
-      })
+      request
     );
 
-    expect(dependencies.sendEmailVerificationEmail).toHaveBeenCalledWith({
-      to: "student@example.test",
-      userName: "Student Example",
-      verificationUrl,
+    expect(
+      dependencies.requestExistingAccountEmailVerification
+    ).toHaveBeenCalledWith({
+      requestHeaders: request.headers,
+      userId: "student-1",
     });
   });
 
@@ -225,7 +229,7 @@ describe("Better Auth Google configuration", () => {
     >;
     const onPasswordReset = emailAndPassword.onPasswordReset;
     expect(onPasswordReset).toBeTypeOf("function");
-    expect(emailAndPassword.requireEmailVerification).toBe(false);
+    expect(emailAndPassword.requireEmailVerification).toBe(true);
     if (typeof onPasswordReset !== "function") {
       return;
     }
@@ -342,20 +346,18 @@ describe("Better Auth Google configuration", () => {
     >;
     const sendVerification = emailVerification.sendVerificationEmail as (
       input: {
-        user: { email: string; name: string };
-        url: string;
+        user: { id: string };
       },
       request?: Request
     ) => Promise<void>;
-    dependencies.sendEmailVerificationEmail.mockRejectedValueOnce(
+    dependencies.requestExistingAccountEmailVerification.mockRejectedValueOnce(
       new Error("raw-provider-error-with-token")
     );
 
     await expect(
       sendVerification(
         {
-          user: { email: "private@example.test", name: "Private Student" },
-          url: "https://example.test/verify?token=private-token",
+          user: { id: "private-user-id" },
         },
         new Request("http://localhost:3000/api/auth/send-verification-email")
       )
@@ -366,7 +368,7 @@ describe("Better Auth Google configuration", () => {
         errorCode: "email_verification_delivery_failed",
         operation: "auth.email_verification",
         outcome: "failure",
-        provider: "resend",
+        provider: "database",
       })
     );
     expect(

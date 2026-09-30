@@ -1,6 +1,6 @@
 "use client";
 
-import { Logout01Icon } from "@hugeicons/core-free-icons";
+import { Logout01Icon, UserCircleIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -58,7 +58,14 @@ interface PanelLayoutProps {
   readonly userEmail: string;
   readonly userImage?: string | null;
   readonly userName: string;
-  readonly userRole?: AppRole;
+  readonly userRole: AppRole;
+}
+
+function getAccountSettingsHref(userRole: AppRole) {
+  if (userRole === "student") {
+    return route("/app/configuracoes#minha-conta");
+  }
+  return route("/admin/configuracoes#minha-conta");
 }
 
 function SidebarHeaderContent() {
@@ -167,6 +174,7 @@ function PanelLayoutInner({
   userRole,
 }: PanelLayoutProps): JSX.Element {
   const initials = getInitials(userName);
+  const accountSettingsHref = getAccountSettingsHref(userRole);
   const [isPending, setIsPending] = useState(false);
   const [isFocusMode, setFocusMode] = useState(false);
   const [isMainSidebarOpen, setMainSidebarOpen] = useState(true);
@@ -330,6 +338,16 @@ function PanelLayoutInner({
                         </div>
                       </DropdownMenuLabel>
                       <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href={accountSettingsHref}>
+                          <HugeiconsIcon
+                            aria-hidden="true"
+                            className="mr-2 size-4"
+                            icon={UserCircleIcon}
+                          />
+                          <span>Minha conta</span>
+                        </Link>
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive focus:bg-destructive/10 focus:text-destructive"
                         disabled={isPending}

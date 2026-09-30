@@ -97,6 +97,11 @@ export const changeStaffAccessAction = async (
     if (!target) {
       throw new Error("A Conta selecionada não foi encontrada.");
     }
+    if (target.role === "student") {
+      throw new Error(
+        "O acesso à equipe só pode ser concedido pelo aceite de um convite."
+      );
+    }
 
     const targetGrants = normalizeSupportPermissionGrants(
       target.support_permission_grants

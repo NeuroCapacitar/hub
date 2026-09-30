@@ -9,6 +9,7 @@ import {
   getPasswordResetRedirectUrl,
   getResolvedBetterAuthInfraConfig,
   isBlockedAuthEndpoint,
+  isGoogleOAuthProviderConfigured,
 } from "./auth-policy";
 import {
   DELEGABLE_SUPPORT_PERMISSIONS,
@@ -16,6 +17,27 @@ import {
 } from "./support-permissions";
 
 describe("auth policy", () => {
+  it("reports Google login availability only when both credentials exist", () => {
+    expect(
+      isGoogleOAuthProviderConfigured({
+        clientId: "google-client-id",
+        clientSecret: "google-client-secret",
+      })
+    ).toBe(true);
+    expect(
+      isGoogleOAuthProviderConfigured({
+        clientId: "google-client-id",
+        clientSecret: undefined,
+      })
+    ).toBe(false);
+    expect(
+      isGoogleOAuthProviderConfigured({
+        clientId: undefined,
+        clientSecret: undefined,
+      })
+    ).toBe(false);
+  });
+
   it("blocks public email sign-up by default", () => {
     expect(
       isBlockedAuthEndpoint({

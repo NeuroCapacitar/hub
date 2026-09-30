@@ -1,5 +1,8 @@
 import { getPool } from "@/db";
+import { reconcileUnusedUserAvatars } from "@/features/account/avatar-storage";
+import { expireAccountEmailChangeRequests } from "@/features/account/email-change";
 import { reconcileDashboardBannerStorage } from "@/features/admin/banner-storage-reconciliation";
+import { expireStaffInvitations } from "@/features/admin/staff-invitations";
 import { reconcileAuthMediaStorage } from "@/features/auth-media/storage";
 import { reconcileRevokedCertificateArtifacts } from "@/features/certificates/artifact-reconciliation";
 import { reconcileCertificateTemplateAssets } from "@/features/certificates/template-asset-cleanup";
@@ -21,22 +24,31 @@ interface MaintenanceResult {
   courseCoverObjectsReconciled: number;
   dashboardBannerObjectsReconciled: number;
   deadlineReached: boolean;
+  directAccountEmailChallengesRemoved: number;
+  emailChangeRequestsExpired: number;
+  emailChangeRequestsRemoved: number;
   emailDeliveryEventsRemoved: number;
   emailDeliveryMessagesRemoved: number;
   expiredLessonResourceUploadsRemoved: number;
   expiredRateLimitsRemoved: number;
   expiredSessionsRemoved: number;
+  expiredStaffInvitations: number;
   learningAnalyticsAggregated: number;
   learningAnalyticsEventsRemoved: number;
   leaseLost: boolean;
+  pendingSignupsRemoved: number;
   revokedCertificateCleanupItemsReconciled: number;
   stagedAdminImagesRemoved: number;
   supportRequestsRemoved: number;
+  userAvatarObjectsReconciled: number;
   webhookPayloadsSanitized: number;
 }
 
 const emptyMaintenanceResult = (): MaintenanceResult => ({
   authMediaObjectsReconciled: 0,
+  directAccountEmailChallengesRemoved: 0,
+  emailChangeRequestsExpired: 0,
+  emailChangeRequestsRemoved: 0,
   certificateTemplateAssetsRemoved: 0,
   checkoutReservationsRemoved: 0,
   courseCoverObjectsReconciled: 0,
@@ -44,6 +56,8 @@ const emptyMaintenanceResult = (): MaintenanceResult => ({
   deadlineReached: false,
   expiredRateLimitsRemoved: 0,
   expiredSessionsRemoved: 0,
+  expiredStaffInvitations: 0,
+  pendingSignupsRemoved: 0,
   emailDeliveryEventsRemoved: 0,
   emailDeliveryMessagesRemoved: 0,
   expiredLessonResourceUploadsRemoved: 0,
@@ -53,6 +67,7 @@ const emptyMaintenanceResult = (): MaintenanceResult => ({
   revokedCertificateCleanupItemsReconciled: 0,
   stagedAdminImagesRemoved: 0,
   supportRequestsRemoved: 0,
+  userAvatarObjectsReconciled: 0,
   webhookPayloadsSanitized: 0,
 });
 
@@ -103,6 +118,49 @@ export const runMaintenance = async ({
     "delete from public_checkout_rate_limits where expires_at < now()"
   );
   result.expiredRateLimitsRemoved += checkoutRateLimits.rowCount ?? 0;
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  const accountEmailRateLimits = await pool.query(
+    "delete from account_email_challenge_rate_limits where expires_at < now()"
+  );
+  result.expiredRateLimitsRemoved += accountEmailRateLimits.rowCount ?? 0;
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  const pendingSignups = await pool.query(
+    `delete from pending_signups
+     where (status = 'pending' and expires_at <= now())
+        or (status <> 'pending' and updated_at < now() - interval '1 hour')`
+  );
+  result.pendingSignupsRemoved = pendingSignups.rowCount ?? 0;
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  const emailChallenges = await pool.query(
+    `delete from account_email_challenges
+     where consumed_at is not null or expires_at <= now()`
+  );
+  result.directAccountEmailChallengesRemoved = emailChallenges.rowCount ?? 0;
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  result.expiredStaffInvitations = await expireStaffInvitations({
+    client: pool,
+  });
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  const emailChangeCleanup = await expireAccountEmailChangeRequests({
+    client: pool,
+  });
+  result.emailChangeRequestsExpired = emailChangeCleanup.expired;
+  result.emailChangeRequestsRemoved = emailChangeCleanup.removed;
 
   if (!(await canContinue())) {
     return result;
@@ -229,6 +287,13 @@ export const runMaintenance = async ({
     return result;
   }
   result.authMediaObjectsReconciled = await reconcileAuthMediaStorage({
+    shouldContinue: canContinue,
+  });
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  result.userAvatarObjectsReconciled = await reconcileUnusedUserAvatars({
     shouldContinue: canContinue,
   });
 

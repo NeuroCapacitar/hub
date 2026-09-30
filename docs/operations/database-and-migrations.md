@@ -2,9 +2,9 @@
 status: canonical
 owner: engineering
 last_verified_commit: c10f0d2
-current_migration_tag: 0096_google_provider_account_identity_unique_index
-migration_entry_count: 97
-schema_table_count: 51
+current_migration_tag: 0100_account_profile_and_email_change
+migration_entry_count: 101
+schema_table_count: 57
 ---
 
 # Banco e migrations
@@ -310,6 +310,25 @@ Com migration:
 
 Migrations Production são forward-only e devem ser compatíveis com o código
 anterior durante a janela entre alteração do banco e promoção.
+
+## Identidade e confirmação de compra (0097–0098)
+
+`0097_identity_email_challenges` adiciona cadastros pendentes, desafios de
+e-mail, rate limits HMAC e uma função/índice único para a identidade canônica
+de e-mail. O preflight da própria migration falha se encontrar contas legadas
+que colidem em `canonicalize_auth_email_identity`; isso exige inventário
+sanitizado e resolução manual, nunca merge automático. Não aplique a migration
+até confirmar as colisões no alvo permitido.
+
+`0098_purchase_confirmed_email` adiciona os tópicos/alias da confirmação de
+compra e o ledger permanente `purchase_confirmation_intents`. Seu backfill
+registra somente o `order_id` e origem histórica para Pedidos `paid` com
+identidade já `resolved`; não altera Pedido, Conta, credencial, Concessão ou
+Matrícula, nem copia PII. Pedidos que permanecem em Revisão não recebem o
+marcador e podem emitir a confirmação depois que a identidade for resolvida.
+O Hosted Template `purchase-confirmed` é publicado manualmente conforme o
+[runbook Resend](../integrations/resend-templates.md); migration/build nunca
+publicam o template.
 
 A migration histórica `0065_gray_siren` contém estruturas de uma tentativa de MFA
 administrativo. Elas permanecem no schema e no histórico para evitar uma remoção

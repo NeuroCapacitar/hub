@@ -45,8 +45,9 @@ export function AdminSidebarNav({
 }: {
   permissions: readonly (AuthPermission | string)[];
 }): React.JSX.Element {
-  const navItems = adminNavItems.filter(([, , , permission]) =>
-    permissions.includes(permission)
+  const navItems = adminNavItems.filter(
+    ([, , , permission]) =>
+      permission === "viewSettings" || permissions.includes(permission)
   );
 
   return (

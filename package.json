@@ -122,6 +122,7 @@
     "ops:check:production-backup": "bun scripts/check-production-backup.ts",
     "ops:check:production-release": "bun scripts/check-production-release-state.ts",
     "ops:restore:production-backup": "bun scripts/restore-production-backup.ts",
+    "ops:reconcile:legacy-purchase-confirmations": "bun scripts/reconcile-legacy-purchase-confirmations.ts",
     "ops:supersede:expiry-warning-v1": "bun scripts/supersede-expiry-warning-v1.ts",
     "prepare": "bun scripts/install-git-hooks.ts"
   },

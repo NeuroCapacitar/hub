@@ -141,6 +141,49 @@ describe("SignInForm", () => {
     expect(dependencies.assign).toHaveBeenCalledWith(COURSE_RETURN_TO);
   });
 
+  it("lets an unverified account explicitly request a new confirmation email", async () => {
+    dependencies.fetch.mockReset();
+    dependencies.fetch.mockResolvedValueOnce(
+      jsonResponse(
+        { code: "EMAIL_NOT_VERIFIED", message: "Email not verified" },
+        403
+      )
+    );
+    dependencies.fetch.mockResolvedValueOnce(jsonResponse({ status: true }));
+    act(() => root.render(<SignInForm />));
+    fillCredentials(container);
+
+    await act(async () => {
+      getForm(container).requestSubmit();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const resendButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.includes("Reenviar confirmação")
+    );
+    expect(resendButton).toBeDefined();
+
+    await act(async () => {
+      resendButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(dependencies.fetch).toHaveBeenNthCalledWith(
+      2,
+      "/api/auth/send-verification-email",
+      expect.objectContaining({
+        body: JSON.stringify({ email: "student@example.test" }),
+        credentials: "same-origin",
+        method: "POST",
+      })
+    );
+    expect(container.textContent).toContain(
+      "Se a conta puder receber uma confirmação"
+    );
+  });
+
   it("starts Google login without requesting account creation", async () => {
     dependencies.signInSocial.mockResolvedValue({
       data: { url: "https://accounts.google.test" },

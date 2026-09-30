@@ -128,8 +128,8 @@ export const EmailVerificationEmail = ({
     <Heading>Confirme seu e-mail</Heading>
     <Text style={styles.text}>Olá, {name}.</Text>
     <Text style={styles.text}>
-      Você pediu para confirmar o e-mail desta Conta antes de vinculá-la ao
-      Google. Use o botão abaixo para confirmar; o link expira em uma hora.
+      Use o botão abaixo para confirmar o e-mail da sua Conta. O link expira em
+      uma hora.
     </Text>
     <Section>
       <Button href={verificationUrl} style={styles.button}>
@@ -138,7 +138,7 @@ export const EmailVerificationEmail = ({
     </Section>
     <Text style={styles.muted}>
       Se você não pediu esta confirmação, ignore esta mensagem. Nenhuma senha ou
-      dado da Conta será alterado.
+      acesso será alterado.
     </Text>
   </EmailShell>
 );

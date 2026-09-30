@@ -1,21 +1,6 @@
-import {
-  BookOpen01Icon,
-  Certificate01Icon,
-  HelpCircleIcon,
-  Home01Icon,
-  Settings01Icon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { redirect } from "next/navigation";
 import { PanelLayout } from "@/components/panel-layout";
-import {
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuLink,
-} from "@/components/ui/sidebar";
+import { StudentNavigation } from "@/components/student-navigation";
 import { isPreviewRole } from "@/features/courses/preview";
 import { getStudentCourses } from "@/features/courses/server";
 import { route } from "@/lib/routes";
@@ -40,7 +25,7 @@ export default async function StudentLayout({
 
   return (
     <PanelLayout
-      navContent={<StudentNav courses={courses} />}
+      navContent={<StudentNavigation courses={courses} />}
       {...(studentDashboardGreeting ? { studentDashboardGreeting } : {})}
       userEmail={session.user.email}
       userImage={session.user.image}
@@ -49,112 +34,5 @@ export default async function StudentLayout({
     >
       {children}
     </PanelLayout>
-  );
-}
-
-function StudentNav({
-  courses,
-}: {
-  courses: Awaited<ReturnType<typeof getStudentCourses>>;
-}): React.JSX.Element {
-  return (
-    <>
-      <SidebarGroup>
-        <SidebarGroupLabel>Menu</SidebarGroupLabel>
-        <SidebarGroupContent>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuLink href={route("/app")} tooltip="Início">
-                <HugeiconsIcon
-                  aria-hidden="true"
-                  icon={Home01Icon}
-                  size={18}
-                  strokeWidth={1.5}
-                />
-                <span>Início</span>
-              </SidebarMenuLink>
-            </SidebarMenuItem>
-
-            <SidebarMenuItem>
-              <SidebarMenuLink
-                href={route("/app/certificados")}
-                tooltip="Certificados"
-              >
-                <HugeiconsIcon
-                  aria-hidden="true"
-                  icon={Certificate01Icon}
-                  size={18}
-                  strokeWidth={1.5}
-                />
-                <span>Certificados</span>
-              </SidebarMenuLink>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuLink
-                href={route("/app/configuracoes")}
-                tooltip="Configurações"
-              >
-                <HugeiconsIcon
-                  aria-hidden="true"
-                  icon={Settings01Icon}
-                  size={18}
-                  strokeWidth={1.5}
-                />
-                <span>Configurações</span>
-              </SidebarMenuLink>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-      {courses.length ? (
-        <SidebarGroup>
-          <SidebarGroupLabel>Meus cursos</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {courses.map((course) => (
-                <SidebarMenuItem key={course.courseId}>
-                  <SidebarMenuLink
-                    className="h-auto py-2"
-                    href={route(`/app/cursos/${course.courseId}`)}
-                    tooltip={course.title}
-                  >
-                    <HugeiconsIcon
-                      aria-hidden="true"
-                      icon={BookOpen01Icon}
-                      size={18}
-                      strokeWidth={1.5}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate">{course.title}</span>
-                      <span className="block text-muted-foreground text-xs">
-                        {course.progressPercent}% concluído
-                      </span>
-                    </span>
-                  </SidebarMenuLink>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      ) : null}
-      <SidebarGroup>
-        <SidebarGroupLabel>Suporte</SidebarGroupLabel>
-        <SidebarGroupContent>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuLink href={route("/app/ajuda")} tooltip="Ajuda">
-                <HugeiconsIcon
-                  aria-hidden="true"
-                  icon={HelpCircleIcon}
-                  size={18}
-                  strokeWidth={1.5}
-                />
-                <span>Ajuda</span>
-              </SidebarMenuLink>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-    </>
   );
 }

@@ -66,7 +66,8 @@ export function StudentPlatformAccessControls({
         <Alert variant="destructive">
           <AlertTitle>Acesso bloqueado</AlertTitle>
           <AlertDescription>
-            O bloqueio geral impede o login até que seja restaurado.
+            A Conta não pode acessar áreas internas do Hub, incluindo
+            Configurações, até que o acesso seja restaurado.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -87,7 +88,7 @@ function StudentPlatformAccessHeading(): React.JSX.Element {
         <FinanceHelp
           description="O bloqueio da plataforma é diferente do estado de uma Matrícula."
           details={[
-            "Bloquear interrompe o login e o acesso geral a todos os Cursos.",
+            "Bloquear interrompe o login e o acesso a todas as áreas internas, inclusive Configurações e Cursos.",
             "A operação é reversível, exige motivo e fica registrada na auditoria.",
           ]}
           title="Acesso na plataforma"
@@ -145,7 +146,8 @@ function BlockPlatformAccessForm({
         Bloquear acesso da plataforma
       </h3>
       <p className="mt-1 text-muted-foreground text-xs">
-        O aluno perderá o login e o acesso a todos os Cursos liberados.
+        O aluno perderá o acesso a todas as áreas internas, inclusive
+        Configurações e Cursos.
       </p>
       <AdminMutationForm
         action={blockStudentPlatformAccessAction}
@@ -190,8 +192,9 @@ function BlockPlatformAccessForm({
                   Confirmar bloqueio da plataforma
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                  O aluno perderá o acesso geral à plataforma e não conseguirá
-                  mais fazer login. Deseja confirmar?
+                  O aluno perderá o acesso a todas as áreas internas, inclusive
+                  Configurações, e não conseguirá entrar enquanto a suspensão
+                  estiver ativa. Deseja confirmar?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -287,7 +290,8 @@ export function StudentPlatformAccessSummary({
         <Alert variant="destructive">
           <AlertTitle>Acesso bloqueado</AlertTitle>
           <AlertDescription>
-            O bloqueio geral impede o login até que seja restaurado.
+            A Conta não pode acessar áreas internas do Hub, incluindo
+            Configurações, até que o acesso seja restaurado.
           </AlertDescription>
         </Alert>
       ) : null}

@@ -241,6 +241,14 @@ export const getGoogleOAuthSignUpPolicy = (allowPublicSignUp: boolean) => ({
   disableSignUp: !allowPublicSignUp,
 });
 
+export const isGoogleOAuthProviderConfigured = ({
+  clientId,
+  clientSecret,
+}: {
+  clientId: string | undefined;
+  clientSecret: string | undefined;
+}): boolean => Boolean(clientId?.trim() && clientSecret?.trim());
+
 export const getGoogleOAuthProviderConfig = ({
   allowPublicSignUp,
   clientId,
@@ -253,7 +261,12 @@ export const getGoogleOAuthProviderConfig = ({
   const normalizedClientId = clientId?.trim();
   const normalizedClientSecret = clientSecret?.trim();
 
-  if (!(normalizedClientId || normalizedClientSecret)) {
+  if (!isGoogleOAuthProviderConfigured({ clientId, clientSecret })) {
+    if (normalizedClientId || normalizedClientSecret) {
+      throw new Error(
+        "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured together."
+      );
+    }
     return null;
   }
 

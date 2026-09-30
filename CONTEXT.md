@@ -14,11 +14,20 @@ Este arquivo fixa vocabulário de produto. Regras, implementação e decisões v
 
 Pessoa que consome Cursos no Hub. É papel de negócio e não prova que tenha efetuado a compra.
 
-**Conta**  
-Identidade autenticável do Hub, identificada por e-mail e protegida por credenciais e sessões. Seu papel técnico é `student`, `support` ou `admin`.
+**Conta**
+
+Identidade autenticável do Hub, identificada por e-mail e protegida por credenciais e sessões. Mantém perfil pessoal, avatar escolhido, estado de prova do e-mail e métodos de entrada. Seu papel técnico é `student`, `support` ou `admin`.
 
 **Compradora**  
 Pessoa que informa dados no checkout e assume a relação financeira do Pedido. Pode ser ou não o Aluno; e-mail de compra e e-mail de Conta não são sinônimos sem regra explícita de vínculo.
+
+**Prova de e-mail**
+
+Confirmação explícita de que a pessoa controla a caixa postal da Conta. Não é compra, login ou criação de senha; o link não inicia sessão.
+
+**Troca de e-mail**
+
+Solicitação autenticada que exige autorização no endereço atual e confirmação do novo. O e-mail atual só muda depois das duas provas; sessões anteriores são invalidadas e ambos os endereços recebem um aviso.
 
 **Especialista**  
 Responsável pelo conteúdo, experiência pedagógica e decisões de produto. No escopo atual há uma única especialista, sem marketplace ou tenancy por especialista.
@@ -34,6 +43,10 @@ concedido de permissões de alteração; não é um Admin limitado por convenç�
 
 **Pedido**  
 Registro da intenção e resultado financeiro de compra, com preço, duração e identidade como snapshots.
+
+**Confirmação de compra**
+
+Notificação única por Pedido pago. Se o e-mail da Conta ainda não estiver verificado, o CTA prova a caixa; se já estiver, conduz ao Curso. A confirmação não cria nova Concessão/Matrícula nem redefine senha.
 
 **Concessão de acesso**  
 Direito de uma Conta acessar Curso, originado em fonte identificável como Pedido

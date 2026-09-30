@@ -57,6 +57,7 @@ const createContext = ({
   pendingReviewRows = [],
   persistIdentity = true,
   persistOrder = true,
+  emailVerified = true,
   refundRequestRows = [{ id: "refund-1" }],
 }: {
   correlationRows?: unknown[];
@@ -65,6 +66,7 @@ const createContext = ({
   pendingReviewRows?: unknown[];
   persistIdentity?: boolean;
   persistOrder?: boolean;
+  emailVerified?: boolean;
   refundRequestRows?: unknown[];
 } = {}) => {
   const pendingReviews = [...pendingReviewRows];
@@ -75,6 +77,34 @@ const createContext = ({
     queries.push({ text, values });
     if (text.includes("with correlation_identifiers")) {
       return Promise.resolve(queryResult(correlationRows));
+    }
+    if (text.includes("from purchase_confirmation_intents")) {
+      return Promise.resolve(queryResult([]));
+    }
+    if (text.includes("from outbox_messages as message")) {
+      return Promise.resolve(queryResult([]));
+    }
+    if (text.includes("from account_email_challenges")) {
+      return Promise.resolve(queryResult([]));
+    }
+    if (text.includes("from users") && text.includes("email_verified")) {
+      return Promise.resolve(queryResult([{ email_verified: emailVerified }]));
+    }
+    if (text.includes("insert into purchase_confirmation_intents")) {
+      return Promise.resolve(queryResult([{ order_id: values?.[0] }]));
+    }
+    if (text.includes("insert into account_email_challenges")) {
+      return Promise.resolve(queryResult([]));
+    }
+    if (text.includes("insert into outbox_messages")) {
+      return Promise.resolve(
+        queryResult([{ id: "purchase-confirmed-outbox" }])
+      );
+    }
+    if (text.includes("insert into outbox_messages")) {
+      return Promise.resolve(
+        queryResult([{ id: "purchase-confirmed-outbox" }])
+      );
     }
     if (text.includes("from orders") && text.includes("where id = $1")) {
       const lockedOrder =
@@ -489,7 +519,7 @@ describe("Asaas webhook processor", () => {
       applyRevocation: vi.fn(async () => true),
       enqueueMessage: vi.fn(async () => ({ id: null, inserted: false })),
       resolveIdentity: vi.fn(async () => ({
-        activationRequired: false,
+        emailVerified: true,
         userId: USER_ID,
       })),
     });
@@ -535,7 +565,7 @@ describe("Asaas webhook processor", () => {
       applyRevocation: vi.fn(async () => true),
       enqueueMessage: vi.fn(async () => ({ id: null, inserted: false })),
       resolveIdentity: vi.fn(async () => ({
-        activationRequired: false,
+        emailVerified: true,
         userId: USER_ID,
       })),
     });
@@ -646,7 +676,7 @@ describe("Asaas webhook processor", () => {
         userId: null,
       });
       return Promise.resolve({
-        activationRequired: true,
+        emailVerified: false,
         userId: "public-user",
       });
     });
@@ -696,7 +726,7 @@ describe("Asaas webhook processor", () => {
       persistIdentity: false,
     });
     const resolveIdentity = vi.fn(async () => ({
-      activationRequired: true,
+      emailVerified: false,
       userId: "public-user",
     }));
     const processor = createAsaasWebhookProcessor({
@@ -858,7 +888,7 @@ describe("Asaas webhook processor", () => {
   it("locks the correlated order and grants PIX access with one outbox intent", async () => {
     const { context, lockOrder, queries } = createContext();
     const resolveIdentity = vi.fn(async () => ({
-      activationRequired: false,
+      emailVerified: true,
       userId: USER_ID,
     }));
     const applyPaidAccess = vi.fn(async () => undefined);
@@ -894,7 +924,7 @@ describe("Asaas webhook processor", () => {
       client: context.client,
       message: expect.objectContaining({
         aggregateId: ORDER_ID,
-        idempotencyKey: `email.access-released/${ORDER_ID}/v1`,
+        idempotencyKey: `email.purchase-confirmed/${ORDER_ID}/v1`,
       }),
     });
     expect(
@@ -953,7 +983,7 @@ describe("Asaas webhook processor", () => {
       applyRevocation: vi.fn(async () => true),
       enqueueMessage,
       resolveIdentity: vi.fn(async () => ({
-        activationRequired: false,
+        emailVerified: true,
         userId: USER_ID,
       })),
     });
@@ -1000,7 +1030,7 @@ describe("Asaas webhook processor", () => {
       applyRevocation: vi.fn(async () => true),
       enqueueMessage,
       resolveIdentity: vi.fn(async () => ({
-        activationRequired: false,
+        emailVerified: true,
         userId: USER_ID,
       })),
     });
@@ -1183,7 +1213,7 @@ describe("Asaas webhook processor", () => {
       applyRevocation: vi.fn(async () => true),
       enqueueMessage: vi.fn(async () => ({ id: null, inserted: false })),
       resolveIdentity: vi.fn(async () => ({
-        activationRequired: false,
+        emailVerified: true,
         userId: USER_ID,
       })),
     });
@@ -1240,7 +1270,7 @@ describe("Asaas webhook processor", () => {
       applyRevocation: vi.fn(async () => true),
       enqueueMessage: vi.fn(async () => ({ id: "outbox-1", inserted: true })),
       resolveIdentity: vi.fn(async () => ({
-        activationRequired: false,
+        emailVerified: true,
         userId: USER_ID,
       })),
     });
@@ -1257,8 +1287,9 @@ describe("Asaas webhook processor", () => {
     expect(applyPaidAccess).toHaveBeenCalledOnce();
   });
 
-  it("queues account activation for a public identity without calling auth directly", async () => {
-    const { context } = createContext({
+  it("queues purchase confirmation and mailbox proof for a public identity", async () => {
+    const { context, queries } = createContext({
+      emailVerified: false,
       orderRow: createOrderRow({
         buyer_identity_status: "pending",
         user_id: null,
@@ -1269,7 +1300,7 @@ describe("Asaas webhook processor", () => {
       inserted: true,
     }));
     const resolveIdentity = vi.fn(async () => ({
-      activationRequired: true,
+      emailVerified: false,
       userId: "public-user",
     }));
     const processor = createAsaasWebhookProcessor({
@@ -1288,7 +1319,6 @@ describe("Asaas webhook processor", () => {
 
     expect(resolveIdentity).toHaveBeenCalledWith({
       client: context.client,
-      googleProviderEnabled: false,
       order: {
         buyerIdentityStatus: "pending",
         courseId: COURSE_ID,
@@ -1301,10 +1331,13 @@ describe("Asaas webhook processor", () => {
     expect(enqueueMessage).toHaveBeenCalledWith({
       client: context.client,
       message: expect.objectContaining({
-        idempotencyKey: `auth.account-activation/${ORDER_ID}/v1`,
+        idempotencyKey: `email.purchase-confirmed/${ORDER_ID}/v1`,
         payload: { orderId: ORDER_ID, userId: "public-user" },
       }),
     });
+    expect(
+      queries.some(({ text }) => text.includes("purchase_verification"))
+    ).toBe(true);
   });
 
   it("persists paid evidence and opens a review when the access snapshot is invalid", async () => {

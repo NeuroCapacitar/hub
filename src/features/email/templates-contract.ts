@@ -4,6 +4,10 @@ export const hostedEmailTemplates = [
   "access-expiry-warning",
   "certificate-issued",
   "course-sales-opened",
+  "purchase-confirmed",
+  "email-change-confirmation",
+  "email-change-notice",
+  "staff-invitation",
   "support-request",
 ] as const;
 
@@ -46,6 +50,40 @@ interface CourseSalesOpenedVariables {
   USER_NAME: string;
 }
 
+interface PurchaseConfirmedVariables {
+  ACTION_LABEL: "Acessar Curso" | "Confirmar e-mail";
+  ACTION_URL: string;
+  COURSE_TITLE: string;
+  name: "purchase-confirmed";
+  USER_NAME: string;
+}
+
+interface StaffInvitationVariables {
+  ACTION_URL: string;
+  EXPIRES_AT: string;
+  INVITER_NAME: string;
+  name: "staff-invitation";
+  ROLE_LABEL: "Admin" | "Suporte";
+}
+
+interface EmailChangeConfirmationVariables {
+  ACTION_URL: string;
+  CURRENT_EMAIL: string;
+  NEW_EMAIL: string;
+  name: "email-change-confirmation";
+  STEP_LABEL: "Confirmar e-mail atual" | "Confirmar novo e-mail";
+  USER_NAME: string;
+}
+
+interface EmailChangeNoticeVariables {
+  CHANGE_DATE: string;
+  CURRENT_EMAIL: string;
+  NEW_EMAIL: string;
+  name: "email-change-notice";
+  SUPPORT_EMAIL: string;
+  USER_NAME: string;
+}
+
 interface SupportRequestVariables {
   COURSE_TITLE: string;
   MESSAGE: string;
@@ -61,10 +99,15 @@ export type HostedEmailTemplateVariables =
   | AuthPasswordResetVariables
   | CertificateIssuedVariables
   | CourseSalesOpenedVariables
+  | EmailChangeConfirmationVariables
+  | EmailChangeNoticeVariables
+  | PurchaseConfirmedVariables
+  | StaffInvitationVariables
   | SupportRequestVariables;
 
 type HostedEmailTemplateVariableKey =
   | "ACTION_URL"
+  | "ACTION_LABEL"
   | "CERTIFICATE_CODE"
   | "COURSE_TITLE"
   | "DAYS_REMAINING"
@@ -73,6 +116,14 @@ type HostedEmailTemplateVariableKey =
   | "STUDENT_EMAIL"
   | "STUDENT_NAME"
   | "SUPPORT_SUBJECT"
+  | "EXPIRES_AT"
+  | "INVITER_NAME"
+  | "ROLE_LABEL"
+  | "CURRENT_EMAIL"
+  | "NEW_EMAIL"
+  | "STEP_LABEL"
+  | "CHANGE_DATE"
+  | "SUPPORT_EMAIL"
   | "USER_NAME";
 
 export type HostedEmailTemplateMetadata = Readonly<{
@@ -129,6 +180,46 @@ const hostedTemplateMetadata = {
     requiredKeys: ["USER_NAME", "COURSE_TITLE", "ACTION_URL"],
     subjectOwner: "hub",
   },
+  "purchase-confirmed": {
+    fromOwner: "hub",
+    plainTextMode: "provider-generated",
+    replyToOwner: "hub",
+    requiredKeys: ["USER_NAME", "COURSE_TITLE", "ACTION_LABEL", "ACTION_URL"],
+    subjectOwner: "hub",
+  },
+  "email-change-confirmation": {
+    fromOwner: "hub",
+    plainTextMode: "provider-generated",
+    replyToOwner: "hub",
+    requiredKeys: [
+      "USER_NAME",
+      "CURRENT_EMAIL",
+      "NEW_EMAIL",
+      "STEP_LABEL",
+      "ACTION_URL",
+    ],
+    subjectOwner: "hub",
+  },
+  "email-change-notice": {
+    fromOwner: "hub",
+    plainTextMode: "provider-generated",
+    replyToOwner: "hub",
+    requiredKeys: [
+      "USER_NAME",
+      "CURRENT_EMAIL",
+      "NEW_EMAIL",
+      "CHANGE_DATE",
+      "SUPPORT_EMAIL",
+    ],
+    subjectOwner: "hub",
+  },
+  "staff-invitation": {
+    fromOwner: "hub",
+    plainTextMode: "provider-generated",
+    replyToOwner: "hub",
+    requiredKeys: ["INVITER_NAME", "ROLE_LABEL", "EXPIRES_AT", "ACTION_URL"],
+    subjectOwner: "hub",
+  },
   "support-request": {
     fromOwner: "hub",
     plainTextMode: "provider-generated",
@@ -173,6 +264,7 @@ const isHostedEmailTemplateVariableKey = (
   input: string
 ): input is HostedEmailTemplateVariableKey =>
   input === "ACTION_URL" ||
+  input === "ACTION_LABEL" ||
   input === "CERTIFICATE_CODE" ||
   input === "COURSE_TITLE" ||
   input === "DAYS_REMAINING" ||
@@ -259,6 +351,30 @@ const assertTemplateSpecificVariables = (input: UnknownObject): void => {
     input.DAYS_REMAINING !== "7 dias"
   ) {
     throw new Error("DAYS_REMAINING must be either 1 dia or 7 dias.");
+  }
+
+  if (
+    input.name === "purchase-confirmed" &&
+    input.ACTION_LABEL !== "Confirmar e-mail" &&
+    input.ACTION_LABEL !== "Acessar Curso"
+  ) {
+    throw new Error("ACTION_LABEL is invalid for purchase confirmation.");
+  }
+
+  if (
+    input.name === "staff-invitation" &&
+    input.ROLE_LABEL !== "Admin" &&
+    input.ROLE_LABEL !== "Suporte"
+  ) {
+    throw new Error("ROLE_LABEL is invalid for staff invitation.");
+  }
+
+  if (
+    input.name === "email-change-confirmation" &&
+    input.STEP_LABEL !== "Confirmar e-mail atual" &&
+    input.STEP_LABEL !== "Confirmar novo e-mail"
+  ) {
+    throw new Error("STEP_LABEL is invalid for email change confirmation.");
   }
 
   if (input.name !== "support-request") {

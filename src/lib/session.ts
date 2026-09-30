@@ -18,6 +18,7 @@ import {
 export type AppRole = "admin" | "support" | "student";
 
 export interface AppSession {
+  emailVerified: boolean;
   platformBlockedAt: Date | null;
   platformBlockedReason: string | null;
   role: AppRole;
@@ -33,6 +34,21 @@ export interface AppSession {
 
 const LAST_ACCESS_WRITE_INTERVAL_MS = 5 * 60 * 1000;
 
+const resolveSessionImage = ({
+  avatarKey,
+  avatarMode,
+  userImage,
+}: {
+  avatarKey: string | null | undefined;
+  avatarMode: "custom" | "google" | "initials" | null | undefined;
+  userImage: string | null | undefined;
+}): string | null => {
+  if (avatarMode === "custom" && avatarKey) {
+    return "/api/account/avatar";
+  }
+  return userImage ?? null;
+};
+
 export const getCurrentSession = cache(async (): Promise<AppSession | null> => {
   const session = await getAuth().api.getSession({
     headers: await headers(),
@@ -47,8 +63,11 @@ export const getCurrentSession = cache(async (): Promise<AppSession | null> => {
       platformBlockedAt: profiles.platformBlockedAt,
       platformBlockedReason: profiles.platformBlockedReason,
       role: profiles.role,
+      avatarKey: profiles.avatarKey,
+      avatarMode: profiles.avatarMode,
       supportPermissionGrants: profiles.supportPermissionGrants,
       supportPermissionViews: profiles.supportPermissionViews,
+      emailVerified: users.emailVerified,
       userImage: users.image,
     })
     .from(users)
@@ -57,13 +76,18 @@ export const getCurrentSession = cache(async (): Promise<AppSession | null> => {
     .limit(1);
 
   return {
+    emailVerified: profile?.emailVerified ?? false,
     platformBlockedAt: profile?.platformBlockedAt ?? null,
     platformBlockedReason: profile?.platformBlockedReason ?? null,
     user: {
       id: session.user.id,
       name: session.user.name,
       email: session.user.email,
-      image: profile?.userImage ?? null,
+      image: resolveSessionImage({
+        avatarKey: profile?.avatarKey,
+        avatarMode: profile?.avatarMode,
+        userImage: profile?.userImage,
+      }),
     },
     role: profile?.role ?? "student",
     supportPermissionGrants: normalizeSupportPermissionGrants(
@@ -90,16 +114,19 @@ export const recordLastAccess = async (userId: string): Promise<void> => {
     );
 };
 
-export const requireSession = async (): Promise<AppSession> => {
+export const requireAccountSession = async (): Promise<AppSession> => {
   const session = await getCurrentSession();
-
   if (!session) {
     redirect(route("/entrar"));
   }
-
   if (session.role === "student" && session.platformBlockedAt) {
     redirect(route("/entrar"));
   }
+  return session;
+};
+
+export const requireSession = async (): Promise<AppSession> => {
+  const session = await requireAccountSession();
 
   try {
     await recordLastAccess(session.user.id);

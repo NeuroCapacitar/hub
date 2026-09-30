@@ -7,7 +7,7 @@ import type { GoogleProfile } from "better-auth/social-providers";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { accounts, sessions, users, verifications } from "@/db/schema";
-import { sendEmailVerificationEmail } from "@/features/email/server";
+import { requestExistingAccountEmailVerification } from "@/features/account/email-challenges";
 import { sendBetterAuthPasswordResetEmail } from "@/lib/auth-password-reset";
 import {
   getBetterAuthRateLimitConfig,
@@ -235,7 +235,7 @@ const createAuth = () => {
     emailAndPassword: {
       ...AUTH_PASSWORD_POLICY,
       enabled: true,
-      requireEmailVerification: false,
+      requireEmailVerification: true,
       sendResetPassword: async (input, request) => {
         await sendBetterAuthPasswordResetEmail(input, request);
       },
@@ -248,12 +248,11 @@ const createAuth = () => {
       expiresIn: 60 * 60,
       sendOnSignIn: false,
       sendOnSignUp: false,
-      sendVerificationEmail: async ({ user, url }, request) => {
+      sendVerificationEmail: async ({ user }, request) => {
         try {
-          await sendEmailVerificationEmail({
-            to: user.email,
-            userName: user.name,
-            verificationUrl: url,
+          await requestExistingAccountEmailVerification({
+            requestHeaders: request?.headers ?? new Headers(),
+            userId: user.id,
           });
         } catch {
           logOperationalEvent({
@@ -263,7 +262,7 @@ const createAuth = () => {
             errorCode: "email_verification_delivery_failed",
             operation: "auth.email_verification",
             outcome: "failure",
-            provider: "resend",
+            provider: "database",
           });
           throw new Error("email_verification_delivery_failed");
         }

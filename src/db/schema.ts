@@ -29,6 +29,35 @@ export const timestamps = {
 };
 
 export const roleEnum = pgEnum("role", ["admin", "support", "student"]);
+export const pendingSignupStatusEnum = pgEnum("pending_signup_status", [
+  "pending",
+  "completed",
+  "expired",
+  "superseded",
+]);
+export const accountEmailChallengePurposeEnum = pgEnum(
+  "account_email_challenge_purpose",
+  ["change_email", "purchase_verification", "signup", "verify_email"]
+);
+export const purchaseConfirmationIntentOriginEnum = pgEnum(
+  "purchase_confirmation_intent_origin",
+  ["historical", "current"]
+);
+export const staffInvitationStatusEnum = pgEnum("staff_invitation_status", [
+  "accepted",
+  "expired",
+  "pending",
+  "revoked",
+]);
+export const accountEmailChangeStatusEnum = pgEnum(
+  "account_email_change_status",
+  ["cancelled", "completed", "expired", "pending_current", "pending_new"]
+);
+export const profileAvatarModeEnum = pgEnum("profile_avatar_mode", [
+  "custom",
+  "google",
+  "initials",
+]);
 export const courseStatusEnum = pgEnum("course_status", [
   "draft",
   "active",
@@ -170,12 +199,16 @@ export const emailMessageStatusEnum = pgEnum("email_message_status", [
 ]);
 export const emailDeliveryTopicEnum = pgEnum("email_delivery_topic", [
   "auth.account-activation",
+  "auth.email-change-confirmation",
   "auth.email-verification",
   "auth.password-reset",
   "email.access-released",
   "email.access-expiry-warning",
   "email.certificate-issued",
   "email.course-sales-opened",
+  "email.purchase-confirmed",
+  "email.email-change-notice",
+  "auth.staff-invitation",
   "email.support-request",
 ]);
 export const emailTemplateAliasEnum = pgEnum("email_template_alias", [
@@ -185,6 +218,10 @@ export const emailTemplateAliasEnum = pgEnum("email_template_alias", [
   "access-expiry-warning",
   "certificate-issued",
   "course-sales-opened",
+  "purchase-confirmed",
+  "email-change-confirmation",
+  "email-change-notice",
+  "staff-invitation",
   "support-request",
 ]);
 export const resendWebhookEventStatusEnum = pgEnum(
@@ -259,6 +296,9 @@ export const users = pgTable(
   },
   (table) => [
     uniqueIndex("users_email_lower_unique_idx").on(sql`lower(${table.email})`),
+    uniqueIndex("users_email_identity_unique_idx").on(
+      sql`canonicalize_auth_email_identity(${table.email})`
+    ),
   ]
 );
 
@@ -348,6 +388,10 @@ export const profiles = pgTable(
       .array()
       .default(sql`'{}'::text[]`)
       .notNull(),
+    avatarMode: profileAvatarModeEnum("avatar_mode")
+      .default("google")
+      .notNull(),
+    avatarKey: text("avatar_key"),
     phone: text("phone"),
     invitedAt: timestamp("invited_at", tz),
     lastAccessAt: timestamp("last_access_at", tz),
@@ -357,6 +401,13 @@ export const profiles = pgTable(
   },
   (table) => [
     index("profiles_role_idx").on(table.role),
+    check(
+      "profiles_avatar_key_consistent",
+      sql`(
+        (${table.avatarMode} = 'custom' and ${table.avatarKey} is not null)
+        or (${table.avatarMode} <> 'custom' and ${table.avatarKey} is null)
+      )`
+    ),
     check(
       "profiles_support_permission_grants_consistent",
       sql`(
@@ -1312,6 +1363,222 @@ export const orders = pgTable(
       "orders_refunded_evidence_consistent",
       sql`${table.status} <> 'refunded'
         or (${table.refundedAt} is not null and ${table.providerRefundStatus} is not null)`
+    ),
+  ]
+);
+
+export const purchaseConfirmationIntents = pgTable(
+  "purchase_confirmation_intents",
+  {
+    orderId: uuid("order_id")
+      .primaryKey()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    origin: purchaseConfirmationIntentOriginEnum("origin").notNull(),
+    ...timestamps,
+  }
+);
+
+export const pendingSignups = pgTable(
+  "pending_signups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    courseSlug: text("course_slug"),
+    status: pendingSignupStatusEnum("status").default("pending").notNull(),
+    generation: integer("generation").default(1).notNull(),
+    expiresAt: timestamp("expires_at", tz).notNull(),
+    completedAt: timestamp("completed_at", tz),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("pending_signups_email_identity_pending_unique_idx")
+      .on(sql`canonicalize_auth_email_identity(${table.email})`)
+      .where(sql`${table.status} = 'pending'`),
+    index("pending_signups_expires_at_idx").on(table.expiresAt),
+    check("pending_signups_generation_positive", sql`${table.generation} > 0`),
+    check(
+      "pending_signups_course_slug_valid",
+      sql`${table.courseSlug} is null or ${table.courseSlug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`
+    ),
+  ]
+);
+
+export const accountEmailChallenges = pgTable(
+  "account_email_challenges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    purpose: accountEmailChallengePurposeEnum("purpose").notNull(),
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    pendingSignupId: uuid("pending_signup_id").references(
+      () => pendingSignups.id,
+      { onDelete: "cascade" }
+    ),
+    orderId: uuid("order_id").references(() => orders.id, {
+      onDelete: "cascade",
+    }),
+    pendingEmail: text("pending_email"),
+    generation: integer("generation").default(1).notNull(),
+    expiresAt: timestamp("expires_at", tz).notNull(),
+    consumedAt: timestamp("consumed_at", tz),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("account_email_challenges_pending_signup_purpose_unique_idx")
+      .on(table.pendingSignupId, table.purpose)
+      .where(sql`${table.pendingSignupId} is not null`),
+    uniqueIndex("account_email_challenges_user_purpose_unique_idx")
+      .on(table.userId, table.purpose)
+      .where(sql`${table.userId} is not null and ${table.orderId} is null`),
+    uniqueIndex("account_email_challenges_order_unique_idx")
+      .on(table.orderId)
+      .where(sql`${table.orderId} is not null`),
+    index("account_email_challenges_expires_at_idx").on(table.expiresAt),
+    check(
+      "account_email_challenges_generation_positive",
+      sql`${table.generation} > 0`
+    ),
+    check(
+      "account_email_challenges_owner_consistent",
+      sql`num_nonnulls(${table.userId}, ${table.pendingSignupId}) = 1`
+    ),
+    check(
+      "account_email_challenges_purpose_consistent",
+      sql`(
+        (${table.purpose} = 'signup' and ${table.pendingSignupId} is not null and ${table.orderId} is null and ${table.pendingEmail} is null)
+        or (${table.purpose} = 'verify_email' and ${table.userId} is not null and ${table.orderId} is null and ${table.pendingEmail} is null)
+        or (${table.purpose} = 'purchase_verification' and ${table.userId} is not null and ${table.orderId} is not null and ${table.pendingEmail} is null)
+        or (${table.purpose} = 'change_email' and ${table.userId} is not null and ${table.orderId} is null and ${table.pendingEmail} is not null)
+      )`
+    ),
+  ]
+);
+
+export const accountEmailChallengeRateLimits = pgTable(
+  "account_email_challenge_rate_limits",
+  {
+    keyHash: text("key_hash").primaryKey(),
+    windowStartedAt: timestamp("window_started_at", tz).defaultNow().notNull(),
+    requestCount: integer("request_count").default(0).notNull(),
+    expiresAt: timestamp("expires_at", tz).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("account_email_challenge_rate_limits_expires_at_idx").on(
+      table.expiresAt
+    ),
+    check(
+      "account_email_challenge_rate_limits_count_non_negative",
+      sql`${table.requestCount} >= 0`
+    ),
+  ]
+);
+
+export const staffInvitations = pgTable(
+  "staff_invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    role: roleEnum("role").notNull(),
+    supportPermissionGrants: text("support_permission_grants")
+      .array()
+      .default(sql`'{}'::text[]`)
+      .notNull(),
+    supportPermissionViews: text("support_permission_views")
+      .array()
+      .default(sql`'{}'::text[]`)
+      .notNull(),
+    inviterUserId: text("inviter_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    reason: text("reason").notNull(),
+    generation: integer("generation").default(1).notNull(),
+    status: staffInvitationStatusEnum("status").default("pending").notNull(),
+    expiresAt: timestamp("expires_at", tz).notNull(),
+    acceptedAt: timestamp("accepted_at", tz),
+    acceptedByUserId: text("accepted_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    revokedAt: timestamp("revoked_at", tz),
+    revokedByUserId: text("revoked_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("staff_invitations_pending_email_identity_unique_idx")
+      .on(sql`canonicalize_auth_email_identity(${table.email})`)
+      .where(sql`${table.status} = 'pending'`),
+    index("staff_invitations_expires_at_idx").on(table.expiresAt),
+    check(
+      "staff_invitations_generation_positive",
+      sql`${table.generation} > 0`
+    ),
+    check(
+      "staff_invitations_staff_role_only",
+      sql`${table.role} in ('admin', 'support')`
+    ),
+    check(
+      "staff_invitations_admin_has_no_support_permissions",
+      sql`${table.role} <> 'admin' or (
+        cardinality(${table.supportPermissionGrants}) = 0
+        and cardinality(${table.supportPermissionViews}) = 0
+      )`
+    ),
+    check(
+      "staff_invitations_permissions_allowlisted",
+      sql`${table.supportPermissionGrants} <@ ARRAY[
+        'createCourse', 'manageCourseDetails', 'manageCourseContent',
+        'manageCourseAvailability', 'manageCourseCertificate',
+        'manageEnrollmentSupport', 'manageEnrollmentAccess',
+        'reissueCertificates', 'manageCertificateIssuerProfile',
+        'executeRefund', 'manageFinancialOperations', 'manageFinancialReviews',
+        'manageOperations'
+      ]::text[] and ${table.supportPermissionViews} <@ ARRAY[
+        'viewFinancialAnalysis', 'viewFinancialOrders',
+        'viewFinancialReviews', 'viewAudit'
+      ]::text[]`
+    ),
+  ]
+);
+
+export const accountEmailChangeRequests = pgTable(
+  "account_email_change_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    currentEmail: text("current_email").notNull(),
+    newEmail: text("new_email").notNull(),
+    status: accountEmailChangeStatusEnum("status")
+      .default("pending_current")
+      .notNull(),
+    generation: integer("generation").default(1).notNull(),
+    expiresAt: timestamp("expires_at", tz).notNull(),
+    currentConfirmedAt: timestamp("current_confirmed_at", tz),
+    completedAt: timestamp("completed_at", tz),
+    cancelledAt: timestamp("cancelled_at", tz),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("account_email_change_requests_user_pending_unique_idx")
+      .on(table.userId)
+      .where(sql`${table.status} in ('pending_current', 'pending_new')`),
+    uniqueIndex("account_email_change_requests_new_email_pending_unique_idx")
+      .on(sql`canonicalize_auth_email_identity(${table.newEmail})`)
+      .where(sql`${table.status} in ('pending_current', 'pending_new')`),
+    index("account_email_change_requests_expires_at_idx").on(table.expiresAt),
+    check(
+      "account_email_change_requests_generation_positive",
+      sql`${table.generation} > 0`
+    ),
+    check(
+      "account_email_change_requests_distinct_emails",
+      sql`public.canonicalize_auth_email_identity(${table.currentEmail})
+        <> public.canonicalize_auth_email_identity(${table.newEmail})`
     ),
   ]
 );

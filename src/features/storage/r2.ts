@@ -771,6 +771,83 @@ export const deleteR2Objects = async (keys: string[]): Promise<void> => {
   }
 };
 
+const USER_AVATAR_PREFIX = "user-avatars";
+const SAFE_AVATAR_OWNER_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;
+const SAFE_AVATAR_FILE_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.webp$/i;
+
+const assertUserAvatarObjectKey = ({
+  key,
+  userId,
+}: {
+  key: string;
+  userId: string;
+}): void => {
+  if (
+    !(
+      SAFE_AVATAR_OWNER_PATTERN.test(userId) &&
+      key.startsWith(`${USER_AVATAR_PREFIX}/${userId}/`) &&
+      SAFE_AVATAR_FILE_PATTERN.test(key.split("/").at(-1) ?? "")
+    )
+  ) {
+    throw new Error("Avatar privado inválido.");
+  }
+};
+
+export const uploadPrivateUserAvatarObject = async ({
+  body,
+  key,
+  userId,
+}: {
+  body: Buffer;
+  key: string;
+  userId: string;
+}): Promise<void> => {
+  assertUserAvatarObjectKey({ key, userId });
+  const config = getR2Config();
+  await getR2Client(config).send(
+    new PutObjectCommand({
+      Body: body,
+      Bucket: config.bucketName,
+      CacheControl: "private, no-store",
+      ContentType: "image/webp",
+      Key: config.namespace.toPhysicalKey(key),
+    })
+  );
+};
+
+export const readPrivateUserAvatarObject = async ({
+  key,
+  userId,
+}: {
+  key: string;
+  userId: string;
+}): Promise<Buffer | null> => {
+  assertUserAvatarObjectKey({ key, userId });
+  const config = getR2Config();
+  const object = await getR2Client(config).send(
+    new GetObjectCommand({
+      Bucket: config.bucketName,
+      Key: config.namespace.toPhysicalKey(key),
+    })
+  );
+  if (!object.Body) {
+    return null;
+  }
+  return Buffer.from(await object.Body.transformToByteArray());
+};
+
+export const deletePrivateUserAvatarObject = async ({
+  key,
+  userId,
+}: {
+  key: string;
+  userId: string;
+}): Promise<void> => {
+  assertUserAvatarObjectKey({ key, userId });
+  await deleteR2Objects([key]);
+};
+
 export const deletePublicR2Objects = async (keys: string[]): Promise<void> => {
   const uniqueKeys = Array.from(new Set(keys.filter(Boolean)));
 

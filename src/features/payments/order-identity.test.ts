@@ -53,7 +53,7 @@ describe("local order identity", () => {
 
     await expect(
       resolveLocalOrderIdentity({ client: { query }, order: publicOrder() })
-    ).resolves.toEqual({ activationRequired: false, userId: "student-1" });
+    ).resolves.toEqual({ userId: "student-1" });
 
     expect(query).toHaveBeenNthCalledWith(
       1,
@@ -92,7 +92,7 @@ describe("local order identity", () => {
           orderId: "order-new",
         }),
       })
-    ).resolves.toEqual({ activationRequired: true, userId: "student-new" });
+    ).resolves.toEqual({ userId: "student-new" });
 
     expect(query).toHaveBeenNthCalledWith(
       2,
@@ -183,7 +183,7 @@ describe("local order identity", () => {
 
     await expect(
       resolveLocalOrderIdentity({ client: { query }, order: publicOrder() })
-    ).resolves.toEqual({ activationRequired: true, userId: "student-1" });
+    ).resolves.toEqual({ userId: "student-1" });
     expect(query.mock.calls[0]?.[1]).toEqual([
       "student@example.test",
       COURSE_ID,
@@ -223,7 +223,7 @@ describe("local order identity", () => {
           userId: "student-1",
         }),
       })
-    ).resolves.toEqual({ activationRequired: false, userId: "student-1" });
+    ).resolves.toEqual({ userId: "student-1" });
 
     expect(query).toHaveBeenNthCalledWith(
       1,
@@ -269,7 +269,7 @@ describe("local order identity", () => {
 
     await expect(
       resolveLocalOrderIdentity({ client: { query }, order: publicOrder() })
-    ).resolves.toEqual({ activationRequired: true, userId: "student-1" });
+    ).resolves.toEqual({ userId: "student-1" });
   });
 
   it("rejects a divergent CAS result", async () => {
@@ -307,18 +307,16 @@ describe("local order identity", () => {
       .fn()
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [ELIGIBLE_STUDENT] })
-      .mockResolvedValueOnce({ rows: [{ user_id: "student-1" }] })
-      .mockResolvedValueOnce({ rows: [{ id: "google-account" }] });
+      .mockResolvedValueOnce({ rows: [{ user_id: "student-1" }] });
 
     await expect(
       resolveLocalOrderIdentity({
         client: { query },
-        googleProviderEnabled: true,
         order: publicOrder({
           customerEmail: "First.Last+course@googlemail.com",
         }),
       })
-    ).resolves.toEqual({ activationRequired: false, userId: "student-1" });
+    ).resolves.toEqual({ userId: "student-1" });
 
     expect(query).toHaveBeenNthCalledWith(
       1,
@@ -330,9 +328,8 @@ describe("local order identity", () => {
       expect.stringMatching(PROFILE_JOIN_PATTERN),
       ["firstlast@gmail.com", COURSE_ID]
     );
-    expect(query.mock.calls.at(-2)?.[0]).toMatch(ORDER_LINK_CAS_PATTERN);
-    expect(query.mock.calls.at(-1)?.[0]).toContain("provider_id = 'google'");
-    expect(query.mock.calls.at(-1)?.[0]).toContain("password is not null");
+    expect(query.mock.calls.at(-1)?.[0]).toMatch(ORDER_LINK_CAS_PATTERN);
+    expect(query.mock.calls.join("\n")).not.toContain("from accounts");
   });
 
   it("requires identity review when original and canonical emails point to different users", async () => {
@@ -357,35 +354,16 @@ describe("local order identity", () => {
     expect(query.mock.calls.join("\n")).not.toMatch(USER_INSERT_PATTERN);
   });
 
-  it("does not require password activation when an enabled Google identity is linked", async () => {
-    const query = vi
-      .fn()
-      .mockResolvedValueOnce({ rows: [ELIGIBLE_STUDENT] })
-      .mockResolvedValueOnce({ rows: [{ id: "google-account" }] });
+  it("resolves local order identity without querying available sign-in methods", async () => {
+    const query = vi.fn().mockResolvedValueOnce({ rows: [ELIGIBLE_STUDENT] });
 
     await expect(
       resolveLocalOrderIdentity({
         client: { query },
-        googleProviderEnabled: true,
         order: publicOrder({ userId: "student-1" }),
       })
-    ).resolves.toEqual({ activationRequired: false, userId: "student-1" });
-    expect(query.mock.calls[1]?.[1]).toEqual(["student-1", true]);
-  });
-
-  it("still requires activation when the linked Google provider is not configured", async () => {
-    const query = vi
-      .fn()
-      .mockResolvedValueOnce({ rows: [ELIGIBLE_STUDENT] })
-      .mockResolvedValueOnce({ rows: [] });
-
-    await expect(
-      resolveLocalOrderIdentity({
-        client: { query },
-        googleProviderEnabled: false,
-        order: publicOrder({ userId: "student-1" }),
-      })
-    ).resolves.toEqual({ activationRequired: true, userId: "student-1" });
-    expect(query.mock.calls[1]?.[1]).toEqual(["student-1", false]);
+    ).resolves.toEqual({ userId: "student-1" });
+    expect(query).toHaveBeenCalledOnce();
+    expect(query.mock.calls.join("\n")).not.toContain("from accounts");
   });
 });

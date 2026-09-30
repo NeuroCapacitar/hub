@@ -155,7 +155,7 @@ describe("SignInPage", () => {
     ).rejects.toThrow("redirect:/admin");
   });
 
-  it("does not redirect a blocked Student through returnTo", async () => {
+  it("shows only support and sign-out actions for a blocked Student", async () => {
     dependencies.getCurrentSession.mockResolvedValue({
       platformBlockedAt: new Date("2026-09-01T12:00:00.000Z"),
       role: "student",
@@ -167,7 +167,11 @@ describe("SignInPage", () => {
       })
     );
 
-    expect(markup).toContain('data-return-to="/comprar/curso-gratis"');
+    expect(markup).not.toContain("/app/configuracoes");
+    expect(markup).toContain("Acesso à plataforma suspenso");
+    expect(markup).toContain("Falar com o suporte");
+    expect(markup).toContain("mailto:support@example.test");
+    expect(markup).toContain("Sair da conta");
     expect(dependencies.redirect).not.toHaveBeenCalled();
   });
 });

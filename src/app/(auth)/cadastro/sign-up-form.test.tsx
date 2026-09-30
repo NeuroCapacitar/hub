@@ -8,7 +8,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
-  assign: vi.fn(),
   fetch: vi.fn(),
   signInSocial: vi.fn(),
 }));
@@ -47,25 +46,11 @@ const getForm = (container: HTMLDivElement): HTMLFormElement => {
 const fillCredentials = (container: HTMLDivElement): void => {
   const name = container.querySelector<HTMLInputElement>("#name");
   const email = container.querySelector<HTMLInputElement>("#email");
-  const password = container.querySelector<HTMLInputElement>("#password");
-  const confirmation = container.querySelector<HTMLInputElement>(
-    "#passwordConfirmation"
-  );
-  if (!(name && email && password && confirmation)) {
+  if (!(name && email)) {
     throw new Error("Expected the sign-up fields to be rendered.");
   }
   name.value = "Student Example";
   email.value = "student@example.test";
-  password.value = "Password-123!";
-  confirmation.value = "Password-123!";
-};
-
-const stubLocationAssign = (): void => {
-  const testWindow = Object.create(window) as Window;
-  Object.defineProperty(testWindow, "location", {
-    value: { assign: dependencies.assign },
-  });
-  vi.stubGlobal("window", testWindow);
 };
 
 describe("SignUpForm", () => {
@@ -82,10 +67,7 @@ describe("SignUpForm", () => {
     document.body.append(container);
     root = createRoot(container);
     dependencies.fetch.mockResolvedValueOnce(
-      jsonResponse({ user: { id: "student-1" } })
-    );
-    dependencies.fetch.mockResolvedValueOnce(
-      jsonResponse({ redirectTo: COURSE_RETURN_TO })
+      jsonResponse({ status: "accepted" }, 202)
     );
     vi.stubGlobal("fetch", dependencies.fetch);
   });
@@ -103,11 +85,9 @@ describe("SignUpForm", () => {
     }
   });
 
-  it("preserves the validated course return path in signup, redirect, and login link", async () => {
+  it("requests email confirmation with a validated course return path", async () => {
     act(() => root.render(<SignUpForm returnTo={COURSE_RETURN_TO} />));
     fillCredentials(container);
-    stubLocationAssign();
-
     expect(
       container.querySelector(
         'a[href="/entrar?returnTo=%2Fcomprar%2Fcurso-gratis"]'
@@ -120,19 +100,26 @@ describe("SignUpForm", () => {
       await Promise.resolve();
     });
 
-    expect(dependencies.fetch).toHaveBeenNthCalledWith(
-      2,
-      "/api/auth/redirect?returnTo=%2Fcomprar%2Fcurso-gratis",
-      expect.objectContaining({ credentials: "same-origin" })
+    expect(dependencies.fetch).toHaveBeenCalledOnce();
+    expect(dependencies.fetch).toHaveBeenCalledWith(
+      "/api/account/registrations",
+      expect.objectContaining({
+        body: JSON.stringify({
+          email: "student@example.test",
+          name: "Student Example",
+          returnTo: COURSE_RETURN_TO,
+        }),
+        credentials: "same-origin",
+        method: "POST",
+      })
     );
-    expect(dependencies.assign).toHaveBeenCalledWith(COURSE_RETURN_TO);
+    expect(container.textContent).toContain("Confira seu e-mail");
+    expect(container.querySelector("#password")).toBeNull();
   });
 
   it("does not preserve an invalid return prop", async () => {
     act(() => root.render(<SignUpForm returnTo="//other.example/escape" />));
     fillCredentials(container);
-    stubLocationAssign();
-
     expect(container.querySelector('a[href="/entrar"]')).not.toBeNull();
 
     await act(async () => {
@@ -141,12 +128,15 @@ describe("SignUpForm", () => {
       await Promise.resolve();
     });
 
-    expect(dependencies.fetch).toHaveBeenNthCalledWith(
-      2,
-      "/api/auth/redirect",
-      expect.objectContaining({ credentials: "same-origin" })
+    expect(dependencies.fetch).toHaveBeenCalledWith(
+      "/api/account/registrations",
+      expect.objectContaining({
+        body: JSON.stringify({
+          email: "student@example.test",
+          name: "Student Example",
+        }),
+      })
     );
-    expect(dependencies.assign).toHaveBeenCalledWith(COURSE_RETURN_TO);
   });
 
   it("starts an explicit Google signup only from the signup form", async () => {

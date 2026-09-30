@@ -86,12 +86,19 @@ terminaliza qualquer evento não concluído com código seguro.
 - payload externo é tolerante a campos adicionais.
 
 **Concorrência:** o processor correlaciona identificadores exatos, bloqueia o Pedido antes
-de ler seu snapshot e associa o Webhook por CAS. Para Conta com hash de credencial local
-utilizável, ou com Google vinculado e provider Google configurado no ambiente atual, o
-acesso liberado grava `email.access-released`. Sem método de entrada utilizável, grava
-`auth.account-activation`, que envia a recuperação de senha depois do pagamento. O worker
-revalida credencial e vínculo Google/configuração antes de enviar o reset. Ambas as
-intenções entram na outbox antes do commit e usam chave idempotente por Pedido.
+de ler seu snapshot e associa o Webhook por CAS. Depois da confirmação financeira, o
+Hub cria uma única intenção `email.purchase-confirmed` por Pedido na mesma transação da
+Concessão e Matrícula. `purchase_confirmation_intents` conserva o marcador idempotente
+além da retenção da outbox; Pedidos pagos com identidade resolvida antes da migration são
+registrados como históricos, evitando que uma conciliação posterior dispare novamente um
+e-mail antigo. Pedidos que estavam em Revisão permanecem elegíveis após a resolução.
+Para Conta não verificada, a transação também cria desafio `purchase_verification`; o
+delivery reconsulta Pedido, Conta e Curso e envia **Compra confirmada** com CTA de
+confirmação. Para Conta já verificada, a mesma mensagem aponta à rota de compra do Curso,
+que preserva o retorno ao acesso após login. A confirmação comprova somente posse da
+caixa: não cria sessão, senha, nova Concessão ou Matrícula. `auth.account-activation` e
+`email.access-released` continuam reconhecidos apenas para mensagens legadas; não são
+enfileirados para novos Pedidos.
 
 ### REG-COM-003 Estado terminal não é sobrescrito silenciosamente
 
@@ -362,7 +369,7 @@ Ver [ADR-0009](../adr/0009-course-availability-and-sale-interest.md).
 
 ## Evidências
 
-- schema: `orders`, `webhookEvents`, `paymentReviews`, `refundRequests`, `enrollmentGrants`, `enrollments`, `enrollmentExpirationAdjustments`, `enrollmentEvents`;
+- schema: `orders`, `purchaseConfirmationIntents`, `webhookEvents`, `paymentReviews`, `refundRequests`, `enrollmentGrants`, `enrollments`, `enrollmentExpirationAdjustments`, `enrollmentEvents`;
 - implementação: `src/features/payments`, `src/features/enrollments/server.ts`;
 - testes: `src/features/payments/*.test.ts`, `src/features/enrollments/*.test.ts`,
   `src/features/admin/enrollment-*.test.ts` e `tests/e2e/critical-journeys.spec.ts`;
@@ -375,10 +382,11 @@ Ver [ADR-0009](../adr/0009-course-availability-and-sale-interest.md).
 - [ADR-0005](../adr/0005-financial-precedence-and-manual-review.md), aceito e implementado
   pela decisão pura e pelo processor transacional Asaas.
 - `db:seed:student` cria Concessão `manual` e recompõe a Matrícula pela projeção oficial.
-- A ativação durável guarda somente `userId` e `orderId`; o processor a enfileira no
-  mesmo commit do acesso, e o delivery resolve a Conta e gera o token apenas ao chamar
-  Better Auth. Veja o
-  [runbook de outbox](../operations/outbox-and-transactional-effects.md).
+- A confirmação de compra guarda somente `orderId` e `userId` na outbox e usa o
+  ledger `purchase_confirmation_intents` como dedupe permanente por Pedido. Desafio
+  de e-mail HMAC é persistido sem token/URL e gerado no delivery; nenhum e-mail de
+  compra cria senha ou sessão. `auth.account-activation` permanece apenas para v1
+  histórico. Veja o [runbook de outbox](../operations/outbox-and-transactional-effects.md).
 - Adapter, schema, checkout, inbox, processor, worker agendado, reembolso e conciliação
   Asaas existem em código. As migrations e os fluxos PIX, cartão, cancelamento,
   expiração, reembolso, conciliação e retry após indisponibilidade passaram em

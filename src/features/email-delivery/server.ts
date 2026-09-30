@@ -4,12 +4,16 @@ import type { HostedEmailTemplateName } from "@/features/email/templates-contrac
 
 export const EMAIL_DELIVERY_TOPIC_TAGS = {
   "auth.account-activation": "auth_account_activation",
+  "auth.email-change-confirmation": "auth_email_change_confirmation",
   "auth.email-verification": "auth_email_verification",
   "auth.password-reset": "auth_password_reset",
   "email.access-expiry-warning": "email_access_expiry_warning",
   "email.access-released": "email_access_released",
   "email.certificate-issued": "email_certificate_issued",
   "email.course-sales-opened": "email_course_sales_opened",
+  "email.purchase-confirmed": "email_purchase_confirmed",
+  "email.email-change-notice": "email_email_change_notice",
+  "auth.staff-invitation": "auth_staff_invitation",
   "email.support-request": "email_support_request",
 } as const;
 

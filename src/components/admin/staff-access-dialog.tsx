@@ -330,8 +330,23 @@ function getInitialOpenGroups(
 
 const getRoleWarning = (
   memberRole: StaffRole,
-  role: StaffRole | null
+  role: StaffRole | null,
+  invitationMode: boolean
 ): React.JSX.Element | null => {
+  if (invitationMode && role !== null) {
+    return (
+      <p
+        aria-live="polite"
+        className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+        role="status"
+      >
+        Se este e-mail já pertencer a um Aluno, aceitar o convite trocará o
+        papel. A área de aprendizagem ficará indisponível, mas matrículas,
+        pedidos, progresso e certificados serão preservados.
+      </p>
+    );
+  }
+
   if (memberRole === "student" && role !== null) {
     return (
       <p
@@ -378,6 +393,7 @@ const getRoleChangeConfirmation = (
 
 export function StaffAccessEditor({
   grants,
+  invitationMode = false,
   memberRole,
   onReasonChange,
   onRoleChange,
@@ -389,6 +405,7 @@ export function StaffAccessEditor({
   views,
 }: {
   grants: readonly SupportPermission[];
+  invitationMode?: boolean;
   memberRole: StaffRole;
   onReasonChange?: ((value: string) => void) | undefined;
   onRoleChange: (value: string) => void;
@@ -400,7 +417,7 @@ export function StaffAccessEditor({
   views: readonly SupportViewPermission[];
 }): React.JSX.Element {
   const isStudentCandidate = memberRole === "student";
-  const roleWarning = getRoleWarning(memberRole, role);
+  const roleWarning = getRoleWarning(memberRole, role, invitationMode);
 
   return (
     <div className="flex flex-col gap-5">
@@ -412,8 +429,10 @@ export function StaffAccessEditor({
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              {STAFF_ROLES.filter(
-                (option) => !(isStudentCandidate && option === "student")
+              {STAFF_ROLES.filter((option) =>
+                invitationMode
+                  ? option !== "student"
+                  : !(isStudentCandidate && option === "student")
               ).map((option) => (
                 <SelectItem key={option} value={option}>
                   {STAFF_ROLE_LABELS[option]}
@@ -468,7 +487,9 @@ export function StaffAccessEditor({
         </FieldLegend>
         <FieldDescription>Fica disponível na auditoria.</FieldDescription>
         <Field className="gap-2">
-          <FieldLabel htmlFor={reasonId}>Motivo da alteração</FieldLabel>
+          <FieldLabel htmlFor={reasonId}>
+            {invitationMode ? "Motivo do convite" : "Motivo da alteração"}
+          </FieldLabel>
           <Textarea
             id={reasonId}
             maxLength={500}

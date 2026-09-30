@@ -1,3 +1,4 @@
+import { requestAccountEmailVerificationByAddress } from "@/features/account/email-challenges";
 import { getAuth } from "@/lib/auth";
 import { isBlockedAuthEndpoint } from "@/lib/auth-policy";
 import { getServerEnv } from "@/lib/env";
@@ -60,14 +61,16 @@ const handleVerificationEmailRequest = async (
   correlationId: string
 ): Promise<Response> => {
   try {
-    const response = await getAuth().handler(request);
-    if (await isResponseFailure(response)) {
-      logOperationalEvent({
-        correlationId,
-        errorCode: "verification_email_request_failed",
-        httpStatus: response.status,
-        operation: "auth.email_verification_request",
-        outcome: "failure",
+    const body: unknown = await request.clone().json();
+    if (
+      body &&
+      typeof body === "object" &&
+      !Array.isArray(body) &&
+      typeof Reflect.get(body, "email") === "string"
+    ) {
+      await requestAccountEmailVerificationByAddress({
+        email: Reflect.get(body, "email"),
+        requestHeaders: request.headers,
       });
     }
   } catch {
@@ -76,6 +79,7 @@ const handleVerificationEmailRequest = async (
       errorCode: "verification_email_request_failed",
       operation: "auth.email_verification_request",
       outcome: "failure",
+      provider: "database",
     });
   }
 
@@ -127,8 +131,22 @@ const logAuthRequestOutcome = async ({
 };
 
 export const GET = async (request: Request): Promise<Response> => {
-  const response = await getAuth().handler(request);
   const requestUrl = new URL(request.url);
+  if (requestUrl.pathname.endsWith("/api/auth/verify-email")) {
+    return new Response(null, {
+      headers: {
+        "cache-control": "no-store",
+        location: new URL(
+          "/confirmar-email?legacy=1",
+          requestUrl.origin
+        ).toString(),
+        "referrer-policy": "no-referrer",
+      },
+      status: 303,
+    });
+  }
+
+  const response = await getAuth().handler(request);
 
   if (requestUrl.pathname.endsWith("/api/auth/callback/google")) {
     let providerReturnedError = false;
@@ -173,6 +191,20 @@ export const POST = async (
       ? await getSocialAuthRequest(request)
       : { provider: null, requestSignUp: false };
 
+  if (authEndpoint === "sign-up/email") {
+    logOperationalEvent({
+      correlationId,
+      errorCode: "native_email_signup_blocked",
+      httpStatus: 404,
+      operation: "auth.sign_up",
+      outcome: "failure",
+    });
+    return Response.json(
+      { error: "email_confirmation_required" },
+      { status: 404 }
+    );
+  }
+
   if (
     isBlockedAuthEndpoint({
       allowPublicSignUp: env.AUTH_PUBLIC_SIGNUP_ENABLED,
@@ -189,6 +221,13 @@ export const POST = async (
       outcome: "failure",
     });
     return Response.json({ error: "public_sign_up_disabled" }, { status: 404 });
+  }
+
+  if (authEndpoint === "change-email") {
+    return Response.json(
+      { error: "email_change_flow_unavailable" },
+      { headers: { "cache-control": "no-store" }, status: 404 }
+    );
   }
 
   if (authEndpoint === "send-verification-email") {

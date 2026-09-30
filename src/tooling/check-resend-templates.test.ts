@@ -90,6 +90,32 @@ const requiredKeysByAlias: Record<string, readonly string[]> = {
     "ACTION_URL",
   ],
   "course-sales-opened": ["USER_NAME", "COURSE_TITLE", "ACTION_URL"],
+  "email-change-confirmation": [
+    "USER_NAME",
+    "CURRENT_EMAIL",
+    "NEW_EMAIL",
+    "STEP_LABEL",
+    "ACTION_URL",
+  ],
+  "email-change-notice": [
+    "USER_NAME",
+    "CURRENT_EMAIL",
+    "NEW_EMAIL",
+    "CHANGE_DATE",
+    "SUPPORT_EMAIL",
+  ],
+  "purchase-confirmed": [
+    "USER_NAME",
+    "COURSE_TITLE",
+    "ACTION_LABEL",
+    "ACTION_URL",
+  ],
+  "staff-invitation": [
+    "INVITER_NAME",
+    "ROLE_LABEL",
+    "EXPIRES_AT",
+    "ACTION_URL",
+  ],
   "support-request": [
     "STUDENT_NAME",
     "STUDENT_EMAIL",
@@ -448,7 +474,7 @@ describe("main", () => {
     expect(resendMock.get).not.toHaveBeenCalled();
   });
 
-  it("returns exit code 0 for six valid templates", async () => {
+  it("returns exit code 0 for all valid catalog templates", async () => {
     resendMock.get.mockImplementation(async (alias: string) => ({
       data: remoteForAlias(alias),
       error: null,

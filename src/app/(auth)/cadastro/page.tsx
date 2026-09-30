@@ -89,8 +89,8 @@ export default async function SignUpPage({
           </CardTitle>
           <CardDescription>
             {safeReturnTo?.startsWith("/comprar/")
-              ? "Depois de criar sua conta, você voltará ao Curso para confirmar sua inscrição gratuita."
-              : "A conta dá acesso à plataforma. Os cursos são liberados separadamente."}
+              ? "Confirme seu e-mail para voltar ao Curso e concluir sua inscrição gratuita."
+              : "Confirme seu e-mail para criar a conta. Você pode definir uma senha depois, se quiser."}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-0">

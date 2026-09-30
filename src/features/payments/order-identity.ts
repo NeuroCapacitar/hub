@@ -16,7 +16,6 @@ export interface LockedOrderIdentity {
 }
 
 export interface LocalOrderIdentityResult {
-  activationRequired: boolean;
   userId: string;
 }
 
@@ -126,29 +125,6 @@ const requireEligibleStudent = (row: unknown): string => {
   return userId;
 };
 
-const hasUsableAuthenticationMethod = async ({
-  client,
-  googleProviderEnabled,
-  userId,
-}: {
-  client: OrderIdentityQueryClient;
-  googleProviderEnabled: boolean;
-  userId: string;
-}): Promise<boolean> => {
-  const result = await client.query(
-    `select id
-     from accounts
-     where user_id = $1
-       and (
-         (provider_id = 'credential' and password is not null)
-         or (provider_id = 'google' and $2::boolean = true)
-       )
-     limit 1`,
-    [userId, googleProviderEnabled]
-  );
-  return getRowString(result.rows[0], "id") !== null;
-};
-
 const findExistingBuyerByEmail = async ({
   client,
   courseId,
@@ -219,11 +195,9 @@ const linkPendingOrder = async ({
 
 export const resolveLocalOrderIdentity = async ({
   client,
-  googleProviderEnabled = false,
   order,
 }: {
   client: OrderIdentityQueryClient;
-  googleProviderEnabled?: boolean;
   order: LockedOrderIdentity;
 }): Promise<LocalOrderIdentityResult> => {
   if (order.userId) {
@@ -232,15 +206,7 @@ export const resolveLocalOrderIdentity = async ({
       courseId: order.courseId,
       userId: order.userId,
     });
-    const userId = requireEligibleStudent(row);
-    return {
-      activationRequired: !(await hasUsableAuthenticationMethod({
-        client,
-        googleProviderEnabled,
-        userId,
-      })),
-      userId,
-    };
+    return { userId: requireEligibleStudent(row) };
   }
 
   if (!(order.customerEmail?.trim() && order.customerName?.trim())) {
@@ -282,12 +248,5 @@ export const resolveLocalOrderIdentity = async ({
 
   const userId = requireEligibleStudent(userRow);
   await linkPendingOrder({ client, orderId: order.orderId, userId });
-  return {
-    activationRequired: !(await hasUsableAuthenticationMethod({
-      client,
-      googleProviderEnabled,
-      userId,
-    })),
-    userId,
-  };
+  return { userId };
 };

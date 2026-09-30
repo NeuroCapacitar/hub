@@ -21,20 +21,6 @@ export interface StaffMemberSummary {
   userId: string;
 }
 
-export interface StaffPromotionCandidate {
-  email: string;
-  name: string;
-  userId: string;
-}
-
-export interface StaffPromotionCandidatesResult {
-  candidates: StaffPromotionCandidate[];
-  hasMore: boolean;
-  search: string;
-}
-
-const STAFF_PROMOTION_CANDIDATE_LIMIT = 10;
-
 export const getStaffMembers = async (): Promise<StaffMemberSummary[]> => {
   await requirePermission("manageStaffAccess");
 
@@ -79,42 +65,4 @@ export const getStaffMembers = async (): Promise<StaffMemberSummary[]> => {
     ),
     userId: row.user_id,
   }));
-};
-
-export const getStaffPromotionCandidates = async (
-  value: string
-): Promise<StaffPromotionCandidatesResult> => {
-  await requirePermission("manageStaffAccess");
-
-  const search = value.trim().slice(0, 200);
-  if (!search) {
-    return { candidates: [], hasMore: false, search };
-  }
-
-  const { rows } = await getPool().query<{
-    email: string;
-    name: string;
-    user_id: string;
-  }>(
-    `
-      select u.id as user_id, u.name, u.email
-      from users u
-      join profiles p on p.user_id = u.id
-      where p.role = 'student'
-        and (u.name ilike $1 or u.email ilike $1)
-      order by lower(u.name), u.id
-      limit $2
-    `,
-    [`%${search}%`, STAFF_PROMOTION_CANDIDATE_LIMIT + 1]
-  );
-
-  return {
-    candidates: rows.slice(0, STAFF_PROMOTION_CANDIDATE_LIMIT).map((row) => ({
-      email: row.email,
-      name: row.name,
-      userId: row.user_id,
-    })),
-    hasMore: rows.length > STAFF_PROMOTION_CANDIDATE_LIMIT,
-    search,
-  };
 };

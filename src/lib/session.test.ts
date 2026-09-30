@@ -16,15 +16,28 @@ vi.mock("next/navigation", () => ({ redirect: dependencies.redirect }));
 vi.mock("@/db", () => ({ getDb: dependencies.getDb }));
 vi.mock("@/lib/auth", () => ({ getAuth: dependencies.getAuth }));
 
-import { getCurrentSession, recordLastAccess, requireRole } from "./session";
+import {
+  getCurrentSession,
+  recordLastAccess,
+  requireAccountSession,
+  requireRole,
+  requireSession,
+} from "./session";
 
 const setDatabaseIdentity = (
   role: "admin" | "student" | "support",
-  userImage: string | null = null
+  userImage: string | null = null,
+  platformBlockedAt: Date | null = null,
+  emailVerified = true,
+  avatarMode: "custom" | "google" | "initials" = "google",
+  avatarKey: string | null = null
 ) => {
   const limit = vi.fn().mockResolvedValue([
     {
-      platformBlockedAt: null,
+      avatarKey,
+      avatarMode,
+      emailVerified,
+      platformBlockedAt,
       platformBlockedReason: null,
       role,
       userImage,
@@ -50,6 +63,7 @@ describe("requireRole", () => {
     dependencies.getAuth.mockReturnValue({
       api: {
         getSession: vi.fn().mockResolvedValue({
+          session: { createdAt: new Date() },
           user: {
             email: "staff@example.com",
             id: "staff-user",
@@ -91,6 +105,7 @@ describe("getCurrentSession", () => {
     dependencies.getAuth.mockReturnValue({
       api: {
         getSession: vi.fn().mockResolvedValue({
+          session: { createdAt: new Date() },
           user: {
             email: "student@example.com",
             id: "student-user",
@@ -107,6 +122,49 @@ describe("getCurrentSession", () => {
     await expect(getCurrentSession()).resolves.toMatchObject({
       user: { image: "https://images.example.test/student.jpg" },
     });
+  });
+
+  it("uses a Google image automatically when no custom photo is selected", async () => {
+    setDatabaseIdentity(
+      "student",
+      "https://images.example.test/student.jpg",
+      null,
+      true,
+      "initials"
+    );
+
+    await expect(getCurrentSession()).resolves.toMatchObject({
+      user: { image: "https://images.example.test/student.jpg" },
+    });
+  });
+
+  it("prefers the private custom avatar over the Google image", async () => {
+    setDatabaseIdentity(
+      "student",
+      "https://images.example.test/student.jpg",
+      null,
+      true,
+      "custom",
+      "user-avatars/student-user/avatar.webp"
+    );
+
+    await expect(getCurrentSession()).resolves.toMatchObject({
+      user: { image: "/api/account/avatar" },
+    });
+  });
+
+  it("redirects a blocked Student away from account settings", async () => {
+    setDatabaseIdentity("student", null, new Date());
+
+    await expect(requireAccountSession()).rejects.toThrow("redirect:/entrar");
+    expect(dependencies.redirect).toHaveBeenCalledWith("/entrar");
+  });
+
+  it("redirects a blocked Student from regular internal routes too", async () => {
+    setDatabaseIdentity("student", null, new Date());
+
+    await expect(requireSession()).rejects.toThrow("redirect:/entrar");
+    expect(dependencies.redirect).toHaveBeenCalledWith("/entrar");
   });
 });
 

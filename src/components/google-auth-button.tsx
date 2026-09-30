@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 
-const GoogleMark = (): React.JSX.Element => (
+export const GoogleMark = (): React.JSX.Element => (
   <svg
     aria-hidden="true"
     className="size-[1.125rem]"
@@ -33,10 +33,12 @@ const GoogleMark = (): React.JSX.Element => (
 
 export function GoogleAuthButton({
   callbackUrl,
+  enabled = true,
   label,
   requestSignUp = false,
 }: {
   callbackUrl: string;
+  enabled?: boolean;
   label: string;
   requestSignUp?: boolean;
 }): React.JSX.Element {
@@ -69,7 +71,9 @@ export function GoogleAuthButton({
   return (
     <div className="mb-5">
       <Button
+        aria-describedby={enabled ? undefined : "google-auth-unavailable"}
         className="h-12 w-full gap-3"
+        disabled={!enabled}
         loading={isPending}
         onClick={handleClick}
         type="button"
@@ -78,6 +82,13 @@ export function GoogleAuthButton({
         <GoogleMark />
         {label}
       </Button>
+      {enabled ? null : (
+        <p className="mt-2 text-center text-muted-foreground text-sm">
+          <span id="google-auth-unavailable">
+            Google indisponível no momento.
+          </span>
+        </p>
+      )}
       {error ? (
         <Alert className="mt-4" variant="destructive">
           <AlertDescription>
