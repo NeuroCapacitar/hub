@@ -28,6 +28,7 @@ afterEach(async () => {
     root = null;
   }
   document.body.innerHTML = "";
+  window.history.replaceState(null, "", "/");
   vi.resetAllMocks();
 });
 
@@ -64,8 +65,64 @@ describe("AccountSecurityPanel", () => {
     expect(dependencies.linkSocial).toHaveBeenCalledWith({
       callbackURL:
         "http://localhost:3000/admin/configuracoes?tab=perfil#acesso-conta",
+      errorCallbackURL:
+        "http://localhost:3000/admin/configuracoes?tab=perfil&account_link=google#acesso-conta",
       provider: "google",
     });
+  });
+
+  it("shows a contextual message when Google returns a different email", () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/admin/configuracoes?tab=perfil&account_link=google&error=email_doesn%27t_match"
+    );
+    const host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+
+    act(() => {
+      root?.render(
+        <AccountSecurityPanel
+          accountSettingsPath="/admin/configuracoes?tab=perfil#acesso-conta"
+          emailVerified
+          googleOAuthEnabled
+          hasGoogleAccount={false}
+        />
+      );
+    });
+
+    expect(host.textContent).toContain(
+      "Use no Google o mesmo endereço de e-mail desta conta."
+    );
+    expect(window.location.search).toBe("?tab=perfil");
+  });
+
+  it("explains that no account was linked when the Google flow is cancelled", () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/admin/configuracoes?tab=perfil&account_link=google&error=access_denied"
+    );
+    const host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+
+    act(() => {
+      root?.render(
+        <AccountSecurityPanel
+          accountSettingsPath="/admin/configuracoes?tab=perfil#acesso-conta"
+          emailVerified
+          googleOAuthEnabled
+          hasGoogleAccount={false}
+        />
+      );
+    });
+
+    expect(host.textContent).toContain(
+      "Conexão cancelada. Nenhuma conta foi vinculada."
+    );
+    expect(window.location.search).toBe("?tab=perfil");
   });
 
   it("keeps Google linking disabled until email verification", () => {

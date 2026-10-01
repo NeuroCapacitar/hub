@@ -111,7 +111,25 @@ describe("Asaas reconciliation", () => {
           return Promise.resolve({ rows: [] });
         }
         if (text.includes("from users") && text.includes("email_verified")) {
-          return Promise.resolve({ rows: [{ email_verified: true }] });
+          return Promise.resolve({
+            rows: [
+              {
+                email: "student@example.test",
+                email_verified: true,
+                name: "Student",
+              },
+            ],
+          });
+        }
+        if (text.includes("set customer_email = coalesce")) {
+          return Promise.resolve({
+            rows: [
+              {
+                customer_email: "student@example.test",
+                customer_name: "Student",
+              },
+            ],
+          });
         }
         if (text.includes("insert into purchase_confirmation_intents")) {
           return Promise.resolve({ rows: [{ order_id: "order-1" }] });
@@ -182,7 +200,25 @@ describe("Asaas reconciliation", () => {
           return Promise.resolve({ rows: [] });
         }
         if (text.includes("from users") && text.includes("email_verified")) {
-          return Promise.resolve({ rows: [{ email_verified: true }] });
+          return Promise.resolve({
+            rows: [
+              {
+                email: "student@example.test",
+                email_verified: true,
+                name: "Student",
+              },
+            ],
+          });
+        }
+        if (text.includes("set customer_email = coalesce")) {
+          return Promise.resolve({
+            rows: [
+              {
+                customer_email: "student@example.test",
+                customer_name: "Student",
+              },
+            ],
+          });
         }
         if (text.includes("insert into purchase_confirmation_intents")) {
           return Promise.resolve({ rows: [{ order_id: "order-1" }] });
@@ -326,7 +362,25 @@ describe("Asaas reconciliation", () => {
           return Promise.resolve({ rows: [] });
         }
         if (text.includes("from users") && text.includes("email_verified")) {
-          return Promise.resolve({ rows: [{ email_verified: false }] });
+          return Promise.resolve({
+            rows: [
+              {
+                email: "buyer@example.test",
+                email_verified: false,
+                name: "Buyer",
+              },
+            ],
+          });
+        }
+        if (text.includes("set customer_email = coalesce")) {
+          return Promise.resolve({
+            rows: [
+              {
+                customer_email: "buyer@example.test",
+                customer_name: "Buyer",
+              },
+            ],
+          });
         }
         if (text.includes("insert into purchase_confirmation_intents")) {
           return Promise.resolve({ rows: [{ order_id: "order-1" }] });

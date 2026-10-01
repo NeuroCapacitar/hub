@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   confirmRefundPasswordAction: vi.fn(),
+  listAccounts: vi.fn(),
   requestFullRefundAction: vi.fn(),
 }));
 
@@ -15,6 +16,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 vi.mock("@/features/payments/actions", () => dependencies);
+vi.mock("@/lib/auth-client", () => ({
+  authClient: { listAccounts: dependencies.listAccounts },
+}));
 
 import { RefundOperation } from "./financial-refund-operation";
 
@@ -30,6 +34,7 @@ describe("RefundOperation", () => {
     document.body.append(container);
     root = createRoot(container);
     dependencies.confirmRefundPasswordAction.mockReset();
+    dependencies.listAccounts.mockReset();
     dependencies.requestFullRefundAction.mockReset();
   });
 
@@ -95,5 +100,170 @@ describe("RefundOperation", () => {
     expect(container.textContent).toContain(
       "Confirmar solicitação de reembolso"
     );
+  });
+
+  it("offers the approved password setup flow to an invited Google-only user", async () => {
+    dependencies.listAccounts.mockResolvedValue({
+      data: [
+        {
+          accountId: "google-subject",
+          createdAt: new Date("2026-10-01T12:00:00.000Z"),
+          id: "google-account",
+          providerId: "google",
+          scopes: [],
+          updatedAt: new Date("2026-10-01T12:00:00.000Z"),
+          userId: "admin-1",
+        },
+      ],
+      error: null,
+    });
+
+    act(() => {
+      root.render(<RefundOperation orderId="order-1" />);
+    });
+    const details = container.querySelector("details");
+    if (!details) {
+      throw new Error("Refund operation disclosure was not rendered.");
+    }
+
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(dependencies.listAccounts).toHaveBeenCalledOnce();
+    expect(container.querySelector('input[name="password"]')).toBeNull();
+    expect(container.textContent).toContain(
+      "Sua conta ainda não tem uma senha local."
+    );
+    const setupLink = container.querySelector<HTMLAnchorElement>(
+      'a[href="/recuperar-senha"]'
+    );
+    expect(setupLink?.textContent).toContain("Definir senha por e-mail");
+    expect(setupLink?.target).toBe("_blank");
+    expect(setupLink?.rel).toContain("noopener");
+  });
+
+  it("shows password confirmation only when a credential account exists", async () => {
+    dependencies.listAccounts.mockResolvedValue({
+      data: [
+        {
+          accountId: "admin-1",
+          createdAt: new Date("2026-10-01T12:00:00.000Z"),
+          id: "credential-account",
+          providerId: "credential",
+          scopes: [],
+          updatedAt: new Date("2026-10-01T12:00:00.000Z"),
+          userId: "admin-1",
+        },
+      ],
+      error: null,
+    });
+
+    act(() => {
+      root.render(<RefundOperation orderId="order-1" />);
+    });
+    const details = container.querySelector("details");
+    if (!details) {
+      throw new Error("Refund operation disclosure was not rendered.");
+    }
+
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('input[name="password"]')).not.toBeNull();
+    expect(container.textContent).not.toContain(
+      "Sua conta ainda não tem uma senha local."
+    );
+  });
+
+  it("lets the user return from password setup and recheck before continuing", async () => {
+    dependencies.listAccounts
+      .mockResolvedValueOnce({
+        data: [
+          {
+            accountId: "google-subject",
+            createdAt: new Date("2026-10-01T12:00:00.000Z"),
+            id: "google-account",
+            providerId: "google",
+            scopes: [],
+            updatedAt: new Date("2026-10-01T12:00:00.000Z"),
+            userId: "admin-1",
+          },
+        ],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            accountId: "admin-1",
+            createdAt: new Date("2026-10-01T12:00:00.000Z"),
+            id: "credential-account",
+            providerId: "credential",
+            scopes: [],
+            updatedAt: new Date("2026-10-01T12:00:00.000Z"),
+            userId: "admin-1",
+          },
+        ],
+        error: null,
+      });
+
+    act(() => {
+      root.render(<RefundOperation orderId="order-1" />);
+    });
+    const details = container.querySelector("details");
+    if (!details) {
+      throw new Error("Refund operation disclosure was not rendered.");
+    }
+
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const checkButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.includes("Já defini a senha")
+    );
+    expect(checkButton).toBeDefined();
+
+    await act(async () => {
+      checkButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(dependencies.listAccounts).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('input[name="password"]')).not.toBeNull();
+  });
+
+  it("keeps the refund step safe and offers retry when account methods cannot load", async () => {
+    dependencies.listAccounts.mockResolvedValue({
+      data: null,
+      error: { message: "unavailable" },
+    });
+
+    act(() => {
+      root.render(<RefundOperation orderId="order-1" />);
+    });
+    const details = container.querySelector("details");
+    if (!details) {
+      throw new Error("Refund operation disclosure was not rendered.");
+    }
+
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('input[name="password"]')).toBeNull();
+    expect(container.textContent).toContain(
+      "Não foi possível verificar o método de acesso."
+    );
+    expect(container.textContent).toContain("Tentar novamente");
   });
 });

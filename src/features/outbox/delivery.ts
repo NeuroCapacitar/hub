@@ -423,6 +423,7 @@ interface PurchaseConfirmedDeliveryData {
   course_slug: string;
   course_title: string;
   email_verified: boolean;
+  purchase_verification_required: boolean;
   student_email: string;
   student_name: string;
 }
@@ -440,14 +441,19 @@ const getPurchaseConfirmedDeliveryData = async ({
         orders.checkout_course_slug as course_slug,
         orders.checkout_item_name as course_title,
         users.email_verified,
-        users.email as student_email,
-        users.name as student_name
+        orders.customer_email as student_email,
+        orders.customer_name as student_name,
+        purchase_confirmation_intents.verification_required as purchase_verification_required
       from orders
       join users on users.id = orders.user_id
+      join purchase_confirmation_intents
+        on purchase_confirmation_intents.order_id = orders.id
       where orders.id = $1
         and orders.user_id = $2
         and orders.provider = 'asaas'
         and orders.status = 'paid'
+        and nullif(btrim(orders.customer_email), '') is not null
+        and nullif(btrim(orders.customer_name), '') is not null
       limit 1
     `,
     [orderId, userId]
@@ -465,15 +471,52 @@ interface PurchaseVerificationChallengeDeliveryData {
 }
 
 const getPurchaseVerificationChallenge = async ({
+  outboxMessageId,
   orderId,
   userId,
 }: {
+  outboxMessageId: string;
   orderId: string;
   userId: string;
 }): Promise<PurchaseVerificationChallengeDeliveryData | null> => {
-  const result =
-    await getPool().query<PurchaseVerificationChallengeDeliveryData>(
+  const client = getPool();
+  const refreshed =
+    await client.query<PurchaseVerificationChallengeDeliveryData>(
       `
+      update account_email_challenges as challenge
+      set generation = challenge.generation + 1,
+          expires_at = now() + interval '24 hours',
+          consumed_at = null,
+          updated_at = now()
+      where challenge.order_id = $1
+        and challenge.user_id = $2
+        and challenge.purpose = 'purchase_verification'
+        and (
+          challenge.consumed_at is not null
+          or challenge.expires_at <= now() + interval '23 hours'
+        )
+        and not exists (
+          select 1
+          from email_messages
+          where email_messages.outbox_message_id = $3
+            and email_messages.first_provider_attempt_at is not null
+        )
+      returning
+        challenge.id as challenge_id,
+        challenge.user_id,
+        challenge.purpose,
+        challenge.generation,
+        challenge.expires_at,
+        challenge.consumed_at
+      `,
+      [orderId, userId, outboxMessageId]
+    );
+  if (refreshed.rows[0]) {
+    return refreshed.rows[0];
+  }
+
+  const result = await client.query<PurchaseVerificationChallengeDeliveryData>(
+    `
       select
         id as challenge_id,
         user_id,
@@ -487,9 +530,71 @@ const getPurchaseVerificationChallenge = async ({
         and purpose = 'purchase_verification'
       limit 1
     `,
+    [orderId, userId]
+  );
+  if (result.rows[0]) {
+    return result.rows[0];
+  }
+
+  const attemptState = await client.query<{ attempted: boolean }>(
+    `select exists (
+       select 1
+       from email_messages
+       where outbox_message_id = $1
+         and first_provider_attempt_at is not null
+     ) as attempted`,
+    [outboxMessageId]
+  );
+  if (attemptState.rows[0]?.attempted) {
+    return null;
+  }
+
+  const recreated =
+    await client.query<PurchaseVerificationChallengeDeliveryData>(
+      `insert into account_email_challenges (
+       purpose,
+       user_id,
+       order_id,
+       generation,
+       expires_at
+     ) values (
+       'purchase_verification',
+       $2,
+       $1,
+       1,
+       now() + interval '24 hours'
+     )
+     on conflict (order_id) where order_id is not null do nothing
+     returning
+       id as challenge_id,
+       user_id,
+       purpose,
+       generation,
+       expires_at,
+       consumed_at`,
       [orderId, userId]
     );
-  return result.rows[0] ?? null;
+  if (recreated.rows[0]) {
+    return recreated.rows[0];
+  }
+
+  const afterConflict =
+    await client.query<PurchaseVerificationChallengeDeliveryData>(
+      `select
+       id as challenge_id,
+       user_id,
+       purpose,
+       generation,
+       expires_at,
+       consumed_at
+     from account_email_challenges
+     where order_id = $1
+       and user_id = $2
+       and purpose = 'purchase_verification'
+     limit 1`,
+      [orderId, userId]
+    );
+  return afterConflict.rows[0] ?? null;
 };
 
 const deliverPurchaseConfirmed = async ({
@@ -509,7 +614,10 @@ const deliverPurchaseConfirmed = async ({
     throw unavailableAggregate();
   }
 
-  const data = await getPurchaseConfirmedDeliveryData(payload);
+  const data = await getPurchaseConfirmedDeliveryData({
+    orderId: payload.orderId,
+    userId: payload.userId,
+  });
   if (!data) {
     throw unavailableAggregate();
   }
@@ -521,17 +629,19 @@ const deliverPurchaseConfirmed = async ({
     throw unavailableAggregate();
   }
 
+  const verificationRequired = data.purchase_verification_required;
   let actionUrl: string;
   let actionLabel: "Acessar Curso" | "Confirmar e-mail";
-  if (data.email_verified) {
-    actionUrl = getApplicationUrl(safePurchaseReturnTo);
-    actionLabel = "Acessar Curso";
-  } else {
-    const challenge = await getPurchaseVerificationChallenge(payload);
+  if (verificationRequired) {
+    const challenge = await getPurchaseVerificationChallenge({
+      orderId: payload.orderId,
+      outboxMessageId: message.id,
+      userId: payload.userId,
+    });
     if (
       challenge?.purpose !== "purchase_verification" ||
       challenge.user_id !== payload.userId ||
-      challenge.consumed_at ||
+      (challenge.consumed_at !== null && !data.email_verified) ||
       challenge.expires_at.getTime() <= Date.now()
     ) {
       throw new OutboxSupersededError(
@@ -551,6 +661,9 @@ const deliverPurchaseConfirmed = async ({
     }).toString();
     actionUrl = verificationUrl.toString();
     actionLabel = "Confirmar e-mail";
+  } else {
+    actionUrl = getApplicationUrl(safePurchaseReturnTo);
+    actionLabel = "Acessar Curso";
   }
 
   try {

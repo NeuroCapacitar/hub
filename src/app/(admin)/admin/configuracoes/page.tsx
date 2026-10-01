@@ -9,7 +9,6 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAccountSecuritySummary } from "@/features/account/profile";
 import {
   getAdminBannersData,
@@ -20,6 +19,7 @@ import { getAdminAuthMediaData } from "@/features/auth-media/server";
 import { canPerform, hasAdminSurfaceAccess } from "@/lib/auth-policy";
 import { route } from "@/lib/routes";
 import { requireSession } from "@/lib/session";
+import { AdminSettingsTabs } from "./admin-settings-tabs";
 import { AuthMediaGallery } from "./auth-media/auth-media-gallery";
 import { BannerGallery } from "./banners/banner-gallery";
 import {
@@ -36,10 +36,6 @@ const adminSettingsTabValues = [
   "certificados",
   "plataforma",
 ] as const;
-const settingsTabsListClassName =
-  "!h-auto grid w-full grid-cols-2 gap-1 p-1 sm:flex";
-const settingsTabsTriggerClassName = "flex-1 py-1.5";
-
 const getDefaultAdminSettingsTab = (
   requestedTab: string | undefined
 ): (typeof adminSettingsTabValues)[number] => {
@@ -169,39 +165,8 @@ export default async function AdminSettingsPage({
           title="Configurações"
         />
 
-        <Tabs className="w-full gap-12" defaultValue={defaultTab}>
-          <TabsList
-            aria-label="Seções das configurações"
-            className={settingsTabsListClassName}
-          >
-            <TabsTrigger
-              className={settingsTabsTriggerClassName}
-              value="perfil"
-            >
-              Perfil
-            </TabsTrigger>
-            <TabsTrigger
-              className={settingsTabsTriggerClassName}
-              value="certificados"
-            >
-              Certificados
-            </TabsTrigger>
-            <TabsTrigger
-              className={settingsTabsTriggerClassName}
-              value="plataforma"
-            >
-              Plataforma
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent className="mt-0" forceMount value="perfil">
-            <AccountProfileSection
-              security={security}
-              session={session}
-              settingsHref="/admin/configuracoes?tab=perfil#acesso-conta"
-            />
-          </TabsContent>
-          <TabsContent className="mt-0" forceMount value="certificados">
+        <AdminSettingsTabs
+          certificates={
             <section
               aria-labelledby="settings-certificates"
               className="grid gap-6"
@@ -253,8 +218,9 @@ export default async function AdminSettingsPage({
                 </CardContent>
               </Card>
             </section>
-          </TabsContent>
-          <TabsContent className="mt-0" value="plataforma">
+          }
+          defaultTab={defaultTab}
+          platform={
             <div className="grid gap-16">
               <section className="grid gap-6" id="tela-acesso">
                 <div className="space-y-1">
@@ -300,8 +266,15 @@ export default async function AdminSettingsPage({
                 <FaqTable faqs={sortedFaqs} readOnly={!canManageFaq} />
               </section>
             </div>
-          </TabsContent>
-        </Tabs>
+          }
+          profile={
+            <AccountProfileSection
+              security={security}
+              session={session}
+              settingsHref="/admin/configuracoes?tab=perfil#acesso-conta"
+            />
+          }
+        />
       </div>
     </PageContainer>
   );

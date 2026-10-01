@@ -65,7 +65,7 @@ function getAccountSettingsHref(userRole: AppRole) {
   if (userRole === "student") {
     return route("/app/configuracoes#minha-conta");
   }
-  return route("/admin/configuracoes#minha-conta");
+  return route("/admin/configuracoes?tab=perfil#minha-conta");
 }
 
 function SidebarHeaderContent() {

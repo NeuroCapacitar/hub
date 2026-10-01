@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const PRIVATE_AVATAR_URL_PATTERN =
+  /^\/api\/account\/avatar\?revision=[A-Za-z0-9_-]+$/;
+
 const dependencies = vi.hoisted(() => ({
   getAuth: vi.fn(),
   getDb: vi.fn(),
@@ -40,6 +43,8 @@ const setDatabaseIdentity = (
       platformBlockedAt,
       platformBlockedReason: null,
       role,
+      supportPermissionGrants: [],
+      supportPermissionViews: [],
       userImage,
     },
   ]);
@@ -149,8 +154,24 @@ describe("getCurrentSession", () => {
     );
 
     await expect(getCurrentSession()).resolves.toMatchObject({
-      user: { image: "/api/account/avatar" },
+      user: {
+        image: expect.stringMatching(PRIVATE_AVATAR_URL_PATTERN),
+      },
     });
+  });
+
+  it("uses a new opaque URL revision after replacing the active avatar object", async () => {
+    const firstObjectKey = "user-avatars/student-user/first.webp";
+    const secondObjectKey = "user-avatars/student-user/second.webp";
+    setDatabaseIdentity("student", null, null, true, "custom", firstObjectKey);
+    const firstSession = await getCurrentSession();
+
+    setDatabaseIdentity("student", null, null, true, "custom", secondObjectKey);
+    const secondSession = await getCurrentSession();
+
+    expect(firstSession?.user.image).not.toBe(secondSession?.user.image);
+    expect(firstSession?.user.image).not.toContain(firstObjectKey);
+    expect(secondSession?.user.image).not.toContain(secondObjectKey);
   });
 
   it("redirects a blocked Student away from account settings", async () => {

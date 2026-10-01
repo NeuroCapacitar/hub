@@ -30,7 +30,7 @@ describe("purchase confirmation intent", () => {
   it("registers one durable intent and adds an order-bound verification challenge when needed", async () => {
     const orderId = "order-1";
     const userId = "student-1";
-    const { client } = makeClient((statement) => {
+    const { client, query } = makeClient((statement) => {
       if (statement.includes("from purchase_confirmation_intents")) {
         return { rows: [] };
       }
@@ -41,7 +41,25 @@ describe("purchase confirmation intent", () => {
         statement.includes("from users") &&
         statement.includes("email_verified")
       ) {
-        return { rows: [{ email_verified: false }] };
+        return {
+          rows: [
+            {
+              email: "student@example.test",
+              email_verified: false,
+              name: "Student",
+            },
+          ],
+        };
+      }
+      if (statement.includes("update orders")) {
+        return {
+          rows: [
+            {
+              customer_email: "student@example.test",
+              customer_name: "Student",
+            },
+          ],
+        };
       }
       if (statement.includes("insert into account_email_challenges")) {
         return { rows: [{ generation: 1, id: "challenge-1" }] };
@@ -74,6 +92,14 @@ describe("purchase confirmation intent", () => {
     expect(client.query).toHaveBeenCalledWith(
       expect.stringContaining("insert into account_email_challenges"),
       expect.arrayContaining([orderId, userId])
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("verification_required"),
+      [orderId, true]
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("update orders"),
+      [orderId, "student@example.test", "Student", userId]
     );
   });
 
@@ -176,7 +202,25 @@ describe("purchase confirmation intent", () => {
         statement.includes("from users") &&
         statement.includes("email_verified")
       ) {
-        return { rows: [{ email_verified: true }] };
+        return {
+          rows: [
+            {
+              email: "student@example.test",
+              email_verified: true,
+              name: "Student",
+            },
+          ],
+        };
+      }
+      if (statement.includes("update orders")) {
+        return {
+          rows: [
+            {
+              customer_email: "student@example.test",
+              customer_name: "Student",
+            },
+          ],
+        };
       }
       if (statement.includes("update outbox_messages")) {
         return { rows: [{ id: "legacy-message" }] };
@@ -230,7 +274,25 @@ describe("purchase confirmation intent", () => {
         statement.includes("from users") &&
         statement.includes("email_verified")
       ) {
-        return { rows: [{ email_verified: true }] };
+        return {
+          rows: [
+            {
+              email: "student@example.test",
+              email_verified: true,
+              name: "Student",
+            },
+          ],
+        };
+      }
+      if (statement.includes("update orders")) {
+        return {
+          rows: [
+            {
+              customer_email: "student@example.test",
+              customer_name: "Student",
+            },
+          ],
+        };
       }
       if (statement.includes("update purchase_confirmation_intents")) {
         return { rows: [{ order_id: "order-1" }] };
@@ -249,7 +311,7 @@ describe("purchase confirmation intent", () => {
 
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("set origin = 'current'"),
-      ["order-1"]
+      ["order-1", false]
     );
     expect(dependencies.enqueueOutboxMessage).toHaveBeenCalledOnce();
   });

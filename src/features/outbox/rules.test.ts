@@ -101,7 +101,10 @@ describe("outbox message contracts", () => {
       aggregateId: "order-1",
       aggregateType: "order",
       idempotencyKey: "email.purchase-confirmed/order-1/v1",
-      payload: { orderId: "order-1", userId: "user-1" },
+      payload: {
+        orderId: "order-1",
+        userId: "user-1",
+      },
       payloadVersion: 1,
       topic: "email.purchase-confirmed",
     });

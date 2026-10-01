@@ -2,11 +2,18 @@ import "server-only";
 import { dash, sentinel } from "@better-auth/infra";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import type { GoogleProfile } from "better-auth/social-providers";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { accounts, sessions, users, verifications } from "@/db/schema";
+import {
+  accounts,
+  profiles,
+  sessions,
+  users,
+  verifications,
+} from "@/db/schema";
 import { requestExistingAccountEmailVerification } from "@/features/account/email-challenges";
 import { sendBetterAuthPasswordResetEmail } from "@/lib/auth-password-reset";
 import {
@@ -74,9 +81,7 @@ const mapGoogleProfileToUser = async (
     }
 
     const googleEmail = profile.email.trim().toLowerCase();
-    const candidateEmails = [
-      ...new Set([googleEmail, normalizeBuyerEmail(googleEmail)]),
-    ];
+    const canonicalGoogleEmail = normalizeBuyerEmail(googleEmail);
     const candidates = await getDb()
       .select({
         email: users.email,
@@ -85,7 +90,12 @@ const mapGoogleProfileToUser = async (
         userId: users.id,
       })
       .from(users)
-      .where(inArray(sql<string>`lower(${users.email})`, candidateEmails))
+      .where(
+        eq(
+          sql<string>`public.canonicalize_auth_email_identity(${users.email})`,
+          canonicalGoogleEmail
+        )
+      )
       .limit(2);
     const resolution = resolveGoogleEmailCandidate({
       candidates,
@@ -129,6 +139,21 @@ const mapGoogleProfileToUser = async (
     });
     return { email: null };
   }
+};
+
+export const isStudentPlatformAccessBlocked = async (
+  userId: string
+): Promise<boolean> => {
+  const [profile] = await getDb()
+    .select({
+      platformBlockedAt: profiles.platformBlockedAt,
+      role: profiles.role,
+    })
+    .from(profiles)
+    .where(eq(profiles.userId, userId))
+    .limit(1);
+
+  return profile?.role === "student" && profile.platformBlockedAt !== null;
 };
 
 const verifyLocalEmailAfterPasswordReset = async (
@@ -241,6 +266,20 @@ const createAuth = () => {
       },
       onPasswordReset: async ({ user }, request) => {
         await verifyLocalEmailAfterPasswordReset(user.id, request);
+      },
+    },
+    databaseHooks: {
+      session: {
+        create: {
+          before: async (session) => {
+            if (await isStudentPlatformAccessBlocked(session.userId)) {
+              throw APIError.from("FORBIDDEN", {
+                code: "ACCOUNT_SUSPENDED",
+                message: "Acesso à plataforma suspenso.",
+              });
+            }
+          },
+        },
       },
     },
     emailVerification: {

@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { and, eq, isNull, lt, or } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -34,6 +35,11 @@ export interface AppSession {
 
 const LAST_ACCESS_WRITE_INTERVAL_MS = 5 * 60 * 1000;
 
+const getPrivateAvatarImageUrl = (avatarKey: string): string => {
+  const revision = createHash("sha256").update(avatarKey).digest("base64url");
+  return `/api/account/avatar?revision=${revision}`;
+};
+
 const resolveSessionImage = ({
   avatarKey,
   avatarMode,
@@ -44,7 +50,7 @@ const resolveSessionImage = ({
   userImage: string | null | undefined;
 }): string | null => {
   if (avatarMode === "custom" && avatarKey) {
-    return "/api/account/avatar";
+    return getPrivateAvatarImageUrl(avatarKey);
   }
   return userImage ?? null;
 };

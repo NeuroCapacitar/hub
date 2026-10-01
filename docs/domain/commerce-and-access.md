@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
+last_verified_commit: 6bf5d693fd565c7c4c0c4bd9b7754efca92c2b44
 ---
 
 # Comércio e acesso
@@ -92,11 +92,20 @@ Concessão e Matrícula. `purchase_confirmation_intents` conserva o marcador ide
 além da retenção da outbox; Pedidos pagos com identidade resolvida antes da migration são
 registrados como históricos, evitando que uma conciliação posterior dispare novamente um
 e-mail antigo. Pedidos que estavam em Revisão permanecem elegíveis após a resolução.
-Para Conta não verificada, a transação também cria desafio `purchase_verification`; o
-delivery reconsulta Pedido, Conta e Curso e envia **Compra confirmada** com CTA de
-confirmação. Para Conta já verificada, a mesma mensagem aponta à rota de compra do Curso,
-que preserva o retorno ao acesso após login. A confirmação comprova somente posse da
-caixa: não cria sessão, senha, nova Concessão ou Matrícula. `auth.account-activation` e
+Na criação da intenção, `purchase_confirmation_intents.verification_required`
+registra se a Conta precisava comprovar o e-mail naquele momento; o retry não
+recalcula a ação a partir de um estado posterior da Conta. Para quem precisa
+confirmar, a transação cria desafio `purchase_verification`; o delivery usa os
+snapshots do Pedido/Curso e a decisão do ledger para enviar **Compra confirmada**
+com CTA de confirmação. Se um Pedido legado resolvido ainda não tiver snapshot
+de comprador, o e-mail/nome da Conta vinculada são gravados no Pedido nessa
+transação; snapshots já recebidos do checkout/provider prevalecem. A entrega não
+usa valores mutáveis da Conta como fallback. Para quem já estava verificado, a mensagem aponta à rota
+de compra do Curso, que preserva o retorno ao acesso após login. Se o desafio
+estiver perto de vencer antes da primeira tentativa ao provider, ele é renovado;
+depois dela, token, prazo e conteúdo permanecem estáveis durante a janela de
+retry/idempotência. A confirmação comprova somente posse da caixa: não cria
+sessão, senha, nova Concessão ou Matrícula. `auth.account-activation` e
 `email.access-released` continuam reconhecidos apenas para mensagens legadas; não são
 enfileirados para novos Pedidos.
 
@@ -239,6 +248,14 @@ exige conciliação, sem repetição cega.
 O token de confirmação e sua auditoria usam uma transação local. A reserva e sua
 auditoria usam outra transação local antes da mutação externa. A persistência da
 evidência ou da falha ocorre depois da resposta do provider.
+
+Quando Admin/Suporte não possui credencial local, a interface pode consultar os
+métodos da sessão e orientar a criação da primeira senha pelo fluxo aprovado de
+`/recuperar-senha`. A recuperação abre em outra aba para preservar o Pedido em
+andamento; depois, a pessoa volta à operação e atualiza a verificação. Essa
+consulta só ajusta a orientação visual: a autorização continua exigindo a
+confirmação server-side de senha em `confirmRefundPasswordAction`. Consulte
+[Perfil da Conta e continuidade de acesso](account-profile-and-access.md).
 
 Conciliação por pagamento e sincronização local do extrato exigem
 `manageFinancialOperations`. Toda resolução manual de Revisão exige
@@ -383,9 +400,10 @@ Ver [ADR-0009](../adr/0009-course-availability-and-sale-interest.md).
   pela decisão pura e pelo processor transacional Asaas.
 - `db:seed:student` cria Concessão `manual` e recompõe a Matrícula pela projeção oficial.
 - A confirmação de compra guarda somente `orderId` e `userId` na outbox e usa o
-  ledger `purchase_confirmation_intents` como dedupe permanente por Pedido. Desafio
-  de e-mail HMAC é persistido sem token/URL e gerado no delivery; nenhum e-mail de
-  compra cria senha ou sessão. `auth.account-activation` permanece apenas para v1
+  ledger `purchase_confirmation_intents` como dedupe permanente por Pedido, com a
+  decisão de verificação congelada na criação da intenção. Desafio de e-mail HMAC
+  é persistido sem token/URL e gerado no delivery; nenhum e-mail de compra cria
+  senha ou sessão. `auth.account-activation` permanece apenas para v1
   histórico. Veja o [runbook de outbox](../operations/outbox-and-transactional-effects.md).
 - Adapter, schema, checkout, inbox, processor, worker agendado, reembolso e conciliação
   Asaas existem em código. As migrations e os fluxos PIX, cartão, cancelamento,

@@ -1,10 +1,10 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: c10f0d2
-current_migration_tag: 0100_account_profile_and_email_change
-migration_entry_count: 101
-schema_table_count: 57
+last_verified_commit: 6bf5d693fd565c7c4c0c4bd9b7754efca92c2b44
+current_migration_tag: 0102_account_password_reset_operation_guard
+migration_entry_count: 103
+schema_table_count: 58
 ---
 
 # Banco e migrations
@@ -311,7 +311,7 @@ Com migration:
 Migrations Production são forward-only e devem ser compatíveis com o código
 anterior durante a janela entre alteração do banco e promoção.
 
-## Identidade e confirmação de compra (0097–0098)
+## Identidade, confirmação de compra e recuperação (0097–0102)
 
 `0097_identity_email_challenges` adiciona cadastros pendentes, desafios de
 e-mail, rate limits HMAC e uma função/índice único para a identidade canônica
@@ -329,6 +329,64 @@ marcador e podem emitir a confirmação depois que a identidade for resolvida.
 O Hosted Template `purchase-confirmed` é publicado manualmente conforme o
 [runbook Resend](../integrations/resend-templates.md); migration/build nunca
 publicam o template.
+
+`0101_nice_dormammu` adiciona `verification_required` ao ledger e preenche as
+intenções existentes usando `users.email_verified`. Novas intenções gravam essa
+decisão na mesma transação do acesso e do enqueue. Assim, o retry mantém o CTA
+original mesmo se a Conta confirmar o e-mail antes da entrega. O token de prova
+continua fora do ledger e só é reconstruído no delivery. O preflight do corte
+verifica essa coluna antes de contar ou substituir mensagens legadas.
+
+`0102_account_password_reset_operation_guard` cria
+`account_password_reset_operations`, sem e-mail, senha ou token. Ela mantém um
+marcador curto para os endpoints Better Auth de solicitar/consumir reset. O
+marcador é coordenado pelo mesmo advisory lock transacional usado pela troca de
+e-mail; se uma redefinição estiver em andamento, a conclusão da troca responde
+temporariamente indisponível e preserva o mesmo link para nova tentativa. A
+limpeza normal acontece ao sair do handler e registros abandonados expiram em
+15 minutos.
+
+### Corte da confirmação de compra legada
+
+O backfill de 0098 representa apenas os Pedidos elegíveis no instante da
+migration. Enquanto a versão anterior ainda processa pagamentos, ela pode gravar
+mensagens v1 para Pedidos pagos depois do backfill, sem uma linha correspondente
+em `purchase_confirmation_intents`. Depois de publicar o template e implantar a
+versão que usa `email.purchase-confirmed`, faça o corte explícito; não trate a
+contagem do ledger como inventário completo.
+
+Primeiro rode o dry-run com `DATABASE_URL_DIRECT` e o host explícito do mesmo
+ambiente (`DEVELOPMENT_DATABASE_HOST`, `STAGING_DATABASE_HOST` ou
+`PRODUCTION_DATABASE_HOST`):
+
+```powershell
+bun run ops:reconcile:legacy-purchase-confirmations -- --environment=development --dry-run
+```
+
+O comando aceita somente URL direta PostgreSQL com TLS `verify-full`. Confira
+as contagens sanitizadas de `eligible`, `ambiguousLegacy`, `inFlightLegacy` e
+`remaining`; não copie URLs nem credenciais para logs. A execução exige
+`PURCHASE_CONFIRMED_TEMPLATE_PUBLISHED=true` e
+`PURCHASE_CONFIRMATION_CUTOVER_CONFIRMATION=REPLACE_UNACCEPTED_PURCHASE_CONFIRMATION_V1`.
+Use o mesmo ambiente e troque `--dry-run` por `--execute` somente após conferir
+o resultado:
+
+```powershell
+bun run ops:reconcile:legacy-purchase-confirmations -- --environment=development --execute
+```
+
+Cada execução usa transação serializável, advisory lock do corte e locks dos
+Pedidos/mensagens que processa. O inventário parte dos Pedidos pagos com
+identidade resolvida e inclui linhas sem ledger ou com origem `historical`; uma
+intenção `current` não é reaberta. O helper de domínio inspeciona e bloqueia as
+mensagens v1 do Pedido. Evidência de aceitação ou estado ambíguo registra o
+Pedido como satisfeito sem enfileirar outro e-mail; somente mensagem substituível
+sem evidência de aceitação pode ser superseded e trocada pela confirmação nova.
+Mensagens `processing` ficam fora do lote até terminarem. Rode dry-run e execute
+novamente depois que os escritores v1 tiverem sido retirados e os envios em voo
+forem drenados; encerre o corte quando `eligible`, `ambiguousLegacy`,
+`inFlightLegacy` e `remaining` forem zero. A repetição é idempotente e captura
+Pedidos v1 criados depois de uma execução anterior.
 
 A migration histórica `0065_gray_siren` contém estruturas de uma tentativa de MFA
 administrativo. Elas permanecem no schema e no histórico para evitar uma remoção

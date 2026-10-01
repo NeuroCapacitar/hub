@@ -8,6 +8,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
+vi.mock("@/components/ui/avatar", () => ({
+  Avatar: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
+  AvatarFallback: ({ children }: React.PropsWithChildren) => (
+    <span>{children}</span>
+  ),
+  AvatarImage: ({ alt, src }: { alt: string; src: string }) => (
+    <span data-avatar-alt={alt} data-avatar-src={src} />
+  ),
+}));
 vi.mock("@/components/account/avatar-crop-dialog", () => ({
   AvatarCropDialog: () => null,
 }));
@@ -165,5 +174,39 @@ describe("AccountProfilePanel", () => {
 
     expect(avatarInput).not.toBeNull();
     expect(inputClick).toHaveBeenCalledTimes(2);
+  });
+
+  it("updates the rendered private image source when the refreshed session changes its revision", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+
+    act(() => {
+      root?.render(
+        <AccountProfilePanel
+          avatarMode="custom"
+          image="/api/account/avatar?revision=first"
+          name="Pessoa"
+        />
+      );
+    });
+
+    expect(
+      host.querySelector("[data-avatar-src]")?.getAttribute("data-avatar-src")
+    ).toBe("/api/account/avatar?revision=first");
+
+    act(() => {
+      root?.render(
+        <AccountProfilePanel
+          avatarMode="custom"
+          image="/api/account/avatar?revision=second"
+          name="Pessoa"
+        />
+      );
+    });
+
+    expect(
+      host.querySelector("[data-avatar-src]")?.getAttribute("data-avatar-src")
+    ).toBe("/api/account/avatar?revision=second");
   });
 });

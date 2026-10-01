@@ -1,11 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GoogleMark } from "@/components/google-auth-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { authClient } from "@/lib/auth-client";
+
+const getGoogleLinkErrorMessage = (errorCode: string | null): string => {
+  if (errorCode === "access_denied") {
+    return "Conexão cancelada. Nenhuma conta foi vinculada.";
+  }
+  if (errorCode === "email_doesn't_match") {
+    return "Use no Google o mesmo endereço de e-mail desta conta.";
+  }
+  return "Não foi possível conectar ao Google. Tente novamente.";
+};
 
 function GoogleAccountControl({
   accountSettingsPath,
@@ -22,6 +32,23 @@ function GoogleAccountControl({
   const [error, setError] = useState<string | null>(null);
   const canConnect = googleOAuthEnabled && emailVerified;
 
+  useEffect(() => {
+    const currentUrl = new URL(window.location.href);
+    if (currentUrl.searchParams.get("account_link") !== "google") {
+      return;
+    }
+
+    setError(getGoogleLinkErrorMessage(currentUrl.searchParams.get("error")));
+    currentUrl.searchParams.delete("account_link");
+    currentUrl.searchParams.delete("error");
+    currentUrl.searchParams.delete("error_description");
+    window.history.replaceState(
+      null,
+      "",
+      `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`
+    );
+  }, []);
+
   const linkGoogle = async (): Promise<void> => {
     if (!canConnect) {
       return;
@@ -33,8 +60,11 @@ function GoogleAccountControl({
         accountSettingsPath,
         window.location.origin
       ).toString();
+      const errorCallbackURL = new URL(callbackURL);
+      errorCallbackURL.searchParams.set("account_link", "google");
       const result = await authClient.linkSocial({
         callbackURL,
+        errorCallbackURL: errorCallbackURL.toString(),
         provider: "google",
       });
       if (result.error) {

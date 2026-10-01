@@ -88,7 +88,34 @@ const createContext = ({
       return Promise.resolve(queryResult([]));
     }
     if (text.includes("from users") && text.includes("email_verified")) {
-      return Promise.resolve(queryResult([{ email_verified: emailVerified }]));
+      return Promise.resolve(
+        queryResult([
+          {
+            email: "student@example.test",
+            email_verified: emailVerified,
+            name: "Student",
+          },
+        ])
+      );
+    }
+    if (text.includes("set customer_email = coalesce")) {
+      const lockedOrder = lockedOrderRows.at(-1);
+      const persistedEmail =
+        lockedOrder && typeof lockedOrder === "object"
+          ? Reflect.get(lockedOrder, "customer_email")
+          : null;
+      const persistedName =
+        lockedOrder && typeof lockedOrder === "object"
+          ? Reflect.get(lockedOrder, "customer_name")
+          : null;
+      return Promise.resolve(
+        queryResult([
+          {
+            customer_email: persistedEmail ?? values?.[1],
+            customer_name: persistedName ?? values?.[2],
+          },
+        ])
+      );
     }
     if (text.includes("insert into purchase_confirmation_intents")) {
       return Promise.resolve(queryResult([{ order_id: values?.[0] }]));

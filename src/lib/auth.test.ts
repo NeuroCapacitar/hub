@@ -1,4 +1,6 @@
 import type { GoogleProfile } from "better-auth/social-providers";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
@@ -69,20 +71,27 @@ const GOOGLE_PROFILE: GoogleProfile = {
   sub: "google-sub-fixture",
 };
 
-const configureDatabaseResults = (results: unknown[][]): void => {
+const configureDatabaseResults = (
+  results: unknown[][]
+): { whereConditions: unknown[] } => {
+  const whereConditions: unknown[] = [];
   const select = vi.fn(() => {
     const rows = results.shift() ?? [];
     const query = {
       from: () => query,
       leftJoin: () => query,
       limit: () => Promise.resolve(rows),
-      where: () => query,
+      where: (condition: unknown) => {
+        whereConditions.push(condition);
+        return query;
+      },
     };
     return query;
   });
 
   dependencies.getDb.mockClear();
   dependencies.getDb.mockReturnValue({ select } as never);
+  return { whereConditions };
 };
 
 const configureEmailVerificationUpdate = (rows: unknown[]) => {
@@ -219,6 +228,40 @@ describe("Better Auth Google configuration", () => {
       requestHeaders: request.headers,
       userId: "student-1",
     });
+  });
+
+  it("rejects new Better Auth sessions for a platform-blocked Student", async () => {
+    const options = await getAuthOptions(authEnvironment());
+    const databaseHooks = options.databaseHooks as
+      | { session?: { create?: { before?: unknown } } }
+      | undefined;
+
+    expect(databaseHooks?.session?.create?.before).toBeTypeOf("function");
+    if (typeof databaseHooks?.session?.create?.before !== "function") {
+      return;
+    }
+    configureDatabaseResults([
+      [{ platformBlockedAt: new Date(), role: "student" }],
+    ]);
+    await expect(
+      databaseHooks.session.create.before({ userId: "blocked-student" })
+    ).rejects.toMatchObject({ body: { code: "ACCOUNT_SUSPENDED" } });
+  });
+
+  it("still allows a non-Student to create a session when a block timestamp is present", async () => {
+    const options = await getAuthOptions(authEnvironment());
+    const databaseHooks = options.databaseHooks as {
+      session: {
+        create: { before: (session: { userId: string }) => Promise<void> };
+      };
+    };
+    configureDatabaseResults([
+      [{ platformBlockedAt: new Date(), role: "admin" }],
+    ]);
+
+    await expect(
+      databaseHooks.session.create.before({ userId: "admin-user" })
+    ).resolves.toBeUndefined();
   });
 
   it("marks the local email verified only after Better Auth successfully resets the password", async () => {
@@ -448,6 +491,90 @@ describe("Better Auth Google configuration", () => {
       email: "firstlast@gmail.com",
       image: GOOGLE_PROFILE.picture,
       name: "Existing Student Name",
+    });
+  });
+
+  it("queries the database by canonical identity when a Google address omits a plus tag", async () => {
+    const options = await getAuthOptions(
+      authEnvironment({
+        GOOGLE_CLIENT_ID: "google-client-id-fixture",
+        GOOGLE_CLIENT_SECRET: "google-client-secret-fixture",
+      })
+    );
+    const mapper = getGoogleProfileMapper(options);
+    expect(mapper).not.toBeNull();
+    if (!mapper) {
+      return;
+    }
+
+    const database = configureDatabaseResults([
+      [],
+      [
+        {
+          email: "first.last+course@googlemail.com",
+          image: null,
+          name: "Existing Student Name",
+          userId: "paid-user",
+        },
+      ],
+    ]);
+    const mappedProfile = await mapper({
+      ...GOOGLE_PROFILE,
+      email: "first.last@gmail.com",
+    });
+
+    expect(mappedProfile).toEqual({
+      email: "first.last+course@googlemail.com",
+      image: GOOGLE_PROFILE.picture,
+      name: "Existing Student Name",
+    });
+    expect(
+      new PgDialect().sqlToQuery(database.whereConditions[1] as SQL)
+    ).toMatchObject({
+      params: ["firstlast@gmail.com"],
+      sql: expect.stringContaining("canonicalize_auth_email_identity"),
+    });
+  });
+
+  it("queries the canonical identity when Google omits a buyer's plus tag", async () => {
+    const options = await getAuthOptions(
+      authEnvironment({
+        GOOGLE_CLIENT_ID: "google-client-id-fixture",
+        GOOGLE_CLIENT_SECRET: "google-client-secret-fixture",
+      })
+    );
+    const mapper = getGoogleProfileMapper(options);
+    expect(mapper).not.toBeNull();
+    if (!mapper) {
+      return;
+    }
+
+    const database = configureDatabaseResults([
+      [],
+      [
+        {
+          email: "first.last+course@googlemail.com",
+          image: null,
+          name: "Existing Student Name",
+          userId: "paid-user",
+        },
+      ],
+    ]);
+    const mappedProfile = await mapper({
+      ...GOOGLE_PROFILE,
+      email: "first.last@gmail.com",
+    });
+
+    expect(mappedProfile).toEqual({
+      email: "first.last+course@googlemail.com",
+      image: GOOGLE_PROFILE.picture,
+      name: "Existing Student Name",
+    });
+    expect(
+      new PgDialect().sqlToQuery(database.whereConditions[1] as SQL)
+    ).toMatchObject({
+      params: ["firstlast@gmail.com"],
+      sql: expect.stringContaining("canonicalize_auth_email_identity"),
     });
   });
 

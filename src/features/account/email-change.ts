@@ -2,10 +2,12 @@ import "server-only";
 import { createHmac, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { getPool } from "@/db";
+import { lockAccountIdentity } from "@/features/account/account-identity-lock";
 import {
   createEmailChallengeToken,
   verifyEmailChallengeToken,
 } from "@/features/account/email-challenge-token";
+import { assertNoPasswordResetInProgress } from "@/features/account/password-reset-operations";
 import { writeAuditLog } from "@/features/admin/audit-log";
 import {
   createEmailChangeConfirmationMessage,
@@ -64,15 +66,6 @@ const withTransaction = async <Result>(
   } finally {
     client.release();
   }
-};
-
-const lockUserEmailChange = async (
-  client: Pick<PoolClient, "query">,
-  userId: string
-): Promise<void> => {
-  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [
-    `account-email-change:${userId}`,
-  ]);
 };
 
 const lockEmailIdentities = async (
@@ -134,13 +127,14 @@ const supersedePendingConfirmationMessages = async ({
   client,
   reason = "email_change_generation_rotated",
 }: {
-  actorUserId: string;
+  actorUserId: string | null;
   changeRequestId: string;
   client: PoolClient;
   reason?:
     | "email_change_generation_rotated"
     | "email_change_request_cancelled"
-    | "email_change_request_completed";
+    | "email_change_request_completed"
+    | "email_change_request_expired";
 }): Promise<void> => {
   const result = await client.query<{ id: string }>(
     sql(
@@ -289,6 +283,36 @@ const assertEmailChangeTargetAvailable = async (
   }
 };
 
+const expireReservedEmailChangeRequests = async ({
+  client,
+  newIdentity,
+}: {
+  client: PoolClient;
+  newIdentity: string;
+}): Promise<void> => {
+  const expired = await client.query<{ id: string }>(
+    sql(
+      "update account_email_change_requests",
+      "set status = 'expired',",
+      "    generation = generation + 1,",
+      "    updated_at = now()",
+      "where public.canonicalize_auth_email_identity(new_email) = $1",
+      "  and status in ('pending_current', 'pending_new')",
+      "  and expires_at <= now()",
+      "returning id"
+    ),
+    [newIdentity]
+  );
+  for (const request of expired.rows) {
+    await supersedePendingConfirmationMessages({
+      actorUserId: null,
+      changeRequestId: request.id,
+      client,
+      reason: "email_change_request_expired",
+    });
+  }
+};
+
 const saveEmailChangeRequest = async ({
   client,
   currentEmail,
@@ -378,7 +402,7 @@ export const createOrRefreshEmailChangeRequest = async ({
       throw new Error("Informe um endereço diferente do atual.");
     }
 
-    await lockUserEmailChange(client, userId);
+    await lockAccountIdentity(client, userId);
     await lockEmailIdentities(client, [initialEmail, normalizedNewEmail]);
     const currentEmail = await requireVerifiedAccountEmail(
       client,
@@ -390,6 +414,7 @@ export const createOrRefreshEmailChangeRequest = async ({
         "O e-mail da Conta mudou. Atualize a página e tente novamente."
       );
     }
+    await expireReservedEmailChangeRequests({ client, newIdentity });
     await assertEmailChangeTargetAvailable(client, newIdentity, userId);
 
     const rateLimitAllowed = await consumeEmailChangeRateLimit(client, userId);
@@ -458,6 +483,11 @@ export interface EmailChangePreview {
   newEmail: string;
   stage: EmailChangeStage | "awaiting_new" | "completed";
   userName: string;
+}
+
+export interface EmailChangeTokenResult {
+  nextPath: string;
+  outboxDrainRequired: boolean;
 }
 
 const getEmailChangeRequestPreview = async ({
@@ -742,6 +772,21 @@ const getVerifiedCurrentEmailChangeUser = async (
   return user;
 };
 
+const lockCredentialAccount = async (
+  client: Pick<PoolClient, "query">,
+  userId: string
+): Promise<void> => {
+  await client.query(
+    sql(
+      "select id",
+      "from accounts",
+      "where user_id = $1 and provider_id = 'credential'",
+      "for update"
+    ),
+    [userId]
+  );
+};
+
 const confirmCurrentEmailChange = async ({
   client,
   request,
@@ -750,7 +795,7 @@ const confirmCurrentEmailChange = async ({
   client: PoolClient;
   request: EmailChangeRequestRow;
   userId: string;
-}): Promise<{ nextPath: string }> => {
+}): Promise<EmailChangeTokenResult> => {
   const expiresAt = new Date(Date.now() + EMAIL_CHANGE_TTL_MS);
   const updated = await client.query(
     sql(
@@ -781,7 +826,10 @@ const confirmCurrentEmailChange = async ({
     targetId: userId,
     targetType: "account",
   });
-  return { nextPath: "/confirmar-troca-email?status=awaiting-new" };
+  return {
+    nextPath: "/confirmar-troca-email?status=awaiting-new",
+    outboxDrainRequired: true,
+  };
 };
 
 const completeEmailChange = async ({
@@ -792,7 +840,7 @@ const completeEmailChange = async ({
   client: PoolClient;
   request: EmailChangeRequestRow;
   userId: string;
-}): Promise<{ nextPath: string } | null> => {
+}): Promise<EmailChangeTokenResult | null> => {
   const targetIdentity = normalizeBuyerEmail(request.new_email);
   const taken = await client.query<{ id: string }>(
     sql(
@@ -808,6 +856,19 @@ const completeEmailChange = async ({
   if (taken.rows.length > 0) {
     return null;
   }
+  await assertNoPasswordResetInProgress(client, userId);
+  // The reset endpoints register a short-lived operation under this same
+  // account lock; refuse completion until the native handler has finished.
+  // Then lock the credential row and invalidate every unused reset token.
+  await lockCredentialAccount(client, userId);
+  await client.query(
+    sql(
+      "delete from verifications",
+      "where value = $1",
+      "  and identifier like 'reset-password:%'"
+    ),
+    [userId]
+  );
   const changed = await client.query(
     sql(
       "update users",
@@ -856,12 +917,12 @@ const completeEmailChange = async ({
     targetId: userId,
     targetType: "account",
   });
-  return { nextPath: "/entrar?emailChanged=1" };
+  return { nextPath: "/entrar?emailChanged=1", outboxDrainRequired: true };
 };
 
 export const consumeEmailChangeToken = async (
   token: string
-): Promise<{ nextPath: string } | null> => {
+): Promise<EmailChangeTokenResult | null> => {
   const claims = parseEmailChangeClaims(token);
   if (!claims) {
     return null;
@@ -885,7 +946,7 @@ export const consumeEmailChangeToken = async (
   }
 
   return await withTransaction(async (client) => {
-    await lockUserEmailChange(client, initial.user_id);
+    await lockAccountIdentity(client, initial.user_id);
     await lockEmailIdentities(client, [
       initial.current_email,
       initial.new_email,
@@ -906,7 +967,7 @@ export const consumeEmailChangeToken = async (
     }
     const idempotentPath = getIdempotentEmailChangePath(request, claims);
     if (idempotentPath) {
-      return { nextPath: idempotentPath };
+      return { nextPath: idempotentPath, outboxDrainRequired: false };
     }
     if (!isCurrentEmailChangeToken(request, claims)) {
       return null;
@@ -936,12 +997,15 @@ export const cancelEmailChangeRequest = async ({
   userId: string;
 }): Promise<void> =>
   await withTransaction(async (client) => {
-    await lockUserEmailChange(client, userId);
+    await lockAccountIdentity(client, userId);
     const result = await client.query<EmailChangeRequestRow>(
       sql(
         "select *",
         "from account_email_change_requests",
-        "where user_id = $1 and status in ('pending_current', 'pending_new', 'expired')",
+        "where user_id = $1",
+        "  and status in ('pending_current', 'pending_new')",
+        "  and expires_at > now()",
+        "order by expires_at desc, updated_at desc, id desc",
         "limit 1",
         "for update"
       ),

@@ -4,6 +4,7 @@ const dependencies = vi.hoisted(() => ({
   getServerEnv: vi.fn(),
   logOperationalEvent: vi.fn(),
   requestPublicAccountRegistration: vi.fn(),
+  scheduleOutboxDrainAfterResponse: vi.fn(),
 }));
 
 vi.mock("@/features/account/email-challenges", () => ({
@@ -11,6 +12,10 @@ vi.mock("@/features/account/email-challenges", () => ({
     dependencies.requestPublicAccountRegistration,
 }));
 vi.mock("@/lib/env", () => ({ getServerEnv: dependencies.getServerEnv }));
+vi.mock("@/features/outbox/background-drain", () => ({
+  scheduleOutboxDrainAfterResponse:
+    dependencies.scheduleOutboxDrainAfterResponse,
+}));
 vi.mock("@/lib/observability", () => ({
   CORRELATION_ID_HEADER: "x-correlation-id",
   createCorrelationId: vi.fn(() => "test-correlation-id"),
@@ -32,6 +37,7 @@ describe("POST /api/account/registrations", () => {
       AUTH_PUBLIC_SIGNUP_ENABLED: true,
     });
     dependencies.requestPublicAccountRegistration.mockReset();
+    dependencies.scheduleOutboxDrainAfterResponse.mockReset();
     dependencies.logOperationalEvent.mockReset();
   });
 
@@ -52,6 +58,15 @@ describe("POST /api/account/registrations", () => {
     expect(response.status).toBe(202);
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({ status: "accepted" });
+    if (outcome === "queued") {
+      expect(
+        dependencies.scheduleOutboxDrainAfterResponse
+      ).toHaveBeenCalledOnce();
+    } else {
+      expect(
+        dependencies.scheduleOutboxDrainAfterResponse
+      ).not.toHaveBeenCalled();
+    }
   });
 
   it("does not call Better Auth or the service with a password payload", async () => {

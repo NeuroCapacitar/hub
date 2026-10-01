@@ -190,7 +190,8 @@ export const sendEmailVerificationEmail = async ({
     text: [
       `Olá, ${userName}.`,
       `Use este link para confirmar o e-mail da sua Conta. Ele expira em uma hora: ${verificationUrl}`,
-      "Se você não pediu esta confirmação, ignore esta mensagem. Nenhuma senha ou acesso será alterado.",
+      "O link confirma que você tem acesso ao endereço de e-mail. Ele não inicia uma sessão nem cria uma senha.",
+      "Se você não pediu esta confirmação, ignore esta mensagem.",
     ].join("\n\n"),
     to,
   });

@@ -532,4 +532,70 @@ describe("account email challenges", () => {
       [userId]
     );
   });
+
+  it("replays a purchase confirmation safely when another flow already verified the email", async () => {
+    const challengeId = randomUUID();
+    const orderId = randomUUID();
+    const userId = "purchased-student-verified";
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const token = createEmailChallengeToken({
+      challengeId,
+      expiresAt,
+      generation: 1,
+      purpose: "purchase_verification",
+      secret: SECRET,
+    });
+    const { client, query } = makeClient((statement) => {
+      if (statement.includes("from account_email_challenges")) {
+        return {
+          rows: [
+            {
+              consumed_at: null,
+              expires_at: expiresAt,
+              generation: 1,
+              id: challengeId,
+              order_id: orderId,
+              owner_email: "purchased@example.test",
+              pending_email: null,
+              pending_signup_id: null,
+              purpose: "purchase_verification",
+              user_id: userId,
+            },
+          ],
+        };
+      }
+      if (
+        statement.includes("from users") &&
+        statement.includes("email_verified")
+      ) {
+        return {
+          rows: [
+            {
+              email: "purchased@example.test",
+              email_verified: true,
+            },
+          ],
+        };
+      }
+      if (
+        statement.includes("from orders") &&
+        statement.includes("checkout_course_slug")
+      ) {
+        return { rows: [{ checkout_course_slug: "curso-comprado" }] };
+      }
+      return { rows: [] };
+    });
+    dependencies.connect.mockResolvedValue(client);
+
+    await expect(consumeAccountEmailChallenge(token)).resolves.toEqual({
+      confirmed: true,
+      nextPath: "/entrar?returnTo=%2Fcomprar%2Fcurso-comprado&emailVerified=1",
+    });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("set consumed_at = now()"),
+      [challengeId, 1]
+    );
+    expect(query.mock.calls.join("\n")).not.toContain("delete from accounts");
+    expect(query.mock.calls.join("\n")).not.toContain("delete from sessions");
+  });
 });

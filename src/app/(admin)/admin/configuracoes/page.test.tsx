@@ -19,6 +19,7 @@ const dependencies = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   redirect: dependencies.redirect,
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 vi.mock("next/link", () => ({
   default: ({ children, href }: React.PropsWithChildren<{ href: string }>) => (
@@ -120,6 +121,7 @@ describe("AdminSettingsPage", () => {
       root = null;
     }
     document.body.innerHTML = "";
+    window.history.replaceState(null, "", "/admin/configuracoes");
   });
 
   beforeEach(() => {
@@ -281,6 +283,53 @@ describe("AdminSettingsPage", () => {
         expect(host.textContent).toContain("Perguntas frequentes");
       }
     }
+  });
+
+  it("keeps the selected tab in the URL and follows a profile deep link while mounted", async () => {
+    dependencies.requireSession.mockResolvedValue(staffSession("admin"));
+    dependencies.canPerform.mockImplementation(
+      (_session: unknown, permission: string) => permission === "viewSettings"
+    );
+
+    window.history.replaceState(null, "", "/admin/configuracoes");
+    const host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    await act(async () => {
+      root?.render(await AdminSettingsPage());
+    });
+
+    const platformTab = [...host.querySelectorAll('[role="tab"]')].find(
+      (candidate) => candidate.textContent?.includes("Plataforma")
+    );
+    act(() => {
+      platformTab?.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          button: 0,
+          cancelable: true,
+        })
+      );
+    });
+    expect(window.location.search).toBe("?tab=plataforma");
+
+    window.history.pushState(
+      null,
+      "",
+      "/admin/configuracoes?tab=perfil#acesso-conta"
+    );
+    await act(async () => {
+      root?.render(
+        await AdminSettingsPage({
+          searchParams: Promise.resolve({ tab: "perfil" }),
+        })
+      );
+    });
+
+    const profileTab = [...host.querySelectorAll('[role="tab"]')].find(
+      (candidate) => candidate.textContent?.includes("Perfil")
+    );
+    expect(profileTab?.getAttribute("aria-selected")).toBe("true");
   });
 
   it("shows Support's personal profile without tabs when global access is absent", async () => {

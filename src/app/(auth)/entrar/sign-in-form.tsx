@@ -88,6 +88,14 @@ export function SignInForm({
         return;
       }
 
+      if (signInOutcome === "account_suspended") {
+        setIsAccessBlocked(true);
+        setError(
+          "Sua conta está suspensa. Entre em contato com o suporte para solicitar uma revisão."
+        );
+        return;
+      }
+
       if (signInOutcome !== "authenticated") {
         setError("E-mail ou senha incorretos.");
         return;

@@ -178,6 +178,12 @@ const assertPurchaseConfirmationSchema = async (
       to_regclass('public.purchase_confirmation_intents') is not null
       and to_regclass('public.account_email_challenges') is not null
       and exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'purchase_confirmation_intents'
+          and column_name = 'verification_required'
+      )
+      and exists (
         select 1 from pg_enum value
         join pg_type type on type.oid = value.enumtypid
         where type.typname = 'email_delivery_topic'
@@ -192,11 +198,11 @@ const assertPurchaseConfirmationSchema = async (
     ) as schema_ready
   `);
   if (!result.rows[0]?.schema_ready) {
-    throw new Error("Migration 0098 is not applied to the target.");
+    throw new Error("Migrations 0098 and 0101 are not applied to the target.");
   }
 };
 
-const getCutoverCounts = async (
+export const getPurchaseConfirmationCutoverCounts = async (
   client: Pick<PoolClient, "query">
 ): Promise<CutoverCounts> => {
   const result = await client.query<CutoverCounts>(
@@ -206,8 +212,9 @@ const getCutoverCounts = async (
           orders.id as order_id,
           message.status as outbox_status,
           email_messages.status as email_status
-        from purchase_confirmation_intents
-        join orders on orders.id = purchase_confirmation_intents.order_id
+        from orders
+        left join purchase_confirmation_intents as intent
+          on intent.order_id = orders.id
         join outbox_messages as message
           on message.aggregate_type = 'order'
           and message.aggregate_id = orders.id::text
@@ -215,7 +222,7 @@ const getCutoverCounts = async (
           and message.status in ('pending', 'retrying', 'dead_letter', 'processing')
         left join email_messages
           on email_messages.outbox_message_id = message.id
-        where purchase_confirmation_intents.origin = 'historical'
+        where (intent.order_id is null or intent.origin = 'historical')
           and orders.status = 'paid'
           and orders.buyer_identity_status = 'resolved'
           and orders.user_id is not null
@@ -225,7 +232,10 @@ const getCutoverCounts = async (
           bool_or(outbox_status = 'processing') as in_flight,
           bool_or(
             outbox_status = 'processing'
-            or email_status = any($1::text[])
+            or coalesce(
+              email_status = any($1::email_message_status[]),
+              false
+            )
           ) as ambiguous,
           bool_or(
             outbox_status in ('pending', 'retrying', 'dead_letter')
@@ -248,28 +258,36 @@ const getCutoverCounts = async (
   );
 };
 
-const getHistoricalLegacyOrders = async (
+export const getPurchaseConfirmationLegacyCutoverCandidates = async (
   client: Pick<PoolClient, "query">
 ): Promise<HistoricalPurchaseOrderRow[]> => {
   const result = await client.query<HistoricalPurchaseOrderRow>(
     `
-      select distinct orders.id::text as order_id, orders.user_id
-      from purchase_confirmation_intents
-      join orders on orders.id = purchase_confirmation_intents.order_id
-      where purchase_confirmation_intents.origin = 'historical'
-        and orders.status = 'paid'
-        and orders.buyer_identity_status = 'resolved'
-        and orders.user_id is not null
-        and exists (
-          select 1
-          from outbox_messages as message
-          where message.aggregate_type = 'order'
-            and message.aggregate_id = orders.id::text
-            and message.topic in ('auth.account-activation', 'email.access-released')
-            and message.status in ('pending', 'retrying', 'dead_letter')
-        )
-      order by orders.id::text
-      limit $1
+      with candidates as (
+        select orders.id, orders.user_id
+        from orders
+        left join purchase_confirmation_intents as intent
+          on intent.order_id = orders.id
+        where (intent.order_id is null or intent.origin = 'historical')
+          and orders.status = 'paid'
+          and orders.buyer_identity_status = 'resolved'
+          and orders.user_id is not null
+          and exists (
+            select 1
+            from outbox_messages as message
+            where message.aggregate_type = 'order'
+              and message.aggregate_id = orders.id::text
+              and message.topic in ('auth.account-activation', 'email.access-released')
+              and message.status in ('pending', 'retrying', 'dead_letter')
+          )
+        order by orders.id
+        limit $1
+      )
+      select candidates.id::text as order_id, candidates.user_id
+      from candidates
+      join orders on orders.id = candidates.id
+      order by candidates.id
+      for update of orders
     `,
     [BATCH_LIMIT]
   );
@@ -299,7 +317,7 @@ export const runPurchaseConfirmationLegacyCutover = async ({
       "select pg_advisory_xact_lock(hashtextextended('purchase-confirmation-v1-cutover', 0))"
     );
     await assertPurchaseConfirmationSchema(client);
-    const counts = await getCutoverCounts(client);
+    const counts = await getPurchaseConfirmationCutoverCounts(client);
     if (mode === "dry-run") {
       await client.query("rollback");
       transactionOpen = false;
@@ -315,7 +333,8 @@ export const runPurchaseConfirmationLegacyCutover = async ({
       };
     }
 
-    const candidates = await getHistoricalLegacyOrders(client);
+    const candidates =
+      await getPurchaseConfirmationLegacyCutoverCandidates(client);
     let enqueued = 0;
     let ambiguousLegacy = 0;
     let alreadyRegistered = 0;
@@ -335,7 +354,7 @@ export const runPurchaseConfirmationLegacyCutover = async ({
       }
     }
 
-    const remaining = await getCutoverCounts(client);
+    const remaining = await getPurchaseConfirmationCutoverCounts(client);
     await client.query("commit");
     transactionOpen = false;
     return {

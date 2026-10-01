@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -11,11 +12,88 @@ import {
   confirmRefundPasswordAction,
   requestFullRefundAction,
 } from "@/features/payments/actions";
+import { authClient } from "@/lib/auth-client";
+import { route } from "@/lib/routes";
 import {
   BUYER_IDENTITY_REVIEW_NO_ACCESS_MESSAGE,
   getErrorMessage,
   REFUND_ASAAS_CONFIRMATION_MESSAGE,
 } from "./financial-operations-shared";
+
+type PasswordCredentialStatus =
+  | "unchecked"
+  | "checking"
+  | "available"
+  | "missing"
+  | "unavailable";
+
+function RefundPasswordCredentialGate({
+  children,
+  onRetry,
+  status,
+}: {
+  children: ReactNode;
+  onRetry: () => Promise<void>;
+  status: PasswordCredentialStatus;
+}): ReactNode {
+  if (status === "checking") {
+    return (
+      <p
+        aria-live="polite"
+        className="mt-3 text-muted-foreground text-sm"
+        role="status"
+      >
+        Verificando o método de acesso…
+      </p>
+    );
+  }
+
+  if (status === "missing") {
+    return (
+      <div className="mt-3 grid gap-3">
+        <p className="text-sm">
+          Sua conta ainda não tem uma senha local. Defina-a pelo e-mail; depois,
+          volte aqui e confirme para continuar com o reembolso.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild type="button" variant="outline">
+            <Link
+              href={route("/recuperar-senha")}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Definir senha por e-mail
+            </Link>
+          </Button>
+          <Button onClick={onRetry} type="button" variant="ghost">
+            Já defini a senha
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "unavailable") {
+    return (
+      <div className="mt-3 grid gap-3">
+        <p className="text-muted-foreground text-sm">
+          Não foi possível verificar o método de acesso. Tente novamente para
+          continuar com segurança.
+        </p>
+        <Button
+          className="w-fit"
+          onClick={onRetry}
+          type="button"
+          variant="outline"
+        >
+          Tentar novamente
+        </Button>
+      </div>
+    );
+  }
+
+  return children;
+}
 
 export function RefundOperation({
   identityReview = false,
@@ -32,6 +110,35 @@ export function RefundOperation({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [credentialStatus, setCredentialStatus] =
+    useState<PasswordCredentialStatus>("unchecked");
+
+  const checkPasswordCredential = async (): Promise<void> => {
+    setCredentialStatus("checking");
+    try {
+      const result = await authClient.listAccounts();
+      if (result.error || !result.data) {
+        setCredentialStatus("unavailable");
+        return;
+      }
+
+      setCredentialStatus(
+        result.data.some((account) => account.providerId === "credential")
+          ? "available"
+          : "missing"
+      );
+    } catch {
+      setCredentialStatus("unavailable");
+    }
+  };
+
+  const handleDisclosureToggle = async (
+    event: React.SyntheticEvent<HTMLDetailsElement>
+  ): Promise<void> => {
+    if (event.currentTarget.open && credentialStatus === "unchecked") {
+      await checkPasswordCredential();
+    }
+  };
 
   useEffect(() => {
     if (confirmationToken) {
@@ -72,7 +179,10 @@ export function RefundOperation({
   };
 
   return (
-    <details className="mt-3 rounded-detail border bg-background p-3">
+    <details
+      className="mt-3 rounded-detail border bg-background p-3"
+      onToggle={handleDisclosureToggle}
+    >
       <summary className="cursor-pointer rounded-detail font-medium text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
         Solicitar reembolso integral
       </summary>
@@ -144,47 +254,55 @@ export function RefundOperation({
           </form>
         </>
       ) : (
-        <form
-          action={confirmPassword}
-          aria-describedby={`refund-step-one-description-${orderId}`}
-          aria-labelledby={`refund-step-one-${orderId}`}
-          className="mt-3"
+        <RefundPasswordCredentialGate
+          onRetry={checkPasswordCredential}
+          status={credentialStatus}
         >
-          <h4 className="font-medium text-sm" id={`refund-step-one-${orderId}`}>
-            Etapa 1 de 2: confirmar a senha
-          </h4>
-          <p
-            className="mt-2 text-muted-foreground text-xs"
-            id={`refund-step-one-description-${orderId}`}
+          <form
+            action={confirmPassword}
+            aria-describedby={`refund-step-one-description-${orderId}`}
+            aria-labelledby={`refund-step-one-${orderId}`}
+            className="mt-3"
           >
-            {identityReview
-              ? `Confirme sua senha atual para autorizar a solicitação. ${BUYER_IDENTITY_REVIEW_NO_ACCESS_MESSAGE}`
-              : "Confirme sua senha atual para autorizar a solicitação de reembolso."}
-          </p>
-          <input name="orderId" type="hidden" value={orderId} />
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor={`refund-password-${orderId}`}>
-                Sua senha atual
-              </FieldLabel>
-              <PasswordInput
-                autoComplete="current-password"
-                id={`refund-password-${orderId}`}
-                name="password"
-                required
-                type="password"
-              />
-            </Field>
-          </FieldGroup>
-          <Button
-            className="mt-3 w-full sm:w-auto"
-            loading={pending}
-            type="submit"
-            variant="outline"
-          >
-            Confirmar senha
-          </Button>
-        </form>
+            <h4
+              className="font-medium text-sm"
+              id={`refund-step-one-${orderId}`}
+            >
+              Etapa 1 de 2: confirmar a senha
+            </h4>
+            <p
+              className="mt-2 text-muted-foreground text-xs"
+              id={`refund-step-one-description-${orderId}`}
+            >
+              {identityReview
+                ? `Confirme sua senha atual para autorizar a solicitação. ${BUYER_IDENTITY_REVIEW_NO_ACCESS_MESSAGE}`
+                : "Confirme sua senha atual para autorizar a solicitação de reembolso."}
+            </p>
+            <input name="orderId" type="hidden" value={orderId} />
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor={`refund-password-${orderId}`}>
+                  Sua senha atual
+                </FieldLabel>
+                <PasswordInput
+                  autoComplete="current-password"
+                  id={`refund-password-${orderId}`}
+                  name="password"
+                  required
+                  type="password"
+                />
+              </Field>
+            </FieldGroup>
+            <Button
+              className="mt-3 w-full sm:w-auto"
+              loading={pending}
+              type="submit"
+              variant="outline"
+            >
+              Confirmar senha
+            </Button>
+          </form>
+        </RefundPasswordCredentialGate>
       )}
       {error ? (
         <p

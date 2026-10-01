@@ -26,6 +26,7 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 ### Domínio
 
 - [Identidade e autorização](domain/identity-and-authorization.md)
+- [Perfil da Conta e continuidade de acesso](domain/account-profile-and-access.md)
 - [Comércio e acesso](domain/commerce-and-access.md)
 - [Conteúdo, aprendizagem e progresso](domain/learning-content-and-progress.md)
 - [Certificados e direitos de dados](domain/certificates-and-data-rights.md)

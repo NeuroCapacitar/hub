@@ -716,7 +716,14 @@ const consumeUnverifiedAccount = async ({
   returnTo: string | null;
 }): Promise<{ confirmed: false } | { confirmed: true; nextPath: string }> => {
   if (account.email_verified) {
-    return { confirmed: false };
+    if (!(challenge.purpose === "purchase_verification" && returnTo)) {
+      return { confirmed: false };
+    }
+    await markEmailChallengeConsumed({ challenge, client });
+    return {
+      confirmed: true,
+      nextPath: signInPathAfterVerification(returnTo),
+    };
   }
 
   await client.query(
@@ -801,6 +808,18 @@ export const consumeAccountEmailChallenge = async (
     );
     const challenge = challengeResult.rows[0];
     const now = new Date();
+    if (
+      challenge?.purpose === "purchase_verification" &&
+      challenge.consumed_at &&
+      challenge.user_id &&
+      owner.account?.email_verified
+    ) {
+      return await consumeVerifiedEmailChallenge({
+        account: owner.account,
+        challenge,
+        client,
+      });
+    }
     if (!isValidStoredEmailChallenge(challenge, claims, now)) {
       return { confirmed: false };
     }

@@ -137,8 +137,11 @@ export const EmailVerificationEmail = ({
       </Button>
     </Section>
     <Text style={styles.muted}>
-      Se você não pediu esta confirmação, ignore esta mensagem. Nenhuma senha ou
-      acesso será alterado.
+      O link confirma que você tem acesso ao endereço de e-mail. Ele não inicia
+      uma sessão nem cria uma senha.
+    </Text>
+    <Text style={styles.muted}>
+      Se você não pediu esta confirmação, ignore esta mensagem.
     </Text>
   </EmailShell>
 );

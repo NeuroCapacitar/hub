@@ -48,8 +48,29 @@ const createPaidClient = (emailVerified = true) => {
     if (statement.includes("from outbox_messages as message")) {
       return { rows: [] };
     }
-    if (statement.includes("select email_verified")) {
-      return { rows: [{ email_verified: emailVerified }] };
+    if (
+      statement.includes("from users") &&
+      statement.includes("email_verified")
+    ) {
+      return {
+        rows: [
+          {
+            email: "student@example.test",
+            email_verified: emailVerified,
+            name: "Student",
+          },
+        ],
+      };
+    }
+    if (statement.includes("set customer_email = coalesce")) {
+      return {
+        rows: [
+          {
+            customer_email: "student@example.test",
+            customer_name: "Student",
+          },
+        ],
+      };
     }
     if (statement.includes("insert into account_email_challenges")) {
       return { rows: [{ generation: 1, id: "purchase-challenge" }] };

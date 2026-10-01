@@ -893,6 +893,12 @@ describe("transactional email", () => {
       }),
       { idempotencyKey: "auth.email-verification/challenge-id/1/v1" }
     );
+    expect(JSON.stringify(send.mock.calls[0]?.[0])).toContain(
+      "O link confirma que você tem acesso ao endereço de e-mail."
+    );
+    expect(JSON.stringify(send.mock.calls[0]?.[0])).not.toContain(
+      "Nenhuma senha ou acesso será alterado"
+    );
     expect(JSON.stringify(send.mock.calls[0]?.[1])).not.toContain(
       "raw-verification-token"
     );

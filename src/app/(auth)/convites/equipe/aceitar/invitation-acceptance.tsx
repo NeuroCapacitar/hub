@@ -30,6 +30,47 @@ type ViewState =
   | "unavailable";
 type RetryAction = "accept" | "preview" | null;
 
+const INVALID_INVITATION_ERROR = "invalid_or_expired_staff_invitation";
+
+const readJsonResponse = async (response: Response): Promise<unknown> => {
+  try {
+    return await response.json();
+  } catch {
+    throw new Error("unavailable");
+  }
+};
+
+const requestInvitationJson = async (
+  url: string,
+  init: RequestInit
+): Promise<unknown> => {
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch {
+    throw new Error("unavailable");
+  }
+
+  if (response.status === 400) {
+    const body = await readJsonResponse(response);
+    const error =
+      body && typeof body === "object" ? Reflect.get(body, "error") : null;
+    if (error === INVALID_INVITATION_ERROR) {
+      throw new Error("invalid");
+    }
+    throw new Error("unavailable");
+  }
+
+  if (!response.ok) {
+    throw new Error("unavailable");
+  }
+
+  return readJsonResponse(response);
+};
+
+const isExplicitInvitationRejection = (error: unknown): boolean =>
+  error instanceof Error && error.message === "invalid";
+
 const getPreview = (value: unknown): InvitationPreview | null => {
   if (!value || typeof value !== "object") {
     return null;
@@ -75,25 +116,22 @@ const getPreview = (value: unknown): InvitationPreview | null => {
 const requestInvitationPreview = async (
   challengeToken: string
 ): Promise<InvitationPreview> => {
-  const response = await fetch("/api/account/staff-invitations/preview", {
-    body: JSON.stringify({ token: challengeToken }),
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      "ngrok-skip-browser-warning": "true",
-    },
-    method: "POST",
-  });
-  if (response.status >= 500) {
-    throw new Error("unavailable");
-  }
-  if (!response.ok) {
-    throw new Error("invalid");
-  }
-  const preview = getPreview(await response.json());
+  const result = await requestInvitationJson(
+    "/api/account/staff-invitations/preview",
+    {
+      body: JSON.stringify({ token: challengeToken }),
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      method: "POST",
+    }
+  );
+  const preview = getPreview(result);
   if (!preview) {
-    throw new Error("invalid");
+    throw new Error("unavailable");
   }
   return preview;
 };
@@ -105,28 +143,31 @@ const submitInvitationAcceptance = async ({
   name: string;
   token: string;
 }): Promise<string> => {
-  const response = await fetch("/api/account/staff-invitations/accept", {
-    body: JSON.stringify({ name: name.trim(), token }),
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      "ngrok-skip-browser-warning": "true",
-    },
-    method: "POST",
-  });
-  const result: unknown = await response.json();
-  if (!response.ok) {
-    throw new Error(response.status >= 500 ? "unavailable" : "invalid");
-  }
+  const result = await requestInvitationJson(
+    "/api/account/staff-invitations/accept",
+    {
+      body: JSON.stringify({ name: name.trim(), token }),
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      method: "POST",
+    }
+  );
   const nextPath =
     result && typeof result === "object"
       ? Reflect.get(result, "nextPath")
       : null;
-  const safeNextPath =
-    typeof nextPath === "string"
-      ? new URL(nextPath, window.location.origin)
-      : null;
+  let safeNextPath: URL | null = null;
+  if (typeof nextPath === "string") {
+    try {
+      safeNextPath = new URL(nextPath, window.location.origin);
+    } catch {
+      throw new Error("unavailable");
+    }
+  }
   if (
     !result ||
     typeof result !== "object" ||
@@ -136,7 +177,7 @@ const submitInvitationAcceptance = async ({
     safeNextPath.pathname !== "/entrar" ||
     safeNextPath.searchParams.get("returnTo") !== "/admin"
   ) {
-    throw new Error("invalid");
+    throw new Error("unavailable");
   }
   return safeNextPath.pathname + safeNextPath.search;
 };
@@ -176,10 +217,9 @@ export function StaffInvitationAcceptance(): React.JSX.Element {
       })
       .catch((error: unknown) => {
         if (active) {
-          const unavailable =
-            error instanceof Error && error.message === "unavailable";
-          setRetryAction(unavailable ? "preview" : null);
-          setState(unavailable ? "unavailable" : "error");
+          const rejected = isExplicitInvitationRejection(error);
+          setRetryAction(rejected ? null : "preview");
+          setState(rejected ? "error" : "unavailable");
         }
       });
 
@@ -199,10 +239,9 @@ export function StaffInvitationAcceptance(): React.JSX.Element {
       const nextPath = await submitInvitationAcceptance({ name, token });
       window.location.assign(nextPath);
     } catch (error) {
-      const unavailable =
-        error instanceof Error && error.message === "unavailable";
-      setRetryAction(unavailable ? "accept" : null);
-      setState(unavailable ? "unavailable" : "error");
+      const rejected = isExplicitInvitationRejection(error);
+      setRetryAction(rejected ? null : "accept");
+      setState(rejected ? "error" : "unavailable");
     }
   };
 
@@ -218,10 +257,9 @@ export function StaffInvitationAcceptance(): React.JSX.Element {
       setRetryAction(null);
       setState(preview.alreadyAccepted ? "accepted" : "ready");
     } catch (error) {
-      const unavailable =
-        error instanceof Error && error.message === "unavailable";
-      setRetryAction(unavailable ? "preview" : null);
-      setState(unavailable ? "unavailable" : "error");
+      const rejected = isExplicitInvitationRejection(error);
+      setRetryAction(rejected ? null : "preview");
+      setState(rejected ? "error" : "unavailable");
     }
   };
 

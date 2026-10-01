@@ -1,5 +1,7 @@
 import { requestAccountEmailVerificationByAddress } from "@/features/account/email-challenges";
-import { getAuth } from "@/lib/auth";
+import { withAccountPasswordResetOperation } from "@/features/account/password-reset-operations";
+import { scheduleOutboxDrainAfterResponse } from "@/features/outbox/background-drain";
+import { getAuth, isStudentPlatformAccessBlocked } from "@/lib/auth";
 import { isBlockedAuthEndpoint } from "@/lib/auth-policy";
 import { getServerEnv } from "@/lib/env";
 import {
@@ -16,6 +18,9 @@ interface SocialAuthRequest {
   provider: string | null;
   requestSignUp: boolean;
 }
+
+const AUTH_API_PATH_PREFIX_PATTERN = /^\/api\/auth\/?/;
+const TRAILING_SLASH_PATTERN = /\/$/;
 
 const getSocialAuthRequest = async (
   request: Request
@@ -56,6 +61,43 @@ const isResponseFailure = async (response: Response): Promise<boolean> => {
 const verificationEmailResponse = (): Response =>
   Response.json({ status: true }, { headers: { "cache-control": "no-store" } });
 
+const blockedAccountResponse = (): Response =>
+  Response.json(
+    { code: "ACCOUNT_SUSPENDED", error: "account_suspended" },
+    { headers: { "cache-control": "no-store" }, status: 403 }
+  );
+
+const recoveryEndpoints = new Set([
+  "request-password-reset",
+  "reset-password",
+  "sign-out",
+]);
+
+const isPublicAccountRecoveryEndpoint = (authEndpoint: string): boolean =>
+  recoveryEndpoints.has(authEndpoint) ||
+  authEndpoint.startsWith("reset-password/");
+
+const checkAuthenticatedPlatformAccess = async (
+  request: Request,
+  authEndpoint: string
+): Promise<Response | null> => {
+  if (
+    isPublicAccountRecoveryEndpoint(authEndpoint) ||
+    !request.headers.has("cookie")
+  ) {
+    return null;
+  }
+
+  const session = await getAuth().api.getSession({ headers: request.headers });
+  if (
+    session?.user &&
+    (await isStudentPlatformAccessBlocked(session.user.id))
+  ) {
+    return blockedAccountResponse();
+  }
+  return null;
+};
+
 const handleVerificationEmailRequest = async (
   request: Request,
   correlationId: string
@@ -68,10 +110,22 @@ const handleVerificationEmailRequest = async (
       !Array.isArray(body) &&
       typeof Reflect.get(body, "email") === "string"
     ) {
-      await requestAccountEmailVerificationByAddress({
+      const outcome = await requestAccountEmailVerificationByAddress({
         email: Reflect.get(body, "email"),
         requestHeaders: request.headers,
       });
+      if (outcome === "queued") {
+        try {
+          scheduleOutboxDrainAfterResponse({ correlationId });
+        } catch {
+          logOperationalEvent({
+            correlationId,
+            errorCode: "account_verification_drain_schedule_failed",
+            operation: "auth.email_verification_drain",
+            outcome: "failure",
+          });
+        }
+      }
     }
   } catch {
     logOperationalEvent({
@@ -144,6 +198,24 @@ export const GET = async (request: Request): Promise<Response> => {
       },
       status: 303,
     });
+  }
+
+  const authEndpoint = requestUrl.pathname
+    .replace(AUTH_API_PATH_PREFIX_PATTERN, "")
+    .replace(TRAILING_SLASH_PATTERN, "");
+  try {
+    const accessResponse = await checkAuthenticatedPlatformAccess(
+      request,
+      authEndpoint
+    );
+    if (accessResponse) {
+      return accessResponse;
+    }
+  } catch {
+    return Response.json(
+      { error: "authentication_temporarily_unavailable" },
+      { headers: { "cache-control": "no-store" }, status: 503 }
+    );
   }
 
   const response = await getAuth().handler(request);
@@ -223,6 +295,21 @@ export const POST = async (
     return Response.json({ error: "public_sign_up_disabled" }, { status: 404 });
   }
 
+  try {
+    const accessResponse = await checkAuthenticatedPlatformAccess(
+      request,
+      authEndpoint
+    );
+    if (accessResponse) {
+      return accessResponse;
+    }
+  } catch {
+    return Response.json(
+      { error: "authentication_temporarily_unavailable" },
+      { headers: { "cache-control": "no-store" }, status: 503 }
+    );
+  }
+
   if (authEndpoint === "change-email") {
     return Response.json(
       { error: "email_change_flow_unavailable" },
@@ -234,7 +321,35 @@ export const POST = async (
     return handleVerificationEmailRequest(request, correlationId);
   }
 
-  const response = await getAuth().handler(request);
+  const nativeHandler = async (): Promise<Response> =>
+    await getAuth().handler(request);
+  let response: Response;
+  if (
+    authEndpoint === "request-password-reset" ||
+    authEndpoint === "reset-password"
+  ) {
+    try {
+      response = await withAccountPasswordResetOperation({
+        endpoint: authEndpoint,
+        handler: nativeHandler,
+        request,
+      });
+    } catch {
+      logOperationalEvent({
+        correlationId,
+        errorCode: "password_reset_operation_guard_failed",
+        operation: "auth.password_reset",
+        outcome: "failure",
+        provider: "database",
+      });
+      return Response.json(
+        { error: "password_reset_temporarily_unavailable" },
+        { headers: { "cache-control": "no-store" }, status: 503 }
+      );
+    }
+  } else {
+    response = await nativeHandler();
+  }
   await logAuthRequestOutcome({
     authEndpoint,
     correlationId,

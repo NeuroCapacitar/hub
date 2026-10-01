@@ -1374,6 +1374,9 @@ export const purchaseConfirmationIntents = pgTable(
       .primaryKey()
       .references(() => orders.id, { onDelete: "cascade" }),
     origin: purchaseConfirmationIntentOriginEnum("origin").notNull(),
+    verificationRequired: boolean("verification_required")
+      .default(false)
+      .notNull(),
     ...timestamps,
   }
 );
@@ -1579,6 +1582,29 @@ export const accountEmailChangeRequests = pgTable(
       "account_email_change_requests_distinct_emails",
       sql`public.canonicalize_auth_email_identity(${table.currentEmail})
         <> public.canonicalize_auth_email_identity(${table.newEmail})`
+    ),
+  ]
+);
+
+export const accountPasswordResetOperations = pgTable(
+  "account_password_reset_operations",
+  {
+    id: uuid("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    operation: text("operation").notNull(),
+    expiresAt: timestamp("expires_at", tz).notNull(),
+    createdAt: timestamp("created_at", tz).defaultNow().notNull(),
+  },
+  (table) => [
+    index("account_password_reset_operations_user_expires_idx").on(
+      table.userId,
+      table.expiresAt
+    ),
+    check(
+      "account_password_reset_operations_operation_valid",
+      sql`${table.operation} in ('request', 'consume')`
     ),
   ]
 );

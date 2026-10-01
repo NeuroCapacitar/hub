@@ -24,6 +24,7 @@ const REPLACEABLE_OUTBOX_STATES = new Set([
   "pending",
   "retrying",
 ]);
+const PURCHASE_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface PurchaseConfirmationLedgerRow {
   origin: "current" | "historical";
@@ -121,7 +122,7 @@ const ensurePurchaseVerificationChallenge = async ({
     [orderId]
   );
   const existing = existingResult.rows[0];
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + PURCHASE_VERIFICATION_TTL_MS);
   if (existing) {
     if (
       existing.user_id !== userId ||
@@ -226,8 +227,12 @@ export const enqueuePurchaseConfirmedEmail = async ({
     return "already_registered";
   }
 
-  const buyer = await client.query<{ email_verified: boolean }>(
-    `select email_verified
+  const buyer = await client.query<{
+    email: string;
+    email_verified: boolean;
+    name: string;
+  }>(
+    `select email, email_verified, name
      from users
      where id = $1
      limit 1
@@ -239,20 +244,44 @@ export const enqueuePurchaseConfirmedEmail = async ({
     throw new Error("purchase_confirmation_user_missing");
   }
 
+  const orderSnapshot = await client.query<{
+    customer_email: string | null;
+    customer_name: string | null;
+  }>(
+    `update orders
+     set customer_email = coalesce(customer_email, $2),
+         customer_name = coalesce(customer_name, $3),
+         updated_at = now()
+     where id = $1
+       and user_id = $4
+       and provider = 'asaas'
+       and status = 'paid'
+     returning customer_email, customer_name`,
+    [orderId, buyerRow.email, buyerRow.name, userId]
+  );
+  const snapshot = orderSnapshot.rows[0];
+  if (!(snapshot?.customer_email?.trim() && snapshot.customer_name?.trim())) {
+    throw new Error("purchase_confirmation_order_snapshot_missing");
+  }
+
   const registered = registeredIntent
     ? await client.query<{ order_id: string }>(
         `update purchase_confirmation_intents
-         set origin = 'current', updated_at = now()
+         set origin = 'current',
+             verification_required = $2,
+             updated_at = now()
          where order_id = $1 and origin = 'historical'
          returning order_id`,
-        [orderId]
+        [orderId, !buyerRow.email_verified]
       )
     : await client.query<{ order_id: string }>(
-        `insert into purchase_confirmation_intents (order_id, origin)
-         values ($1, 'current')
+        `insert into purchase_confirmation_intents (
+           order_id, origin, verification_required
+         )
+         values ($1, 'current', $2)
          on conflict (order_id) do nothing
          returning order_id`,
-        [orderId]
+        [orderId, !buyerRow.email_verified]
       );
   if (!registered.rows[0]) {
     return "already_registered";

@@ -1,7 +1,7 @@
 ---
 status: runbook
 owner: operations
-last_verified_commit: a95be66d7645e17d3bf83528ffa065b7ced38861
+last_verified_commit: 6bf5d693fd565c7c4c0c4bd9b7754efca92c2b44
 ---
 
 # Outbox e efeitos transacionais
@@ -19,10 +19,16 @@ que a transação terminou. Esse drain é limitado a cinco mensagens e quinze
 segundos; uma falha não altera nem remove a intenção durável. O cron de outbox
 continua sendo a recuperação para indisponibilidade, timeout ou queda do
 processo. Em particular, conclusão de aula que emite certificado, suporte,
-alteração de disponibilidade do curso e comandos administrativos de certificado
-usam o drain imediato. Manutenção de matrículas e entregas encadeadas do
-próprio worker permanecem cron/worker-only para evitar recursão e concorrência
-desnecessárias.
+criação/atualização e reenvio de convites da equipe, alteração de disponibilidade
+do curso e comandos administrativos de certificado usam o drain imediato. A
+ação agenda o drain somente depois que a transação do convite confirma a intenção
+na outbox. A confirmação do e-mail atual numa troca de endereço também agenda o
+drain da prova para o novo endereço; a confirmação final agenda os avisos aos dois
+endereços. Replays idempotentes não agendam outro drain. Se o agendamento imediato
+falhar depois do commit, a rota mantém a confirmação bem-sucedida e registra a
+falha; a intenção durável continua recuperável pelo cron. Manutenção de matrículas
+e entregas encadeadas do próprio worker permanecem cron/worker-only para evitar
+recursão e concorrência desnecessárias.
 
 ## Catálogo aprovado
 
@@ -81,7 +87,18 @@ devolve o certificado a `pending` antes de reentregar a mesma mensagem.
   `order`; chave `email.purchase-confirmed/<order-id>/v1`; payload somente
   `orderId` e `userId`. `purchase_confirmation_intents` é a barreira durável
   por Pedido que sobrevive à retenção de 30 dias das mensagens. O ledger só é
-  gravado na mesma transação do acesso e do enqueue. A migration 0098 registra
+  gravado na mesma transação do acesso e do enqueue; `verification_required`
+  congela se a pessoa precisava confirmar o endereço quando a intenção nasceu.
+  Retry não recalcula essa escolha pelo estado atual da Conta. A entrega usa os
+  snapshots do Pedido/Curso para manter destinatário, nome e CTA consistentes.
+  Se um Pedido resolvido legado ainda não tiver snapshot de comprador, a mesma
+  transação os preenche com a identidade da Conta vinculada; valores presentes
+  do checkout/provider nunca são substituídos.
+  Desafio perto de vencer só é renovado antes da primeira tentativa ao provider;
+  se a manutenção já o removeu antes dessa tentativa, o worker cria outro sob a
+  chave única do Pedido. Depois de tentativa externa, desafio ausente não é
+  recriado nem rotacionado: token e envelope permanecem estáveis durante a janela
+  de idempotência. A migration 0098 registra
   como `historical` Pedidos pagos cuja identidade já estava resolvida, sem copiar PII;
   Pedidos em Revisão continuam elegíveis para confirmação depois da resolução. O publisher normal
   não reenvia esses Pedidos por uma reconciliação tardia. Uma rotina de corte
@@ -261,6 +278,11 @@ reconciliação do corte só substitui uma mensagem v1 quando não há evidênci
 aceitação; `accepted`, `acceptance_unknown`, `processing` e `delivered` nunca
 geram uma segunda confirmação. Os tópicos v1 permanecem registrados para
 entrega/supersession segura durante o rollout.
+O backfill 0098 não cobre mensagens v1 criadas depois da migration: a rotina
+também inventaria Pedidos sem linha no ledger, mantém estados aceitos/ambíguos
+sem um novo envio e bloqueia as linhas que vai reconciliar. Siga o procedimento
+de dry-run, execução e drenagem em
+[Banco e migrations](database-and-migrations.md).
 
 Essa seção de dead letter descreve a **Outbox**. Eventos de lifecycle recebidos
 do Resend possuem uma inbox separada, `resend_webhook_events`, com estados e

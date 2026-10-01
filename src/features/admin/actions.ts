@@ -936,12 +936,18 @@ export const blockStudentPlatformAccessAction = async (
 
   await getPool().query(
     `
-      update profiles
-      set platform_blocked_at = now(),
-          platform_blocked_reason = $2,
-          updated_at = now()
-      where user_id = $1
-        and role = 'student'
+      with blocked as (
+        update profiles
+        set platform_blocked_at = now(),
+            platform_blocked_reason = $2,
+            updated_at = now()
+        where user_id = $1
+          and role = 'student'
+        returning user_id
+      )
+      delete from sessions
+      using blocked
+      where sessions.user_id = blocked.user_id
     `,
     [userId, reason]
   );

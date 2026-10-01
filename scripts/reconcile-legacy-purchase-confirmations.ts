@@ -1,14 +1,27 @@
 import { Pool } from "pg";
 import {
+  type PurchaseConfirmationCutoverTarget,
   resolvePurchaseConfirmationCutoverTarget,
   runPurchaseConfirmationLegacyCutover,
 } from "../src/tooling/purchase-confirmation-cutover";
 
 const main = async (): Promise<void> => {
-  const target = resolvePurchaseConfirmationCutoverTarget({
-    argv: process.argv.slice(2),
-    environment: process.env,
-  });
+  let target: PurchaseConfirmationCutoverTarget;
+  try {
+    target = resolvePurchaseConfirmationCutoverTarget({
+      argv: process.argv.slice(2),
+      environment: process.env,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Purchase confirmation cutover target is invalid.";
+    process.stderr.write(`${message}\n`);
+    process.exitCode = 1;
+    return;
+  }
+
   const pool = new Pool({
     application_name: "hub-purchase-confirmation-v1-cutover",
     connectionString: target.databaseUrl,

@@ -1,4 +1,5 @@
 import { consumeEmailChangeToken } from "@/features/account/email-change";
+import { scheduleOutboxDrainAfterResponse } from "@/features/outbox/background-drain";
 import {
   CORRELATION_ID_HEADER,
   createCorrelationId,
@@ -48,6 +49,18 @@ export const POST = async (request: Request): Promise<Response> => {
         { error: "invalid_or_expired_email_change" },
         { headers: noStoreHeaders, status: 400 }
       );
+    }
+    if (result.outboxDrainRequired) {
+      try {
+        scheduleOutboxDrainAfterResponse({ correlationId });
+      } catch {
+        logOperationalEvent({
+          correlationId,
+          errorCode: "email_change_outbox_drain_schedule_failed",
+          operation: "auth.email_change_confirmation_outbox_drain",
+          outcome: "failure",
+        });
+      }
     }
     logOperationalEvent({
       correlationId,

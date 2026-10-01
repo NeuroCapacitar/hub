@@ -1,5 +1,6 @@
 import { requestPublicAccountRegistration } from "@/features/account/email-challenges";
 import { parsePublicSignupInput } from "@/features/account/public-signup-input";
+import { scheduleOutboxDrainAfterResponse } from "@/features/outbox/background-drain";
 import { getServerEnv } from "@/lib/env";
 import {
   CORRELATION_ID_HEADER,
@@ -43,10 +44,22 @@ export const POST = async (request: Request): Promise<Response> => {
   }
 
   try {
-    await requestPublicAccountRegistration({
+    const outcome = await requestPublicAccountRegistration({
       input,
       requestHeaders: request.headers,
     });
+    if (outcome === "queued") {
+      try {
+        scheduleOutboxDrainAfterResponse({ correlationId });
+      } catch {
+        logOperationalEvent({
+          correlationId,
+          errorCode: "signup_confirmation_drain_schedule_failed",
+          operation: "auth.public_signup_confirmation_drain",
+          outcome: "failure",
+        });
+      }
+    }
     logOperationalEvent({
       correlationId,
       operation: "auth.public_signup_request",

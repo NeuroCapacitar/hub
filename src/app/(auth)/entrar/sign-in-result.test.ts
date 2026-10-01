@@ -31,4 +31,13 @@ describe("isSuccessfulSignInPayload", () => {
       })
     ).toBe("email_verification_required");
   });
+
+  it("distinguishes a suspended account from invalid credentials", () => {
+    expect(
+      getSignInOutcome({
+        code: "ACCOUNT_SUSPENDED",
+        error: "account_suspended",
+      })
+    ).toBe("account_suspended");
+  });
 });

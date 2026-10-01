@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyConfirmedPaymentAccess } from "@/features/payments/apply-authoritative-financial-evidence";
 import type { OrderIdentityQueryClient } from "@/features/payments/order-identity";
 import { resolveLocalOrderIdentity } from "@/features/payments/order-identity";
+import { normalizeBuyerEmail } from "@/lib/email-identity";
 import { getGoogleOAuthProviderConfig } from "./auth-policy";
 
 vi.mock("server-only", () => ({}));
@@ -227,11 +228,11 @@ const startAndCompleteGoogleOAuth = async ({
 const createOrderIdentityMemoryQuery =
   (database: GoogleOAuthMemoryDB): OrderIdentityQueryClient["query"] =>
   (queryText, values = []) => {
-    if (queryText.includes("where lower(u.email) = $1")) {
+    if (queryText.includes("canonicalize_auth_email_identity(u.email)")) {
       const matchingUser = database.user.find(
         (user) =>
           typeof user.email === "string" &&
-          user.email.toLowerCase() === values[0]
+          normalizeBuyerEmail(user.email) === values[0]
       );
       const rows = matchingUser
         ? [
@@ -498,7 +499,7 @@ describe("Better Auth Google OAuth flow with a fake token endpoint", () => {
     }
 
     const identityQuery = createOrderIdentityMemoryQuery(database);
-    const transactionQuery = vi.fn((queryText: string) => {
+    const transactionQuery = vi.fn((queryText: string, values?: unknown[]) => {
       if (
         queryText.includes("with transitioned as") ||
         queryText.includes("provider_customer_id = $2")
@@ -511,9 +512,28 @@ describe("Better Auth Google OAuth flow with a fake token endpoint", () => {
       ) {
         return { rows: [] };
       }
-      if (queryText.includes("select email_verified")) {
+      if (
+        queryText.includes("from users") &&
+        queryText.includes("email_verified")
+      ) {
         return {
-          rows: [{ email_verified: database.user[0]?.emailVerified === true }],
+          rows: [
+            {
+              email: googleUser.email,
+              email_verified: database.user[0]?.emailVerified === true,
+              name: googleUser.name,
+            },
+          ],
+        };
+      }
+      if (queryText.includes("set customer_email = coalesce")) {
+        return {
+          rows: [
+            {
+              customer_email: values?.[1],
+              customer_name: values?.[2],
+            },
+          ],
         };
       }
       if (queryText.includes("insert into purchase_confirmation_intents")) {

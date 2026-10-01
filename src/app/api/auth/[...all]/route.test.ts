@@ -3,15 +3,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const dependencies = vi.hoisted(() => ({
   getAuth: vi.fn(),
   getServerEnv: vi.fn(),
+  isStudentPlatformAccessBlocked: vi.fn(),
   logOperationalEvent: vi.fn(),
   requestAccountEmailVerificationByAddress: vi.fn(),
+  withAccountPasswordResetOperation: vi.fn(),
 }));
 
 vi.mock("@/features/account/email-challenges", () => ({
   requestAccountEmailVerificationByAddress:
     dependencies.requestAccountEmailVerificationByAddress,
 }));
-vi.mock("@/lib/auth", () => ({ getAuth: dependencies.getAuth }));
+vi.mock("@/lib/auth", () => ({
+  getAuth: dependencies.getAuth,
+  isStudentPlatformAccessBlocked: dependencies.isStudentPlatformAccessBlocked,
+}));
+vi.mock("@/features/account/password-reset-operations", () => ({
+  withAccountPasswordResetOperation:
+    dependencies.withAccountPasswordResetOperation,
+}));
 vi.mock("@/lib/env", () => ({ getServerEnv: dependencies.getServerEnv }));
 vi.mock("@/lib/observability", () => ({
   CORRELATION_ID_HEADER: "x-correlation-id",
@@ -28,8 +37,14 @@ describe("POST /api/auth/[...all]", () => {
     });
     dependencies.getAuth.mockReturnValue({
       handler: vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+      api: { getSession: vi.fn().mockResolvedValue(null) },
     });
+    dependencies.isStudentPlatformAccessBlocked.mockReset();
+    dependencies.isStudentPlatformAccessBlocked.mockResolvedValue(false);
     dependencies.requestAccountEmailVerificationByAddress.mockReset();
+    dependencies.withAccountPasswordResetOperation.mockImplementation(
+      ({ handler }: { handler: () => Promise<Response> }) => handler()
+    );
   });
 
   it("records a failed sign-in without account data", async () => {
@@ -63,6 +78,114 @@ describe("POST /api/auth/[...all]", () => {
         outcome: "success",
       })
     );
+  });
+
+  it("blocks native Better Auth mutations for a suspended Student session", async () => {
+    const handler = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    const getSession = vi
+      .fn()
+      .mockResolvedValue({ user: { id: "blocked-student" } });
+    dependencies.getAuth.mockReturnValue({ handler, api: { getSession } });
+    dependencies.isStudentPlatformAccessBlocked.mockResolvedValue(true);
+
+    const response = await POST(
+      new Request("https://hub.example.test/api/auth/update-user", {
+        headers: { cookie: "better-auth.session_token=session-token" },
+        method: "POST",
+        body: JSON.stringify({ name: "Changed directly" }),
+      }),
+      { params: Promise.resolve({ all: ["update-user"] }) }
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "ACCOUNT_SUSPENDED",
+    });
+    expect(getSession).toHaveBeenCalledOnce();
+    expect(dependencies.isStudentPlatformAccessBlocked).toHaveBeenCalledWith(
+      "blocked-student"
+    );
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["request-password-reset", "request-password-reset"],
+    ["reset-password", "reset-password"],
+  ] as const)("guards %s with the shared account identity lock", async (path, endpoint) => {
+    const handler = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    dependencies.getAuth.mockReturnValue({ handler });
+    const request = new Request(`https://hub.example.test/api/auth/${path}`, {
+      body: JSON.stringify({ email: "student@example.test", token: "token" }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    const response = await POST(request, {
+      params: Promise.resolve({ all: [path] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(dependencies.withAccountPasswordResetOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint,
+        request,
+        handler: expect.any(Function),
+      })
+    );
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed when the password-reset guard cannot reach the database", async () => {
+    const handler = vi.fn();
+    dependencies.getAuth.mockReturnValue({ handler });
+    dependencies.withAccountPasswordResetOperation.mockRejectedValueOnce(
+      new Error("database unavailable")
+    );
+
+    const response = await POST(
+      new Request("https://hub.example.test/api/auth/reset-password", {
+        body: JSON.stringify({ token: "token" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+      { params: Promise.resolve({ all: ["reset-password"] }) }
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: "password_reset_temporarily_unavailable",
+    });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("keeps sign-out available for a suspended Student", async () => {
+    const handler = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    dependencies.getAuth.mockReturnValue({
+      api: {
+        getSession: vi
+          .fn()
+          .mockResolvedValue({ user: { id: "blocked-student" } }),
+      },
+      handler,
+    });
+    dependencies.isStudentPlatformAccessBlocked.mockResolvedValue(true);
+
+    const response = await POST(
+      new Request("https://hub.example.test/api/auth/sign-out", {
+        method: "POST",
+      }),
+      { params: Promise.resolve({ all: ["sign-out"] }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(dependencies.isStudentPlatformAccessBlocked).not.toHaveBeenCalled();
+    expect(handler).toHaveBeenCalledOnce();
   });
 
   it("blocks explicit social account creation when public signup is disabled", async () => {
