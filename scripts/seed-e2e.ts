@@ -1,3 +1,4 @@
+import "./e2e-env-preload";
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";

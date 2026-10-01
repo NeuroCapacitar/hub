@@ -36,7 +36,7 @@ function RefundPasswordCredentialGate({
   onRetry: () => Promise<void>;
   status: PasswordCredentialStatus;
 }): ReactNode {
-  if (status === "checking") {
+  if (status === "checking" || status === "unchecked") {
     return (
       <p
         aria-live="polite"

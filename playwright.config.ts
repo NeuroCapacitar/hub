@@ -1,3 +1,4 @@
+import "./scripts/e2e-env-preload";
 import { defineConfig, devices } from "@playwright/test";
 import { resolveSafeE2eRuntimeDatabaseUrl } from "./src/db/e2e-database-guard";
 
@@ -10,7 +11,7 @@ if (!e2eDatabaseUrl) {
 }
 const e2eRuntimeDatabaseUrl = resolveSafeE2eRuntimeDatabaseUrl({
   ...process.env,
-  DATABASE_URL: process.env.DATABASE_URL?.trim() || e2eDatabaseUrl,
+  DATABASE_URL: e2eDatabaseUrl,
   E2E_DATABASE_URL: e2eDatabaseUrl,
 });
 const e2eObjectStorageEnvironment = {
@@ -31,6 +32,9 @@ const e2eApplicationEnvironment = {
   AUTH_PUBLIC_SIGNUP_ENABLED: "true",
   BETTER_AUTH_TRUSTED_ORIGINS: "http://127.0.0.1:3100",
   BETTER_AUTH_URL: "http://127.0.0.1:3100",
+  BETTER_AUTH_API_KEY: "",
+  BETTER_AUTH_API_URL: "",
+  BETTER_AUTH_KV_URL: "",
   CERTIFICATE_PUBLIC_BASE_URL: "http://127.0.0.1:3100",
   CI: "true",
   DATABASE_URL: e2eRuntimeDatabaseUrl,
@@ -38,10 +42,25 @@ const e2eApplicationEnvironment = {
   E2E_TEST_MODE: "true",
   CRON_SECRET: "e2e-cron-secret",
   INTERNAL_BOOTSTRAP_SECRET: "",
+  GOOGLE_CLIENT_ID: "e2e-google-client-id",
+  GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
+  JMVSTREAM_AUTH_RESOURCE: "",
+  JMVSTREAM_API_TOKEN: "",
+  JMVSTREAM_PLAN_ID: "",
   NEXT_PUBLIC_APP_URL: "http://127.0.0.1:3100",
   NEXT_PUBLIC_E2E_TEST_MODE: "true",
+  NEXT_PUBLIC_SENTRY_DSN: "",
+  NEXT_PUBLIC_SENTRY_RELEASE: "",
   PAYMENTS_CHECKOUT_MODE: "public",
+  RESEND_API_KEY: "",
+  RESEND_READINESS_SECRET: "",
+  RESEND_WEBHOOK_SECRET: "",
   SCHEDULED_JOBS_ENABLED: "true",
+  SENTRY_AUTH_TOKEN: "",
+  SENTRY_DSN: "",
+  SENTRY_ORG: "",
+  SENTRY_PROJECT: "",
+  SENTRY_READINESS_SECRET: "",
 } as const;
 
 for (const [key, value] of Object.entries(e2eObjectStorageEnvironment)) {

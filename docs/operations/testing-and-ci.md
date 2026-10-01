@@ -109,8 +109,18 @@ bun run verify
 ```
 
 Para testar somente integração, configure uma URL PostgreSQL descartável e
-execute `bun run test:certificates:integration`. Para E2E, use as URLs e os
-servidores locais definidos no `playwright.config.ts`.
+execute `bun run test:certificates:integration`. Para E2E local, configure
+`.env.e2e.local` (arquivo ignorado pelo Git) com `E2E_DATABASE_URL` apontando ao
+endpoint direto do banco descartável e, se disponível,
+`E2E_RUNTIME_DATABASE_URL` com o endpoint pooler correspondente. O loader usado
+pelo Playwright, migration, seed e teardown força `DATABASE_URL` e
+`DATABASE_URL_DIRECT` para o mesmo banco E2E; não altere as URLs de Development
+em `.env.local`. O guard rejeita Production e URL pooled como banco de migration.
+O processo do app usa a pooler quando o par direto/pooler é válido. Credenciais
+reais de Sentry, Resend, Google e JMVStream são removidas do app E2E; o Google
+recebe valores fictícios somente para manter o botão acessível nos testes de
+teclado, sem iniciar OAuth. Use os servidores locais simulados definidos em
+`playwright.config.ts`.
 
 As Contas criadas pelo seed E2E são fixtures pré-verificadas para jornadas
 autenticadas. A jornada de cadastro público testa separadamente que nenhuma

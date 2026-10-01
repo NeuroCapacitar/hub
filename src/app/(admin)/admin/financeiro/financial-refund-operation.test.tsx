@@ -49,9 +49,35 @@ describe("RefundOperation", () => {
     ).IS_REACT_ACT_ENVIRONMENT = false;
   });
 
-  it("describes the refund as a two-step request and protects identity reviews", () => {
+  it("describes the refund as a two-step request and protects identity reviews", async () => {
+    dependencies.listAccounts.mockResolvedValue({
+      data: [
+        {
+          accountId: "admin-1",
+          createdAt: new Date("2026-10-01T12:00:00.000Z"),
+          id: "credential-account",
+          providerId: "credential",
+          scopes: [],
+          updatedAt: new Date("2026-10-01T12:00:00.000Z"),
+          userId: "admin-1",
+        },
+      ],
+      error: null,
+    });
+
     act(() => {
       root.render(<RefundOperation identityReview orderId="order-1" />);
+    });
+
+    const details = container.querySelector("details");
+    if (!details) {
+      throw new Error("Refund operation disclosure was not rendered.");
+    }
+
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+      await Promise.resolve();
     });
 
     expect(container.textContent).toContain("Etapa 1 de 2: confirmar a senha");
@@ -64,13 +90,60 @@ describe("RefundOperation", () => {
     ).not.toBeNull();
   });
 
+  it("keeps the password form hidden until the credential check finishes", async () => {
+    dependencies.listAccounts.mockReturnValue(new Promise(() => undefined));
+
+    act(() => {
+      root.render(<RefundOperation orderId="order-1" />);
+    });
+
+    const details = container.querySelector("details");
+    if (!details) {
+      throw new Error("Refund operation disclosure was not rendered.");
+    }
+
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Verificando o método de acesso…");
+    expect(container.querySelector('input[name="password"]')).toBeNull();
+  });
+
   it("announces and focuses the order confirmation step after password confirmation", async () => {
     dependencies.confirmRefundPasswordAction.mockResolvedValue({
       confirmationToken: "confirmation-token",
     });
+    dependencies.listAccounts.mockResolvedValue({
+      data: [
+        {
+          accountId: "admin-1",
+          createdAt: new Date("2026-10-01T12:00:00.000Z"),
+          id: "credential-account",
+          providerId: "credential",
+          scopes: [],
+          updatedAt: new Date("2026-10-01T12:00:00.000Z"),
+          userId: "admin-1",
+        },
+      ],
+      error: null,
+    });
 
     act(() => {
       root.render(<RefundOperation orderId="order-1" />);
+    });
+
+    const details = container.querySelector("details");
+    if (!details) {
+      throw new Error("Refund operation disclosure was not rendered.");
+    }
+
+    await act(async () => {
+      details.open = true;
+      details.dispatchEvent(new Event("toggle", { bubbles: true }));
+      await Promise.resolve();
     });
 
     const form = container.querySelector("form");
