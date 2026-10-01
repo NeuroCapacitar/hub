@@ -92,12 +92,14 @@ Concessão e Matrícula. `purchase_confirmation_intents` conserva o marcador ide
 além da retenção da outbox; Pedidos pagos com identidade resolvida antes da migration são
 registrados como históricos, evitando que uma conciliação posterior dispare novamente um
 e-mail antigo. Pedidos que estavam em Revisão permanecem elegíveis após a resolução.
-Na criação da intenção, `purchase_confirmation_intents.verification_required`
-registra se a Conta precisava comprovar o e-mail naquele momento; o retry não
-recalcula a ação a partir de um estado posterior da Conta. Para quem precisa
-confirmar, a transação cria desafio `purchase_verification`; o delivery usa os
-snapshots do Pedido/Curso e a decisão do ledger para enviar **Compra confirmada**
-com CTA de confirmação. Se um Pedido legado resolvido ainda não tiver snapshot
+Uma intenção nova começa com `purchase_confirmation_intents.verification_required`
+nulo. Na primeira preparação da entrega, antes de chamar o provider, um `UPDATE`
+condicional registra a situação atual de `users.email_verified`. Se a Conta já
+foi confirmada enquanto a mensagem aguardava, o CTA é **Acessar Curso**; caso
+contrário, o delivery cria/recupera o desafio `purchase_verification` e envia
+**Compra confirmada** com CTA de confirmação. Depois de registrada, essa decisão
+permanece estável nos retries, mesmo que o estado da Conta mude. Se um Pedido
+legado resolvido ainda não tiver snapshot
 de comprador, o e-mail/nome da Conta vinculada são gravados no Pedido nessa
 transação; snapshots já recebidos do checkout/provider prevalecem. A entrega não
 usa valores mutáveis da Conta como fallback. Para quem já estava verificado, a mensagem aponta à rota

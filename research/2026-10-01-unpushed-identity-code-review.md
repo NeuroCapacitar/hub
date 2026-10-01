@@ -247,4 +247,38 @@ migration em banco.
 - As migrations 0101/0102 foram geradas e revisadas localmente, mas não foram
   aplicadas em Development, Staging ou Production. Publicação/verificação real
   de templates Resend, preflight remoto, smoke de Staging e CI do SHA candidato
-  seguem como gates operacionais de release, fora desta alteração local.
+seguem como gates operacionais de release, fora desta alteração local.
+
+## Seguimento da revisão de execução — 2026-10-01
+
+- `Reflect.get` foi removido dos dois readers de body no caminho de verificação
+  e recuperação; o objeto é estreitado uma vez para `Record<string, unknown>`.
+- A fronteira externa de recuperação aplica rate limit HMAC antes de lookup,
+  lock ou marcador: por IP e e-mail na solicitação; por IP e token no consumo.
+  Solicitação limitada conserva HTTP 200 e `{ status: true }`; token limitado
+  retorna 429 com código genérico. Limite de IP confiável ausente em Production
+  falha fechado. O endpoint de pedido também aplica piso de resposta de 250 ms
+  para reduzir a diferença de tempo causada pelo trabalho do guard. O limitador
+  nativo Better Auth segue ativo depois do wrapper.
+- Wrappers de transação e advisory locks canônicos de e-mail foram centralizados
+  sem alterar os namespaces/chaves PostgreSQL existentes. A limpeza de manutenção
+  agora remove globalmente marcadores expirados de reset abandonados.
+- Compra: intenção não fixa mais verificação no pagamento. Primeiro preparo de
+  entrega resolve o estado atual por `UPDATE` condicional e persiste a escolha;
+  retries permanecem idempotentes. Migration `0103_purchase_confirmation_delivery_decision`
+  ajusta o schema e reabre somente decisões ainda sem tentativa ao provider.
+- E2E de Curso gratuito agora inclui confirmação, definição da primeira senha
+  pelo fluxo público de recuperação, login, retorno preservado e matrícula
+  explícita pela mesma Conta. O token de reset é lido somente pelo helper que
+  exige o banco isolado E2E.
+- Pesquisa primária arquivada em
+  `research/2026-10-01-auth-review-remediation-research.md`.
+- Migration 0103 foi gerada e revisada localmente, mas **não aplicada** a nenhum
+  banco. Staging/Production, push e deploy não foram tocados. O E2E foi ampliado,
+  mas não executado porque `E2E_DATABASE_URL` não está disponível nesta worktree.
+- `bun run verify:quick`: passou — 524 arquivos de teste, 3.715 aprovados e um
+  teste PostgreSQL condicional pulado por ausência de `CI_POSTGRES_ADMIN_URL`.
+  `bun run docs:check`, `bun run db:migrations:check`, typecheck e Ultracite
+  também passaram.
+- CodeRabbit 0.7.6 está autenticado, mas sem seat atribuído; a revisão externa
+  opcional permanece indisponível.

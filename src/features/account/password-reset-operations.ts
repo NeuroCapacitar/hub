@@ -1,12 +1,25 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
-import { getPool } from "@/db";
+import { withPostgresTransaction } from "@/db/transaction";
 import { lockAccountIdentity } from "@/features/account/account-identity-lock";
+import { consumeAccountRateLimit } from "@/features/account/account-rate-limits";
+import { getClientIpAddress } from "@/lib/client-ip";
 import { normalizeBuyerEmail } from "@/lib/email-identity";
+import { getServerEnv } from "@/lib/env";
 
 const PASSWORD_RESET_OPERATION_TTL_MINUTES = 15;
 const MAX_RESET_TOKEN_LENGTH = 256;
+const PASSWORD_RESET_EMAIL_LIMIT = 3;
+const PASSWORD_RESET_IP_LIMIT = 10;
+const PASSWORD_RESET_TOKEN_LIMIT = 10;
+const PASSWORD_RESET_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const PASSWORD_RESET_RATE_LIMIT_NAMESPACE = "hub:password-reset-rate-limit:v1";
+// Masks the extra user-scoped guard work before Better Auth returns its neutral response.
+const PUBLIC_PASSWORD_RESET_RESPONSE_FLOOR_MS = 250;
+const PASSWORD_RESET_RATE_LIMITED_RESPONSE_HEADERS = {
+  "cache-control": "no-store",
+};
 
 type PasswordResetEndpoint = "request-password-reset" | "reset-password";
 type QueryClient = Pick<PoolClient, "query">;
@@ -22,31 +35,14 @@ interface PasswordResetOperation {
   userId: string;
 }
 
-const withTransaction = async <T>(
-  operation: (client: PoolClient) => Promise<T>
-): Promise<T> => {
-  const client = await getPool().connect();
-  let transactionOpen = false;
-  try {
-    await client.query("begin");
-    transactionOpen = true;
-    const result = await operation(client);
-    await client.query("commit");
-    transactionOpen = false;
-    return result;
-  } catch (error) {
-    if (transactionOpen) {
-      try {
-        await client.query("rollback");
-      } catch {
-        // Preserve the original failure.
-      }
-    }
-    throw error;
-  } finally {
-    client.release();
-  }
-};
+type BeginPasswordResetResult =
+  | { operation: null; rateLimited: true }
+  | { operation: PasswordResetOperation | null; rateLimited: false };
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 
 const getPasswordResetIntent = async (
   request: Request,
@@ -58,12 +54,10 @@ const getPasswordResetIntent = async (
   } catch {
     body = null;
   }
+  const bodyRecord = asRecord(body);
 
   if (endpoint === "request-password-reset") {
-    const email =
-      body && typeof body === "object" && !Array.isArray(body)
-        ? Reflect.get(body, "email")
-        : null;
+    const email = bodyRecord?.email;
     if (
       typeof email !== "string" ||
       email.length > 320 ||
@@ -74,10 +68,7 @@ const getPasswordResetIntent = async (
     return { email: normalizeBuyerEmail(email), endpoint };
   }
 
-  const bodyToken =
-    body && typeof body === "object" && !Array.isArray(body)
-      ? Reflect.get(body, "token")
-      : null;
+  const bodyToken = bodyRecord?.token;
   const queryToken = new URL(request.url).searchParams.get("token");
   const token =
     typeof bodyToken === "string" && bodyToken.length > 0
@@ -87,6 +78,52 @@ const getPasswordResetIntent = async (
     return null;
   }
   return { endpoint, token };
+};
+
+const isPasswordResetRateLimited = async ({
+  client,
+  intent,
+  request,
+}: {
+  client: QueryClient;
+  intent: PasswordResetIntent | null;
+  request: Request;
+}): Promise<boolean> => {
+  const env = getServerEnv();
+  const clientIp = getClientIpAddress(request.headers, env.CLIENT_IP_SOURCE);
+  if (clientIp === "unknown" && env.NODE_ENV === "production") {
+    return true;
+  }
+
+  const multiplier = env.E2E_TEST_MODE ? 100 : 1;
+  const ipAllowed = await consumeAccountRateLimit({
+    client,
+    key: `ip:${intent?.endpoint ?? "invalid"}:${clientIp}`,
+    limit: PASSWORD_RESET_IP_LIMIT * multiplier,
+    namespace: PASSWORD_RESET_RATE_LIMIT_NAMESPACE,
+    windowMs: PASSWORD_RESET_RATE_LIMIT_WINDOW_MS,
+  });
+
+  let identityAllowed = true;
+  if (intent?.endpoint === "request-password-reset" && intent.email) {
+    identityAllowed = await consumeAccountRateLimit({
+      client,
+      key: `email:${intent.email}`,
+      limit: PASSWORD_RESET_EMAIL_LIMIT * multiplier,
+      namespace: PASSWORD_RESET_RATE_LIMIT_NAMESPACE,
+      windowMs: PASSWORD_RESET_RATE_LIMIT_WINDOW_MS,
+    });
+  } else if (intent?.endpoint === "reset-password" && intent.token) {
+    identityAllowed = await consumeAccountRateLimit({
+      client,
+      key: `token:${intent.token}`,
+      limit: PASSWORD_RESET_TOKEN_LIMIT * multiplier,
+      namespace: PASSWORD_RESET_RATE_LIMIT_NAMESPACE,
+      windowMs: PASSWORD_RESET_RATE_LIMIT_WINDOW_MS,
+    });
+  }
+
+  return !(ipAllowed && identityAllowed);
 };
 
 const findCandidateUserId = async (
@@ -157,21 +194,25 @@ const isPasswordResetIntentCurrent = async (
 const beginPasswordResetOperation = async (
   request: Request,
   endpoint: PasswordResetEndpoint
-): Promise<PasswordResetOperation | null> => {
+): Promise<BeginPasswordResetResult> => {
   const intent = await getPasswordResetIntent(request, endpoint);
-  if (!intent) {
-    return null;
-  }
 
-  return await withTransaction(async (client) => {
+  return await withPostgresTransaction(async (client) => {
+    if (await isPasswordResetRateLimited({ client, intent, request })) {
+      return { operation: null, rateLimited: true };
+    }
+    if (!intent) {
+      return { operation: null, rateLimited: false };
+    }
+
     const userId = await findCandidateUserId(client, intent);
     if (!userId) {
-      return null;
+      return { operation: null, rateLimited: false };
     }
 
     await lockAccountIdentity(client, userId);
     if (!(await isPasswordResetIntentCurrent(client, intent, userId))) {
-      return null;
+      return { operation: null, rateLimited: false };
     }
 
     const id = randomUUID();
@@ -191,7 +232,7 @@ const beginPasswordResetOperation = async (
         PASSWORD_RESET_OPERATION_TTL_MINUTES,
       ]
     );
-    return { id, userId };
+    return { operation: { id, userId }, rateLimited: false };
   });
 };
 
@@ -199,7 +240,7 @@ const finishPasswordResetOperation = async ({
   id,
   userId,
 }: PasswordResetOperation): Promise<void> =>
-  await withTransaction(async (client) => {
+  await withPostgresTransaction(async (client) => {
     await lockAccountIdentity(client, userId);
     await client.query(
       `delete from account_password_reset_operations
@@ -207,6 +248,32 @@ const finishPasswordResetOperation = async ({
       [id, userId]
     );
   });
+
+const createRateLimitedResponse = (
+  endpoint: PasswordResetEndpoint
+): Response =>
+  endpoint === "request-password-reset"
+    ? Response.json(
+        { status: true },
+        { headers: PASSWORD_RESET_RATE_LIMITED_RESPONSE_HEADERS }
+      )
+    : Response.json(
+        { code: "RATE_LIMITED" },
+        {
+          headers: PASSWORD_RESET_RATE_LIMITED_RESPONSE_HEADERS,
+          status: 429,
+        }
+      );
+
+const waitForPublicResetResponseFloor = async (
+  startedAt: number
+): Promise<void> => {
+  const remainingMs =
+    PUBLIC_PASSWORD_RESET_RESPONSE_FLOOR_MS - (performance.now() - startedAt);
+  if (remainingMs > 0) {
+    await new Promise<void>((resolve) => setTimeout(resolve, remainingMs));
+  }
+};
 
 export const withAccountPasswordResetOperation = async ({
   endpoint,
@@ -217,15 +284,27 @@ export const withAccountPasswordResetOperation = async ({
   handler: () => Promise<Response>;
   request: Request;
 }): Promise<Response> => {
-  const operation = await beginPasswordResetOperation(request, endpoint);
-  if (!operation) {
-    return await handler();
-  }
-
+  const startedAt = performance.now();
   try {
-    return await handler();
+    const beginResult = await beginPasswordResetOperation(request, endpoint);
+    if (beginResult.rateLimited) {
+      return createRateLimitedResponse(endpoint);
+    }
+
+    const operation = beginResult.operation;
+    if (!operation) {
+      return await handler();
+    }
+
+    try {
+      return await handler();
+    } finally {
+      await finishPasswordResetOperation(operation);
+    }
   } finally {
-    await finishPasswordResetOperation(operation);
+    if (endpoint === "request-password-reset") {
+      await waitForPublicResetResponseFloor(startedAt);
+    }
   }
 };
 

@@ -30,6 +30,7 @@ interface MaintenanceResult {
   emailDeliveryEventsRemoved: number;
   emailDeliveryMessagesRemoved: number;
   expiredLessonResourceUploadsRemoved: number;
+  expiredPasswordResetOperationsRemoved: number;
   expiredRateLimitsRemoved: number;
   expiredSessionsRemoved: number;
   expiredStaffInvitations: number;
@@ -60,6 +61,7 @@ const emptyMaintenanceResult = (): MaintenanceResult => ({
   pendingSignupsRemoved: 0,
   emailDeliveryEventsRemoved: 0,
   emailDeliveryMessagesRemoved: 0,
+  expiredPasswordResetOperationsRemoved: 0,
   expiredLessonResourceUploadsRemoved: 0,
   learningAnalyticsAggregated: 0,
   learningAnalyticsEventsRemoved: 0,
@@ -145,6 +147,16 @@ export const runMaintenance = async ({
      where consumed_at is not null or expires_at <= now()`
   );
   result.directAccountEmailChallengesRemoved = emailChallenges.rowCount ?? 0;
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  const expiredPasswordResetOperations = await pool.query(
+    `delete from account_password_reset_operations
+     where expires_at <= now()`
+  );
+  result.expiredPasswordResetOperationsRemoved =
+    expiredPasswordResetOperations.rowCount ?? 0;
 
   if (!(await canContinue())) {
     return result;

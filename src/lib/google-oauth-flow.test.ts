@@ -513,8 +513,8 @@ describe("Better Auth Google OAuth flow with a fake token endpoint", () => {
         return { rows: [] };
       }
       if (
-        queryText.includes("from users") &&
-        queryText.includes("email_verified")
+        queryText.includes("select email, name") &&
+        queryText.includes("from users")
       ) {
         return {
           rows: [

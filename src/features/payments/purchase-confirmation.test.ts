@@ -27,7 +27,7 @@ describe("purchase confirmation intent", () => {
     });
   });
 
-  it("registers one durable intent and adds an order-bound verification challenge when needed", async () => {
+  it("registers one durable intent with verification decision deferred to delivery", async () => {
     const orderId = "order-1";
     const userId = "student-1";
     const { client, query } = makeClient((statement) => {
@@ -37,15 +37,11 @@ describe("purchase confirmation intent", () => {
       if (statement.includes("from outbox_messages as message")) {
         return { rows: [] };
       }
-      if (
-        statement.includes("from users") &&
-        statement.includes("email_verified")
-      ) {
+      if (statement.includes("from users")) {
         return {
           rows: [
             {
               email: "student@example.test",
-              email_verified: false,
               name: "Student",
             },
           ],
@@ -60,9 +56,6 @@ describe("purchase confirmation intent", () => {
             },
           ],
         };
-      }
-      if (statement.includes("insert into account_email_challenges")) {
-        return { rows: [{ generation: 1, id: "challenge-1" }] };
       }
       if (statement.includes("insert into purchase_confirmation_intents")) {
         return { rows: [{ order_id: orderId }] };
@@ -89,14 +82,15 @@ describe("purchase confirmation intent", () => {
         topic: "email.purchase-confirmed",
       },
     });
-    expect(client.query).toHaveBeenCalledWith(
-      expect.stringContaining("insert into account_email_challenges"),
-      expect.arrayContaining([orderId, userId])
-    );
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("verification_required"),
-      [orderId, true]
+      expect.stringContaining("insert into purchase_confirmation_intents"),
+      [orderId]
     );
+    expect(
+      query.mock.calls.some(([statement]) =>
+        String(statement).includes("account_email_challenges")
+      )
+    ).toBe(false);
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("update orders"),
       [orderId, "student@example.test", "Student", userId]
@@ -198,15 +192,11 @@ describe("purchase confirmation intent", () => {
           ],
         };
       }
-      if (
-        statement.includes("from users") &&
-        statement.includes("email_verified")
-      ) {
+      if (statement.includes("from users")) {
         return {
           rows: [
             {
               email: "student@example.test",
-              email_verified: true,
               name: "Student",
             },
           ],
@@ -270,15 +260,11 @@ describe("purchase confirmation intent", () => {
           ],
         };
       }
-      if (
-        statement.includes("from users") &&
-        statement.includes("email_verified")
-      ) {
+      if (statement.includes("from users")) {
         return {
           rows: [
             {
               email: "student@example.test",
-              email_verified: true,
               name: "Student",
             },
           ],
@@ -311,7 +297,7 @@ describe("purchase confirmation intent", () => {
 
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("set origin = 'current'"),
-      ["order-1", false]
+      ["order-1"]
     );
     expect(dependencies.enqueueOutboxMessage).toHaveBeenCalledOnce();
   });

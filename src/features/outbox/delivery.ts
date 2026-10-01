@@ -423,7 +423,7 @@ interface PurchaseConfirmedDeliveryData {
   course_slug: string;
   course_title: string;
   email_verified: boolean;
-  purchase_verification_required: boolean;
+  purchase_verification_required: boolean | null;
   student_email: string;
   student_name: string;
 }
@@ -435,7 +435,26 @@ const getPurchaseConfirmedDeliveryData = async ({
   orderId: string;
   userId: string;
 }): Promise<PurchaseConfirmedDeliveryData | null> => {
-  const result = await getPool().query<PurchaseConfirmedDeliveryData>(
+  const pool = getPool();
+  await pool.query<{ verification_required: boolean }>(
+    `
+      update purchase_confirmation_intents as intent
+      set verification_required = not users.email_verified,
+          updated_at = now()
+      from orders
+      join users on users.id = orders.user_id
+      where intent.order_id = orders.id
+        and orders.id = $1
+        and orders.user_id = $2
+        and orders.provider = 'asaas'
+        and orders.status = 'paid'
+        and intent.verification_required is null
+      returning intent.verification_required
+    `,
+    [orderId, userId]
+  );
+
+  const result = await pool.query<PurchaseConfirmedDeliveryData>(
     `
       select
         orders.checkout_course_slug as course_slug,
@@ -458,7 +477,11 @@ const getPurchaseConfirmedDeliveryData = async ({
     `,
     [orderId, userId]
   );
-  return result.rows[0] ?? null;
+  const delivery = result.rows[0] ?? null;
+  if (!delivery || delivery.purchase_verification_required === null) {
+    return null;
+  }
+  return delivery;
 };
 
 interface PurchaseVerificationChallengeDeliveryData {

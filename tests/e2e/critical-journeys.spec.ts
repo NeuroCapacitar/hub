@@ -14,6 +14,7 @@ import {
   readFreeEnrollmentOutcome,
   readOrderOutcome,
   readPaymentEventCount,
+  readPendingPasswordResetToken,
   readPendingSignupChallenge,
   readSignupAccountOutcome,
   resetE2eAsaasCheckoutMutations,
@@ -442,7 +443,7 @@ test("public signup verifies email before creating a Student account", async ({
     });
 });
 
-test("free-course signup verifies email and preserves the handoff without enrolling @mobile", async ({
+test("free-course signup verifies email, preserves handoff, and enrolls only after login @mobile", async ({
   page,
   request,
 }) => {
@@ -541,6 +542,70 @@ test("free-course signup verifies email and preserves the handoff without enroll
       freeGrantStatus: null,
       orderCount: 0,
     });
+
+  await page.goto("/recuperar-senha");
+  await page.getByLabel("E-mail").fill(email);
+  await page.getByRole("button", { name: "Enviar link" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "Se o e-mail estiver cadastrado"
+  );
+
+  const resetToken = await readPendingPasswordResetToken(email);
+  const password = "E2e-Verified-Student-2026!";
+  await page.goto(`/redefinir-senha?token=${encodeURIComponent(resetToken)}`);
+  await page.getByLabel("Nova senha").fill(password);
+  await page.getByLabel("Confirmar senha").fill(password);
+  await page.getByRole("button", { name: "Salvar senha" }).click();
+  await expect(page.getByText("Senha definida com sucesso")).toBeVisible();
+  await expect
+    .poll(() => readSignupAccountOutcome(email))
+    .toEqual({
+      accountCount: 1,
+      credentialCount: 1,
+      emailVerified: true,
+      enrollmentGrantCount: 0,
+      sessionCount: 0,
+      studentProfileCount: 1,
+    });
+
+  await page.goto(
+    `/entrar?returnTo=${encodeURIComponent(expectedPurchasePath)}`
+  );
+  await page.getByLabel("E-mail").fill(email);
+  await page.getByLabel("Senha").fill(password);
+  await page.getByRole("button", { exact: true, name: "Entrar" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/comprar/${fixture.freeCourse.slug}$`)
+  );
+
+  await page
+    .getByRole("button", { name: "Inscrever-se gratuitamente" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/app/cursos/${fixture.freeCourse.id}$`)
+  );
+  await expect(
+    page.getByRole("heading", { name: fixture.freeCourse.title })
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      readFreeEnrollmentOutcome({
+        courseId: fixture.freeCourse.id,
+        email,
+      })
+    )
+    .toEqual({
+      accountCount: 1,
+      enrollmentCount: 1,
+      enrollmentStatus: "active",
+      freeEventCount: 1,
+      freeGrantCount: 1,
+      freeGrantStatus: "active",
+      orderCount: 0,
+    });
+
+  expect(checkoutRequestCount).toBe(0);
+  expect(await readE2eAsaasCheckoutMutationCount(request)).toBe(0);
 });
 
 test("authenticated Student enrolls in a free course directly", async ({

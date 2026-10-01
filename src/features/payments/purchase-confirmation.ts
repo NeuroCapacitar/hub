@@ -24,7 +24,6 @@ const REPLACEABLE_OUTBOX_STATES = new Set([
   "pending",
   "retrying",
 ]);
-const PURCHASE_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface PurchaseConfirmationLedgerRow {
   origin: "current" | "historical";
@@ -35,15 +34,6 @@ interface LegacyPurchaseEmailRow {
   id: string;
   status: string;
   topic: (typeof LEGACY_PURCHASE_EMAIL_TOPICS)[number];
-}
-
-interface PurchaseVerificationChallengeRow {
-  consumed_at: Date | null;
-  expires_at: Date;
-  generation: number;
-  id: string;
-  purpose: string;
-  user_id: string;
 }
 
 export type PurchaseConfirmationEnqueueResult =
@@ -100,61 +90,6 @@ const supersedeUnacceptedLegacyMessages = async ({
       );
     }
   }
-};
-
-const ensurePurchaseVerificationChallenge = async ({
-  client,
-  orderId,
-  userId,
-}: {
-  client: PoolClient;
-  orderId: string;
-  userId: string;
-}): Promise<void> => {
-  const existingResult = await client.query<PurchaseVerificationChallengeRow>(
-    `
-      select id, user_id, purpose, generation, expires_at, consumed_at
-      from account_email_challenges
-      where order_id = $1
-      limit 1
-      for update
-    `,
-    [orderId]
-  );
-  const existing = existingResult.rows[0];
-  const expiresAt = new Date(Date.now() + PURCHASE_VERIFICATION_TTL_MS);
-  if (existing) {
-    if (
-      existing.user_id !== userId ||
-      existing.purpose !== "purchase_verification"
-    ) {
-      throw new Error("purchase_verification_challenge_conflict");
-    }
-    if (existing.consumed_at || existing.expires_at.getTime() <= Date.now()) {
-      await client.query(
-        `update account_email_challenges
-         set generation = generation + 1,
-             expires_at = $2,
-             consumed_at = null,
-             updated_at = now()
-         where id = $1 and order_id = $3`,
-        [existing.id, expiresAt, orderId]
-      );
-    }
-    return;
-  }
-
-  await client.query(
-    `insert into account_email_challenges (
-       purpose,
-       user_id,
-       order_id,
-       generation,
-       expires_at
-     ) values ('purchase_verification', $1, $2, 1, $3)
-     on conflict (order_id) where order_id is not null do nothing`,
-    [userId, orderId, expiresAt]
-  );
 };
 
 export const enqueuePurchaseConfirmedEmail = async ({
@@ -227,12 +162,8 @@ export const enqueuePurchaseConfirmedEmail = async ({
     return "already_registered";
   }
 
-  const buyer = await client.query<{
-    email: string;
-    email_verified: boolean;
-    name: string;
-  }>(
-    `select email, email_verified, name
+  const buyer = await client.query<{ email: string; name: string }>(
+    `select email, name
      from users
      where id = $1
      limit 1
@@ -268,28 +199,25 @@ export const enqueuePurchaseConfirmedEmail = async ({
     ? await client.query<{ order_id: string }>(
         `update purchase_confirmation_intents
          set origin = 'current',
-             verification_required = $2,
+             verification_required = null,
              updated_at = now()
          where order_id = $1 and origin = 'historical'
          returning order_id`,
-        [orderId, !buyerRow.email_verified]
+        [orderId]
       )
     : await client.query<{ order_id: string }>(
         `insert into purchase_confirmation_intents (
-           order_id, origin, verification_required
+           order_id, origin
          )
-         values ($1, 'current', $2)
+         values ($1, 'current')
          on conflict (order_id) do nothing
          returning order_id`,
-        [orderId, !buyerRow.email_verified]
+        [orderId]
       );
   if (!registered.rows[0]) {
     return "already_registered";
   }
 
-  if (!buyerRow.email_verified) {
-    await ensurePurchaseVerificationChallenge({ client, orderId, userId });
-  }
   await enqueueMessage({
     client,
     message: createPurchaseConfirmedMessage({ orderId, userId }),

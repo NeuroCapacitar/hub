@@ -104,14 +104,14 @@ const handleVerificationEmailRequest = async (
 ): Promise<Response> => {
   try {
     const body: unknown = await request.clone().json();
-    if (
-      body &&
-      typeof body === "object" &&
-      !Array.isArray(body) &&
-      typeof Reflect.get(body, "email") === "string"
-    ) {
+    const bodyRecord =
+      body !== null && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : null;
+    const email = bodyRecord?.email;
+    if (typeof email === "string") {
       const outcome = await requestAccountEmailVerificationByAddress({
-        email: Reflect.get(body, "email"),
+        email,
         requestHeaders: request.headers,
       });
       if (outcome === "queued") {

@@ -1,12 +1,15 @@
 import "server-only";
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { getPool } from "@/db";
+import { withPostgresTransaction } from "@/db/transaction";
 import { lockAccountIdentity } from "@/features/account/account-identity-lock";
+import { consumeAccountRateLimit } from "@/features/account/account-rate-limits";
 import {
   createEmailChallengeToken,
   verifyEmailChallengeToken,
 } from "@/features/account/email-challenge-token";
+import { lockAccountEmailIdentities } from "@/features/account/email-identity-lock";
 import { assertNoPasswordResetInProgress } from "@/features/account/password-reset-operations";
 import { writeAuditLog } from "@/features/admin/audit-log";
 import {
@@ -47,79 +50,17 @@ interface EmailChangeTokenClaims {
   generation: number;
 }
 
-const withTransaction = async <Result>(
-  operation: (client: PoolClient) => Promise<Result>
-): Promise<Result> => {
-  const client = await getPool().connect();
-  try {
-    await client.query("begin");
-    const result = await operation(client);
-    await client.query("commit");
-    return result;
-  } catch (error) {
-    try {
-      await client.query("rollback");
-    } catch {
-      // Preserve the original failure.
-    }
-    throw error;
-  } finally {
-    client.release();
-  }
-};
-
-const lockEmailIdentities = async (
-  client: Pick<PoolClient, "query">,
-  emails: readonly string[]
-): Promise<void> => {
-  const identities = [...new Set(emails.map(normalizeBuyerEmail))].sort();
-  for (const identity of identities) {
-    await client.query(
-      "select pg_advisory_xact_lock(hashtextextended($1, 0))",
-      [`account-email:${identity}`]
-    );
-  }
-};
-
-const hashEmailChangeRateLimitKey = (userId: string): string =>
-  createHmac("sha256", getServerEnv().BETTER_AUTH_SECRET)
-    .update("hub:account-email-change-rate-limit:v1\0")
-    .update(userId)
-    .digest("hex");
-
 const consumeEmailChangeRateLimit = async (
   client: Pick<PoolClient, "query">,
   userId: string
-): Promise<boolean> => {
-  const result = await client.query<{ request_count: number }>(
-    sql(
-      "insert into account_email_challenge_rate_limits (",
-      "  key_hash, window_started_at, request_count, expires_at",
-      ") values ($1, now(), 1, now() + ($2 * interval '1 millisecond'))",
-      "on conflict (key_hash) do update set",
-      "  window_started_at = case",
-      "    when account_email_challenge_rate_limits.expires_at <= now() then now()",
-      "    else account_email_challenge_rate_limits.window_started_at",
-      "  end,",
-      "  request_count = case",
-      "    when account_email_challenge_rate_limits.expires_at <= now() then 1",
-      "    else account_email_challenge_rate_limits.request_count + 1",
-      "  end,",
-      "  expires_at = case",
-      "    when account_email_challenge_rate_limits.expires_at <= now()",
-      "      then now() + ($2 * interval '1 millisecond')",
-      "    else account_email_challenge_rate_limits.expires_at",
-      "  end,",
-      "  updated_at = now()",
-      "returning request_count"
-    ),
-    [hashEmailChangeRateLimitKey(userId), EMAIL_CHANGE_RATE_WINDOW_MS]
-  );
-  return (
-    (result.rows[0]?.request_count ?? Number.MAX_SAFE_INTEGER) <=
-    EMAIL_CHANGE_REQUEST_LIMIT
-  );
-};
+): Promise<boolean> =>
+  await consumeAccountRateLimit({
+    client,
+    key: userId,
+    limit: EMAIL_CHANGE_REQUEST_LIMIT,
+    namespace: "hub:account-email-change-rate-limit:v1",
+    windowMs: EMAIL_CHANGE_RATE_WINDOW_MS,
+  });
 
 const supersedePendingConfirmationMessages = async ({
   actorUserId,
@@ -393,7 +334,7 @@ export const createOrRefreshEmailChangeRequest = async ({
   newEmail: string;
   userId: string;
 }): Promise<{ expiresAt: Date; status: "pending_current" }> => {
-  const outcome = await withTransaction(async (client) => {
+  const outcome = await withPostgresTransaction(async (client) => {
     const initialEmail = await requireVerifiedAccountEmail(client, userId);
     const normalizedNewEmail = newEmail.trim().toLowerCase();
     const currentIdentity = normalizeBuyerEmail(initialEmail);
@@ -403,7 +344,10 @@ export const createOrRefreshEmailChangeRequest = async ({
     }
 
     await lockAccountIdentity(client, userId);
-    await lockEmailIdentities(client, [initialEmail, normalizedNewEmail]);
+    await lockAccountEmailIdentities(client, [
+      initialEmail,
+      normalizedNewEmail,
+    ]);
     const currentEmail = await requireVerifiedAccountEmail(
       client,
       userId,
@@ -945,9 +889,9 @@ export const consumeEmailChangeToken = async (
     return null;
   }
 
-  return await withTransaction(async (client) => {
+  return await withPostgresTransaction(async (client) => {
     await lockAccountIdentity(client, initial.user_id);
-    await lockEmailIdentities(client, [
+    await lockAccountEmailIdentities(client, [
       initial.current_email,
       initial.new_email,
     ]);
@@ -996,7 +940,7 @@ export const cancelEmailChangeRequest = async ({
 }: {
   userId: string;
 }): Promise<void> =>
-  await withTransaction(async (client) => {
+  await withPostgresTransaction(async (client) => {
     await lockAccountIdentity(client, userId);
     const result = await client.query<EmailChangeRequestRow>(
       sql(

@@ -50,7 +50,7 @@ const createPaidClient = (emailVerified = true) => {
     }
     if (
       statement.includes("from users") &&
-      statement.includes("email_verified")
+      statement.includes("select email, name")
     ) {
       return {
         rows: [
@@ -132,17 +132,18 @@ describe("authoritative financial evidence application", () => {
     );
   });
 
-  it("creates a purchase verification challenge for a paid unverified buyer", async () => {
+  it("defers the purchase verification decision and challenge to delivery", async () => {
     const client = createPaidClient(false);
 
     await expect(
       applyConfirmedPaymentAccess({ client: client as never, order })
     ).resolves.toBe(true);
 
-    expect(client.query).toHaveBeenCalledWith(
-      expect.stringContaining("insert into account_email_challenges"),
-      expect.arrayContaining(["user-1", "order-1", expect.any(Date)])
-    );
+    expect(
+      client.query.mock.calls.some(([statement]) =>
+        String(statement).includes("account_email_challenges")
+      )
+    ).toBe(false);
     expect(dependencies.enqueueOutboxMessage).toHaveBeenCalledWith({
       client,
       message: expect.objectContaining({

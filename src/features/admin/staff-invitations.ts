@@ -2,10 +2,12 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { getPool } from "@/db";
+import { withPostgresTransaction } from "@/db/transaction";
 import {
   createEmailChallengeToken,
   verifyEmailChallengeToken,
 } from "@/features/account/email-challenge-token";
+import { lockAccountEmailIdentity } from "@/features/account/email-identity-lock";
 import { writeAuditLog } from "@/features/admin/audit-log";
 import { createStaffInvitationMessage } from "@/features/outbox/rules";
 import { enqueueOutboxMessage } from "@/features/outbox/server";
@@ -51,38 +53,6 @@ interface InviteClaims {
   generation: number;
   invitationId: string;
 }
-
-const withTransaction = async <Result>(
-  operation: (client: PoolClient) => Promise<Result>
-): Promise<Result> => {
-  const client = await getPool().connect();
-  try {
-    await client.query("begin");
-    const result = await operation(client);
-    await client.query("commit");
-    return result;
-  } catch (error) {
-    try {
-      await client.query("rollback");
-    } catch {
-      // Preserve the original failure if the transaction was already closed.
-    }
-    throw error;
-  } finally {
-    client.release();
-  }
-};
-
-const lockEmailIdentity = async (
-  client: Pick<PoolClient, "query">,
-  email: string
-): Promise<string> => {
-  const canonicalEmail = normalizeBuyerEmail(email);
-  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [
-    `account-email:${canonicalEmail}`,
-  ]);
-  return canonicalEmail;
-};
 
 const requireActiveAdmin = async (
   client: Pick<PoolClient, "query">,
@@ -376,10 +346,13 @@ export const createOrRefreshStaffInvitation = async ({
   invitationId: string;
   outcome: "created" | "updated";
 }> =>
-  await withTransaction(async (client) => {
+  await withPostgresTransaction(async (client) => {
     const actor = await requireActiveAdmin(client, actorUserId);
     const invitationEmail = input.email.trim().toLowerCase();
-    const canonicalEmail = await lockEmailIdentity(client, invitationEmail);
+    const canonicalEmail = await lockAccountEmailIdentity(
+      client,
+      invitationEmail
+    );
     const identity = await getCanonicalIdentity(client, canonicalEmail);
     assertStaffInvitationTarget({
       actorEmail: actor.email,
@@ -437,7 +410,7 @@ export const resendStaffInvitation = async ({
   actorUserId: string;
   invitationId: string;
 }): Promise<void> =>
-  await withTransaction(async (client) => {
+  await withPostgresTransaction(async (client) => {
     await requireActiveAdmin(client, actorUserId);
     const preview = await client.query<{ email: string }>(
       "select email from staff_invitations where id = $1 limit 1",
@@ -447,7 +420,7 @@ export const resendStaffInvitation = async ({
     if (!email) {
       throw new Error("Convite não encontrado.");
     }
-    await lockEmailIdentity(client, email);
+    await lockAccountEmailIdentity(client, email);
     const current = await client.query<InvitationRow>(
       `select * from staff_invitations
        where id = $1 and status in ('pending', 'expired')
@@ -517,7 +490,7 @@ export const revokeStaffInvitation = async ({
   actorUserId: string;
   invitationId: string;
 }): Promise<void> =>
-  await withTransaction(async (client) => {
+  await withPostgresTransaction(async (client) => {
     await requireActiveAdmin(client, actorUserId);
     const preview = await client.query<{ email: string }>(
       "select email from staff_invitations where id = $1 limit 1",
@@ -527,7 +500,7 @@ export const revokeStaffInvitation = async ({
     if (!email) {
       throw new Error("Convite não encontrado.");
     }
-    await lockEmailIdentity(client, email);
+    await lockAccountEmailIdentity(client, email);
     const updated = await client.query<{ role: StaffInvitationRole }>(
       `update staff_invitations
        set status = 'revoked',
@@ -722,7 +695,7 @@ const lockStaffInvitationForAcceptance = async ({
   if (!email) {
     return null;
   }
-  const canonicalEmail = await lockEmailIdentity(client, email);
+  const canonicalEmail = await lockAccountEmailIdentity(client, email);
   const identity = await getCanonicalIdentity(client, canonicalEmail);
   const invitationResult = await client.query<InvitationRow>(
     [
@@ -889,7 +862,7 @@ export const acceptStaffInvitation = async ({
     return null;
   }
 
-  return await withTransaction(async (client) => {
+  return await withPostgresTransaction(async (client) => {
     const locked = await lockStaffInvitationForAcceptance({ claims, client });
     if (!locked) {
       return null;

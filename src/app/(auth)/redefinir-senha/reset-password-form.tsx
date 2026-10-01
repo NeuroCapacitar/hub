@@ -18,11 +18,14 @@ type ResetPasswordState =
   | { status: "submitting" }
   | { status: "success" }
   | { canRequestNewLink: boolean; message: string; status: "error" };
+type ResetPasswordErrorState = Extract<ResetPasswordState, { status: "error" }>;
 
 const PASSWORD_TOO_LONG_MESSAGE =
   "A senha informada é muito longa. Tente uma senha menor.";
 
 const INVALID_TOKEN_MESSAGE = "Link inválido ou expirado.";
+const RATE_LIMITED_MESSAGE =
+  "Muitas tentativas. Aguarde alguns minutos e tente novamente.";
 const NETWORK_ERROR_MESSAGE =
   "Não foi possível atualizar a senha. Tente novamente.";
 const RESET_COMPLETION_ERROR_MESSAGE =
@@ -39,6 +42,41 @@ async function getResetErrorCode(response: Response): Promise<unknown> {
   }
   return null;
 }
+
+const getResetPasswordErrorState = async (
+  response: Response
+): Promise<ResetPasswordErrorState> => {
+  const errorCode = await getResetErrorCode(response);
+  if (errorCode === "INVALID_TOKEN") {
+    return {
+      canRequestNewLink: true,
+      message: INVALID_TOKEN_MESSAGE,
+      status: "error",
+    };
+  }
+  if (errorCode === "RATE_LIMITED") {
+    return {
+      canRequestNewLink: false,
+      message: RATE_LIMITED_MESSAGE,
+      status: "error",
+    };
+  }
+  if (response.status >= 500) {
+    return {
+      canRequestNewLink: true,
+      message: RESET_COMPLETION_ERROR_MESSAGE,
+      status: "error",
+    };
+  }
+  return {
+    canRequestNewLink: false,
+    message:
+      errorCode === "PASSWORD_TOO_LONG"
+        ? PASSWORD_TOO_LONG_MESSAGE
+        : NETWORK_ERROR_MESSAGE,
+    status: "error",
+  };
+};
 
 export function ResetPasswordForm({
   token,
@@ -90,34 +128,7 @@ export function ResetPasswordForm({
       });
 
       if (!response.ok) {
-        const errorCode = await getResetErrorCode(response);
-
-        if (errorCode === "INVALID_TOKEN") {
-          setState({
-            canRequestNewLink: true,
-            message: INVALID_TOKEN_MESSAGE,
-            status: "error",
-          });
-          return;
-        }
-
-        if (response.status >= 500) {
-          setState({
-            canRequestNewLink: true,
-            message: RESET_COMPLETION_ERROR_MESSAGE,
-            status: "error",
-          });
-          return;
-        }
-
-        setState({
-          canRequestNewLink: false,
-          message:
-            errorCode === "PASSWORD_TOO_LONG"
-              ? PASSWORD_TOO_LONG_MESSAGE
-              : NETWORK_ERROR_MESSAGE,
-          status: "error",
-        });
+        setState(await getResetPasswordErrorState(response));
         return;
       }
 

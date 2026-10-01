@@ -87,9 +87,10 @@ devolve o certificado a `pending` antes de reentregar a mesma mensagem.
   `order`; chave `email.purchase-confirmed/<order-id>/v1`; payload somente
   `orderId` e `userId`. `purchase_confirmation_intents` é a barreira durável
   por Pedido que sobrevive à retenção de 30 dias das mensagens. O ledger só é
-  gravado na mesma transação do acesso e do enqueue; `verification_required`
-  congela se a pessoa precisava confirmar o endereço quando a intenção nasceu.
-  Retry não recalcula essa escolha pelo estado atual da Conta. A entrega usa os
+  gravado na mesma transação do acesso e do enqueue; `verification_required` inicia
+  nulo e é resolvido no primeiro preparo da entrega, antes do provider, a partir do
+  estado atual da Conta. O resultado é persistido condicionalmente e o retry não
+  recalcula essa escolha. A entrega usa os
   snapshots do Pedido/Curso para manter destinatário, nome e CTA consistentes.
   Se um Pedido resolvido legado ainda não tiver snapshot de comprador, a mesma
   transação os preenche com a identidade da Conta vinculada; valores presentes

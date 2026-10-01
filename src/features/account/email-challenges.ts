@@ -1,8 +1,10 @@
 import "server-only";
-import { createHmac, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { z } from "zod";
-import { getPool } from "@/db";
+import { withPostgresTransaction } from "@/db/transaction";
+import { consumeAccountRateLimit } from "@/features/account/account-rate-limits";
+import { lockAccountEmailIdentity } from "@/features/account/email-identity-lock";
 import { createEmailVerificationMessage } from "@/features/outbox/rules";
 import { enqueueOutboxMessage } from "@/features/outbox/server";
 import { getAuthSignInPath, getSafeAuthReturnTo } from "@/lib/auth-return-to";
@@ -68,53 +70,6 @@ interface AccountClaimRow {
   email_verified: boolean;
 }
 
-const hashRateLimitKey = (value: string): string =>
-  createHmac("sha256", getServerEnv().BETTER_AUTH_SECRET)
-    .update("hub:account-email-challenge-rate-limit:v1\0")
-    .update(value)
-    .digest("hex");
-
-const consumeRateLimit = async ({
-  client,
-  key,
-  limit,
-}: {
-  client: PoolClient;
-  key: string;
-  limit: number;
-}): Promise<boolean> => {
-  const keyHash = hashRateLimitKey(key);
-  const result = await client.query<{ request_count: number }>(
-    `
-      insert into account_email_challenge_rate_limits (
-        key_hash,
-        window_started_at,
-        request_count,
-        expires_at
-      )
-      values ($1, now(), 1, now() + ($2 * interval '1 millisecond'))
-      on conflict (key_hash) do update set
-        window_started_at = case
-          when account_email_challenge_rate_limits.expires_at <= now() then now()
-          else account_email_challenge_rate_limits.window_started_at
-        end,
-        request_count = case
-          when account_email_challenge_rate_limits.expires_at <= now() then 1
-          else account_email_challenge_rate_limits.request_count + 1
-        end,
-        expires_at = case
-          when account_email_challenge_rate_limits.expires_at <= now()
-            then now() + ($2 * interval '1 millisecond')
-          else account_email_challenge_rate_limits.expires_at
-        end,
-        updated_at = now()
-      returning request_count
-    `,
-    [keyHash, RATE_LIMIT_WINDOW_MS]
-  );
-  return (result.rows[0]?.request_count ?? Number.MAX_SAFE_INTEGER) <= limit;
-};
-
 const isRateLimited = async ({
   canonicalEmail,
   client,
@@ -125,19 +80,23 @@ const isRateLimited = async ({
   requestHeaders: Headers;
 }): Promise<boolean> => {
   const env = getServerEnv();
-  const emailAllowed = await consumeRateLimit({
+  const emailAllowed = await consumeAccountRateLimit({
     client,
     key: `email:${canonicalEmail}`,
     limit: EMAIL_REQUEST_LIMIT,
+    namespace: "hub:account-email-challenge-rate-limit:v1",
+    windowMs: RATE_LIMIT_WINDOW_MS,
   });
   const ipAddress = getClientIpAddress(requestHeaders, env.CLIENT_IP_SOURCE);
   if (ipAddress === "unknown" && env.NODE_ENV === "production") {
     return true;
   }
-  const ipAllowed = await consumeRateLimit({
+  const ipAllowed = await consumeAccountRateLimit({
     client,
     key: `ip:${ipAddress}`,
     limit: IP_REQUEST_LIMIT,
+    namespace: "hub:account-email-challenge-rate-limit:v1",
+    windowMs: RATE_LIMIT_WINDOW_MS,
   });
 
   return !(emailAllowed && ipAllowed);
@@ -335,23 +294,6 @@ const issuePendingSignup = async ({
   return challenge;
 };
 
-const withTransaction = async <Result>(
-  operation: (client: PoolClient) => Promise<Result>
-): Promise<Result> => {
-  const client = await getPool().connect();
-  try {
-    await client.query("begin");
-    const result = await operation(client);
-    await client.query("commit");
-    return result;
-  } catch (error) {
-    await client.query("rollback");
-    throw error;
-  } finally {
-    client.release();
-  }
-};
-
 export const requestPublicAccountRegistration = async ({
   input,
   requestHeaders,
@@ -361,11 +303,8 @@ export const requestPublicAccountRegistration = async ({
 }): Promise<ChallengeRequestOutcome> => {
   const canonicalEmail = normalizeBuyerEmail(input.email);
 
-  return await withTransaction(async (client) => {
-    await client.query(
-      "select pg_advisory_xact_lock(hashtextextended($1, 0))",
-      [`account-email:${canonicalEmail}`]
-    );
+  return await withPostgresTransaction(async (client) => {
+    await lockAccountEmailIdentity(client, canonicalEmail);
     if (await isRateLimited({ canonicalEmail, client, requestHeaders })) {
       return "rate_limited";
     }
@@ -411,11 +350,8 @@ export const requestAccountEmailVerificationByAddress = async ({
   }
   const canonicalEmail = normalizeBuyerEmail(parsedEmail.data);
 
-  return await withTransaction(async (client) => {
-    await client.query(
-      "select pg_advisory_xact_lock(hashtextextended($1, 0))",
-      [`account-email:${canonicalEmail}`]
-    );
+  return await withPostgresTransaction(async (client) => {
+    await lockAccountEmailIdentity(client, canonicalEmail);
     if (await isRateLimited({ canonicalEmail, client, requestHeaders })) {
       return "rate_limited";
     }
@@ -445,7 +381,7 @@ export const requestExistingAccountEmailVerification = async ({
   requestHeaders: Headers;
   userId: string;
 }): Promise<ChallengeRequestOutcome> =>
-  await withTransaction(async (client) => {
+  await withPostgresTransaction(async (client) => {
     const userResult = await client.query<{ email: string }>(
       "select email from users where id = $1 limit 1",
       [userId]
@@ -455,10 +391,7 @@ export const requestExistingAccountEmailVerification = async ({
       return "suppressed";
     }
     const canonicalEmail = normalizeBuyerEmail(email);
-    await client.query(
-      "select pg_advisory_xact_lock(hashtextextended($1, 0))",
-      [`account-email:${canonicalEmail}`]
-    );
+    await lockAccountEmailIdentity(client, canonicalEmail);
     if (await isRateLimited({ canonicalEmail, client, requestHeaders })) {
       return "rate_limited";
     }
@@ -520,9 +453,7 @@ const lockEmailChallengeOwner = async ({
   }
 
   const canonicalEmail = normalizeBuyerEmail(preview.owner_email);
-  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [
-    `account-email:${canonicalEmail}`,
-  ]);
+  await lockAccountEmailIdentity(client, canonicalEmail);
 
   if (preview.pending_signup_id) {
     const result = await client.query<PendingSignupAcceptanceRow>(
@@ -659,9 +590,7 @@ const consumePendingSignup = async ({
   }
 
   const canonicalEmail = normalizeBuyerEmail(pending.email);
-  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [
-    `account-email:${canonicalEmail}`,
-  ]);
+  await lockAccountEmailIdentity(client, canonicalEmail);
   const accountCandidates = await client.query<{ id: string }>(
     `
       select id
@@ -755,7 +684,7 @@ export const consumeAccountEmailChallenge = async (
     return { confirmed: false };
   }
 
-  return await withTransaction(async (client) => {
+  return await withPostgresTransaction(async (client) => {
     const previewResult = await client.query<EmailChallengeOwnerPreview>(
       `
         select

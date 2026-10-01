@@ -146,8 +146,15 @@ mesmo link novamente. Sem operação ativa, bloqueia a Conta e a credencial loca
 apaga os registros `reset-password:%` ainda pendentes em `verifications` e só
 então altera o e-mail. As linhas de `accounts` não são apagadas nem têm a senha
 ou vínculos Google alterados. Marcadores são removidos quando o handler termina
-e expiram em 15 minutos após falha inesperada do processo. Se o guard não puder
-acessar o banco, os endpoints de reset falham fechados com HTTP 503. Reservas de
+e expiram em 15 minutos após falha inesperada do processo; a manutenção também
+remove globalmente os marcadores expirados. Antes do lookup de Conta/token, a
+fronteira do Hub consome limites HMAC por IP e por e-mail (solicitação) ou token
+(consumo). IP confiável ausente em Production falha fechado; uma solicitação
+limitada conserva HTTP 200 e a resposta neutra. O endpoint público também mantém um
+tempo mínimo de resposta de 250 ms para reduzir diferenças causadas pelo guard
+associado à Conta. O rate limit interno do Better Auth permanece como segunda camada
+após o wrapper. Se o guard não puder acessar o banco, os
+endpoints de reset falham fechados com HTTP 503. Reservas de
 endereço vencidas são marcadas `expired` e têm sua geração rotacionada sob o lock
 advisory do endereço canônico antes da checagem de disponibilidade; a mensagem
 pendente correspondente é superseded. Cancelamento seleciona apenas pedido
@@ -329,15 +336,18 @@ limpeza de mensagens entregues da outbox. A migration registra Pedidos já pagos
 históricos para que reconciliação tardia não reenvie confirmação. O processor enfileira
 marcador e intenção na mesma transação da Concessão e Matrícula.
 
-Na mesma transação que registra a intenção e enfileira a mensagem, o ledger captura
-`verification_required` a partir do estado de verificação naquele momento. Retry não
-muda de confirmação de e-mail para acesso ao Curso só porque a Conta mudou enquanto a
-mensagem aguardava. A entrega usa os dados imutáveis do Pedido, o snapshot do Curso e
-essa decisão durável; nenhum token, e-mail ou URL secreta entra na outbox. Se a prova
-estiver perto de vencer antes da primeira tentativa ao provider, o desafio é renovado.
-Depois da primeira tentativa, geração, prazo e envelope permanecem estáveis durante a
-janela idempotente do provider. O desafio não cria sessão, senha ou acesso adicional;
-reset/criação de senha permanece uma ação separada iniciada pelo usuário.
+Uma intenção nova começa com `verification_required` nulo. Na primeira preparação da
+entrega, antes de chamar o provider, um `UPDATE ... WHERE verification_required IS NULL`
+captura o `email_verified` atual de forma concorrente-segura. Quem confirmou o
+endereço enquanto a mensagem aguardava recebe o CTA de acesso; quem ainda não confirmou
+recebe o CTA de confirmação. Essa decisão fica no ledger e os retries não alternam o
+CTA. A entrega usa dados imutáveis do Pedido e snapshot do Curso; nenhum token, e-mail
+ou URL secreta entra na outbox. O desafio só é criado/renovado quando a decisão
+registrada exige confirmação e, depois da primeira tentativa ao provider, geração,
+prazo e envelope permanecem estáveis durante a janela idempotente. O desafio não cria
+sessão, senha ou acesso adicional; reset/criação de senha permanece uma ação separada
+iniciada pelo usuário. A migration 0103 reseta a nulo somente intenções atuais ainda
+não tentadas, preservando decisões de mensagens já submetidas.
 
 `auth.account-activation` e `email.access-released` continuam implementados somente
 para mensagens v1 históricas. Não são escolhidos para novos Pedidos; o corte deduplica

@@ -1374,9 +1374,7 @@ export const purchaseConfirmationIntents = pgTable(
       .primaryKey()
       .references(() => orders.id, { onDelete: "cascade" }),
     origin: purchaseConfirmationIntentOriginEnum("origin").notNull(),
-    verificationRequired: boolean("verification_required")
-      .default(false)
-      .notNull(),
+    verificationRequired: boolean("verification_required"),
     ...timestamps,
   }
 );

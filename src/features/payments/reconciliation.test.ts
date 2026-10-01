@@ -110,7 +110,10 @@ describe("Asaas reconciliation", () => {
         if (text.includes("from outbox_messages as message")) {
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("from users") && text.includes("email_verified")) {
+        if (
+          text.includes("select email, name") &&
+          text.includes("from users")
+        ) {
           return Promise.resolve({
             rows: [
               {
@@ -199,7 +202,10 @@ describe("Asaas reconciliation", () => {
         if (text.includes("from outbox_messages as message")) {
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("from users") && text.includes("email_verified")) {
+        if (
+          text.includes("select email, name") &&
+          text.includes("from users")
+        ) {
           return Promise.resolve({
             rows: [
               {
@@ -361,7 +367,10 @@ describe("Asaas reconciliation", () => {
         if (text.includes("from outbox_messages as message")) {
           return Promise.resolve({ rows: [] });
         }
-        if (text.includes("from users") && text.includes("email_verified")) {
+        if (
+          text.includes("select email, name") &&
+          text.includes("from users")
+        ) {
           return Promise.resolve({
             rows: [
               {

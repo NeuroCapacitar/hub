@@ -230,6 +230,29 @@ describe("ResetPasswordForm", () => {
     expect(container.textContent).not.toContain("PASSWORD_TOO_LONG");
   });
 
+  it("explains when password reset attempts are rate limited", async () => {
+    dependencies.fetch.mockResolvedValue(
+      new Response(JSON.stringify({ code: "RATE_LIMITED" }), {
+        headers: { "Content-Type": "application/json" },
+        status: 429,
+      })
+    );
+    act(() => root.render(<ResetPasswordForm token="valid-token" />));
+    fillValidPasswords(container);
+
+    await act(async () => {
+      getForm(container).requestSubmit();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "Muitas tentativas. Aguarde alguns minutos e tente novamente."
+    );
+    expect(container.querySelector("form")).not.toBeNull();
+    expect(container.querySelector('a[href="/recuperar-senha"]')).toBeNull();
+    expect(container.textContent).not.toContain("RATE_LIMITED");
+  });
+
   it("uses safe generic text for an unknown JSON code and provider message", async () => {
     dependencies.fetch.mockResolvedValue(
       new Response(

@@ -129,6 +129,34 @@ export const readPendingSignupChallenge = async (
   }
 };
 
+export const readPendingPasswordResetToken = async (
+  email: string
+): Promise<string> => {
+  const pool = new Pool({ connectionString: requireE2eDatabaseUrl() });
+  try {
+    const result = await pool.query<{ identifier: string }>(
+      `select verification.identifier
+       from verifications as verification
+       join users on verification.value = users.id
+       where verification.identifier like 'reset-password:%'
+         and verification.expires_at > now()
+         and public.canonicalize_auth_email_identity(users.email) =
+           public.canonicalize_auth_email_identity($1)
+       order by verification.expires_at desc
+       limit 1`,
+      [email]
+    );
+    const identifier = result.rows[0]?.identifier;
+    const token = identifier?.slice("reset-password:".length);
+    if (!token) {
+      throw new Error("Pending password reset token fixture was not found.");
+    }
+    return token;
+  } finally {
+    await pool.end();
+  }
+};
+
 export const setE2ePlatformBlock = async ({
   blocked,
   userId,

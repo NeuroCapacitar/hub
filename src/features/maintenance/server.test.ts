@@ -116,6 +116,7 @@ describe("runMaintenance", () => {
       .mockResolvedValueOnce({ rowCount: 5 })
       .mockResolvedValueOnce({ rowCount: 8 })
       .mockResolvedValueOnce({ rowCount: 9 })
+      .mockResolvedValueOnce({ rowCount: 13 })
       .mockResolvedValueOnce({ rowCount: 10 })
       .mockResolvedValueOnce({ rowCount: 11 })
       .mockResolvedValueOnce({ rowCount: 5 })
@@ -141,6 +142,7 @@ describe("runMaintenance", () => {
       expiredStaffInvitations: 0,
       emailDeliveryEventsRemoved: 13,
       emailDeliveryMessagesRemoved: 14,
+      expiredPasswordResetOperationsRemoved: 13,
       expiredLessonResourceUploadsRemoved: 10,
       learningAnalyticsAggregated: 5,
       learningAnalyticsEventsRemoved: 6,
@@ -169,6 +171,9 @@ describe("runMaintenance", () => {
     ).toContain("updated_at < now() - interval '1 hour'");
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("delete from account_email_challenges")
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("delete from account_password_reset_operations")
     );
     expect(dependencies.expireStaffInvitations).toHaveBeenCalledWith({
       client: pool,
@@ -256,6 +261,7 @@ describe("runMaintenance", () => {
           pendingSignupsRemoved: 8,
           emailDeliveryEventsRemoved: 13,
           emailDeliveryMessagesRemoved: 14,
+          expiredPasswordResetOperationsRemoved: 13,
           expiredLessonResourceUploadsRemoved: 10,
           learningAnalyticsAggregated: 5,
           learningAnalyticsEventsRemoved: 6,

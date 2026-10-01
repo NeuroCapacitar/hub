@@ -87,7 +87,7 @@ const createContext = ({
     if (text.includes("from account_email_challenges")) {
       return Promise.resolve(queryResult([]));
     }
-    if (text.includes("from users") && text.includes("email_verified")) {
+    if (text.includes("select email, name") && text.includes("from users")) {
       return Promise.resolve(
         queryResult([
           {
@@ -1314,7 +1314,7 @@ describe("Asaas webhook processor", () => {
     expect(applyPaidAccess).toHaveBeenCalledOnce();
   });
 
-  it("queues purchase confirmation and mailbox proof for a public identity", async () => {
+  it("queues confirmation and defers mailbox proof until delivery for a public identity", async () => {
     const { context, queries } = createContext({
       emailVerified: false,
       orderRow: createOrderRow({
@@ -1364,7 +1364,7 @@ describe("Asaas webhook processor", () => {
     });
     expect(
       queries.some(({ text }) => text.includes("purchase_verification"))
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("persists paid evidence and opens a review when the access snapshot is invalid", async () => {
