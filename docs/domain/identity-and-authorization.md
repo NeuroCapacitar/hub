@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: b9cc1bd90419d4ed623b2b9805a48adc840d5957
+last_verified_commit: 6bf5d693fd565c7c4c0c4bd9b7754efca92c2b44
 ---
 
 # Identidade e autorização
@@ -16,13 +16,29 @@ Define Conta, sessão, perfil, papéis, permissões e bloqueios. Termos comercia
 - `accounts`: credenciais e provedores da identidade.
 - `sessions`: sessões revogáveis.
 - `verifications`: tokens de verificação e recuperação.
+- `pending_signups`: dados mínimos e temporários de um cadastro ainda sem Conta.
+- `account_email_challenges`: finalidade, geração, prazo e consumo dos desafios
+  próprios do Hub para provar posse de uma caixa postal.
+- `account_email_challenge_rate_limits`: somente hashes HMAC de destinatário/IP,
+  contagem e janela; não armazena e-mail ou endereço IP em claro.
+- `account_email_change_requests`: etapas e prazos de troca de e-mail;
+  endereços pendentes são temporários e removidos após a entrega dos avisos e
+  retenção terminal curta.
+- `account_password_reset_operations`: marcadores temporários que coordenam
+  solicitação/consumo de recuperação de senha com a troca de identidade.
+- `staff_invitations`: convites internos pendentes, papel proposto, grants
+  allowlisted, Admin convidante, geração e prazo. Um convite não cria Conta,
+  sessão ou acesso antes do aceite.
 - `two_factors`: estrutura legada de uma tentativa anterior de autenticação,
   mantida apenas para preservar o histórico de migrations; não é registrada nem
   consultada pela aplicação atual.
-- `profiles`: papel, bloqueio de plataforma e dados complementares do Aluno.
+- `profiles`: papel, bloqueio de plataforma, modo de avatar e chave R2
+  privada da imagem personalizada, além de dados complementares do Aluno.
 - papéis: `admin`, `support`, `student`.
 
-Não existe Better Auth Admin Plugin nem Organization Plugin. Não existe organização, tenant, convite ou equipe de cliente no domínio atual.
+Não existe Better Auth Admin Plugin nem Organization Plugin. Não há organização,
+tenant ou equipe de cliente; a equipe interna usa o lifecycle próprio de
+`staff_invitations`.
 
 ### REG-IDA-001 E-mail identifica a Conta sem distinção de caixa
 
@@ -31,9 +47,13 @@ Além de espaços e caixa, Gmail/Googlemail convergem domínio, removem pontos e
 provedores reconhecidos pelo Sentinel removem `+tag`. Essa mesma regra deve ser aplicada
 antes de procurar ou criar a Conta da Compradora.
 
-**Implementado:** migration `0027_case_insensitive_user_email.sql`; normalização de Compradora compatível com o Sentinel em `normalizeBuyerEmail`, de `src/features/payments/buyer-identity.ts`.
-
-**Falha:** conflitos de legado precisam ser resolvidos antes de aplicar a restrição. A migration não está no journal atual; a garantia do banco implantado não foi verificada.
+**Implementado:** a migration `0097_identity_email_challenges.sql` está no
+journal e adiciona a função canônica e seu índice único; conflitos legados fazem
+a migration falhar fechada. Compra e vínculo Google consultam a mesma função
+canônica. Disputas concorrentes de criação são relidas sob essa identidade e
+colisões com mais de uma Conta são recusadas sem merge automático. O estado de
+aplicação em cada banco compartilhado deve ser confirmado pelo preflight e pelo
+runbook; esta implementação local não aplicou migration em nenhum ambiente.
 
 `scanBuyerIdentityCollisions`, em `src/features/payments/identity-collision-audit.ts`,
 é uma auditoria somente leitura em lotes por cursor. Ela agrupa somente colisões da
@@ -48,7 +68,7 @@ redirecione sua saída para logs compartilhados.
 
 ### REG-IDA-002 Cadastro público é desabilitado por padrão
 
-`AUTH_PUBLIC_SIGNUP_ENABLED` tem default `false`. Quando desligado, `isBlockedAuthEndpoint`, em `src/lib/auth-policy.ts`, bloqueia `POST sign-up/email`. Contas também podem entrar por fluxo financeiro ou bootstrap operacional.
+`AUTH_PUBLIC_SIGNUP_ENABLED` tem default `false`. O endpoint nativo Better Auth `POST sign-up/email` é sempre bloqueado, inclusive quando o cadastro público está habilitado, pois persiste a senha antes da prova da caixa. Quando a flag está ligada, o fluxo próprio de `/cadastro` é `/api/account/registrations`; login Google desconhecido nunca cria Conta. Contas também podem entrar por fluxo financeiro, convite ou bootstrap operacional.
 
 **Autorização:** o endpoint de bootstrap Admin só existe fora de produção, exige `INTERNAL_BOOTSTRAP_SECRET` e retorna 404 em produção por `getBootstrapAdminDecision`.
 
@@ -56,7 +76,130 @@ redirecione sua saída para logs compartilhados.
 
 ### REG-IDA-002A Cadastro público cria apenas a Conta
 
-`AUTH_PUBLIC_SIGNUP_ENABLED` continua com default `false`. Quando habilitado, `/cadastro` permite criar uma Conta com sessão imediata, mas não cria Pedido, Concessão ou Matrícula. Cursos permanecem indisponíveis até o fluxo comercial ou administrativo conceder acesso. Compra pública não depende de abrir esse cadastro: a confirmação financeira pode criar uma Conta local sem credencial e enviar ativação.
+`AUTH_PUBLIC_SIGNUP_ENABLED` continua com default `false`. Quando habilitado, `/cadastro` coleta nome e e-mail, nunca senha. A resposta externa é neutra para e-mail novo, existente, limitado ou suprimido. Antes da prova da caixa, só existe uma pendência temporária e um desafio HMAC com finalidade, geração, prazo e uso único; não há Conta, Perfil, credencial, sessão, Pedido, Concessão ou Matrícula. Abrir o link por `GET` não altera estado: o token fica no fragmento da URL, é removido do histórico do navegador e só é consumido após ação explícita por `POST`. A confirmação cria uma Conta Student verificada sem credencial nem sessão, e direciona para entrar; senha pode ser criada depois. Colisão canônica nunca faz merge ou substituição. A inscrição gratuita continua sendo uma ação autenticada separada.
+
+A confirmação remove imediatamente a pendência que continha nome/e-mail;
+pendências abandonadas são apagadas após o vencimento pelo maintenance. Desafios
+consumidos/vencidos e buckets HMAC expirados também são removidos pelo mesmo job.
+
+Para Conta local legada não verificada, a confirmação funciona como reivindicação: numa transação, consome o desafio, apaga credential e sessões criados antes da prova, e só então marca o e-mail como verificado. Cadastro público não inicia reivindicação para Admin/Suporte; esses papéis podem pedir confirmação explicitamente pelo fluxo de verificação, que também invalida credential pré-prova. A troca de e-mail e convites têm finalidades próprias e não reutilizam o desafio de signup.
+
+### REG-IDA-002B Convite de equipe exige aceite explícito
+
+Somente Admin com acesso ativo pode criar, atualizar, reenviar ou cancelar um
+convite. O registro pendente guarda o e-mail, papel, grants/views permitidos,
+motivo, Admin convidante, geração e expiração de sete dias. A outbox guarda
+somente `invitationId` e geração. O delivery revalida estado, prazo e Admin
+convidante e gera um token HMAC de propósito `staff_invitation`; o token fica
+no fragmento da URL e não é persistido em fila, log ou auditoria.
+
+O GET da página e o POST de preview não alteram Conta ou convite. Um POST
+explícito valida novamente geração, prazo, e-mail canônico e estado do
+convidante; em uma única transação consome o convite e cria/atualiza o Perfil.
+A interface só encerra o fluxo como convite inválido quando recebe o código
+explícito `invalid_or_expired_staff_invitation` com HTTP 400. Falhas de rede,
+HTTP 5xx, outros status ou respostas JSON malformadas mantêm o resultado como
+incerto e oferecem nova tentativa. Repetir o POST de aceite é seguro: um
+convite já aceito retorna o mesmo destino de login sem reaplicar a promoção.
+Conta nova nasce verificada, sem credencial ou sessão. A aceitação de um Aluno
+existente converte o papel único, revoga sessões e preserva matrícula, pedidos,
+progresso e certificados. Para Student legado não verificado, o próprio convite
+prova a posse da caixa: credenciais e sessões anteriores são invalidadas antes
+de marcar o e-mail verificado. A pessoa precisa entrar novamente pelo método de
+login escolhido; o aceite não autentica.
+
+Convites expirados são marcados pelo maintenance; reenvio rotaciona geração e
+invalida links/outbox antigos. A equipe continua single-role: Admin/Suporte já
+existentes não recebem uma segunda atribuição por convite. A tabela de membros
+mantém edição, auditoria e proteção contra rebaixar o último Admin.
+
+### REG-IDA-009 Perfil compartilhado e métodos de entrada
+
+Não existe rota separada para a Conta. Dados pessoais e métodos de entrada
+integram as configurações existentes: `/app/configuracoes` para Student e
+`/admin/configuracoes` para Admin/Support. Na rota administrativa, a seção
+pessoal está sempre disponível; sem a capacidade `viewSettings`, ela não carrega
+nem exibe configurações do Hub.
+
+Configurações Student permanece sob o layout normal de `/app` e os mesmos
+guards de sessão. Uma Conta com acesso à plataforma suspenso não pode entrar em
+nenhuma área interna, inclusive Configurações; o guard redireciona para
+`/entrar`, que informa a suspensão e oferece contato com o Suporte. A navegação
+e o endpoint privado de avatar também negam acesso. Nenhuma preferência ou dado
+de aprendizagem é carregado para uma Conta suspensa. A restauração do acesso é
+uma ação administrativa auditada, não uma ação disponível ao próprio Aluno.
+
+O nome continua em `users.name` e alimenta novos Certificados; snapshots já
+emitidos não mudam. O e-mail atual fica visível e sua troca requer Conta
+verificada, mas não exige reautenticação por idade da sessão. São exigidas duas
+provas em ordem: um link HMAC de uso único ao endereço atual autoriza a
+solicitação; outro ao endereço novo comprova posse. Somente após ambas as
+provas o Hub atualiza `users.email`, invalida sessões anteriores e envia avisos
+aos dois endereços. Nenhum link cria sessão. Solicitações expiram em uma hora;
+um novo pedido rotaciona a geração e invalida os links anteriores.
+
+Os endpoints Better Auth de solicitar e consumir reset registram uma operação
+temporária em `account_password_reset_operations`, sob o mesmo advisory lock
+transacional da troca. Ao concluir a segunda prova, a transação recusa
+temporariamente a troca se houver reset em andamento; a pessoa pode tentar o
+mesmo link novamente. Sem operação ativa, bloqueia a Conta e a credencial local,
+apaga os registros `reset-password:%` ainda pendentes em `verifications` e só
+então altera o e-mail. As linhas de `accounts` não são apagadas nem têm a senha
+ou vínculos Google alterados. Marcadores são removidos quando o handler termina
+e expiram em 15 minutos após falha inesperada do processo; a manutenção também
+remove globalmente os marcadores expirados. Antes do lookup de Conta/token, a
+fronteira do Hub consome limites HMAC por IP e por e-mail (solicitação) ou token
+(consumo). IP confiável ausente em Production falha fechado; uma solicitação
+limitada conserva HTTP 200 e a resposta neutra. O endpoint público também mantém um
+tempo mínimo de resposta de 250 ms para reduzir diferenças causadas pelo guard
+associado à Conta. O rate limit interno do Better Auth permanece como segunda camada
+após o wrapper. Se o guard não puder acessar o banco, os
+endpoints de reset falham fechados com HTTP 503. Reservas de
+endereço vencidas são marcadas `expired` e têm sua geração rotacionada sob o lock
+advisory do endereço canônico antes da checagem de disponibilidade; a mensagem
+pendente correspondente é superseded. Cancelamento seleciona apenas pedido
+pendente ainda dentro do prazo, rotaciona sua geração e supersedes sua mensagem.
+
+O fluxo sempre adquire primeiro o advisory da Conta e depois os advisories dos
+endereços canônicos em ordem lexical. Na criação/renovação, bloqueia a linha do
+usuário atual, expira e bloqueia reservas vencidas do destino, verifica a
+disponibilidade e então bloqueia o pedido ativo próprio. Na confirmação, bloqueia
+o pedido e depois a Conta; na conclusão, também bloqueia o usuário que já ocupa o
+destino, a credencial local e, por fim, apaga os tokens de reset pendentes. O
+cancelamento bloqueia o advisory da Conta antes do pedido ativo. A limpeza de
+reservas vencidas acontece sob o advisory do endereço de destino e antes da
+verificação de disponibilidade. Essa ordem serializa concorrentes que reservam
+o mesmo endereço e invalida links que ainda estavam pendentes.
+
+O cancelamento bloqueia o advisory da Conta antes do pedido ativo. A limpeza de
+reservas vencidas acontece sob o advisory do endereço de destino e antes da
+verificação de disponibilidade. Essa ordem serializa concorrentes que reservam
+o mesmo endereço e invalida links que ainda estavam pendentes. Os dois endpoints
+Better Auth são envolvidos pelo guard do Hub, cobrindo tanto a emissão quanto o
+intervalo entre consumo do token e gravação da credencial.
+
+A senha é opcional. Configurações não cria nem altera senha e não consulta se uma
+credential existe. A pessoa solicita um link em `/recuperar-senha`, pelo link
+`Esqueci minha senha` da tela de login. O link leva a `/redefinir-senha`; o token de uso único permite definir a
+primeira senha de uma Conta Google-only ou atualizar uma credential existente.
+O fluxo Better Auth continua responsável por expiração, validação, verificação
+local do e-mail e revogação de sessões conforme a configuração atual. Não há
+link de reset nem formulário de senha nas Configurações. O Hub nunca lê nem
+exibe hash. Vincular Google é uma ação autenticada e mantém a prova local
+exigida para o primeiro vínculo.
+
+O avatar apresentado segue uma ordem automática: imagem personalizada privada,
+foto Google disponível e, por último, iniciais. Iniciais não são uma opção de
+perfil. Remover a foto personalizada limpa a referência ativa e o objeto antigo
+no R2; o próximo fallback é aplicado sem uma escolha de modo. A imagem é
+validada pelo conteúdo, permite enquadramento manual antes do envio e é
+processada para quadrado WebP de 512×512. São aceitos somente JPG/PNG/WebP
+estáticos de até 5 MiB. A chave R2 inclui o `userId` obtido da sessão; a leitura
+usa rota autenticada própria, sem URL pública ou chave fornecida pelo navegador.
+O perfil mantém uma única referência ativa; substituição troca a referência em
+transação e remove o objeto anterior. Se a remoção falhar, o reconciliador apaga
+órfãos válidos após 24 horas, com falhas registradas sem dados pessoais nos
+logs operacionais.
 
 As páginas `/entrar` e `/cadastro` aceitam retorno somente para a rota interna
 canônica `/comprar/<slug>`, validada por `getSafeAuthReturnTo` em
@@ -69,7 +212,7 @@ administrativa autorizada; Student bloqueada continua recebendo `403`. O fluxo d
 recuperação de senha não carrega
 esse retorno.
 
-O trigger `users_create_student_profile`, da migration `0041_public_signup_student_profiles.sql`, cria o Perfil `student` junto com cada nova Conta. A migration também preenche Perfis ausentes de Contas legadas, para que as novas Contas apareçam na administração sem depender de hook assíncrono da aplicação.
+O trigger `users_create_student_profile`, da migration `0041_public_signup_student_profiles.sql`, cria o Perfil `student` junto com cada Conta criada pelo signup confirmado. A migration também preenche Perfis ausentes de Contas legadas, para que as novas Contas apareçam na administração sem depender de hook assíncrono da aplicação.
 
 Quando a Conta Student retorna de `/comprar/<slug>`, somente
 `enrollFreeCourseAction`, em `src/app/(student)/app/actions.ts`, pode iniciar a
@@ -185,22 +328,31 @@ integral confirmado. A prova E2E PostgreSQL passou e a homologação Sandbox pó
 comprovou PIX, vínculo, acesso, entrega do e-mail de ativação, criação da senha, login e
 abertura do Curso.
 
-### REG-IDA-006 Ativação por compra é durável sem persistir segredo
+### REG-IDA-006 Confirmação de compra é durável sem persistir segredo
 
-A intenção `auth.account-activation` guarda exatamente `userId` e `orderId`, sem outros
-dados pessoais, token ou URL de callback. Na entrega, o adaptador exige Pedido Asaas
-`paid`, vínculo do Pedido com a Conta e Conta existente, resolve o e-mail atual e chama
-Better Auth `requestPasswordReset`. O token nasce apenas dentro do Better Auth/callback.
-Como Better Auth captura falhas do callback e resolve a API mesmo sem envio, a chamada
-interna abre um contexto assíncrono isolado, associado à chave HMAC da intenção, e só
-conclui quando o callback registra entrega. Falha ou ausência do callback usa
-`account_activation_failed` e permanece elegível para retry; Conta que já ganhou
-credential satisfaz a intenção como no-op. O contexto guarda somente chave e resultado,
-sem e-mail, token ou URL.
+Para Pedidos novos, `email.purchase-confirmed` guarda somente `orderId` e `userId`;
+`purchase_confirmation_intents` é o marcador durável único por Pedido e sobrevive à
+limpeza de mensagens entregues da outbox. A migration registra Pedidos já pagos como
+históricos para que reconciliação tardia não reenvie confirmação. O processor enfileira
+marcador e intenção na mesma transação da Concessão e Matrícula.
 
-Factory, parser, processor e delivery implementam
-[DEC-DISC-001](../decisions.md#dec-disc-001). O processor escolhe entre ativação e
-`email.access-released` e grava a intenção na mesma transação do acesso.
+Uma intenção nova começa com `verification_required` nulo. Na primeira preparação da
+entrega, antes de chamar o provider, um `UPDATE ... WHERE verification_required IS NULL`
+captura o `email_verified` atual de forma concorrente-segura. Quem confirmou o
+endereço enquanto a mensagem aguardava recebe o CTA de acesso; quem ainda não confirmou
+recebe o CTA de confirmação. Essa decisão fica no ledger e os retries não alternam o
+CTA. A entrega usa dados imutáveis do Pedido e snapshot do Curso; nenhum token, e-mail
+ou URL secreta entra na outbox. O desafio só é criado/renovado quando a decisão
+registrada exige confirmação e, depois da primeira tentativa ao provider, geração,
+prazo e envelope permanecem estáveis durante a janela idempotente. O desafio não cria
+sessão, senha ou acesso adicional; reset/criação de senha permanece uma ação separada
+iniciada pelo usuário. A migration 0103 reseta a nulo somente intenções atuais ainda
+não tentadas, preservando decisões de mensagens já submetidas.
+
+`auth.account-activation` e `email.access-released` continuam implementados somente
+para mensagens v1 históricas. Não são escolhidos para novos Pedidos; o corte deduplica
+as duas versões, bloqueia retry manual legado e nunca envia uma segunda confirmação se
+há aceitação confirmada/incerta.
 
 ## Autenticação
 
@@ -231,8 +383,7 @@ As páginas `/` e `/entrar` aguardam uma requisição antes de resolver a sessã
 
 ### REG-IDA-008 Login Google não cria Conta implicitamente
 
-**Contrato aprovado; Etapas 1–3 da implementação concluídas; ativação e
-homologação real ainda pendentes:** `/entrar` usa Google somente para
+**Contrato implementado:** `/entrar` usa Google somente para
 autenticar uma Conta existente; o pedido de signup explícito nunca é
 enviado nessa rota. `disableImplicitSignUp` permanece ativo, e a opção de
 signup Google segue `AUTH_PUBLIC_SIGNUP_ENABLED`. `/cadastro` pode criar uma
@@ -250,20 +401,27 @@ não tem imagem; uma imagem já cadastrada prevalece. O avatar é lido da sessã
 server-side e exibido no menu da Conta. Tokens OAuth ficam cifrados no banco;
 não há escopos de produto nem ID-token sign-in.
 
-Depois de uma redefinição de senha concluída, `onPasswordReset` atualiza
-idempotentemente `users.email_verified=true` pelo ID da Conta, usando o link
-único enviado à caixa postal cadastrada como prova local de controle. A escrita
-ocorre depois da atualização da credencial pelo Better Auth. Se ela falhar, o
-callback registra apenas um código operacional genérico e falha a resposta; a
-tela não afirma sucesso e oferece solicitar outro link em `/recuperar-senha`.
+`emailAndPassword.requireEmailVerification` está ativo para bloquear login por
+senha em Conta não verificada. O cadastro local e a confirmação pontual usam
+desafios do Hub entregues pela outbox; `GET /api/auth/verify-email` não marca
+estado e encaminha links Better Auth antigos à orientação para solicitar novo
+link. Em uma reivindicação legada, credential e sessões anteriores são
+invalidados antes de `users.email_verified=true`. Depois de redefinição de
+senha, `onPasswordReset` também atualiza esse campo idempotentemente porque o
+link de reset foi enviado à caixa cadastrada; se a escrita falhar, a tela não
+afirma sucesso e permite solicitar outro link em `/recuperar-senha`.
 
-`emailAndPassword.requireEmailVerification` continua desligado para preservar
-cadastro por senha e o retorno da autoinscrição. A confirmação pontual do
-endereço para um vínculo Google só é enviada após pedido explícito, usa resposta
-anti-enumeração e rate limit, e não é acionada automaticamente em signup ou
-sign-in. Essa decisão está em
-[DEC-DISC-020](../decisions.md#dec-disc-020); compra pública continua
-guest-first conforme [DEC-DISC-007](../decisions.md#dec-disc-007).
+O envio de confirmação só ocorre após ação explícita; a resposta pública não
+enumera Contas e há limite por identidade e IP. Se o IP confiável não puder ser
+resolvido em produção, o pedido é recusado sem revelar a causa. Para qualquer primeiro vínculo
+Google, inclusive Gmail/Workspace, exige-se prova local. A exceção condicional
+por domínio foi adiada porque a versão instalada não expõe um hook de
+autorização seguro; não configurar `requireLocalEmailVerified:false` nem
+`trustedProviders`. Essa política está em
+[DEC-DISC-020](../decisions.md#dec-disc-020). Compra pública continua
+guest-first conforme [DEC-DISC-007](../decisions.md#dec-disc-007); a confirmação
+da compra usa o ledger durável descrito em REG-IDA-006 e não reabre o fluxo
+legado de reset por compra.
 
 Na interface, `/entrar` inicia Google sem `requestSignUp`; `/cadastro` só mostra
 criação social quando cadastro público está habilitado e, quando está desligado,
@@ -292,12 +450,19 @@ concluída de token inválido/expirado sem exibir o código Better Auth.
 ## Evidências
 
 - schema: `roleEnum`, `users`, `sessions`, `accounts`, `verifications`,
-  `profiles` e estruturas legadas de migration em `src/db/schema.ts`;
+  `pendingSignups`, `accountEmailChallenges`, `accountEmailChallengeRateLimits`,
+  `accountEmailChangeRequests`, `accountPasswordResetOperations`, `profiles`
+  e estruturas legadas de migration em `src/db/schema.ts`;
 - implementação: `getAuth`, `canPerform`,
-  `isBlockedAuthEndpoint` e `getBootstrapAdminDecision`;
+  `isBlockedAuthEndpoint`, `getBootstrapAdminDecision` e o serviço de
+  desafios/guard de reset em `src/features/account/`;
 - testes: `src/lib/auth-policy.test.ts`, `src/lib/session.test.ts`,
-  `src/lib/trusted-origins.test.ts` e `src/lib/allowed-dev-origins.test.ts`;
+  `src/lib/trusted-origins.test.ts`,
+  `src/lib/allowed-dev-origins.test.ts` e `src/features/account/*.test.ts`;
 - rotas: `src/app/api/auth/[...all]/route.ts`,
+  `src/app/api/account/registrations/route.ts`,
+  `src/app/api/account/email-challenges/consume/route.ts`,
+  `src/app/api/account/email-changes/consume/route.ts`,
   `src/app/api/auth/redirect/route.ts` e
   `src/app/api/auth/dev/bootstrap-admin/route.ts`.
 

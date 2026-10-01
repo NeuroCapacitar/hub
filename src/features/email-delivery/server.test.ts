@@ -21,6 +21,13 @@ const verificationContext = {
   templateAlias: "auth-email-verification",
   topic: "auth.email-verification",
 } as unknown as EmailDeliveryContext;
+const purchaseConfirmationContext: EmailDeliveryContext = {
+  correlationId: "0198d6f4-c2a5-7000-8000-000000000003",
+  idempotencyKey: "email.purchase-confirmed/order-1/v1",
+  outboxMessageId: "0198d6f4-c2a5-7000-8000-000000000003",
+  templateAlias: "purchase-confirmed",
+  topic: "email.purchase-confirmed",
+};
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
 describe("email request fingerprint and tags", () => {
@@ -66,6 +73,16 @@ describe("email request fingerprint and tags", () => {
       {
         name: "hub_correlation",
         value: verificationContext.correlationId,
+      },
+    ]);
+  });
+
+  it("uses a distinct closed Resend tag for purchase confirmation", () => {
+    expect(buildResendLifecycleTags(purchaseConfirmationContext)).toEqual([
+      { name: "hub_topic", value: "email_purchase_confirmed" },
+      {
+        name: "hub_correlation",
+        value: "0198d6f4-c2a5-7000-8000-000000000003",
       },
     ]);
   });

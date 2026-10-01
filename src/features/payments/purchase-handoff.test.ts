@@ -51,6 +51,7 @@ const ACTIVE_COURSE = {
 const EMPTY_RELEASE_SCHEDULE = buildContentReleaseScheduleSnapshot([]);
 
 const createSession = (overrides: Partial<AppSession> = {}): AppSession => ({
+  emailVerified: true,
   platformBlockedAt: null,
   platformBlockedReason: null,
   role: "student",

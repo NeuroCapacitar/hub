@@ -1,3 +1,4 @@
+import "./e2e-env-preload";
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -142,6 +143,12 @@ const createUser = async ({
   });
   const userId = result.user.id;
 
+  await getPool().query(
+    `update users
+     set email_verified = true, updated_at = now()
+     where id = $1`,
+    [userId]
+  );
   await getPool().query(
     `
       insert into profiles (user_id, role, support_permission_grants, support_permission_views)

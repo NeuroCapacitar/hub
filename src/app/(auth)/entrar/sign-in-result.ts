@@ -1,4 +1,8 @@
-export type SignInOutcome = "authenticated" | "failure";
+export type SignInOutcome =
+  | "account_suspended"
+  | "authenticated"
+  | "email_verification_required"
+  | "failure";
 
 export const getSignInOutcome = (payload: unknown): SignInOutcome => {
   if (typeof payload !== "object" || payload === null) {
@@ -11,6 +15,14 @@ export const getSignInOutcome = (payload: unknown): SignInOutcome => {
     message?: unknown;
     user?: unknown;
   };
+
+  if (data.code === "EMAIL_NOT_VERIFIED") {
+    return "email_verification_required";
+  }
+
+  if (data.code === "ACCOUNT_SUSPENDED") {
+    return "account_suspended";
+  }
 
   if (data.code || data.error) {
     return "failure";

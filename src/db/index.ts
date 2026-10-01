@@ -9,6 +9,7 @@ import {
 import { getServerEnv } from "@/lib/env";
 import { createCorrelationId, logOperationalEvent } from "@/lib/observability";
 import {
+  accountPasswordResetOperations,
   accounts,
   appSettings,
   auditLogs,
@@ -44,6 +45,7 @@ import {
 } from "./schema";
 
 const schema = {
+  accountPasswordResetOperations,
   accounts,
   appSettings,
   auditLogs,

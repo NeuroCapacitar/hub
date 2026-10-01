@@ -8,22 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/password-input";
 import { getAuthSignInPath, getSafeAuthReturnTo } from "@/lib/auth-return-to";
-import {
-  getNewPasswordValidationError,
-  PASSWORD_MIN_LENGTH,
-} from "@/lib/password-policy";
-import { isSuccessfulSignUpPayload } from "./sign-up-result";
-
-const getAuthRedirectPath = (returnTo: string | null): string => {
-  const searchParams = new URLSearchParams();
-  if (returnTo) {
-    searchParams.set("returnTo", returnTo);
-  }
-  const query = searchParams.toString();
-  return query ? `/api/auth/redirect?${query}` : "/api/auth/redirect";
-};
 
 export function SignUpForm({
   googleLoginEnabled = false,
@@ -36,6 +21,7 @@ export function SignUpForm({
 } = {}): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
   const safeReturnTo = getSafeAuthReturnTo(returnTo);
   const signInHref = getAuthSignInPath(safeReturnTo);
 
@@ -44,28 +30,14 @@ export function SignUpForm({
     setError(null);
 
     const formData = new FormData(event.currentTarget);
-    const password = String(formData.get("password") ?? "");
-    const passwordConfirmation = String(
-      formData.get("passwordConfirmation") ?? ""
-    );
-
-    const passwordError = getNewPasswordValidationError({
-      confirmation: passwordConfirmation,
-      password,
-    });
-    if (passwordError) {
-      setError(passwordError);
-      return;
-    }
-
     setIsPending(true);
 
     try {
-      const response = await fetch("/api/auth/sign-up/email", {
+      const response = await fetch("/api/account/registrations", {
         body: JSON.stringify({
           email: formData.get("email"),
           name: formData.get("name"),
-          password,
+          ...(safeReturnTo ? { returnTo: safeReturnTo } : {}),
         }),
         credentials: "same-origin",
         headers: {
@@ -74,34 +46,18 @@ export function SignUpForm({
         },
         method: "POST",
       });
-      const contentType = response.headers.get("content-type") ?? "";
-      const payload = contentType.includes("application/json")
-        ? await response.json()
-        : await response.text();
-
-      if (!(response.ok && isSuccessfulSignUpPayload(payload))) {
-        setError(
-          "Não foi possível criar a conta. Confira os dados e tente novamente."
-        );
+      const result: unknown = await response.json();
+      if (
+        !(response.ok && result) ||
+        typeof result !== "object" ||
+        Reflect.get(result, "status") !== "accepted"
+      ) {
+        setError("Não foi possível solicitar a confirmação. Tente novamente.");
         return;
       }
-
-      const redirectResponse = await fetch(getAuthRedirectPath(safeReturnTo), {
-        credentials: "same-origin",
-        headers: { "ngrok-skip-browser-warning": "true" },
-      });
-
-      if (!redirectResponse.ok) {
-        setError(
-          "Sua conta foi criada, mas não foi possível iniciar a sessão."
-        );
-        return;
-      }
-
-      const data = (await redirectResponse.json()) as { redirectTo?: string };
-      window.location.assign(data.redirectTo ?? "/app");
+      setRequestSent(true);
     } catch {
-      setError("Não foi possível criar a conta. Tente novamente.");
+      setError("Não foi possível solicitar a confirmação. Tente novamente.");
     } finally {
       setIsPending(false);
     }
@@ -116,62 +72,53 @@ export function SignUpForm({
           requestSignUp
         />
       ) : null}
-      <FieldGroup className="gap-5">
-        <Field>
-          <FieldLabel htmlFor="name">Nome completo</FieldLabel>
-          <Input
-            autoComplete="name"
-            className="h-11"
-            id="name"
-            name="name"
-            required
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="email">E-mail</FieldLabel>
-          <Input
-            autoComplete="email"
-            className="h-11"
-            id="email"
-            name="email"
-            placeholder="aluno@exemplo.com"
-            required
-            type="email"
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="password">Senha</FieldLabel>
-          <PasswordInput
-            autoComplete="new-password"
-            className="h-11"
-            id="password"
-            minLength={PASSWORD_MIN_LENGTH}
-            name="password"
-            required
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="passwordConfirmation">
-            Confirmar senha
-          </FieldLabel>
-          <PasswordInput
-            autoComplete="new-password"
-            className="h-11"
-            id="passwordConfirmation"
-            minLength={PASSWORD_MIN_LENGTH}
-            name="passwordConfirmation"
-            required
-          />
-        </Field>
-      </FieldGroup>
+      {requestSent ? (
+        <div aria-live="polite" className="space-y-2">
+          <h2 className="font-semibold">Confira seu e-mail</h2>
+          <p className="text-muted-foreground text-sm">
+            Se esse endereço puder criar ou confirmar uma conta, enviaremos um
+            link. Abra-o para continuar; por segurança, o link expira em uma
+            hora.
+          </p>
+        </div>
+      ) : (
+        <FieldGroup className="gap-5">
+          <Field>
+            <FieldLabel htmlFor="name">Nome completo</FieldLabel>
+            <Input
+              autoComplete="name"
+              className="h-11"
+              id="name"
+              maxLength={120}
+              name="name"
+              required
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="email">E-mail</FieldLabel>
+            <Input
+              autoComplete="email"
+              className="h-11"
+              id="email"
+              maxLength={254}
+              name="email"
+              placeholder="aluno@exemplo.com"
+              required
+              type="email"
+            />
+          </Field>
+        </FieldGroup>
+      )}
       {error ? (
         <Alert className="mt-5" variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
-      <Button className="mt-5 h-12 w-full" loading={isPending} type="submit">
-        Criar conta
-      </Button>
+      {requestSent ? null : (
+        <Button className="mt-5 h-12 w-full" loading={isPending} type="submit">
+          Enviar link de confirmação
+        </Button>
+      )}
       <Link
         className="mt-4 inline-flex text-muted-foreground text-sm underline-offset-4 hover:text-foreground hover:underline"
         href={signInHref}

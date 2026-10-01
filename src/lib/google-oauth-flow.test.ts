@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { applyConfirmedPaymentAccess } from "@/features/payments/apply-authoritative-financial-evidence";
 import type { OrderIdentityQueryClient } from "@/features/payments/order-identity";
 import { resolveLocalOrderIdentity } from "@/features/payments/order-identity";
+import { normalizeBuyerEmail } from "@/lib/email-identity";
 import { getGoogleOAuthProviderConfig } from "./auth-policy";
 
 vi.mock("server-only", () => ({}));
@@ -227,16 +228,17 @@ const startAndCompleteGoogleOAuth = async ({
 const createOrderIdentityMemoryQuery =
   (database: GoogleOAuthMemoryDB): OrderIdentityQueryClient["query"] =>
   (queryText, values = []) => {
-    if (queryText.includes("where lower(u.email) = $1")) {
+    if (queryText.includes("canonicalize_auth_email_identity(u.email)")) {
       const matchingUser = database.user.find(
         (user) =>
           typeof user.email === "string" &&
-          user.email.toLowerCase() === values[0]
+          normalizeBuyerEmail(user.email) === values[0]
       );
       const rows = matchingUser
         ? [
             {
               course_revoked: false,
+              email_verified: matchingUser.emailVerified === true,
               id: matchingUser.id,
               platform_blocked_at: null,
               role: "student",
@@ -244,18 +246,6 @@ const createOrderIdentityMemoryQuery =
           ]
         : [];
       return Promise.resolve({ rows });
-    }
-
-    if (queryText.includes("provider_id = 'credential'")) {
-      const [userId, googleProviderEnabled] = values;
-      const account = database.account.find(
-        (candidate) =>
-          candidate.userId === userId &&
-          (candidate.providerId === "credential" ||
-            (candidate.providerId === "google" &&
-              googleProviderEnabled === true))
-      );
-      return Promise.resolve({ rows: account ? [{ id: account.id }] : [] });
     }
 
     if (queryText.includes("update orders")) {
@@ -433,13 +423,20 @@ describe("Better Auth Google OAuth flow with a fake token endpoint", () => {
   it("does not auto-link an unverified local account or create a duplicate", async () => {
     vi.stubGlobal("fetch", makeGoogleTokenFetch(GOOGLE_TEST_PROFILE));
     const { auth, database } = createSocialAuth();
-    await auth.api.signUpEmail({
+    const localSignUp = await auth.api.signUpEmail({
       body: {
         email: GOOGLE_TEST_PROFILE.email,
         name: "Local Student",
         password: "Local-password-123!",
       },
     });
+    const localUser = database.user.find(
+      (user) => user.id === localSignUp.user.id
+    );
+    if (!localUser) {
+      throw new Error("Expected the local test account to exist.");
+    }
+    expect(localUser.emailVerified).toBe(false);
     const existingSessionCount = database.session.length;
 
     const response = await startAndCompleteGoogleOAuth({ auth });
@@ -452,7 +449,38 @@ describe("Better Auth Google OAuth flow with a fake token endpoint", () => {
     expect(database.session).toHaveLength(existingSessionCount);
   });
 
-  it("keeps payment, access, and the released-access notice on the Google-created user", async () => {
+  it("still rejects first linking when Google does not verify the email", async () => {
+    const profile: GoogleProfile = {
+      ...GOOGLE_TEST_PROFILE,
+      email_verified: false,
+    };
+    vi.stubGlobal("fetch", makeGoogleTokenFetch(profile));
+    const { auth, database } = createSocialAuth({ profile });
+    const localSignUp = await auth.api.signUpEmail({
+      body: {
+        email: profile.email,
+        name: "Local Student",
+        password: "Local-password-123!",
+      },
+    });
+    const localUser = database.user.find(
+      (user) => user.id === localSignUp.user.id
+    );
+    if (!localUser) {
+      throw new Error("Expected the local test account to exist.");
+    }
+    localUser.emailVerified = true;
+
+    const response = await startAndCompleteGoogleOAuth({ auth });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain("/oauth/callback?");
+    expect(database.user).toHaveLength(1);
+    expect(database.account).toHaveLength(1);
+    expect(database.account[0]?.providerId).toBe("credential");
+  });
+
+  it("keeps payment, access, and purchase confirmation on the Google-created user", async () => {
     const profile: GoogleProfile = {
       ...GOOGLE_TEST_PROFILE,
       email: "First.Last+course@googlemail.com",
@@ -471,10 +499,48 @@ describe("Better Auth Google OAuth flow with a fake token endpoint", () => {
     }
 
     const identityQuery = createOrderIdentityMemoryQuery(database);
-    const transactionQuery = vi
-      .fn()
-      .mockResolvedValueOnce({ rows: [{ id: "paid-order-fixture" }] })
-      .mockResolvedValueOnce({ rows: [{ id: "paid-order-fixture" }] });
+    const transactionQuery = vi.fn((queryText: string, values?: unknown[]) => {
+      if (
+        queryText.includes("with transitioned as") ||
+        queryText.includes("provider_customer_id = $2")
+      ) {
+        return { rows: [{ id: "paid-order-fixture" }] };
+      }
+      if (
+        queryText.includes("from purchase_confirmation_intents") ||
+        queryText.includes("from outbox_messages as message")
+      ) {
+        return { rows: [] };
+      }
+      if (
+        queryText.includes("select email, name") &&
+        queryText.includes("from users")
+      ) {
+        return {
+          rows: [
+            {
+              email: googleUser.email,
+              email_verified: database.user[0]?.emailVerified === true,
+              name: googleUser.name,
+            },
+          ],
+        };
+      }
+      if (queryText.includes("set customer_email = coalesce")) {
+        return {
+          rows: [
+            {
+              customer_email: values?.[1],
+              customer_name: values?.[2],
+            },
+          ],
+        };
+      }
+      if (queryText.includes("insert into purchase_confirmation_intents")) {
+        return { rows: [{ order_id: "paid-order-fixture" }] };
+      }
+      return { rows: [] };
+    });
     const applyPaidAccess = vi.fn().mockResolvedValue(undefined);
     const enqueueMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -500,10 +566,9 @@ describe("Better Auth Google OAuth flow with a fake token endpoint", () => {
           kind: "resolved",
           orderId: "paid-order-fixture",
         },
-        resolveIdentity: async ({ googleProviderEnabled, order }) =>
+        resolveIdentity: async ({ order }) =>
           resolveLocalOrderIdentity({
             client: { query: identityQuery },
-            googleProviderEnabled: googleProviderEnabled ?? false,
             order,
           }),
       })
@@ -515,8 +580,8 @@ describe("Better Auth Google OAuth flow with a fake token endpoint", () => {
     expect(enqueueMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.objectContaining({
-          idempotencyKey: "email.access-released/paid-order-fixture/v1",
-          topic: "email.access-released",
+          idempotencyKey: "email.purchase-confirmed/paid-order-fixture/v1",
+          topic: "email.purchase-confirmed",
         }),
       })
     );

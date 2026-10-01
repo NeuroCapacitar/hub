@@ -35,5 +35,8 @@ describe("PanelLayout", () => {
     expect(source).toContain("currentTitle: pageMeta.title");
     expect(source).toContain("pageMeta.mobilePageHeading");
     expect(source).toContain("{pageMeta.title}");
+    expect(source).toContain(
+      'route("/admin/configuracoes?tab=perfil#minha-conta")'
+    );
   });
 });

@@ -1,5 +1,4 @@
 import "server-only";
-import { createHmac, randomUUID } from "node:crypto";
 import { render } from "@react-email/components";
 import { createElement } from "react";
 import { Resend } from "resend";
@@ -159,27 +158,29 @@ export const sendTransactionalEmail = async ({
 };
 
 export const sendEmailVerificationEmail = async ({
+  deliveryContext,
   to,
   userName,
   verificationUrl,
 }: {
+  deliveryContext: HostedEmailDeliveryContext;
   to: string;
   userName: string;
   verificationUrl: string;
 }): Promise<void> => {
-  const env = getServerEnv();
-  const verificationDigest = createHmac("sha256", env.BETTER_AUTH_SECRET)
-    .update(verificationUrl)
-    .digest("hex");
-  const idempotencyKey = `auth.email-verification/${verificationDigest}/v1`;
+  const idempotencyKey = deliveryContext.idempotencyKey;
+  const resolvedDeliveryContext: EmailDeliveryContext = {
+    correlationId: deliveryContext.correlationId,
+    idempotencyKey,
+    ...(deliveryContext.outboxMessageId
+      ? { outboxMessageId: deliveryContext.outboxMessageId }
+      : {}),
+    templateAlias: "auth-email-verification",
+    topic: "auth.email-verification",
+  };
 
   await sendTransactionalEmail({
-    deliveryContext: {
-      correlationId: randomUUID(),
-      idempotencyKey,
-      templateAlias: "auth-email-verification",
-      topic: "auth.email-verification",
-    },
+    deliveryContext: resolvedDeliveryContext,
     idempotencyKey,
     react: createElement(EmailVerificationEmail, {
       name: userName,
@@ -188,8 +189,9 @@ export const sendEmailVerificationEmail = async ({
     subject: `Confirme seu e-mail no ${PLATFORM_NAME}`,
     text: [
       `Olá, ${userName}.`,
-      `Você pediu para confirmar o e-mail desta Conta antes de vinculá-la ao Google. O link expira em uma hora: ${verificationUrl}`,
-      "Se não pediu esta confirmação, ignore esta mensagem. Nenhuma senha ou dado da Conta será alterado.",
+      `Use este link para confirmar o e-mail da sua Conta. Ele expira em uma hora: ${verificationUrl}`,
+      "O link confirma que você tem acesso ao endereço de e-mail. Ele não inicia uma sessão nem cria uma senha.",
+      "Se você não pediu esta confirmação, ignore esta mensagem.",
     ].join("\n\n"),
     to,
   });
@@ -480,6 +482,119 @@ export const sendAccessReleasedEmail = async ({
     USER_NAME: userName,
   });
 };
+
+export const sendPurchaseConfirmedEmail = async ({
+  actionLabel,
+  actionUrl,
+  courseTitle,
+  deliveryContext,
+  idempotencyKey,
+  to,
+  userName,
+}: {
+  actionLabel: "Acessar Curso" | "Confirmar e-mail";
+  actionUrl: string;
+  courseTitle: string;
+  deliveryContext?: HostedEmailDeliveryContext;
+  idempotencyKey: string;
+  to: string;
+  userName: string;
+}): Promise<EmailProviderAcceptance | undefined> =>
+  await sendHostedTemplateEmail({
+    ACTION_LABEL: actionLabel,
+    ACTION_URL: actionUrl,
+    COURSE_TITLE: courseTitle,
+    ...(deliveryContext ? { deliveryContext } : {}),
+    idempotencyKey,
+    name: "purchase-confirmed",
+    subject: `Compra confirmada: ${courseTitle}`,
+    to,
+    USER_NAME: userName,
+  });
+
+export const sendStaffInvitationEmail = async ({
+  actionUrl,
+  deliveryContext,
+  expiresAt,
+  inviterName,
+  roleLabel,
+  to,
+}: {
+  actionUrl: string;
+  deliveryContext: HostedEmailDeliveryContext;
+  expiresAt: string;
+  inviterName: string;
+  roleLabel: "Admin" | "Suporte";
+  to: string;
+}): Promise<EmailProviderAcceptance | undefined> =>
+  await sendHostedTemplateEmail({
+    ACTION_URL: actionUrl,
+    EXPIRES_AT: expiresAt,
+    INVITER_NAME: inviterName,
+    ROLE_LABEL: roleLabel,
+    deliveryContext,
+    name: "staff-invitation",
+    subject: `Convite para a equipe do ${PLATFORM_NAME}`,
+    to,
+  });
+
+export const sendEmailChangeConfirmationEmail = async ({
+  actionUrl,
+  currentEmail,
+  deliveryContext,
+  newEmail,
+  stepLabel,
+  to,
+  userName,
+}: {
+  actionUrl: string;
+  currentEmail: string;
+  deliveryContext: HostedEmailDeliveryContext;
+  newEmail: string;
+  stepLabel: "Confirmar e-mail atual" | "Confirmar novo e-mail";
+  to: string;
+  userName: string;
+}): Promise<EmailProviderAcceptance | undefined> =>
+  await sendHostedTemplateEmail({
+    ACTION_URL: actionUrl,
+    CURRENT_EMAIL: currentEmail,
+    ...(deliveryContext ? { deliveryContext } : {}),
+    name: "email-change-confirmation",
+    NEW_EMAIL: newEmail,
+    STEP_LABEL: stepLabel,
+    subject: "Confirme a alteração do seu e-mail",
+    to,
+    USER_NAME: userName,
+  });
+
+export const sendEmailChangeNoticeEmail = async ({
+  changeDate,
+  currentEmail,
+  deliveryContext,
+  newEmail,
+  supportEmail,
+  to,
+  userName,
+}: {
+  changeDate: string;
+  currentEmail: string;
+  deliveryContext: HostedEmailDeliveryContext;
+  newEmail: string;
+  supportEmail: string;
+  to: string;
+  userName: string;
+}): Promise<EmailProviderAcceptance | undefined> =>
+  await sendHostedTemplateEmail({
+    CHANGE_DATE: changeDate,
+    CURRENT_EMAIL: currentEmail,
+    ...(deliveryContext ? { deliveryContext } : {}),
+    name: "email-change-notice",
+    NEW_EMAIL: newEmail,
+    subject: "O e-mail da sua conta foi alterado",
+    SUPPORT_EMAIL: supportEmail,
+    to,
+    USER_NAME: userName,
+  });
 
 export const sendAccessExpiryWarningEmail = async ({
   courseId,

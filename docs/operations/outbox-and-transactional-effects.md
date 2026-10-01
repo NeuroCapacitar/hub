@@ -1,7 +1,7 @@
 ---
 status: runbook
 owner: operations
-last_verified_commit: a95be66d7645e17d3bf83528ffa065b7ced38861
+last_verified_commit: 6bf5d693fd565c7c4c0c4bd9b7754efca92c2b44
 ---
 
 # Outbox e efeitos transacionais
@@ -19,10 +19,16 @@ que a transação terminou. Esse drain é limitado a cinco mensagens e quinze
 segundos; uma falha não altera nem remove a intenção durável. O cron de outbox
 continua sendo a recuperação para indisponibilidade, timeout ou queda do
 processo. Em particular, conclusão de aula que emite certificado, suporte,
-alteração de disponibilidade do curso e comandos administrativos de certificado
-usam o drain imediato. Manutenção de matrículas e entregas encadeadas do
-próprio worker permanecem cron/worker-only para evitar recursão e concorrência
-desnecessárias.
+criação/atualização e reenvio de convites da equipe, alteração de disponibilidade
+do curso e comandos administrativos de certificado usam o drain imediato. A
+ação agenda o drain somente depois que a transação do convite confirma a intenção
+na outbox. A confirmação do e-mail atual numa troca de endereço também agenda o
+drain da prova para o novo endereço; a confirmação final agenda os avisos aos dois
+endereços. Replays idempotentes não agendam outro drain. Se o agendamento imediato
+falhar depois do commit, a rota mantém a confirmação bem-sucedida e registra a
+falha; a intenção durável continua recuperável pelo cron. Manutenção de matrículas
+e entregas encadeadas do próprio worker permanecem cron/worker-only para evitar
+recursão e concorrência desnecessárias.
 
 ## Catálogo aprovado
 
@@ -38,17 +44,67 @@ devolve o certificado a `pending` antes de reentregar a mesma mensagem.
 
 - `certificate.render`: emitido na transação de emissão; agregado `certificate`; chave `certificate.render/<certificate-id>/v1`; payload somente `certificateId`. Ele é o único evento que pode criar o PDF.
 - `email.certificate-issued`: emitido somente pela entrega bem-sucedida de `certificate.render`, depois que o Certificado está `ready`; agregado `certificate`; chave `email.certificate-issued/<certificate-id>/v1`; payload somente `certificateId`.
-- `email.access-released`: emitido pelo processor financeiro quando a Conta já possui
-  credencial; agregado `order`; chave `email.access-released/<order-id>/v1`; payload
-  somente `userId` e `courseId`.
+- `email.access-released`: tópico v1 histórico; agregado `order`; payload
+  somente `userId` e `courseId`. Não é publicado para novos Pedidos nem pode
+  ser reprocessado manualmente após o corte.
 - `email.access-expiry-warning`: emitido pela manutenção de Matrícula; agregado
   `enrollment`; payload v2 fechado com `enrollmentId`, janela `1d`/`7d` e
   `expectedExpiresAt` ISO UTC exato. A chave inclui Matrícula, janela, epoch da
   validade e `/v2`. O epoch precisa corresponder ao payload. Payload v1 é aceito
   apenas para classificação segura e nunca é enviado.
-- `auth.account-activation`: intenção emitida pelo processor Asaas quando a Conta
-  vinculada ao Pedido pago ainda não possui credential; agregado `order`; chave
-  `auth.account-activation/<order-id>/v1`; payload exatamente `userId` e `orderId`.
+- `auth.account-activation`: tópico v1 histórico do processor Asaas, mantido
+  para delivery/supersession seguro durante o corte; agregado `order`; payload
+  exatamente `userId` e `orderId`. Novos Pedidos usam
+  `email.purchase-confirmed`; reprocessamento manual de v1 foi bloqueado.
+- `auth.email-verification`: desafio de cadastro ou confirmação local; agregado
+  `account_email_challenge`; chave
+  `auth.email-verification/<challenge-id>/<generation>/v1`; payload exatamente
+  `challengeId` e `generation`. O delivery relê propósito, geração, prazo,
+  destinatário e estado atual; deriva o token HMAC somente ao enviar. A URL
+  coloca o token no fragmento do navegador, não na requisição GET, e o `GET`
+  apenas apresenta a confirmação. Somente um `POST` explícito consome o desafio
+  em transação. Geração antiga, desafio expirado/consumido ou origem não mais
+  elegível termina como `superseded`; payload e logs não contêm e-mail, token
+  ou URL.
+- `auth.staff-invitation`: emitido na transação do convite; agregado
+  `staff_invitation`; chave por convite e geração; payload somente
+  `invitationId` e `generation`. A entrega relê o convite e o Admin
+  convidante, gera o HMAC no último momento e envia um link com token no
+  fragmento. Geração vencida/substituída, convite cancelado ou convidante sem
+  acesso ativo termina como `superseded`. O preview por POST é somente leitura;
+  outro POST explícito consome o convite e aplica a role na mesma transação.
+  Nome, e-mail, papel, token e URL não entram no payload da outbox.
+- `auth.email-change-confirmation`: intenção por solicitação e geração;
+  payload somente `changeRequestId` e `generation`. Primeiro vai ao e-mail
+  atual para autorização; só depois vai ao novo e-mail para confirmar posse.
+  O token HMAC é reconstruído no delivery e fica no fragmento.
+- `email.email-change-notice`: duas intenções por alteração concluída,
+  distinguindo somente destinatário `current` ou `new`. Os endereços ficam
+  no registro temporário da solicitação e são resolvidos na entrega, não na
+  outbox. A alteração e as duas intenções são gravadas na mesma transação;
+  sessões anteriores são revogadas e nenhum link autentica.
+- `email.purchase-confirmed`: confirmação de um Pedido Asaas `paid`; agregado
+  `order`; chave `email.purchase-confirmed/<order-id>/v1`; payload somente
+  `orderId` e `userId`. `purchase_confirmation_intents` é a barreira durável
+  por Pedido que sobrevive à retenção de 30 dias das mensagens. O ledger só é
+  gravado na mesma transação do acesso e do enqueue; `verification_required` inicia
+  nulo e é resolvido no primeiro preparo da entrega, antes do provider, a partir do
+  estado atual da Conta. O resultado é persistido condicionalmente e o retry não
+  recalcula essa escolha. A entrega usa os
+  snapshots do Pedido/Curso para manter destinatário, nome e CTA consistentes.
+  Se um Pedido resolvido legado ainda não tiver snapshot de comprador, a mesma
+  transação os preenche com a identidade da Conta vinculada; valores presentes
+  do checkout/provider nunca são substituídos.
+  Desafio perto de vencer só é renovado antes da primeira tentativa ao provider;
+  se a manutenção já o removeu antes dessa tentativa, o worker cria outro sob a
+  chave única do Pedido. Depois de tentativa externa, desafio ausente não é
+  recriado nem rotacionado: token e envelope permanecem estáveis durante a janela
+  de idempotência. A migration 0098 registra
+  como `historical` Pedidos pagos cuja identidade já estava resolvida, sem copiar PII;
+  Pedidos em Revisão continuam elegíveis para confirmação depois da resolução. O publisher normal
+  não reenvia esses Pedidos por uma reconciliação tardia. Uma rotina de corte
+  explícita pode substituir somente mensagens v1 elegíveis sem aceitação
+  confirmada/incerta; ela nunca reabre o ledger histórico após envio/ambiguidade.
 - `email.course-sales-opened`: emitido ao abrir vendas; agregado `course_interest`; chave por Interesse; payload somente `interestId`. Vendas novamente fechadas adiam sem consumir tentativa.
 - `payments.checkout-cancel`: emitido ao fechar vendas; agregado `order`; chave por Pedido; payload somente `orderId`. Pedido já pago ou Checkout já terminal conclui como no-op.
 - `email.support-request`: emitido quando um Aluno envia o formulário de suporte;
@@ -62,10 +118,32 @@ devolve o certificado a `pending` antes de reentregar a mesma mensagem.
 
 O payload nunca contém nome, e-mail, token de redefinição, senha, chave de API ou URL secreta. O adaptador consulta os dados atuais somente no momento da entrega.
 
-### Ativação de Conta
+### Confirmação de e-mail
 
-`sendPasswordResetEmail` continua no callback do Better Auth. A URL contém token secreto e
-nunca entra na outbox. O delivery de `auth.account-activation` exige Pedido Asaas `paid`,
+O signup por e-mail não chama `signUpEmail` do Better Auth e não grava senha
+antes da confirmação. `pending_signups` contém apenas nome, e-mail, slug interno
+validado, geração e prazo; `account_email_challenges` é a autoridade de consumo
+único. O primeiro cadastro cria `users` verificado sem credential e sem sessão.
+Para Conta legada não verificada, o claim confirmado apaga credenciais e sessões
+anteriores antes de atualizar `email_verified`, na mesma transação. O rate limit
+armazena apenas hashes HMAC de identidade/IP. O endpoint Better Auth de envio é
+mantido como entrada compatível, mas seu callback cria o desafio do Hub; o GET
+Better Auth de verificação não altera estado. Redefinição de senha permanece um
+fluxo separado e só ocorre por pedido explícito. Em produção, ausência de IP
+resolvido pela origem de proxy configurada falha fechado; em desenvolvimento,
+o bucket `unknown` continua limitado.
+
+Solicitações de troca de e-mail expiram em uma hora. A linha temporária mantém
+os dois endereços somente até a entrega das notificações e, no máximo, por 30
+dias depois de um estado terminal; mensagens ainda pendentes, retryable ou em
+dead-letter impedem a limpeza até serem concluídas ou superseded. Avatares
+privados não referenciados são removidos após a janela de segurança de 24 horas.
+
+### Ativação legada de Conta
+
+`sendPasswordResetEmail` continua no callback do Better Auth para recuperação e
+mensagens v1 históricas. A URL contém token secreto e nunca entra na outbox.
+O delivery legado de `auth.account-activation` exige Pedido Asaas `paid`,
 `orders.user_id` igual ao payload e Conta existente. Ele resolve o e-mail atual da Conta e
 chama `requestPasswordReset` com `/redefinir-senha`; se credential já existe, conclui como
 no-op sem enviar `email.access-released`.
@@ -90,8 +168,8 @@ somente `account_activation_email_delivery_failed`, sem causa nem mensagem do pr
 o caminho público continua propagando seu erro original para o tratamento público.
 
 Pedido inelegível usa `aggregate_not_deliverable`, sem retry. Falha do Better Auth usa
-`account_activation_failed`, com retry e sem causa ou PII. O processor Asaas enfileira
-esta intenção quando `activationRequired=true`.
+`account_activation_failed`, com retry e sem causa ou PII. Este ramo não é
+enfileirado para novos Pedidos; o corte o mantém somente para v1 histórica.
 
 ## Entrega, concorrência e idempotência
 
@@ -194,6 +272,19 @@ mensagem passar.
 A Administração do Hub é a dona operacional de dead letters, inclusive
 `auth.account-activation`, e incidentes de e-mail.
 
+Após o corte para `email.purchase-confirmed`, dead letters legadas
+`auth.account-activation` e `email.access-released` não podem ser reprocessadas
+manualmente, pois seus templates podem reiniciar o fluxo antigo de senha. A
+reconciliação do corte só substitui uma mensagem v1 quando não há evidência de
+aceitação; `accepted`, `acceptance_unknown`, `processing` e `delivered` nunca
+geram uma segunda confirmação. Os tópicos v1 permanecem registrados para
+entrega/supersession segura durante o rollout.
+O backfill 0098 não cobre mensagens v1 criadas depois da migration: a rotina
+também inventaria Pedidos sem linha no ledger, mantém estados aceitos/ambíguos
+sem um novo envio e bloqueia as linhas que vai reconciliar. Siga o procedimento
+de dry-run, execução e drenagem em
+[Banco e migrations](database-and-migrations.md).
+
 Essa seção de dead letter descreve a **Outbox**. Eventos de lifecycle recebidos
 do Resend possuem uma inbox separada, `resend_webhook_events`, com estados e
 causas próprias. Um dead letter Resend significa que o evento externo não foi
@@ -213,6 +304,16 @@ Cada execução do consumidor remove:
 
 Essa retenção cobre somente a outbox e sua auditoria operacional. Não autoriza apagar auditorias financeiras, dados de Conta ou outros registros sujeitos a política jurídica própria.
 
+O job de maintenance também minimiza o ciclo de vida de cadastro: apaga
+`pending_signups` expirados e pendências em estado terminal com mais de uma hora,
+remove desafios de e-mail consumidos ou vencidos e elimina rate limits quando a
+janela HMAC expira. Uma confirmação de signup apaga imediatamente a pendência
+que continha nome/e-mail; a Conta final mantém os dados necessários. Desafio
+expirado removido da tabela não pode ser reproduzido mesmo que a mensagem
+idempotente da outbox ainda exista. No evento `maintenance.executed`,
+`directAccountEmailChallengesRemoved` conta apenas deleções diretas; desafios
+removidos por cascade ao apagar uma pendência não são somados novamente.
+
 Todos os tópicos usam a outbox existente. `auth.account-activation` é classificado como
 payload sem PII por conter somente identificadores locais; segue a mesma retenção de 30
 dias para `delivered` e 180 dias para `dead_letter`.
@@ -221,7 +322,8 @@ dias para `delivered` e 180 dias para `dead_letter`.
 
 - schema e migrations: `outboxMessages` em `src/db/schema.ts`,
   `0023_lyrical_lucky_pierre.sql`, `0024_light_stature.sql` e
-  `0066_gifted_retro_girl.sql`;
+  `0066_gifted_retro_girl.sql`, `0097_identity_email_challenges.sql` e
+  `0098_purchase_confirmed_email.sql`;
 - transações: `completeLesson`, `processAsaasWebhookEvent` e `processEnrollmentMaintenance`;
 - testes: `src/features/outbox/*.test.ts`, `outbox.integration.test.ts`,
   `expiry-warning.integration.test.ts`, `server.integration.test.ts` de suporte e

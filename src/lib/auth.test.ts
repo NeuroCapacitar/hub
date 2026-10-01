@@ -1,4 +1,6 @@
 import type { GoogleProfile } from "better-auth/social-providers";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
@@ -6,7 +8,7 @@ const dependencies = vi.hoisted(() => ({
   getDb: vi.fn(() => ({})),
   getServerEnv: vi.fn(),
   logOperationalEvent: vi.fn(),
-  sendEmailVerificationEmail: vi.fn(),
+  requestExistingAccountEmailVerification: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -22,8 +24,9 @@ vi.mock("better-auth/next-js", () => ({
   nextCookies: vi.fn(() => ({ name: "next-cookies" })),
 }));
 vi.mock("@/db", () => ({ getDb: dependencies.getDb }));
-vi.mock("@/features/email/server", () => ({
-  sendEmailVerificationEmail: dependencies.sendEmailVerificationEmail,
+vi.mock("@/features/account/email-challenges", () => ({
+  requestExistingAccountEmailVerification:
+    dependencies.requestExistingAccountEmailVerification,
 }));
 vi.mock("@/lib/auth-password-reset", () => ({
   sendBetterAuthPasswordResetEmail: vi.fn(),
@@ -68,20 +71,27 @@ const GOOGLE_PROFILE: GoogleProfile = {
   sub: "google-sub-fixture",
 };
 
-const configureDatabaseResults = (results: unknown[][]): void => {
+const configureDatabaseResults = (
+  results: unknown[][]
+): { whereConditions: unknown[] } => {
+  const whereConditions: unknown[] = [];
   const select = vi.fn(() => {
     const rows = results.shift() ?? [];
     const query = {
       from: () => query,
       leftJoin: () => query,
       limit: () => Promise.resolve(rows),
-      where: () => query,
+      where: (condition: unknown) => {
+        whereConditions.push(condition);
+        return query;
+      },
     };
     return query;
   });
 
   dependencies.getDb.mockClear();
   dependencies.getDb.mockReturnValue({ select } as never);
+  return { whereConditions };
 };
 
 const configureEmailVerificationUpdate = (rows: unknown[]) => {
@@ -139,7 +149,7 @@ describe("Better Auth Google configuration", () => {
   beforeEach(() => {
     dependencies.getDb.mockClear();
     dependencies.logOperationalEvent.mockClear();
-    dependencies.sendEmailVerificationEmail.mockReset();
+    dependencies.requestExistingAccountEmailVerification.mockReset();
   });
 
   it("does not register a Google provider without OAuth credentials", async () => {
@@ -148,7 +158,7 @@ describe("Better Auth Google configuration", () => {
     expect(options.socialProviders).toBeUndefined();
   });
 
-  it("keeps login-only policy, token protection and local linking safeguards", async () => {
+  it("keeps login-only policy, local linking safeguards and token protection", async () => {
     const options = await getAuthOptions(
       authEnvironment({
         GOOGLE_CLIENT_ID: "google-client-id-fixture",
@@ -180,6 +190,7 @@ describe("Better Auth Google configuration", () => {
       enabled: true,
       updateUserInfoOnLink: false,
     });
+    expect(accountLinking).not.toHaveProperty("requireLocalEmailVerified");
     expect(emailVerification).toMatchObject({
       autoSignInAfterVerification: false,
       sendOnSignIn: false,
@@ -187,34 +198,70 @@ describe("Better Auth Google configuration", () => {
     });
     expect(emailVerification.sendVerificationEmail).toBeTypeOf("function");
     expect(options.emailAndPassword).toMatchObject({
-      requireEmailVerification: false,
+      requireEmailVerification: true,
     });
     expect(accountLinking).not.toHaveProperty("trustedProviders");
 
     const sendVerification = emailVerification.sendVerificationEmail as (
       input: {
-        user: { email: string; name: string };
-        url: string;
+        user: { id: string };
       },
       request?: Request
     ) => Promise<void>;
-    const verificationUrl =
-      "http://localhost:3000/api/auth/verify-email?token=verification-fixture";
+    dependencies.requestExistingAccountEmailVerification.mockResolvedValue(
+      "queued"
+    );
+    const request = new Request(
+      "http://localhost:3000/api/auth/send-verification-email",
+      { headers: { "x-correlation-id": "request-correlation-id" } }
+    );
     await sendVerification(
       {
-        user: { email: "student@example.test", name: "Student Example" },
-        url: verificationUrl,
+        user: { id: "student-1" },
       },
-      new Request("http://localhost:3000/api/auth/send-verification-email", {
-        headers: { "x-correlation-id": "request-correlation-id" },
-      })
+      request
     );
 
-    expect(dependencies.sendEmailVerificationEmail).toHaveBeenCalledWith({
-      to: "student@example.test",
-      userName: "Student Example",
-      verificationUrl,
+    expect(
+      dependencies.requestExistingAccountEmailVerification
+    ).toHaveBeenCalledWith({
+      requestHeaders: request.headers,
+      userId: "student-1",
     });
+  });
+
+  it("rejects new Better Auth sessions for a platform-blocked Student", async () => {
+    const options = await getAuthOptions(authEnvironment());
+    const databaseHooks = options.databaseHooks as
+      | { session?: { create?: { before?: unknown } } }
+      | undefined;
+
+    expect(databaseHooks?.session?.create?.before).toBeTypeOf("function");
+    if (typeof databaseHooks?.session?.create?.before !== "function") {
+      return;
+    }
+    configureDatabaseResults([
+      [{ platformBlockedAt: new Date(), role: "student" }],
+    ]);
+    await expect(
+      databaseHooks.session.create.before({ userId: "blocked-student" })
+    ).rejects.toMatchObject({ body: { code: "ACCOUNT_SUSPENDED" } });
+  });
+
+  it("still allows a non-Student to create a session when a block timestamp is present", async () => {
+    const options = await getAuthOptions(authEnvironment());
+    const databaseHooks = options.databaseHooks as {
+      session: {
+        create: { before: (session: { userId: string }) => Promise<void> };
+      };
+    };
+    configureDatabaseResults([
+      [{ platformBlockedAt: new Date(), role: "admin" }],
+    ]);
+
+    await expect(
+      databaseHooks.session.create.before({ userId: "admin-user" })
+    ).resolves.toBeUndefined();
   });
 
   it("marks the local email verified only after Better Auth successfully resets the password", async () => {
@@ -225,7 +272,7 @@ describe("Better Auth Google configuration", () => {
     >;
     const onPasswordReset = emailAndPassword.onPasswordReset;
     expect(onPasswordReset).toBeTypeOf("function");
-    expect(emailAndPassword.requireEmailVerification).toBe(false);
+    expect(emailAndPassword.requireEmailVerification).toBe(true);
     if (typeof onPasswordReset !== "function") {
       return;
     }
@@ -342,20 +389,18 @@ describe("Better Auth Google configuration", () => {
     >;
     const sendVerification = emailVerification.sendVerificationEmail as (
       input: {
-        user: { email: string; name: string };
-        url: string;
+        user: { id: string };
       },
       request?: Request
     ) => Promise<void>;
-    dependencies.sendEmailVerificationEmail.mockRejectedValueOnce(
+    dependencies.requestExistingAccountEmailVerification.mockRejectedValueOnce(
       new Error("raw-provider-error-with-token")
     );
 
     await expect(
       sendVerification(
         {
-          user: { email: "private@example.test", name: "Private Student" },
-          url: "https://example.test/verify?token=private-token",
+          user: { id: "private-user-id" },
         },
         new Request("http://localhost:3000/api/auth/send-verification-email")
       )
@@ -366,7 +411,7 @@ describe("Better Auth Google configuration", () => {
         errorCode: "email_verification_delivery_failed",
         operation: "auth.email_verification",
         outcome: "failure",
-        provider: "resend",
+        provider: "database",
       })
     );
     expect(
@@ -446,6 +491,90 @@ describe("Better Auth Google configuration", () => {
       email: "firstlast@gmail.com",
       image: GOOGLE_PROFILE.picture,
       name: "Existing Student Name",
+    });
+  });
+
+  it("queries the database by canonical identity when a Google address omits a plus tag", async () => {
+    const options = await getAuthOptions(
+      authEnvironment({
+        GOOGLE_CLIENT_ID: "google-client-id-fixture",
+        GOOGLE_CLIENT_SECRET: "google-client-secret-fixture",
+      })
+    );
+    const mapper = getGoogleProfileMapper(options);
+    expect(mapper).not.toBeNull();
+    if (!mapper) {
+      return;
+    }
+
+    const database = configureDatabaseResults([
+      [],
+      [
+        {
+          email: "first.last+course@googlemail.com",
+          image: null,
+          name: "Existing Student Name",
+          userId: "paid-user",
+        },
+      ],
+    ]);
+    const mappedProfile = await mapper({
+      ...GOOGLE_PROFILE,
+      email: "first.last@gmail.com",
+    });
+
+    expect(mappedProfile).toEqual({
+      email: "first.last+course@googlemail.com",
+      image: GOOGLE_PROFILE.picture,
+      name: "Existing Student Name",
+    });
+    expect(
+      new PgDialect().sqlToQuery(database.whereConditions[1] as SQL)
+    ).toMatchObject({
+      params: ["firstlast@gmail.com"],
+      sql: expect.stringContaining("canonicalize_auth_email_identity"),
+    });
+  });
+
+  it("queries the canonical identity when Google omits a buyer's plus tag", async () => {
+    const options = await getAuthOptions(
+      authEnvironment({
+        GOOGLE_CLIENT_ID: "google-client-id-fixture",
+        GOOGLE_CLIENT_SECRET: "google-client-secret-fixture",
+      })
+    );
+    const mapper = getGoogleProfileMapper(options);
+    expect(mapper).not.toBeNull();
+    if (!mapper) {
+      return;
+    }
+
+    const database = configureDatabaseResults([
+      [],
+      [
+        {
+          email: "first.last+course@googlemail.com",
+          image: null,
+          name: "Existing Student Name",
+          userId: "paid-user",
+        },
+      ],
+    ]);
+    const mappedProfile = await mapper({
+      ...GOOGLE_PROFILE,
+      email: "first.last@gmail.com",
+    });
+
+    expect(mappedProfile).toEqual({
+      email: "first.last+course@googlemail.com",
+      image: GOOGLE_PROFILE.picture,
+      name: "Existing Student Name",
+    });
+    expect(
+      new PgDialect().sqlToQuery(database.whereConditions[1] as SQL)
+    ).toMatchObject({
+      params: ["firstlast@gmail.com"],
+      sql: expect.stringContaining("canonicalize_auth_email_identity"),
     });
   });
 

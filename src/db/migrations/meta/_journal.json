@@ -680,6 +680,55 @@
       "when": 1790566863367,
       "tag": "0096_google_provider_account_identity_unique_index",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1790694808716,
+      "tag": "0097_identity_email_challenges",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1790701070461,
+      "tag": "0098_purchase_confirmed_email",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1790705877861,
+      "tag": "0099_cool_wong",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1790707214457,
+      "tag": "0100_account_profile_and_email_change",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1790841201495,
+      "tag": "0101_nice_dormammu",
+      "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1790842566734,
+      "tag": "0102_account_password_reset_operation_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1790862961883,
+      "tag": "0103_purchase_confirmation_delivery_decision",
+      "breakpoints": true
     }
   ]
 }

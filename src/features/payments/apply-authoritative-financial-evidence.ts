@@ -1,17 +1,13 @@
 import "server-only";
 import type { PoolClient } from "pg";
 import { applyPaidWebhookAccess } from "@/features/enrollments/server";
-import {
-  createAccountActivationMessage,
-  createPaidAccessReleasedMessage,
-} from "@/features/outbox/rules";
 import { enqueueOutboxMessage } from "@/features/outbox/server";
 import type { AsaasBuyerIdentityPreparation } from "@/features/payments/asaas-customer-enrichment";
 import {
   LocalOrderIdentityError,
   resolveLocalOrderIdentity,
 } from "@/features/payments/order-identity";
-import { getServerEnv } from "@/lib/env";
+import { enqueuePurchaseConfirmedEmail } from "./purchase-confirmation";
 
 export type BuyerIdentityReviewReason =
   | "buyer_identity_conflict"
@@ -222,12 +218,8 @@ export const applyConfirmedPaymentAccess = async ({
 
   let identity: Awaited<ReturnType<typeof resolveLocalOrderIdentity>>;
   try {
-    const env = getServerEnv();
     identity = await resolveIdentity({
       client,
-      googleProviderEnabled: Boolean(
-        env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
-      ),
       order: {
         buyerIdentityStatus: order.buyerIdentityStatus,
         courseId: order.courseId,
@@ -253,18 +245,11 @@ export const applyConfirmedPaymentAccess = async ({
     orderId: order.id,
     userId: identity.userId,
   });
-  await enqueueMessage({
+  await enqueuePurchaseConfirmedEmail({
     client,
-    message: identity.activationRequired
-      ? createAccountActivationMessage({
-          orderId: order.id,
-          userId: identity.userId,
-        })
-      : createPaidAccessReleasedMessage({
-          courseId: order.courseId,
-          orderId: order.id,
-          userId: identity.userId,
-        }),
+    enqueueMessage,
+    orderId: order.id,
+    userId: identity.userId,
   });
   return true;
 };

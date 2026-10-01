@@ -1,3 +1,4 @@
+import "./e2e-env-preload";
 import { resolve } from "node:path";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { Pool } from "pg";

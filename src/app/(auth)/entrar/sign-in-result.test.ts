@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSuccessfulSignInPayload } from "./sign-in-result";
+import { getSignInOutcome, isSuccessfulSignInPayload } from "./sign-in-result";
 
 describe("isSuccessfulSignInPayload", () => {
   it("rejects Better Auth error payloads even when HTTP status is 200", () => {
@@ -21,5 +21,23 @@ describe("isSuccessfulSignInPayload", () => {
         user: { id: "user_123", email: "aluno@example.com" },
       })
     ).toBe(true);
+  });
+
+  it("distinguishes an unverified account so the user can request confirmation", () => {
+    expect(
+      getSignInOutcome({
+        code: "EMAIL_NOT_VERIFIED",
+        message: "Email not verified",
+      })
+    ).toBe("email_verification_required");
+  });
+
+  it("distinguishes a suspended account from invalid credentials", () => {
+    expect(
+      getSignInOutcome({
+        code: "ACCOUNT_SUSPENDED",
+        error: "account_suspended",
+      })
+    ).toBe("account_suspended");
   });
 });

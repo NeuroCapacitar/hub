@@ -28,7 +28,7 @@
     "embla-carousel-autoplay": "^8.6.0",
     "embla-carousel-react": "^8.6.0",
     "fast-xml-parser": "5.7.3",
-    "next": "16.3.3",
+    "next": "16.3.6",
     "next-themes": "^0.4.6",
     "pdfkit": "0.19.1",
     "pg": "8.22.0",
@@ -122,6 +122,7 @@
     "ops:check:production-backup": "bun scripts/check-production-backup.ts",
     "ops:check:production-release": "bun scripts/check-production-release-state.ts",
     "ops:restore:production-backup": "bun scripts/restore-production-backup.ts",
+    "ops:reconcile:legacy-purchase-confirmations": "bun --conditions=react-server scripts/reconcile-legacy-purchase-confirmations.ts",
     "ops:supersede:expiry-warning-v1": "bun scripts/supersede-expiry-warning-v1.ts",
     "prepare": "bun scripts/install-git-hooks.ts"
   },
@@ -134,18 +135,18 @@
   ],
   "overrides": {
     "@hono/node-server": "2.1.0",
-    "brace-expansion": "5.0.9",
+    "brace-expansion": "5.0.12",
     "browserslist": "4.28.8",
     "esbuild": "0.28.1",
-    "fast-uri": "3.1.6",
-    "hono": "4.13.1",
-    "ip-address": "10.4.0",
-    "js-yaml": "4.3.1",
+    "fast-uri": "3.1.8",
+    "hono": "4.13.7",
+    "ip-address": "10.7.1",
+    "js-yaml": "4.3.2",
     "nanoid": "3.3.18",
     "postcss": "8.5.26",
     "prosemirror-model": "1.25.11",
     "sharp": "0.35.4",
-    "undici": "7.29.0"
+    "smol-toml": "1.7.1"
   },
   "trustedDependencies": [
     "esbuild",

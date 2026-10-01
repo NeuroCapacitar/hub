@@ -23,7 +23,7 @@ const signIn = async (
   await page.goto("/entrar");
   await page.getByLabel("E-mail").fill(credentials.email);
   await page.getByLabel("Senha").fill(credentials.password);
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.getByRole("button", { exact: true, name: "Entrar" }).click();
   await expect(page).toHaveURL(expectedPath, { timeout: 15_000 });
 };
 

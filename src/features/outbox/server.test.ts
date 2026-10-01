@@ -281,6 +281,35 @@ describe("outbox persistence", () => {
     expect(String(query.mock.calls[0]?.[0])).toContain("support_requests");
   });
 
+  it("does not manually requeue legacy purchase emails after the new flow is active", async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            manual_reprocess_count: 0,
+            source_exists: true,
+            status: "dead_letter",
+            topic: "auth.account-activation",
+          },
+        ],
+      });
+
+    await expect(
+      requeueDeadLetterMessage({
+        actorUserId: "admin-1",
+        client: { query } as never,
+        messageId: "legacy-activation-1",
+        reason: "Solicitação confirmada.",
+      })
+    ).rejects.toThrow("A mensagem não está elegível");
+
+    expect(String(query.mock.calls[0]?.[0])).toContain(
+      "topic not in ('auth.account-activation', 'email.access-released')"
+    );
+  });
+
   it("supersedes an unavailable support dead letter without changing attempts", async () => {
     const query = vi
       .fn()

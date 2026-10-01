@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   getPool: vi.fn(),
+  createEmailChangeToken: vi.fn(),
+  getEmailChangeConfirmationDeliveryData: vi.fn(),
+  getEmailChangeNoticeDeliveryData: vi.fn(),
   getAuth: vi.fn(),
   getApplicationUrl: vi.fn(),
   getAsaasProviderClient: vi.fn(),
@@ -11,8 +14,15 @@ const dependencies = vi.hoisted(() => ({
   sendAccessReleasedEmail: vi.fn(),
   sendCertificateIssuedEmail: vi.fn(),
   sendCourseSalesOpenedEmail: vi.fn(),
+  sendEmailVerificationEmail: vi.fn(),
+  sendEmailChangeConfirmationEmail: vi.fn(),
+  sendEmailChangeNoticeEmail: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
+  sendPurchaseConfirmedEmail: vi.fn(),
+  sendStaffInvitationEmail: vi.fn(),
   sendSupportRequestEmail: vi.fn(),
+  createStaffInvitationUrlToken: vi.fn(),
+  getStaffInvitationDeliveryData: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -26,15 +36,33 @@ vi.mock("@/features/payments/provider", () => ({
 vi.mock("@/features/certificates/server", () => ({
   renderPendingCertificate: dependencies.renderPendingCertificate,
 }));
+vi.mock("@/features/admin/staff-invitations", () => ({
+  createStaffInvitationUrlToken: dependencies.createStaffInvitationUrlToken,
+  getStaffInvitationDeliveryData: dependencies.getStaffInvitationDeliveryData,
+}));
+vi.mock("@/features/account/email-change", () => ({
+  createEmailChangeToken: dependencies.createEmailChangeToken,
+  getEmailChangeConfirmationDeliveryData:
+    dependencies.getEmailChangeConfirmationDeliveryData,
+  getEmailChangeNoticeDeliveryData:
+    dependencies.getEmailChangeNoticeDeliveryData,
+}));
 vi.mock("@/features/email/server", () => ({
   sendAccessExpiryWarningEmail: dependencies.sendAccessExpiryWarningEmail,
   sendAccessReleasedEmail: dependencies.sendAccessReleasedEmail,
   sendCertificateIssuedEmail: dependencies.sendCertificateIssuedEmail,
   sendCourseSalesOpenedEmail: dependencies.sendCourseSalesOpenedEmail,
+  sendEmailVerificationEmail: dependencies.sendEmailVerificationEmail,
+  sendEmailChangeConfirmationEmail:
+    dependencies.sendEmailChangeConfirmationEmail,
+  sendEmailChangeNoticeEmail: dependencies.sendEmailChangeNoticeEmail,
   sendPasswordResetEmail: dependencies.sendPasswordResetEmail,
+  sendPurchaseConfirmedEmail: dependencies.sendPurchaseConfirmedEmail,
+  sendStaffInvitationEmail: dependencies.sendStaffInvitationEmail,
   sendSupportRequestEmail: dependencies.sendSupportRequestEmail,
 }));
 
+import { verifyEmailChallengeToken } from "@/features/account/email-challenge-token";
 import {
   ACCOUNT_ACTIVATION_IDEMPOTENCY_HEADER,
   deriveAccountActivationEmailIdempotencyKey,
@@ -77,6 +105,17 @@ describe("outbox email delivery", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     dependencies.sendPasswordResetEmail.mockResolvedValue(undefined);
+    dependencies.sendEmailVerificationEmail.mockResolvedValue(undefined);
+    dependencies.sendEmailChangeConfirmationEmail.mockResolvedValue(undefined);
+    dependencies.sendEmailChangeNoticeEmail.mockResolvedValue(undefined);
+    dependencies.createEmailChangeToken.mockReturnValue(
+      "signed-email-change-token"
+    );
+    dependencies.sendPurchaseConfirmedEmail.mockResolvedValue(undefined);
+    dependencies.sendStaffInvitationEmail.mockResolvedValue(undefined);
+    dependencies.createStaffInvitationUrlToken.mockReturnValue(
+      "signed-invite-token"
+    );
     dependencies.getServerEnv.mockReturnValue({
       BETTER_AUTH_SECRET: "auth-secret",
       BETTER_AUTH_URL: "https://auth.example.test",
@@ -84,6 +123,640 @@ describe("outbox email delivery", () => {
     dependencies.getAsaasProviderClient.mockReturnValue({
       cancelCheckout: vi.fn(),
     });
+  });
+
+  it("reconstructs a staff invitation link at delivery time", async () => {
+    const invitationId = "8b5f2d8e-dc4d-43a3-9c1b-35dcac2a2a32";
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    dependencies.getStaffInvitationDeliveryData.mockResolvedValue({
+      email: "new-staff@example.test",
+      expiresAt,
+      generation: 4,
+      inviterName: "Admin Teste",
+      role: "support",
+    });
+    dependencies.getApplicationUrl.mockImplementation(
+      (path: string) => `https://hub.example.test${path}`
+    );
+
+    await deliverOutboxMessage({
+      aggregateId: invitationId,
+      aggregateType: "staff_invitation",
+      attempts: 1,
+      id: "outbox-staff-invitation",
+      idempotencyKey: `auth.staff-invitation/${invitationId}/4/v1`,
+      payload: { generation: 4, invitationId },
+      payloadVersion: 1,
+      topic: "auth.staff-invitation",
+    });
+
+    expect(dependencies.createStaffInvitationUrlToken).toHaveBeenCalledWith({
+      expiresAt,
+      generation: 4,
+      invitationId,
+    });
+    expect(dependencies.sendStaffInvitationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionUrl:
+          "https://hub.example.test/convites/equipe/aceitar#token=signed-invite-token",
+        deliveryContext: expect.objectContaining({
+          idempotencyKey: `auth.staff-invitation/${invitationId}/4/v1`,
+          topic: "auth.staff-invitation",
+        }),
+        inviterName: "Admin Teste",
+        roleLabel: "Suporte",
+        to: "new-staff@example.test",
+      })
+    );
+  });
+
+  it("supersedes a stale staff invitation without sending it", async () => {
+    dependencies.getStaffInvitationDeliveryData.mockResolvedValue(null);
+    const invitationId = "8b5f2d8e-dc4d-43a3-9c1b-35dcac2a2a32";
+
+    await expect(
+      deliverOutboxMessage({
+        aggregateId: invitationId,
+        aggregateType: "staff_invitation",
+        attempts: 1,
+        id: "outbox-stale-staff-invitation",
+        idempotencyKey: `auth.staff-invitation/${invitationId}/2/v1`,
+        payload: { generation: 2, invitationId },
+        payloadVersion: 1,
+        topic: "auth.staff-invitation",
+      })
+    ).rejects.toMatchObject({ code: "staff_invitation_stale" });
+    expect(dependencies.sendStaffInvitationEmail).not.toHaveBeenCalled();
+  });
+
+  it("delivers the current stage of an email change with a purpose-bound fragment token", async () => {
+    const changeRequestId = "44b1793a-6381-48a2-9002-6acfe70a0a20";
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    dependencies.getEmailChangeConfirmationDeliveryData.mockResolvedValue({
+      changeRequestId,
+      currentEmail: "old@example.test",
+      expiresAt,
+      generation: 2,
+      newEmail: "new@example.test",
+      stage: "pending_current",
+      to: "old@example.test",
+      userName: "Pessoa",
+    });
+    dependencies.getApplicationUrl.mockImplementation(
+      (path: string) => `https://hub.example.test${path}`
+    );
+
+    await deliverOutboxMessage({
+      aggregateId: changeRequestId,
+      aggregateType: "account_email_change",
+      attempts: 1,
+      id: "outbox-email-change",
+      idempotencyKey: `auth.email-change-confirmation/${changeRequestId}/2/v1`,
+      payload: { changeRequestId, generation: 2 },
+      payloadVersion: 1,
+      topic: "auth.email-change-confirmation",
+    });
+
+    expect(dependencies.createEmailChangeToken).toHaveBeenCalledWith({
+      changeRequestId,
+      expiresAt,
+      generation: 2,
+    });
+    expect(dependencies.sendEmailChangeConfirmationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionUrl:
+          "https://hub.example.test/confirmar-troca-email#token=signed-email-change-token",
+        currentEmail: "old@example.test",
+        newEmail: "new@example.test",
+        stepLabel: "Confirmar e-mail atual",
+        to: "old@example.test",
+      })
+    );
+  });
+
+  it("sends the completed email-change notice to the selected old or new address", async () => {
+    const changeRequestId = "44b1793a-6381-48a2-9002-6acfe70a0a20";
+    dependencies.getServerEnv.mockReturnValue({
+      BETTER_AUTH_SECRET: "auth-secret",
+      BETTER_AUTH_URL: "https://auth.example.test",
+      RESEND_FROM_EMAIL: "hub@example.test",
+      SUPPORT_EMAIL: "support@example.test",
+    });
+    dependencies.getEmailChangeNoticeDeliveryData.mockResolvedValue({
+      completedAt: new Date("2026-09-29T14:00:00.000Z"),
+      currentEmail: "old@example.test",
+      newEmail: "new@example.test",
+      to: "new@example.test",
+      userName: "Pessoa",
+    });
+
+    await deliverOutboxMessage({
+      aggregateId: changeRequestId,
+      aggregateType: "account_email_change",
+      attempts: 1,
+      id: "outbox-email-change-notice",
+      idempotencyKey: `email.email-change-notice/${changeRequestId}/new/v1`,
+      payload: { changeRequestId, recipient: "new" },
+      payloadVersion: 1,
+      topic: "email.email-change-notice",
+    });
+
+    expect(dependencies.sendEmailChangeNoticeEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentEmail: "old@example.test",
+        newEmail: "new@example.test",
+        supportEmail: "support@example.test",
+        to: "new@example.test",
+      })
+    );
+  });
+
+  it("reconstructs an email challenge link from current persisted identifiers", async () => {
+    const challengeId = "f5c60626-5c2f-4f2a-8d2d-03c28e47b68c";
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const query = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          challenge_id: challengeId,
+          consumed_at: null,
+          expires_at: expiresAt,
+          generation: 3,
+          pending_signup_id: challengeId,
+          pending_signup_email: "student@example.test",
+          pending_signup_name: "Student Example",
+          pending_signup_status: "pending",
+          purpose: "signup",
+          recipient_email: "student@example.test",
+          recipient_name: "Student Example",
+          user_id: null,
+          user_email: null,
+          user_name: null,
+        },
+      ],
+    });
+    dependencies.getPool.mockReturnValue({ query });
+    dependencies.getApplicationUrl.mockImplementation(
+      (path: string) => `https://hub.example.test${path}`
+    );
+
+    await deliverOutboxMessage({
+      aggregateId: challengeId,
+      aggregateType: "account_email_challenge",
+      attempts: 1,
+      id: "outbox-email-challenge",
+      idempotencyKey: `auth.email-verification/${challengeId}/3/v1`,
+      payload: { challengeId, generation: 3 },
+      payloadVersion: 1,
+      topic: "auth.email-verification",
+    });
+
+    expect(dependencies.sendEmailVerificationEmail).toHaveBeenCalledOnce();
+    const email = dependencies.sendEmailVerificationEmail.mock.calls[0]?.[0];
+    expect(email).toMatchObject({
+      deliveryContext: {
+        idempotencyKey: `auth.email-verification/${challengeId}/3/v1`,
+        outboxMessageId: "outbox-email-challenge",
+        topic: "auth.email-verification",
+      },
+      to: "student@example.test",
+      userName: "Student Example",
+    });
+    const verificationUrl = new URL(email.verificationUrl);
+    expect(verificationUrl.pathname).toBe("/confirmar-email");
+    const token = new URLSearchParams(verificationUrl.hash.slice(1)).get(
+      "token"
+    );
+    expect(token).toBeTruthy();
+    expect(
+      verifyEmailChallengeToken({
+        purpose: "signup",
+        secret: "auth-secret",
+        token: token ?? "",
+      })
+    ).toMatchObject({ challengeId, generation: 3, purpose: "signup" });
+    expect(verificationUrl.toString()).not.toContain("student@example.test");
+  });
+
+  it("sends a verified buyer to the purchased course without a password reset URL", async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ verification_required: false }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            course_slug: "curso-teste",
+            course_title: "Curso de teste",
+            email_verified: true,
+            purchase_verification_required: false,
+            student_email: "student@example.test",
+            student_name: "Student Example",
+          },
+        ],
+      });
+    dependencies.getPool.mockReturnValue({ query });
+    dependencies.getApplicationUrl.mockImplementation(
+      (path: string) => `https://hub.example.test${path}`
+    );
+
+    await deliverOutboxMessage({
+      aggregateId: "order-1",
+      aggregateType: "order",
+      attempts: 1,
+      id: "outbox-purchase-confirmed",
+      idempotencyKey: "email.purchase-confirmed/order-1/v1",
+      payload: { orderId: "order-1", userId: "student-1" },
+      payloadVersion: 1,
+      topic: "email.purchase-confirmed",
+    });
+
+    expect(dependencies.sendPurchaseConfirmedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionLabel: "Acessar Curso",
+        actionUrl: "https://hub.example.test/comprar/curso-teste",
+        courseTitle: "Curso de teste",
+        deliveryContext: expect.objectContaining({
+          outboxMessageId: "outbox-purchase-confirmed",
+          topic: "email.purchase-confirmed",
+        }),
+        to: "student@example.test",
+        userName: "Student Example",
+      })
+    );
+    expect(dependencies.sendPasswordResetEmail).not.toHaveBeenCalled();
+  });
+
+  it("uses a purpose-bound purchase verification challenge for an unverified buyer", async () => {
+    const challengeId = "f5c60626-5c2f-4f2a-8d2d-03c28e47b68c";
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [{ verification_required: true }],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            course_slug: "curso-teste",
+            course_title: "Curso de teste",
+            email_verified: false,
+            purchase_verification_required: true,
+            student_email: "student@example.test",
+            student_name: "Student Example",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            challenge_id: challengeId,
+            consumed_at: null,
+            expires_at: expiresAt,
+            generation: 4,
+            purpose: "purchase_verification",
+            user_id: "student-1",
+          },
+        ],
+      });
+    dependencies.getPool.mockReturnValue({ query });
+    dependencies.getApplicationUrl.mockImplementation(
+      (path: string) => `https://hub.example.test${path}`
+    );
+
+    await deliverOutboxMessage({
+      aggregateId: "order-1",
+      aggregateType: "order",
+      attempts: 1,
+      id: "outbox-purchase-unverified",
+      idempotencyKey: "email.purchase-confirmed/order-1/v1",
+      payload: { orderId: "order-1", userId: "student-1" },
+      payloadVersion: 1,
+      topic: "email.purchase-confirmed",
+    });
+
+    const email = dependencies.sendPurchaseConfirmedEmail.mock.calls[0]?.[0];
+    expect(email).toMatchObject({
+      actionLabel: "Confirmar e-mail",
+      courseTitle: "Curso de teste",
+      to: "student@example.test",
+      userName: "Student Example",
+    });
+    const actionUrl = new URL(email.actionUrl);
+    const token = new URLSearchParams(actionUrl.hash.slice(1)).get("token");
+    expect(actionUrl.pathname).toBe("/confirmar-email");
+    expect(
+      verifyEmailChallengeToken({
+        purpose: "purchase_verification",
+        secret: "auth-secret",
+        token: token ?? "",
+      })
+    ).toMatchObject({
+      challengeId,
+      generation: 4,
+      purpose: "purchase_verification",
+    });
+  });
+
+  it("keeps the purchase email action and recipient stable after account state changes", async () => {
+    const challengeId = "f5c60626-5c2f-4f2a-8d2d-03c28e47b68c";
+    const deliveryExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    let deliveryStarted = false;
+    let verificationDecisionResolved = false;
+    const query = vi.fn((statement: string, _values: unknown[] = []) => {
+      if (statement.includes("update purchase_confirmation_intents")) {
+        if (verificationDecisionResolved) {
+          return Promise.resolve({ rows: [] });
+        }
+        verificationDecisionResolved = true;
+        return Promise.resolve({ rows: [{ verification_required: true }] });
+      }
+      if (statement.includes("from orders")) {
+        return Promise.resolve({
+          rows: [
+            {
+              course_slug: "curso-teste",
+              course_title: "Curso de teste",
+              email_verified: deliveryStarted,
+              purchase_verification_required: true,
+              student_email: "buyer-at-purchase@example.test",
+              student_name: "Nome na compra",
+            },
+          ],
+        });
+      }
+      if (statement.includes("update account_email_challenges")) {
+        if (deliveryStarted) {
+          return Promise.resolve({ rows: [] });
+        }
+        deliveryStarted = true;
+        return Promise.resolve({
+          rows: [
+            {
+              challenge_id: challengeId,
+              consumed_at: null,
+              expires_at: deliveryExpiry,
+              generation: 5,
+              purpose: "purchase_verification",
+              user_id: "student-1",
+            },
+          ],
+        });
+      }
+      if (statement.includes("from account_email_challenges")) {
+        return Promise.resolve({
+          rows: [
+            {
+              challenge_id: challengeId,
+              consumed_at: null,
+              expires_at: deliveryExpiry,
+              generation: 5,
+              purpose: "purchase_verification",
+              user_id: "student-1",
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+    dependencies.getPool.mockReturnValue({ query });
+    dependencies.getApplicationUrl.mockImplementation(
+      (path: string) => `https://hub.example.test${path}`
+    );
+    const message = {
+      aggregateId: "order-1",
+      aggregateType: "order",
+      attempts: 1,
+      id: "outbox-purchase-v1",
+      idempotencyKey: "email.purchase-confirmed/order-1/v1",
+      payload: { orderId: "order-1", userId: "student-1" },
+      payloadVersion: 1,
+      topic: "email.purchase-confirmed",
+    } as const;
+
+    await deliverOutboxMessage(message);
+    await deliverOutboxMessage({ ...message, attempts: 2 });
+
+    const deliveries = dependencies.sendPurchaseConfirmedEmail.mock.calls.map(
+      ([input]) => input
+    );
+    expect(deliveries).toHaveLength(2);
+    expect(deliveries[0]).toMatchObject({
+      actionLabel: "Confirmar e-mail",
+      to: "buyer-at-purchase@example.test",
+      userName: "Nome na compra",
+    });
+    expect(deliveries[1]).toMatchObject(deliveries[0]);
+    const deliverySelect = query.mock.calls.find(([statement]) =>
+      String(statement).includes("orders.customer_email")
+    )?.[0];
+    expect(String(deliverySelect)).toContain("orders.customer_name");
+    expect(String(deliverySelect)).not.toContain(
+      "coalesce(orders.customer_email"
+    );
+    expect(String(deliverySelect)).not.toContain(
+      "coalesce(orders.customer_name"
+    );
+    expect(String(deliverySelect)).toContain(
+      "purchase_confirmation_intents.verification_required"
+    );
+    const challengeRefresh = query.mock.calls.find(([statement]) =>
+      String(statement).includes("interval '23 hours'")
+    );
+    expect(String(challengeRefresh?.[0])).toContain("interval '23 hours'");
+    expect(String(challengeRefresh?.[0])).toContain(
+      "email_messages.first_provider_attempt_at"
+    );
+    expect(challengeRefresh?.[1]).toEqual([
+      "order-1",
+      "student-1",
+      "outbox-purchase-v1",
+    ]);
+  });
+
+  it("uses current verification state when the first purchase email is prepared", async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ verification_required: false }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            course_slug: "curso-teste",
+            course_title: "Curso de teste",
+            email_verified: true,
+            purchase_verification_required: false,
+            student_email: "student@example.test",
+            student_name: "Student Example",
+          },
+        ],
+      });
+    dependencies.getPool.mockReturnValue({ query });
+    dependencies.getApplicationUrl.mockImplementation(
+      (path: string) => `https://hub.example.test${path}`
+    );
+
+    await deliverOutboxMessage({
+      aggregateId: "order-1",
+      aggregateType: "order",
+      attempts: 1,
+      id: "outbox-purchase-verified-before-send",
+      idempotencyKey: "email.purchase-confirmed/order-1/v1",
+      payload: { orderId: "order-1", userId: "student-1" },
+      payloadVersion: 1,
+      topic: "email.purchase-confirmed",
+    });
+
+    expect(dependencies.sendPurchaseConfirmedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionLabel: "Acessar Curso",
+        actionUrl: "https://hub.example.test/comprar/curso-teste",
+      })
+    );
+    expect(
+      query.mock.calls.some(([statement]) =>
+        String(statement).includes("account_email_challenges")
+      )
+    ).toBe(false);
+  });
+
+  it("recreates a proof removed by maintenance before the first provider attempt", async () => {
+    const challengeId = "f5c60626-5c2f-4f2a-8d2d-03c28e47b68c";
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const query = vi.fn((statement: string, _values: unknown[] = []) => {
+      if (statement.includes("from orders")) {
+        return {
+          rows: [
+            {
+              course_slug: "curso-teste",
+              course_title: "Curso de teste",
+              email_verified: false,
+              purchase_verification_required: true,
+              student_email: "buyer@example.test",
+              student_name: "Comprador",
+            },
+          ],
+        };
+      }
+      if (statement.includes("update account_email_challenges")) {
+        return { rows: [] };
+      }
+      if (statement.includes("from account_email_challenges")) {
+        return { rows: [] };
+      }
+      if (
+        statement.includes("select exists") &&
+        statement.includes("email_messages")
+      ) {
+        return { rows: [{ attempted: false }] };
+      }
+      if (statement.includes("insert into account_email_challenges")) {
+        return {
+          rows: [
+            {
+              challenge_id: challengeId,
+              consumed_at: null,
+              expires_at: expiresAt,
+              generation: 1,
+              purpose: "purchase_verification",
+              user_id: "student-1",
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+    dependencies.getPool.mockReturnValue({ query });
+    dependencies.getApplicationUrl.mockImplementation(
+      (path: string) => `https://hub.example.test${path}`
+    );
+
+    await deliverOutboxMessage({
+      aggregateId: "order-1",
+      aggregateType: "order",
+      attempts: 25,
+      id: "outbox-purchase-no-first-attempt",
+      idempotencyKey: "email.purchase-confirmed/order-1/v1",
+      payload: { orderId: "order-1", userId: "student-1" },
+      payloadVersion: 1,
+      topic: "email.purchase-confirmed",
+    });
+
+    const email = dependencies.sendPurchaseConfirmedEmail.mock.calls[0]?.[0];
+    expect(email?.actionLabel).toBe("Confirmar e-mail");
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("insert into account_email_challenges"),
+      ["order-1", "student-1"]
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("select exists"),
+      ["outbox-purchase-no-first-attempt"]
+    );
+    const url = new URL(email?.actionUrl ?? "https://hub.example.test");
+    const token = new URLSearchParams(url.hash.slice(1)).get("token");
+    expect(
+      verifyEmailChallengeToken({
+        purpose: "purchase_verification",
+        secret: "auth-secret",
+        token: token ?? "",
+      })
+    ).toMatchObject({
+      challengeId,
+      generation: 1,
+      purpose: "purchase_verification",
+    });
+  });
+
+  it("does not replace a missing proof after the provider attempt has started", async () => {
+    const query = vi.fn((statement: string) => {
+      if (statement.includes("from orders")) {
+        return {
+          rows: [
+            {
+              course_slug: "curso-teste",
+              course_title: "Curso de teste",
+              email_verified: false,
+              purchase_verification_required: true,
+              student_email: "buyer@example.test",
+              student_name: "Comprador",
+            },
+          ],
+        };
+      }
+      if (statement.includes("update account_email_challenges")) {
+        return { rows: [] };
+      }
+      if (statement.includes("from account_email_challenges")) {
+        return { rows: [] };
+      }
+      if (
+        statement.includes("select exists") &&
+        statement.includes("email_messages")
+      ) {
+        return { rows: [{ attempted: true }] };
+      }
+      return { rows: [] };
+    });
+    dependencies.getPool.mockReturnValue({ query });
+
+    await expect(
+      deliverOutboxMessage({
+        aggregateId: "order-1",
+        aggregateType: "order",
+        attempts: 2,
+        id: "outbox-purchase-attempted",
+        idempotencyKey: "email.purchase-confirmed/order-1/v1",
+        payload: { orderId: "order-1", userId: "student-1" },
+        payloadVersion: 1,
+        topic: "email.purchase-confirmed",
+      })
+    ).rejects.toMatchObject({
+      code: "purchase_verification_challenge_missing",
+    });
+
+    expect(
+      query.mock.calls.some(([statement]) =>
+        String(statement).includes("insert into account_email_challenges")
+      )
+    ).toBe(false);
+    expect(dependencies.sendPurchaseConfirmedEmail).not.toHaveBeenCalled();
   });
 
   it("resolves the current account email when delivering an eligible activation", async () => {

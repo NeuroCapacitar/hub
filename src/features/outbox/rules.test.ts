@@ -5,8 +5,13 @@ import {
   createCertificateIssuedMessage,
   createCheckoutCancellationMessage,
   createCourseSalesOpenedMessage,
+  createEmailChangeConfirmationMessage,
+  createEmailChangeNoticeMessage,
+  createEmailVerificationMessage,
   createEnrollmentExpiryWarningMessage,
   createPaidAccessReleasedMessage,
+  createPurchaseConfirmedMessage,
+  createStaffInvitationMessage,
   createSupportRequestMessage,
   getRetryDelayMs,
   parseOutboxPayload,
@@ -17,6 +22,33 @@ const ACTIVATION_FORBIDDEN_PAYLOAD_KEY_PATTERN =
   /email|name|token|password|url|courseId/i;
 
 describe("outbox message contracts", () => {
+  it("stores only a challenge id and generation for an account email challenge", () => {
+    const message = createEmailVerificationMessage({
+      challengeId: "f5c60626-5c2f-4f2a-8d2d-03c28e47b68c",
+      generation: 3,
+    });
+
+    expect(message).toEqual({
+      aggregateId: "f5c60626-5c2f-4f2a-8d2d-03c28e47b68c",
+      aggregateType: "account_email_challenge",
+      idempotencyKey:
+        "auth.email-verification/f5c60626-5c2f-4f2a-8d2d-03c28e47b68c/3/v1",
+      payload: {
+        challengeId: "f5c60626-5c2f-4f2a-8d2d-03c28e47b68c",
+        generation: 3,
+      },
+      payloadVersion: 1,
+      topic: "auth.email-verification",
+    });
+    expect(parseOutboxPayload(message)).toEqual({
+      challengeId: "f5c60626-5c2f-4f2a-8d2d-03c28e47b68c",
+      generation: 3,
+    });
+    expect(JSON.stringify(message.payload)).not.toMatch(
+      FORBIDDEN_PAYLOAD_KEY_PATTERN
+    );
+  });
+
   it("stores only stable identifiers in a certificate notification", () => {
     const message = createCertificateIssuedMessage({
       certificateId: "certificate-1",
@@ -57,6 +89,95 @@ describe("outbox message contracts", () => {
     expect(Object.keys(message.payload).join(",")).not.toMatch(
       FORBIDDEN_PAYLOAD_KEY_PATTERN
     );
+  });
+
+  it("derives one purchase confirmation intent per paid order", () => {
+    const message = createPurchaseConfirmedMessage({
+      orderId: "order-1",
+      userId: "user-1",
+    });
+
+    expect(message).toEqual({
+      aggregateId: "order-1",
+      aggregateType: "order",
+      idempotencyKey: "email.purchase-confirmed/order-1/v1",
+      payload: {
+        orderId: "order-1",
+        userId: "user-1",
+      },
+      payloadVersion: 1,
+      topic: "email.purchase-confirmed",
+    });
+    expect(parseOutboxPayload(message)).toEqual({
+      orderId: "order-1",
+      userId: "user-1",
+    });
+    expect(JSON.stringify(message.payload)).not.toMatch(
+      ACTIVATION_FORBIDDEN_PAYLOAD_KEY_PATTERN
+    );
+  });
+
+  it("stores only an invitation id and generation in staff invite messages", () => {
+    const invitationId = "8b5f2d8e-dc4d-43a3-9c1b-35dcac2a2a32";
+    const message = createStaffInvitationMessage({
+      generation: 2,
+      invitationId,
+    });
+
+    expect(message).toEqual({
+      aggregateId: invitationId,
+      aggregateType: "staff_invitation",
+      idempotencyKey: `auth.staff-invitation/${invitationId}/2/v1`,
+      payload: { generation: 2, invitationId },
+      payloadVersion: 1,
+      topic: "auth.staff-invitation",
+    });
+    expect(parseOutboxPayload(message)).toEqual({
+      generation: 2,
+      invitationId,
+    });
+    expect(JSON.stringify(message.payload)).not.toMatch(
+      FORBIDDEN_PAYLOAD_KEY_PATTERN
+    );
+    expect(() =>
+      createStaffInvitationMessage({ generation: 0, invitationId })
+    ).toThrow("generation");
+    expect(() =>
+      createStaffInvitationMessage({ generation: 1, invitationId: "bad" })
+    ).toThrow("UUID");
+  });
+
+  it("stores only request identifiers and stage selectors for email changes", () => {
+    const changeRequestId = "44b1793a-6381-48a2-9002-6acfe70a0a20";
+    const confirmation = createEmailChangeConfirmationMessage({
+      changeRequestId,
+      generation: 2,
+    });
+    const notice = createEmailChangeNoticeMessage({
+      changeRequestId,
+      recipient: "current",
+    });
+
+    expect(parseOutboxPayload(confirmation)).toEqual({
+      changeRequestId,
+      generation: 2,
+    });
+    expect(parseOutboxPayload(notice)).toEqual({
+      changeRequestId,
+      recipient: "current",
+    });
+    expect(JSON.stringify([confirmation.payload, notice.payload])).not.toMatch(
+      FORBIDDEN_PAYLOAD_KEY_PATTERN
+    );
+    expect(() =>
+      createEmailChangeConfirmationMessage({ changeRequestId, generation: 0 })
+    ).toThrow("generation");
+    expect(() =>
+      createEmailChangeNoticeMessage({
+        changeRequestId,
+        recipient: "unknown" as "current",
+      })
+    ).not.toThrow();
   });
 
   it("stores an activation intent with exactly the local account and order ids", () => {

@@ -1,6 +1,7 @@
 import type { APIRequestContext } from "@playwright/test";
 import { Pool } from "pg";
 import { assertSafeE2eDatabaseEnvironment } from "../../src/db/e2e-database-guard";
+import { createEmailChallengeToken } from "../../src/features/account/email-challenge-token";
 
 const WEBHOOK_TOKEN = "e2e-webhook-token-with-at-least-32-characters";
 const CRON_SECRET = "e2e-cron-secret";
@@ -12,6 +13,148 @@ const requireE2eDatabaseUrl = (): string => {
     throw new Error("E2E database guard accepted an absent database URL.");
   }
   return databaseUrl;
+};
+
+export interface SignupAccountOutcome {
+  accountCount: number;
+  credentialCount: number;
+  emailVerified: boolean;
+  enrollmentGrantCount: number;
+  sessionCount: number;
+  studentProfileCount: number;
+}
+
+export const readSignupAccountOutcome = async (
+  email: string
+): Promise<SignupAccountOutcome> => {
+  const pool = new Pool({ connectionString: requireE2eDatabaseUrl() });
+  try {
+    const result = await pool.query<{
+      account_count: string;
+      credential_count: string;
+      email_verified: boolean;
+      enrollment_grant_count: string;
+      session_count: string;
+      student_profile_count: string;
+    }>(
+      `select
+         (select count(*) from users
+          where public.canonicalize_auth_email_identity(email) =
+            public.canonicalize_auth_email_identity($1))::text as account_count,
+         coalesce((select bool_or(email_verified) from users
+          where public.canonicalize_auth_email_identity(email) =
+            public.canonicalize_auth_email_identity($1)), false) as email_verified,
+         (select count(*) from profiles join users on users.id = profiles.user_id
+          where public.canonicalize_auth_email_identity(users.email) =
+            public.canonicalize_auth_email_identity($1)
+            and profiles.role = 'student')::text as student_profile_count,
+         (select count(*) from accounts join users on users.id = accounts.user_id
+          where public.canonicalize_auth_email_identity(users.email) =
+            public.canonicalize_auth_email_identity($1)
+            and accounts.provider_id = 'credential'
+            and accounts.password is not null)::text as credential_count,
+         (select count(*) from sessions join users on users.id = sessions.user_id
+          where public.canonicalize_auth_email_identity(users.email) =
+            public.canonicalize_auth_email_identity($1))::text as session_count,
+         (select count(*) from enrollment_grants join users on users.id = enrollment_grants.user_id
+          where public.canonicalize_auth_email_identity(users.email) =
+            public.canonicalize_auth_email_identity($1))::text as enrollment_grant_count`,
+      [email]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new Error("Signup account outcome query returned no row.");
+    }
+    return {
+      accountCount: Number(row.account_count),
+      credentialCount: Number(row.credential_count),
+      emailVerified: row.email_verified,
+      enrollmentGrantCount: Number(row.enrollment_grant_count),
+      sessionCount: Number(row.session_count),
+      studentProfileCount: Number(row.student_profile_count),
+    };
+  } finally {
+    await pool.end();
+  }
+};
+
+export const readPendingSignupChallenge = async (
+  email: string
+): Promise<{ courseSlug: string | null; token: string }> => {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret) {
+    throw new Error("E2E Better Auth secret is required for signup fixtures.");
+  }
+  const pool = new Pool({ connectionString: requireE2eDatabaseUrl() });
+  try {
+    const result = await pool.query<{
+      challenge_id: string;
+      course_slug: string | null;
+      expires_at: Date;
+      generation: number;
+    }>(
+      `select
+         challenge.id as challenge_id,
+         challenge.generation,
+         challenge.expires_at,
+         pending.course_slug
+       from pending_signups as pending
+       join account_email_challenges as challenge
+         on challenge.pending_signup_id = pending.id
+        and challenge.purpose = 'signup'
+        and challenge.consumed_at is null
+       where pending.status = 'pending'
+         and public.canonicalize_auth_email_identity(pending.email) =
+           public.canonicalize_auth_email_identity($1)
+       order by pending.created_at desc
+       limit 1`,
+      [email]
+    );
+    const challenge = result.rows[0];
+    if (!challenge) {
+      throw new Error("Pending signup challenge fixture was not found.");
+    }
+    return {
+      courseSlug: challenge.course_slug,
+      token: createEmailChallengeToken({
+        challengeId: challenge.challenge_id,
+        expiresAt: challenge.expires_at,
+        generation: challenge.generation,
+        purpose: "signup",
+        secret,
+      }),
+    };
+  } finally {
+    await pool.end();
+  }
+};
+
+export const readPendingPasswordResetToken = async (
+  email: string
+): Promise<string> => {
+  const pool = new Pool({ connectionString: requireE2eDatabaseUrl() });
+  try {
+    const result = await pool.query<{ identifier: string }>(
+      `select verification.identifier
+       from verifications as verification
+       join users on verification.value = users.id
+       where verification.identifier like 'reset-password:%'
+         and verification.expires_at > now()
+         and public.canonicalize_auth_email_identity(users.email) =
+           public.canonicalize_auth_email_identity($1)
+       order by verification.expires_at desc
+       limit 1`,
+      [email]
+    );
+    const identifier = result.rows[0]?.identifier;
+    const token = identifier?.slice("reset-password:".length);
+    if (!token) {
+      throw new Error("Pending password reset token fixture was not found.");
+    }
+    return token;
+  } finally {
+    await pool.end();
+  }
 };
 
 export const setE2ePlatformBlock = async ({
@@ -215,11 +358,11 @@ export const readE2eAsaasCheckoutMutationCount = async (
 
 export interface OrderOutcome {
   accountLinked: boolean;
-  activationCount: number;
   activeEnrollmentCount: number;
   buyerIdentityStatus: "pending" | "resolved" | "review_required";
   enrollmentCount: number;
   grantCount: number;
+  purchaseConfirmationCount: number;
   status: "cancelled" | "disputed" | "paid" | "pending" | "refunded";
   studentProfileCount: number;
   unverifiedAccount: boolean;
@@ -316,7 +459,11 @@ export const readBuyerIdentityReviewOutcome = async (
            from outbox_messages om
            where om.aggregate_type = 'order'
              and om.aggregate_id = o.id::text
-             and om.topic in ('auth.account-activation', 'email.access-released')
+             and om.topic in (
+               'auth.account-activation',
+               'email.access-released',
+               'email.purchase-confirmed'
+             )
          )::text as access_outbox_count
        from orders o
        where o.id = $1
@@ -346,7 +493,6 @@ export const readOrderOutcome = async (
   const pool = new Pool({ connectionString: requireE2eDatabaseUrl() });
   try {
     const result = await pool.query<{
-      activation_count: string;
       active_enrollment_count: string;
       account_linked: boolean;
       buyer_identity_status: OrderOutcome["buyerIdentityStatus"];
@@ -355,6 +501,7 @@ export const readOrderOutcome = async (
       status: OrderOutcome["status"];
       student_profile_count: string;
       unverified_account: boolean;
+      purchase_confirmation_count: string;
     }>(
       `select
          o.status,
@@ -397,8 +544,8 @@ export const readOrderOutcome = async (
            from outbox_messages om
            where om.aggregate_type = 'order'
              and om.aggregate_id = o.id::text
-             and om.topic = 'auth.account-activation'
-         )::text as activation_count
+             and om.topic = 'email.purchase-confirmed'
+         )::text as purchase_confirmation_count
        from orders o
        where o.id = $1
        limit 1`,
@@ -409,12 +556,12 @@ export const readOrderOutcome = async (
       throw new Error("Financial E2E order was not found.");
     }
     return {
-      activationCount: Number(row.activation_count),
       activeEnrollmentCount: Number(row.active_enrollment_count),
       accountLinked: row.account_linked,
       buyerIdentityStatus: row.buyer_identity_status,
       enrollmentCount: Number(row.enrollment_count),
       grantCount: Number(row.grant_count),
+      purchaseConfirmationCount: Number(row.purchase_confirmation_count),
       studentProfileCount: Number(row.student_profile_count),
       status: row.status,
       unverifiedAccount: row.unverified_account,

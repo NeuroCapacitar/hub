@@ -50,6 +50,7 @@ import {
   sendCourseSalesOpenedEmail,
   sendHostedTemplateEmail,
   sendPasswordResetEmail,
+  sendPurchaseConfirmedEmail,
   sendSupportRequestEmail,
   sendTransactionalEmail,
 } from "./server";
@@ -864,8 +865,16 @@ describe("transactional email", () => {
     }
 
     const verificationUrl =
-      "https://preview.neurocapacitar.com.br/api/auth/verify-email?token=raw-verification-token";
+      "https://preview.neurocapacitar.com.br/confirmar-email#token=raw-verification-token";
+    const challengeOutboxId = "f5c60626-5c2f-4f2a-8d2d-03c28e47b68c";
+    const deliveryContext = {
+      correlationId: challengeOutboxId,
+      idempotencyKey: "auth.email-verification/challenge-id/1/v1",
+      outboxMessageId: challengeOutboxId,
+      topic: "auth.email-verification" as const,
+    };
     await sendVerificationEmail({
+      deliveryContext,
       to: "allowed@example.test",
       userName: "Aluno de teste",
       verificationUrl,
@@ -878,11 +887,17 @@ describe("transactional email", () => {
         text: expect.stringContaining(verificationUrl),
         tags: [
           { name: "hub_topic", value: "auth_email_verification" },
-          { name: "hub_correlation", value: expect.any(String) },
+          { name: "hub_correlation", value: challengeOutboxId },
         ],
         to: "allowed@example.test",
       }),
-      { idempotencyKey: expect.any(String) }
+      { idempotencyKey: "auth.email-verification/challenge-id/1/v1" }
+    );
+    expect(JSON.stringify(send.mock.calls[0]?.[0])).toContain(
+      "O link confirma que você tem acesso ao endereço de e-mail."
+    );
+    expect(JSON.stringify(send.mock.calls[0]?.[0])).not.toContain(
+      "Nenhuma senha ou acesso será alterado"
     );
     expect(JSON.stringify(send.mock.calls[0]?.[1])).not.toContain(
       "raw-verification-token"
@@ -970,6 +985,43 @@ describe("transactional email", () => {
     expect(email).not.toHaveProperty("react");
     expect(options).toEqual({
       idempotencyKey: "email.course-sales-opened/interest-1/v1",
+    });
+  });
+
+  it("sends a purchase-confirmed template with a verification or course action", async () => {
+    process.env.RESEND_API_KEY = "re_test";
+    process.env.RESEND_FROM_EMAIL = "PROTEA-R <noreply@example.test>";
+    send.mockResolvedValue({ data: { id: "email_purchase" }, error: null });
+
+    await sendPurchaseConfirmedEmail({
+      actionLabel: "Confirmar e-mail",
+      actionUrl: "https://hub.example/confirmar-email#token=signed-token",
+      courseTitle: "Curso confirmado",
+      idempotencyKey: "email.purchase-confirmed/order-1/v1",
+      to: "student@example.test",
+      userName: "Student",
+    });
+
+    const [email, options] = send.mock.calls[0] ?? [];
+    expect(email).toEqual(
+      expect.objectContaining({
+        subject: "Compra confirmada: Curso confirmado",
+        template: {
+          id: "purchase-confirmed",
+          variables: {
+            ACTION_LABEL: "Confirmar e-mail",
+            ACTION_URL:
+              "https://hub.example/confirmar-email#token=signed-token",
+            COURSE_TITLE: "Curso confirmado",
+            USER_NAME: "Student",
+          },
+        },
+        to: "student@example.test",
+      })
+    );
+    expect(email).not.toHaveProperty("PASSWORD_RESET_URL");
+    expect(options).toEqual({
+      idempotencyKey: "email.purchase-confirmed/order-1/v1",
     });
   });
 

@@ -163,6 +163,7 @@ const sentryNextConfig = {
     ? { release: { name: sentryBuildConfiguration.release } }
     : {}),
   silent: !process.env.CI,
+  telemetry: !isE2eTest,
   useRunAfterProductionCompileHook: true,
   widenClientFileUpload: true,
   sourcemaps: {

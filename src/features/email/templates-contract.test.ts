@@ -44,6 +44,40 @@ const validCourseSalesOpened = {
   USER_NAME: "Aluno de teste",
 } satisfies HostedEmailTemplateVariables;
 
+const validPurchaseConfirmed = {
+  ACTION_LABEL: "Confirmar e-mail",
+  ACTION_URL: "https://example.test/confirmar-email#token=signed",
+  COURSE_TITLE: "Curso de teste",
+  name: "purchase-confirmed",
+  USER_NAME: "Aluno de teste",
+} satisfies HostedEmailTemplateVariables;
+
+const validStaffInvitation = {
+  ACTION_URL: "https://example.test/convites/equipe/aceitar#token=signed",
+  EXPIRES_AT: "6 de outubro de 2026",
+  INVITER_NAME: "Admin de teste",
+  name: "staff-invitation",
+  ROLE_LABEL: "Suporte",
+} satisfies HostedEmailTemplateVariables;
+
+const validEmailChangeConfirmation = {
+  ACTION_URL: "https://example.test/confirmar-troca-email#token=signed",
+  CURRENT_EMAIL: "atual@example.test",
+  name: "email-change-confirmation",
+  NEW_EMAIL: "novo@example.test",
+  STEP_LABEL: "Confirmar e-mail atual",
+  USER_NAME: "Pessoa de teste",
+} satisfies HostedEmailTemplateVariables;
+
+const validEmailChangeNotice = {
+  CHANGE_DATE: "29 de setembro de 2026 às 15:00",
+  CURRENT_EMAIL: "atual@example.test",
+  name: "email-change-notice",
+  NEW_EMAIL: "novo@example.test",
+  SUPPORT_EMAIL: "suporte@example.test",
+  USER_NAME: "Pessoa de teste",
+} satisfies HostedEmailTemplateVariables;
+
 const validSupportRequest = {
   COURSE_TITLE: "Curso de teste",
   MESSAGE: "Preciso de ajuda para acessar o curso.",
@@ -59,19 +93,27 @@ const validVariables = [
   validAccessExpiryWarning,
   validCertificateIssued,
   validCourseSalesOpened,
+  validPurchaseConfirmed,
+  validStaffInvitation,
+  validEmailChangeConfirmation,
+  validEmailChangeNotice,
   validSupportRequest,
 ];
 
 const longString = (length: number): string => "x".repeat(length);
 
 describe("hosted Resend template aliases", () => {
-  it("exposes the six logical names as the canonical aliases", () => {
+  it("exposes the logical names as the canonical aliases", () => {
     expect(hostedEmailTemplates).toEqual([
       "auth-password-reset",
       "access-released",
       "access-expiry-warning",
       "certificate-issued",
       "course-sales-opened",
+      "purchase-confirmed",
+      "email-change-confirmation",
+      "email-change-notice",
+      "staff-invitation",
       "support-request",
     ]);
   });
@@ -161,6 +203,18 @@ describe("hosted template variables", () => {
         USER_NAME: "Aluno de teste",
       })
     ).toThrow("PASSWORD_RESET_URL is required");
+  });
+
+  it("requires a context-appropriate action label for purchase confirmation", () => {
+    expect(() =>
+      validateHostedTemplateVariables(validPurchaseConfirmed)
+    ).not.toThrow();
+    expect(() =>
+      validateHostedTemplateVariables({
+        ...validPurchaseConfirmed,
+        ACTION_LABEL: "Redefinir senha",
+      })
+    ).toThrow("ACTION_LABEL is invalid for purchase confirmation");
   });
 
   it("requires the certificate code for certificate delivery", () => {

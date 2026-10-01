@@ -39,20 +39,31 @@ export function SignInForm({
 } = {}): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [isAccessBlocked, setIsAccessBlocked] = useState(false);
+  const [isEmailVerificationRequired, setIsEmailVerificationRequired] =
+    useState(false);
   const [isPending, setIsPending] = useState(false);
+  const [isVerificationRequestPending, setIsVerificationRequestPending] =
+    useState(false);
+  const [verificationNotice, setVerificationNotice] = useState<string | null>(
+    null
+  );
+  const [verificationEmail, setVerificationEmail] = useState("");
   const safeReturnTo = getSafeAuthReturnTo(returnTo);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     setIsAccessBlocked(false);
+    setIsEmailVerificationRequired(false);
+    setVerificationNotice(null);
     setIsPending(true);
 
     try {
       const formData = new FormData(event.currentTarget);
+      const email = String(formData.get("email") ?? "").trim();
       const response = await fetch("/api/auth/sign-in/email", {
         body: JSON.stringify({
-          email: formData.get("email"),
+          email,
           password: formData.get("password"),
         }),
         credentials: "same-origin",
@@ -68,7 +79,22 @@ export function SignInForm({
         ? await response.json()
         : await response.text();
 
-      const signInOutcome = response.ok ? getSignInOutcome(payload) : "failure";
+      const signInOutcome = getSignInOutcome(payload);
+
+      if (signInOutcome === "email_verification_required") {
+        setVerificationEmail(email);
+        setIsEmailVerificationRequired(true);
+        setError("Confirme seu e-mail para continuar.");
+        return;
+      }
+
+      if (signInOutcome === "account_suspended") {
+        setIsAccessBlocked(true);
+        setError(
+          "Sua conta está suspensa. Entre em contato com o suporte para solicitar uma revisão."
+        );
+        return;
+      }
 
       if (signInOutcome !== "authenticated") {
         setError("E-mail ou senha incorretos.");
@@ -86,7 +112,7 @@ export function SignInForm({
         );
         setIsAccessBlocked(true);
         setError(
-          "Acesso bloqueado. Entre em contato com o suporte para revisar sua conta."
+          "Sua conta está suspensa. Entre em contato com o suporte para solicitar uma revisão."
         );
         return;
       }
@@ -108,12 +134,38 @@ export function SignInForm({
     }
   };
 
+  const handleResendEmailVerification = async (): Promise<void> => {
+    setIsVerificationRequestPending(true);
+    setVerificationNotice(null);
+    try {
+      await fetch("/api/auth/send-verification-email", {
+        body: JSON.stringify({ email: verificationEmail }),
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
+        method: "POST",
+      });
+      setVerificationNotice(
+        "Se a conta puder receber uma confirmação, enviaremos um novo link para esse e-mail."
+      );
+    } catch {
+      setVerificationNotice(
+        "Não foi possível solicitar o link agora. Tente novamente em instantes."
+      );
+    } finally {
+      setIsVerificationRequestPending(false);
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit}>
       {emailVerified ? (
         <Alert aria-live="polite" className="mb-5">
           <AlertDescription>
-            E-mail confirmado. Agora você pode entrar com Google.
+            E-mail confirmado. Entre com Google ou crie uma senha por “Esqueci
+            minha senha”.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -124,9 +176,10 @@ export function SignInForm({
           </AlertDescription>
         </Alert>
       ) : null}
-      {googleLoginEnabled && googleOAuthCallbackUrl ? (
+      {googleOAuthCallbackUrl ? (
         <GoogleAuthButton
           callbackUrl={googleOAuthCallbackUrl}
+          enabled={googleLoginEnabled}
           label="Entrar com Google"
         />
       ) : null}
@@ -140,6 +193,13 @@ export function SignInForm({
             className="h-11"
             id="email"
             name="email"
+            onChange={() => {
+              if (isEmailVerificationRequired) {
+                setIsEmailVerificationRequired(false);
+                setVerificationNotice(null);
+                setError(null);
+              }
+            }}
             placeholder="aluno@exemplo.com"
             required
             type="email"
@@ -160,7 +220,10 @@ export function SignInForm({
         </Field>
       </FieldGroup>
       {error ? (
-        <Alert className="mt-5" variant="destructive">
+        <Alert
+          className="mt-5"
+          variant={isEmailVerificationRequired ? "default" : "destructive"}
+        >
           <AlertDescription id="sign-in-error">
             {error}
             {isAccessBlocked && supportEmail ? (
@@ -175,6 +238,25 @@ export function SignInForm({
             ) : null}
           </AlertDescription>
         </Alert>
+      ) : null}
+      {isEmailVerificationRequired ? (
+        <div className="mt-3 space-y-2">
+          <Button
+            className="w-full"
+            disabled={isVerificationRequestPending}
+            loading={isVerificationRequestPending}
+            onClick={handleResendEmailVerification}
+            type="button"
+            variant="outline"
+          >
+            Reenviar confirmação de e-mail
+          </Button>
+          {verificationNotice ? (
+            <p aria-live="polite" className="text-muted-foreground text-sm">
+              {verificationNotice}
+            </p>
+          ) : null}
+        </div>
       ) : null}
       <Button className="mt-5 h-12 w-full" loading={isPending} type="submit">
         Entrar

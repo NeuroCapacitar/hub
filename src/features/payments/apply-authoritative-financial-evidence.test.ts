@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const dependencies = vi.hoisted(() => ({
   applyPaidWebhookAccess: vi.fn(),
   enqueueOutboxMessage: vi.fn(),
-  getServerEnv: vi.fn(),
   resolveLocalOrderIdentity: vi.fn(),
 }));
 
@@ -14,7 +13,6 @@ vi.mock("@/features/enrollments/server", () => ({
 vi.mock("@/features/outbox/server", () => ({
   enqueueOutboxMessage: dependencies.enqueueOutboxMessage,
 }));
-vi.mock("@/lib/env", () => ({ getServerEnv: dependencies.getServerEnv }));
 vi.mock("@/features/payments/order-identity", () => ({
   LocalOrderIdentityError: class LocalOrderIdentityError extends Error {
     readonly code: string;
@@ -39,23 +37,63 @@ const order = {
   userId: "user-1",
 } as const;
 
+const createPaidClient = (emailVerified = true) => {
+  const query = vi.fn((statement: string) => {
+    if (statement.includes("with transitioned as")) {
+      return { rows: [{ id: "order-1" }] };
+    }
+    if (statement.includes("from purchase_confirmation_intents")) {
+      return { rows: [] };
+    }
+    if (statement.includes("from outbox_messages as message")) {
+      return { rows: [] };
+    }
+    if (
+      statement.includes("from users") &&
+      statement.includes("select email, name")
+    ) {
+      return {
+        rows: [
+          {
+            email: "student@example.test",
+            email_verified: emailVerified,
+            name: "Student",
+          },
+        ],
+      };
+    }
+    if (statement.includes("set customer_email = coalesce")) {
+      return {
+        rows: [
+          {
+            customer_email: "student@example.test",
+            customer_name: "Student",
+          },
+        ],
+      };
+    }
+    if (statement.includes("insert into account_email_challenges")) {
+      return { rows: [{ generation: 1, id: "purchase-challenge" }] };
+    }
+    if (statement.includes("insert into purchase_confirmation_intents")) {
+      return { rows: [{ order_id: "order-1" }] };
+    }
+    return { rows: [] };
+  });
+  return { query };
+};
+
 describe("authoritative financial evidence application", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dependencies.getServerEnv.mockReturnValue({
-      GOOGLE_CLIENT_ID: undefined,
-      GOOGLE_CLIENT_SECRET: undefined,
-    });
     dependencies.resolveLocalOrderIdentity.mockResolvedValue({
-      activationRequired: false,
+      emailVerified: true,
       userId: "user-1",
     });
   });
 
   it("does not grant when the paid transition is blocked by a pending review", async () => {
-    const client = {
-      query: vi.fn().mockResolvedValue({ rows: [] }),
-    };
+    const client = { query: vi.fn().mockResolvedValue({ rows: [] }) };
 
     await expect(
       applyConfirmedPaymentAccess({ client: client as never, order })
@@ -67,9 +105,7 @@ describe("authoritative financial evidence application", () => {
   });
 
   it("applies access and an idempotent outbox message after financial convergence", async () => {
-    const client = {
-      query: vi.fn().mockResolvedValue({ rows: [{ id: "order-1" }] }),
-    };
+    const client = createPaidClient();
 
     await expect(
       applyConfirmedPaymentAccess({ client: client as never, order })
@@ -86,34 +122,32 @@ describe("authoritative financial evidence application", () => {
     expect(dependencies.enqueueOutboxMessage).toHaveBeenCalledWith({
       client,
       message: expect.objectContaining({
-        idempotencyKey: "email.access-released/order-1/v1",
+        idempotencyKey: "email.purchase-confirmed/order-1/v1",
       }),
     });
     expect(dependencies.resolveLocalOrderIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ googleProviderEnabled: false })
+      expect.objectContaining({
+        order: expect.objectContaining({ userId: "user-1" }),
+      })
     );
   });
 
-  it("uses the enabled Google provider when deciding whether paid access needs email activation", async () => {
-    dependencies.getServerEnv.mockReturnValue({
-      GOOGLE_CLIENT_ID: "google-client-id",
-      GOOGLE_CLIENT_SECRET: "google-client-secret",
-    });
-    const client = {
-      query: vi.fn().mockResolvedValue({ rows: [{ id: "order-1" }] }),
-    };
+  it("defers the purchase verification decision and challenge to delivery", async () => {
+    const client = createPaidClient(false);
 
     await expect(
       applyConfirmedPaymentAccess({ client: client as never, order })
     ).resolves.toBe(true);
 
-    expect(dependencies.resolveLocalOrderIdentity).toHaveBeenCalledWith(
-      expect.objectContaining({ googleProviderEnabled: true })
-    );
+    expect(
+      client.query.mock.calls.some(([statement]) =>
+        String(statement).includes("account_email_challenges")
+      )
+    ).toBe(false);
     expect(dependencies.enqueueOutboxMessage).toHaveBeenCalledWith({
       client,
       message: expect.objectContaining({
-        idempotencyKey: "email.access-released/order-1/v1",
+        idempotencyKey: "email.purchase-confirmed/order-1/v1",
       }),
     });
   });

@@ -1,28 +1,25 @@
-import {
-  Certificate01Icon,
-  DashboardSquare01Icon,
-  HelpSquareIcon,
-  Image01Icon,
-  PaintBoardIcon,
-} from "@hugeicons/core-free-icons";
+import { PaintBoardIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { AccountProfileSection } from "@/components/account/account-settings-sections";
 import { FinanceHelp } from "@/components/admin/finance-help";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
-import { Scrollspy } from "@/components/reui/scrollspy";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { getAccountSecuritySummary } from "@/features/account/profile";
 import {
   getAdminBannersData,
   getAdminFaqData,
   getAdminSettingsData,
 } from "@/features/admin/server";
 import { getAdminAuthMediaData } from "@/features/auth-media/server";
-import { requirePermission } from "@/lib/auth-permissions";
-import { canPerform } from "@/lib/auth-policy";
+import { canPerform, hasAdminSurfaceAccess } from "@/lib/auth-policy";
 import { route } from "@/lib/routes";
+import { requireSession } from "@/lib/session";
+import { AdminSettingsTabs } from "./admin-settings-tabs";
 import { AuthMediaGallery } from "./auth-media/auth-media-gallery";
 import { BannerGallery } from "./banners/banner-gallery";
 import {
@@ -34,8 +31,69 @@ import { FaqTable } from "./faq/faq-table";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
-  const session = await requirePermission("viewSettings");
+const adminSettingsTabValues = [
+  "perfil",
+  "certificados",
+  "plataforma",
+] as const;
+const getDefaultAdminSettingsTab = (
+  requestedTab: string | undefined
+): (typeof adminSettingsTabValues)[number] => {
+  if (
+    requestedTab === "perfil" ||
+    requestedTab === "certificados" ||
+    requestedTab === "plataforma"
+  ) {
+    return requestedTab;
+  }
+  if (
+    requestedTab === "tela-acesso" ||
+    requestedTab === "banners" ||
+    requestedTab === "perguntas-frequentes"
+  ) {
+    return "plataforma";
+  }
+  if (requestedTab === "acesso") {
+    return "perfil";
+  }
+  return "perfil";
+};
+
+export default async function AdminSettingsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string | string[] }>;
+} = {}): Promise<React.JSX.Element> {
+  const query = (await searchParams) ?? {};
+  const requestedTab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
+  const defaultTab = getDefaultAdminSettingsTab(requestedTab);
+  const session = await requireSession();
+  if (!hasAdminSurfaceAccess(session)) {
+    redirect(route("/app"));
+  }
+
+  const canViewSettings = canPerform(session, "viewSettings");
+  const securityPromise = getAccountSecuritySummary(session.user.id);
+  if (!canViewSettings) {
+    const security = await securityPromise;
+
+    return (
+      <PageContainer>
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-16">
+          <PageHeader
+            description="Dados pessoais e método de entrada da sua conta."
+            title="Configurações"
+          />
+          <AccountProfileSection
+            security={security}
+            session={session}
+            settingsHref="/admin/configuracoes#acesso-conta"
+          />
+        </div>
+      </PageContainer>
+    );
+  }
+
   const canManageCertificateIssuerProfile = canPerform(
     session,
     "manageCertificateIssuerProfile"
@@ -44,12 +102,16 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
   const canManageBanners = canPerform(session, "manageBanners");
   const canManageFaq = canPerform(session, "manageFaq");
 
-  const [data, bannersData, authMediaData, faqData] = await Promise.all([
-    getAdminSettingsData(),
-    getAdminBannersData(),
-    getAdminAuthMediaData(),
-    getAdminFaqData(),
-  ]);
+  const [security, [data, bannersData, authMediaData, faqData]] =
+    await Promise.all([
+      securityPromise,
+      Promise.all([
+        getAdminSettingsData(),
+        getAdminBannersData(),
+        getAdminAuthMediaData(),
+        getAdminFaqData(),
+      ]),
+    ]);
 
   const sortedBanners = [...bannersData.banners].sort(
     (a, b) => a.sortOrder - b.sortOrder
@@ -83,7 +145,7 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-8">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-16">
         <PageHeader
           actions={
             <Button asChild variant="outline">
@@ -99,81 +161,15 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
               </Link>
             </Button>
           }
-          title="Configurações globais"
+          description="Conta pessoal e ajustes gerais do Hub."
+          title="Configurações"
         />
 
-        <div className="grid grid-cols-1 gap-14 md:grid-cols-[220px_1fr] lg:grid-cols-[240px_1fr]">
-          <aside className="hidden md:block">
-            <div className="sticky top-8">
-              <nav aria-label="Seções das configurações">
-                <Card className="border-none bg-card p-1.5 shadow-xs ring-1 ring-border/50">
-                  <Scrollspy
-                    className="flex flex-col gap-1"
-                    history={false}
-                    offset={96}
-                  >
-                    <a
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-muted-foreground text-sm transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-muted data-[active=true]:text-foreground"
-                      data-scrollspy-anchor="certificados"
-                      href="#certificados"
-                    >
-                      <HugeiconsIcon
-                        aria-hidden="true"
-                        icon={Certificate01Icon}
-                        size={18}
-                        strokeWidth={1.5}
-                      />
-                      <span>Emissão de certificados</span>
-                    </a>
-                    <a
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-muted-foreground text-sm transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-muted data-[active=true]:text-foreground"
-                      data-scrollspy-anchor="tela-acesso"
-                      href="#tela-acesso"
-                    >
-                      <HugeiconsIcon
-                        aria-hidden="true"
-                        icon={Image01Icon}
-                        size={18}
-                        strokeWidth={1.5}
-                      />
-                      <span>Tela de acesso</span>
-                    </a>
-                    <a
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-muted-foreground text-sm transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-muted data-[active=true]:text-foreground"
-                      data-scrollspy-anchor="banners-dashboard"
-                      href="#banners-dashboard"
-                    >
-                      <HugeiconsIcon
-                        aria-hidden="true"
-                        icon={DashboardSquare01Icon}
-                        size={18}
-                        strokeWidth={1.5}
-                      />
-                      <span>Banners do Dashboard</span>
-                    </a>
-                    <a
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-muted-foreground text-sm transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-muted data-[active=true]:text-foreground"
-                      data-scrollspy-anchor="perguntas-frequentes"
-                      href="#perguntas-frequentes"
-                    >
-                      <HugeiconsIcon
-                        aria-hidden="true"
-                        icon={HelpSquareIcon}
-                        size={18}
-                        strokeWidth={1.5}
-                      />
-                      <span>Perguntas frequentes</span>
-                    </a>
-                  </Scrollspy>
-                </Card>
-              </nav>
-            </div>
-          </aside>
-
-          <div className="min-w-0 space-y-20">
+        <AdminSettingsTabs
+          certificates={
             <section
               aria-labelledby="settings-certificates"
-              className="grid scroll-mt-24 gap-6"
+              className="grid gap-6"
               id="certificados"
             >
               <div className="flex items-start justify-between gap-3">
@@ -222,57 +218,63 @@ export default async function AdminSettingsPage(): Promise<React.JSX.Element> {
                 </CardContent>
               </Card>
             </section>
-
-            <section className="grid scroll-mt-24 gap-6" id="tela-acesso">
-              <div className="space-y-1">
-                <h2 className="type-section-title">Tela de acesso</h2>
-                <p className="text-muted-foreground text-sm">
-                  Até cinco imagens 8:7 exibidas na autenticação pública.
-                </p>
-              </div>
-              <AuthMediaGallery
-                initialSlides={sortedAuthMediaSlides}
-                readOnly={!canManageAuthMedia}
-              />
-            </section>
-
-            <section className="grid scroll-mt-24 gap-6" id="banners-dashboard">
-              <div className="space-y-1">
-                <h2 className="type-section-title">Banners do Dashboard</h2>
-                <p className="text-muted-foreground text-sm">
-                  Até cinco banners cadastrados para a página inicial da área do
-                  Aluno.
-                </p>
-              </div>
-              <BannerGallery
-                initialBanners={sortedBanners}
-                readOnly={!canManageBanners}
-              />
-            </section>
-
-            <section
-              className="grid scroll-mt-24 gap-6"
-              id="perguntas-frequentes"
-            >
-              <div className="flex items-start justify-between gap-3">
+          }
+          defaultTab={defaultTab}
+          platform={
+            <div className="grid gap-16">
+              <section className="grid gap-6" id="tela-acesso">
                 <div className="space-y-1">
-                  <h2 className="type-section-title">Perguntas frequentes</h2>
+                  <h2 className="type-section-title">Tela de acesso</h2>
                   <p className="text-muted-foreground text-sm">
-                    Respostas publicadas na área do Aluno.
+                    Até cinco imagens 8:7 exibidas na autenticação pública.
                   </p>
                 </div>
-                {canManageFaq ? (
-                  <FaqCreateDialog nextSortOrder={nextSortOrder} />
-                ) : (
-                  <Badge className="shrink-0" variant="outline">
-                    Somente leitura
-                  </Badge>
-                )}
-              </div>
-              <FaqTable faqs={sortedFaqs} readOnly={!canManageFaq} />
-            </section>
-          </div>
-        </div>
+                <AuthMediaGallery
+                  initialSlides={sortedAuthMediaSlides}
+                  readOnly={!canManageAuthMedia}
+                />
+              </section>
+              <section className="grid gap-6" id="banners-dashboard">
+                <div className="space-y-1">
+                  <h2 className="type-section-title">Banners do Dashboard</h2>
+                  <p className="text-muted-foreground text-sm">
+                    Até cinco banners cadastrados para a página inicial da área
+                    do Aluno.
+                  </p>
+                </div>
+                <BannerGallery
+                  initialBanners={sortedBanners}
+                  readOnly={!canManageBanners}
+                />
+              </section>
+              <section className="grid gap-6" id="perguntas-frequentes">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <h2 className="type-section-title">Perguntas frequentes</h2>
+                    <p className="text-muted-foreground text-sm">
+                      Respostas publicadas na área do Aluno.
+                    </p>
+                  </div>
+                  {canManageFaq ? (
+                    <FaqCreateDialog nextSortOrder={nextSortOrder} />
+                  ) : (
+                    <Badge className="shrink-0" variant="outline">
+                      Somente leitura
+                    </Badge>
+                  )}
+                </div>
+                <FaqTable faqs={sortedFaqs} readOnly={!canManageFaq} />
+              </section>
+            </div>
+          }
+          profile={
+            <AccountProfileSection
+              security={security}
+              session={session}
+              settingsHref="/admin/configuracoes?tab=perfil#acesso-conta"
+            />
+          }
+        />
       </div>
     </PageContainer>
   );

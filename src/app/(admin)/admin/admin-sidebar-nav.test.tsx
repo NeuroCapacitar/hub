@@ -44,11 +44,12 @@ describe("AdminSidebarNav", () => {
     );
   });
 
-  it("does not show Team without the management capability", () => {
+  it("keeps personal settings available without exposing capability-bound areas", () => {
     const markup = renderNav(["viewAdminPanel", "viewCourses"]);
 
     expect(markup).toContain('href="/admin"');
     expect(markup).toContain('href="/admin/cursos"');
+    expect(markup).toContain('href="/admin/configuracoes"');
     expect(markup).not.toContain('href="/admin/equipe"');
   });
 });

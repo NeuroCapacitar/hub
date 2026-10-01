@@ -1,4 +1,7 @@
-import { getAuth } from "@/lib/auth";
+import { requestAccountEmailVerificationByAddress } from "@/features/account/email-challenges";
+import { withAccountPasswordResetOperation } from "@/features/account/password-reset-operations";
+import { scheduleOutboxDrainAfterResponse } from "@/features/outbox/background-drain";
+import { getAuth, isStudentPlatformAccessBlocked } from "@/lib/auth";
 import { isBlockedAuthEndpoint } from "@/lib/auth-policy";
 import { getServerEnv } from "@/lib/env";
 import {
@@ -15,6 +18,9 @@ interface SocialAuthRequest {
   provider: string | null;
   requestSignUp: boolean;
 }
+
+const AUTH_API_PATH_PREFIX_PATTERN = /^\/api\/auth\/?/;
+const TRAILING_SLASH_PATTERN = /\/$/;
 
 const getSocialAuthRequest = async (
   request: Request
@@ -55,20 +61,71 @@ const isResponseFailure = async (response: Response): Promise<boolean> => {
 const verificationEmailResponse = (): Response =>
   Response.json({ status: true }, { headers: { "cache-control": "no-store" } });
 
+const blockedAccountResponse = (): Response =>
+  Response.json(
+    { code: "ACCOUNT_SUSPENDED", error: "account_suspended" },
+    { headers: { "cache-control": "no-store" }, status: 403 }
+  );
+
+const recoveryEndpoints = new Set([
+  "request-password-reset",
+  "reset-password",
+  "sign-out",
+]);
+
+const isPublicAccountRecoveryEndpoint = (authEndpoint: string): boolean =>
+  recoveryEndpoints.has(authEndpoint) ||
+  authEndpoint.startsWith("reset-password/");
+
+const checkAuthenticatedPlatformAccess = async (
+  request: Request,
+  authEndpoint: string
+): Promise<Response | null> => {
+  if (
+    isPublicAccountRecoveryEndpoint(authEndpoint) ||
+    !request.headers.has("cookie")
+  ) {
+    return null;
+  }
+
+  const session = await getAuth().api.getSession({ headers: request.headers });
+  if (
+    session?.user &&
+    (await isStudentPlatformAccessBlocked(session.user.id))
+  ) {
+    return blockedAccountResponse();
+  }
+  return null;
+};
+
 const handleVerificationEmailRequest = async (
   request: Request,
   correlationId: string
 ): Promise<Response> => {
   try {
-    const response = await getAuth().handler(request);
-    if (await isResponseFailure(response)) {
-      logOperationalEvent({
-        correlationId,
-        errorCode: "verification_email_request_failed",
-        httpStatus: response.status,
-        operation: "auth.email_verification_request",
-        outcome: "failure",
+    const body: unknown = await request.clone().json();
+    const bodyRecord =
+      body !== null && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : null;
+    const email = bodyRecord?.email;
+    if (typeof email === "string") {
+      const outcome = await requestAccountEmailVerificationByAddress({
+        email,
+        requestHeaders: request.headers,
       });
+      if (outcome === "queued") {
+        try {
+          scheduleOutboxDrainAfterResponse({ correlationId });
+        } catch {
+          logOperationalEvent({
+            correlationId,
+            errorCode: "account_verification_drain_schedule_failed",
+            operation: "auth.email_verification_drain",
+            outcome: "failure",
+          });
+        }
+      }
     }
   } catch {
     logOperationalEvent({
@@ -76,6 +133,7 @@ const handleVerificationEmailRequest = async (
       errorCode: "verification_email_request_failed",
       operation: "auth.email_verification_request",
       outcome: "failure",
+      provider: "database",
     });
   }
 
@@ -127,8 +185,40 @@ const logAuthRequestOutcome = async ({
 };
 
 export const GET = async (request: Request): Promise<Response> => {
-  const response = await getAuth().handler(request);
   const requestUrl = new URL(request.url);
+  if (requestUrl.pathname.endsWith("/api/auth/verify-email")) {
+    return new Response(null, {
+      headers: {
+        "cache-control": "no-store",
+        location: new URL(
+          "/confirmar-email?legacy=1",
+          requestUrl.origin
+        ).toString(),
+        "referrer-policy": "no-referrer",
+      },
+      status: 303,
+    });
+  }
+
+  const authEndpoint = requestUrl.pathname
+    .replace(AUTH_API_PATH_PREFIX_PATTERN, "")
+    .replace(TRAILING_SLASH_PATTERN, "");
+  try {
+    const accessResponse = await checkAuthenticatedPlatformAccess(
+      request,
+      authEndpoint
+    );
+    if (accessResponse) {
+      return accessResponse;
+    }
+  } catch {
+    return Response.json(
+      { error: "authentication_temporarily_unavailable" },
+      { headers: { "cache-control": "no-store" }, status: 503 }
+    );
+  }
+
+  const response = await getAuth().handler(request);
 
   if (requestUrl.pathname.endsWith("/api/auth/callback/google")) {
     let providerReturnedError = false;
@@ -173,6 +263,20 @@ export const POST = async (
       ? await getSocialAuthRequest(request)
       : { provider: null, requestSignUp: false };
 
+  if (authEndpoint === "sign-up/email") {
+    logOperationalEvent({
+      correlationId,
+      errorCode: "native_email_signup_blocked",
+      httpStatus: 404,
+      operation: "auth.sign_up",
+      outcome: "failure",
+    });
+    return Response.json(
+      { error: "email_confirmation_required" },
+      { status: 404 }
+    );
+  }
+
   if (
     isBlockedAuthEndpoint({
       allowPublicSignUp: env.AUTH_PUBLIC_SIGNUP_ENABLED,
@@ -191,11 +295,61 @@ export const POST = async (
     return Response.json({ error: "public_sign_up_disabled" }, { status: 404 });
   }
 
+  try {
+    const accessResponse = await checkAuthenticatedPlatformAccess(
+      request,
+      authEndpoint
+    );
+    if (accessResponse) {
+      return accessResponse;
+    }
+  } catch {
+    return Response.json(
+      { error: "authentication_temporarily_unavailable" },
+      { headers: { "cache-control": "no-store" }, status: 503 }
+    );
+  }
+
+  if (authEndpoint === "change-email") {
+    return Response.json(
+      { error: "email_change_flow_unavailable" },
+      { headers: { "cache-control": "no-store" }, status: 404 }
+    );
+  }
+
   if (authEndpoint === "send-verification-email") {
     return handleVerificationEmailRequest(request, correlationId);
   }
 
-  const response = await getAuth().handler(request);
+  const nativeHandler = async (): Promise<Response> =>
+    await getAuth().handler(request);
+  let response: Response;
+  if (
+    authEndpoint === "request-password-reset" ||
+    authEndpoint === "reset-password"
+  ) {
+    try {
+      response = await withAccountPasswordResetOperation({
+        endpoint: authEndpoint,
+        handler: nativeHandler,
+        request,
+      });
+    } catch {
+      logOperationalEvent({
+        correlationId,
+        errorCode: "password_reset_operation_guard_failed",
+        operation: "auth.password_reset",
+        outcome: "failure",
+        provider: "database",
+      });
+      return Response.json(
+        { error: "password_reset_temporarily_unavailable" },
+        { headers: { "cache-control": "no-store" }, status: 503 }
+      );
+    }
+  } else {
+    response = await nativeHandler();
+  }
   await logAuthRequestOutcome({
     authEndpoint,
     correlationId,

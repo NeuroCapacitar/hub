@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { FinanceHelp } from "@/components/admin/finance-help";
-import { StaffPromotionDialog } from "@/components/admin/staff-promotion-dialog";
+import { StaffInvitationDialog } from "@/components/admin/staff-invitation-dialog";
+import { StaffInvitationList } from "@/components/admin/staff-invitation-list";
 import { PageContainer } from "@/components/page-container";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import { getStaffInvitations } from "@/features/admin/staff-invitations";
 import { getStaffMembers } from "@/features/admin/staff-server";
 import { requirePermission } from "@/lib/auth-permissions";
 import { StaffAccessTable } from "./staff-access-table";
@@ -12,7 +14,10 @@ export const dynamic = "force-dynamic";
 
 export default async function StaffPage(): Promise<React.JSX.Element> {
   const session = await requirePermission("manageStaffAccess");
-  const members = await getStaffMembers();
+  const [members, invitations] = await Promise.all([
+    getStaffMembers(),
+    getStaffInvitations(),
+  ]);
 
   return (
     <PageContainer>
@@ -20,7 +25,7 @@ export default async function StaffPage(): Promise<React.JSX.Element> {
         <PageHeader
           actions={
             <>
-              <StaffPromotionDialog />
+              <StaffInvitationDialog />
               <Button asChild variant="outline">
                 <Link href="/admin/alunos">Ver Alunos</Link>
               </Button>
@@ -29,6 +34,21 @@ export default async function StaffPage(): Promise<React.JSX.Element> {
           description="Consulte os membros e ajuste as permissões do Suporte."
           title="Equipe"
         />
+        <section
+          aria-labelledby="staff-invitations-title"
+          className="grid gap-4"
+        >
+          <div>
+            <h2 className="type-section-title" id="staff-invitations-title">
+              Convites
+            </h2>
+            <p className="mt-1 text-muted-foreground text-sm">
+              A Conta e o acesso só são criados depois que a pessoa aceita pelo
+              e-mail.
+            </p>
+          </div>
+          <StaffInvitationList invitations={invitations} />
+        </section>
         <section
           aria-labelledby="staff-table-title"
           className="grid min-w-0 gap-6"

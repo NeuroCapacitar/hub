@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: cf6a129
+last_verified_commit: 8a0b2c4b4cec48ea63ade74da665aadbf82007be
 ---
 
 # Catálogo de templates do Resend
@@ -18,13 +18,14 @@ responsável pelo markup, plain text gerado, preview e versionamento editorial.
 
 ## Identidade visual
 
-As seis templates pertencem à família institucional NeuroCapacitar e podem
+Os dez templates pertencem à família institucional NeuroCapacitar e podem
 apresentar a identidade de conteúdo PROTEA-R quando o Curso for a entidade em
 foco. PROTEA-R não é o nome global da plataforma. O shell editorial usa canvas
 creme, faixa teal escura, acento laranja, card claro, CTA teal e rodapé
 institucional. Cada alias acrescenta uma variação semântica:
 segurança da conta, acesso liberado, atenção à expiração, abertura de vendas,
-conquista de certificado ou solicitação operacional de suporte.
+confirmação de compra, convite de equipe, conquista de certificado ou
+solicitação operacional de suporte.
 
 O asset oficial da marca é `public/brand/logo-negativo.svg`, referenciado no
 HTML Hosted por URL HTTPS absoluta:
@@ -57,9 +58,13 @@ Staging compartilha a estrutura Resend, mas a aplicação exige
 
 ## Aliases e estado atual
 
-Os seis templates foram criados e publicados em 2026-08-19 pela integração
-Resend, depois da validação estrutural e de variáveis. Nenhuma versão posterior
-está em draft nesta etapa.
+Os seis aliases originais foram criados e publicados em 2026-08-19 pela
+integração Resend, depois da validação estrutural e de variáveis. Os quatro
+aliases adicionados ao contrato de identidade e compra foram criados e
+publicados no catálogo compartilhado em 2026-10-01, seguindo o shell editorial
+dos templates existentes e seus contratos de variáveis. A publicação é global:
+ela não significa que a versão correspondente do Hub já esteja implantada em
+Staging. Nenhuma migration ou build publica templates externamente.
 
 | Nome lógico | Alias | Estado |
 |---|---|---|
@@ -68,6 +73,10 @@ está em draft nesta etapa.
 | `access-expiry-warning` | `access-expiry-warning` | published |
 | `certificate-issued` | `certificate-issued` | published |
 | `course-sales-opened` | `course-sales-opened` | published |
+| `purchase-confirmed` | `purchase-confirmed` | published |
+| `email-change-confirmation` | `email-change-confirmation` | published |
+| `email-change-notice` | `email-change-notice` | published |
+| `staff-invitation` | `staff-invitation` | published |
 | `support-request` | `support-request` | published |
 
 Os IDs do Resend não são necessários no runtime e não devem ser espalhados pelo
@@ -82,7 +91,24 @@ código. O adapter resolve o alias canônico pelo nome lógico.
 | `access-expiry-warning` | `USER_NAME`, `COURSE_TITLE`, `DAYS_REMAINING`, `ACTION_URL` |
 | `certificate-issued` | `USER_NAME`, `COURSE_TITLE`, `CERTIFICATE_CODE`, `ACTION_URL` |
 | `course-sales-opened` | `USER_NAME`, `COURSE_TITLE`, `ACTION_URL` |
+| `purchase-confirmed` | `USER_NAME`, `COURSE_TITLE`, `ACTION_LABEL`, `ACTION_URL` |
+| `email-change-confirmation` | `USER_NAME`, `CURRENT_EMAIL`, `NEW_EMAIL`, `STEP_LABEL`, `ACTION_URL` |
+| `email-change-notice` | `USER_NAME`, `CURRENT_EMAIL`, `NEW_EMAIL`, `CHANGE_DATE`, `SUPPORT_EMAIL` |
+| `staff-invitation` | `INVITER_NAME`, `ROLE_LABEL`, `EXPIRES_AT`, `ACTION_URL` |
 | `support-request` | `STUDENT_NAME`, `STUDENT_EMAIL`, `COURSE_TITLE`, `SUPPORT_SUBJECT`, `MESSAGE` |
+
+`ACTION_LABEL` para `purchase-confirmed` aceita apenas `Confirmar e-mail` ou
+`Acessar Curso`. O Hub escolhe a ação conforme a verificação atual da Conta no
+momento da entrega; o template não decide autorização nem cria senha.
+
+`ROLE_LABEL` para `staff-invitation` aceita somente `Admin` ou `Suporte`.
+O link contém um token HMAC de uso único no fragmento da URL; o template não
+cria nem transforma esse token.
+
+`STEP_LABEL` para `email-change-confirmation` é limitada a
+`Confirmar e-mail atual` ou `Confirmar novo e-mail`. A troca requer as duas
+provas, não autentica pelo link e envia um aviso de conclusão aos dois
+endereços.
 
 `DAYS_REMAINING` é uma string já formatada como `1 dia` ou `7 dias`. O suporte
 usa fallback `Não informado` para `COURSE_TITLE`; `MESSAGE` fica limitado pelo
@@ -105,11 +131,18 @@ O payload Hosted não pode misturar `template` com `html`, `text` ou `react`.
 ## Workflow editorial
 
 1. editar o draft no Resend;
-2. testar com variáveis controladas;
-3. revisar HTML, plain text, subject, links e conteúdo fornecido pelo aluno;
-4. publicar somente após os testes locais e o checker;
-5. tratar `has_unpublished_versions` como warning enquanto houver uma versão publicada válida;
-6. depois de um revert, testar e publicar o novo draft antes de reprocessar a outbox.
+2. testar com variáveis controladas e revisar HTML, plain text, subject, links,
+   conteúdo fornecido pelo aluno e renderização em desktop/mobile;
+3. confirmar a URL pública da logo e a estrutura acessível do template;
+4. publicar somente depois da revisão do draft; o catálogo é compartilhado por
+   Development, Staging e Production;
+5. rodar o checker contra o catálogo publicado para confirmar alias, envelope,
+   variáveis e conteúdo; o checker exige status `published`;
+6. depois que a versão do Hub que usa o alias estiver em Staging, testar o fluxo
+   controlado com `STAGING_EMAIL_RECIPIENT_ALLOWLIST` ativo e conferir entrega;
+7. tratar `has_unpublished_versions` como warning enquanto houver uma versão
+   publicada válida;
+8. depois de um revert, publicar o template compatível antes de reprocessar a outbox.
 
 Publicação é uma ação externa e não deve ser executada automaticamente pelo
 build, typecheck ou lint.
@@ -132,7 +165,7 @@ bun run test -- src/tooling/check-resend-templates.test.ts
 ```
 
 Também são aceitos `development` e `staging`; os três ambientes resolvem os
-mesmos seis aliases. A chave é lida somente quando esse comando é executado e
+mesmos dez aliases. A chave é lida somente quando esse comando é executado e
 não faz parte de `getServerEnv` nem do runtime web. O checker não publica drafts,
 não roda no build, `check` ou `typecheck` e não imprime HTML, valores de
 variáveis, chave ou PII.

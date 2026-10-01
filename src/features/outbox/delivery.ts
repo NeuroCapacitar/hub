@@ -1,5 +1,15 @@
 import "server-only";
 import { getPool } from "@/db";
+import { createEmailChallengeToken } from "@/features/account/email-challenge-token";
+import {
+  createEmailChangeToken,
+  getEmailChangeConfirmationDeliveryData,
+  getEmailChangeNoticeDeliveryData,
+} from "@/features/account/email-change";
+import {
+  createStaffInvitationUrlToken,
+  getStaffInvitationDeliveryData,
+} from "@/features/admin/staff-invitations";
 import { renderPendingCertificate } from "@/features/certificates/server";
 import type { HostedEmailDeliveryContext } from "@/features/email/server";
 import {
@@ -7,6 +17,11 @@ import {
   sendAccessReleasedEmail,
   sendCertificateIssuedEmail,
   sendCourseSalesOpenedEmail,
+  sendEmailChangeConfirmationEmail,
+  sendEmailChangeNoticeEmail,
+  sendEmailVerificationEmail,
+  sendPurchaseConfirmedEmail,
+  sendStaffInvitationEmail,
   sendSupportRequestEmail,
 } from "@/features/email/server";
 import {
@@ -23,6 +38,7 @@ import {
   deriveAccountActivationEmailIdempotencyKey,
 } from "@/lib/account-activation-idempotency";
 import { getAuth } from "@/lib/auth";
+import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
 import { getServerEnv } from "@/lib/env";
 import {
   classifyExpiryWarningGeneration,
@@ -53,6 +69,14 @@ const certificateRenderFailure = (): OutboxDeliveryError =>
 const accountActivationFailure = (): OutboxDeliveryError =>
   new OutboxDeliveryError("account_activation_failed", { retryable: true });
 
+const purchaseConfirmationFailure = (): OutboxDeliveryError =>
+  new OutboxDeliveryError("purchase_confirmation_failed", { retryable: true });
+
+const staffInvitationFailure = (): OutboxDeliveryError =>
+  new OutboxDeliveryError("staff_invitation_delivery_failed", {
+    retryable: true,
+  });
+
 const checkoutCancellationFailure = (): OutboxDeliveryError =>
   new OutboxDeliveryError("checkout_cancellation_failed", { retryable: true });
 
@@ -68,6 +92,9 @@ const unexpectedDeliveryFailure = (topic: string): OutboxDeliveryError => {
   }
   if (topic === OUTBOX_TOPICS.accountActivation) {
     return accountActivationFailure();
+  }
+  if (topic === OUTBOX_TOPICS.purchaseConfirmed) {
+    return purchaseConfirmationFailure();
   }
   if (topic === OUTBOX_TOPICS.checkoutCancellation) {
     return checkoutCancellationFailure();
@@ -151,6 +178,132 @@ const getAccountActivationDeliveryData = async ({
   );
   const row: unknown = result.rows[0];
   return parseAccountActivationDeliveryData(row);
+};
+
+interface EmailChallengeDeliveryData {
+  challenge_id: string;
+  consumed_at: Date | null;
+  email_verified: boolean | null;
+  expires_at: Date;
+  generation: number;
+  pending_signup_email: string | null;
+  pending_signup_id: string | null;
+  pending_signup_name: string | null;
+  pending_signup_status: string | null;
+  purpose: string;
+  user_email: string | null;
+  user_id: string | null;
+  user_name: string | null;
+}
+
+interface ResolvedEmailChallengeDeliveryData
+  extends EmailChallengeDeliveryData {
+  recipient_email: string;
+  recipient_name: string;
+}
+
+const getEmailChallengeDeliveryData = async (
+  challengeId: string
+): Promise<ResolvedEmailChallengeDeliveryData | null> => {
+  const result = await getPool().query<EmailChallengeDeliveryData>(
+    `
+      select
+        challenge.id as challenge_id,
+        challenge.purpose,
+        challenge.generation,
+        challenge.expires_at,
+        challenge.consumed_at,
+        challenge.pending_signup_id,
+        pending_signups.status as pending_signup_status,
+        pending_signups.name as pending_signup_name,
+        pending_signups.email as pending_signup_email,
+        challenge.user_id,
+        users.email as user_email,
+        users.name as user_name,
+        users.email_verified
+      from account_email_challenges as challenge
+      left join pending_signups
+        on pending_signups.id = challenge.pending_signup_id
+      left join users on users.id = challenge.user_id
+      where challenge.id = $1
+      limit 1
+    `,
+    [challengeId]
+  );
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  const recipientEmail = row.pending_signup_email ?? row.user_email;
+  const recipientName = row.pending_signup_name ?? row.user_name;
+  if (!(recipientEmail && recipientName)) {
+    return null;
+  }
+
+  return {
+    ...row,
+    recipient_email: recipientEmail,
+    recipient_name: recipientName,
+  };
+};
+
+const deliverEmailVerification = async ({
+  message,
+  payload,
+}: {
+  message: ClaimedOutboxMessage;
+  payload: OutboxPayload;
+}): Promise<boolean> => {
+  if (
+    message.topic !== OUTBOX_TOPICS.emailVerification ||
+    !("challengeId" in payload && "generation" in payload)
+  ) {
+    return false;
+  }
+  if (message.aggregateId !== payload.challengeId) {
+    throw unavailableAggregate();
+  }
+
+  const challenge = await getEmailChallengeDeliveryData(payload.challengeId);
+  if (
+    !challenge ||
+    challenge.generation !== payload.generation ||
+    challenge.consumed_at ||
+    challenge.expires_at.getTime() <= Date.now()
+  ) {
+    throw new OutboxSupersededError("email_challenge_stale");
+  }
+
+  const signupChallenge =
+    challenge.purpose === "signup" &&
+    challenge.pending_signup_id !== null &&
+    challenge.pending_signup_status === "pending";
+  const userVerificationChallenge =
+    challenge.purpose === "verify_email" &&
+    challenge.user_id !== null &&
+    challenge.email_verified === false;
+  if (!(signupChallenge || userVerificationChallenge)) {
+    throw new OutboxSupersededError("email_challenge_unsupported");
+  }
+
+  const verificationUrl = new URL(getApplicationUrl("/confirmar-email"));
+  verificationUrl.hash = new URLSearchParams({
+    token: createEmailChallengeToken({
+      challengeId: challenge.challenge_id,
+      expiresAt: challenge.expires_at,
+      generation: challenge.generation,
+      purpose: challenge.purpose as "signup" | "verify_email",
+      secret: getServerEnv().BETTER_AUTH_SECRET,
+    }),
+  }).toString();
+  await sendEmailVerificationEmail({
+    deliveryContext: createEmailDeliveryContext(message),
+    to: challenge.recipient_email as string,
+    userName: challenge.recipient_name as string,
+    verificationUrl: verificationUrl.toString(),
+  });
+  return true;
 };
 
 const deliverAccountActivation = async ({
@@ -264,6 +417,429 @@ const getAccessReleasedDeliveryData = async ({
     [userId, courseId]
   );
   return result.rows[0] ?? null;
+};
+
+interface PurchaseConfirmedDeliveryData {
+  course_slug: string;
+  course_title: string;
+  email_verified: boolean;
+  purchase_verification_required: boolean | null;
+  student_email: string;
+  student_name: string;
+}
+
+const getPurchaseConfirmedDeliveryData = async ({
+  orderId,
+  userId,
+}: {
+  orderId: string;
+  userId: string;
+}): Promise<PurchaseConfirmedDeliveryData | null> => {
+  const pool = getPool();
+  await pool.query<{ verification_required: boolean }>(
+    `
+      update purchase_confirmation_intents as intent
+      set verification_required = not users.email_verified,
+          updated_at = now()
+      from orders
+      join users on users.id = orders.user_id
+      where intent.order_id = orders.id
+        and orders.id = $1
+        and orders.user_id = $2
+        and orders.provider = 'asaas'
+        and orders.status = 'paid'
+        and intent.verification_required is null
+      returning intent.verification_required
+    `,
+    [orderId, userId]
+  );
+
+  const result = await pool.query<PurchaseConfirmedDeliveryData>(
+    `
+      select
+        orders.checkout_course_slug as course_slug,
+        orders.checkout_item_name as course_title,
+        users.email_verified,
+        orders.customer_email as student_email,
+        orders.customer_name as student_name,
+        purchase_confirmation_intents.verification_required as purchase_verification_required
+      from orders
+      join users on users.id = orders.user_id
+      join purchase_confirmation_intents
+        on purchase_confirmation_intents.order_id = orders.id
+      where orders.id = $1
+        and orders.user_id = $2
+        and orders.provider = 'asaas'
+        and orders.status = 'paid'
+        and nullif(btrim(orders.customer_email), '') is not null
+        and nullif(btrim(orders.customer_name), '') is not null
+      limit 1
+    `,
+    [orderId, userId]
+  );
+  const delivery = result.rows[0] ?? null;
+  if (!delivery || delivery.purchase_verification_required === null) {
+    return null;
+  }
+  return delivery;
+};
+
+interface PurchaseVerificationChallengeDeliveryData {
+  challenge_id: string;
+  consumed_at: Date | null;
+  expires_at: Date;
+  generation: number;
+  purpose: string;
+  user_id: string;
+}
+
+const getPurchaseVerificationChallenge = async ({
+  outboxMessageId,
+  orderId,
+  userId,
+}: {
+  outboxMessageId: string;
+  orderId: string;
+  userId: string;
+}): Promise<PurchaseVerificationChallengeDeliveryData | null> => {
+  const client = getPool();
+  const refreshed =
+    await client.query<PurchaseVerificationChallengeDeliveryData>(
+      `
+      update account_email_challenges as challenge
+      set generation = challenge.generation + 1,
+          expires_at = now() + interval '24 hours',
+          consumed_at = null,
+          updated_at = now()
+      where challenge.order_id = $1
+        and challenge.user_id = $2
+        and challenge.purpose = 'purchase_verification'
+        and (
+          challenge.consumed_at is not null
+          or challenge.expires_at <= now() + interval '23 hours'
+        )
+        and not exists (
+          select 1
+          from email_messages
+          where email_messages.outbox_message_id = $3
+            and email_messages.first_provider_attempt_at is not null
+        )
+      returning
+        challenge.id as challenge_id,
+        challenge.user_id,
+        challenge.purpose,
+        challenge.generation,
+        challenge.expires_at,
+        challenge.consumed_at
+      `,
+      [orderId, userId, outboxMessageId]
+    );
+  if (refreshed.rows[0]) {
+    return refreshed.rows[0];
+  }
+
+  const result = await client.query<PurchaseVerificationChallengeDeliveryData>(
+    `
+      select
+        id as challenge_id,
+        user_id,
+        purpose,
+        generation,
+        expires_at,
+        consumed_at
+      from account_email_challenges
+      where order_id = $1
+        and user_id = $2
+        and purpose = 'purchase_verification'
+      limit 1
+    `,
+    [orderId, userId]
+  );
+  if (result.rows[0]) {
+    return result.rows[0];
+  }
+
+  const attemptState = await client.query<{ attempted: boolean }>(
+    `select exists (
+       select 1
+       from email_messages
+       where outbox_message_id = $1
+         and first_provider_attempt_at is not null
+     ) as attempted`,
+    [outboxMessageId]
+  );
+  if (attemptState.rows[0]?.attempted) {
+    return null;
+  }
+
+  const recreated =
+    await client.query<PurchaseVerificationChallengeDeliveryData>(
+      `insert into account_email_challenges (
+       purpose,
+       user_id,
+       order_id,
+       generation,
+       expires_at
+     ) values (
+       'purchase_verification',
+       $2,
+       $1,
+       1,
+       now() + interval '24 hours'
+     )
+     on conflict (order_id) where order_id is not null do nothing
+     returning
+       id as challenge_id,
+       user_id,
+       purpose,
+       generation,
+       expires_at,
+       consumed_at`,
+      [orderId, userId]
+    );
+  if (recreated.rows[0]) {
+    return recreated.rows[0];
+  }
+
+  const afterConflict =
+    await client.query<PurchaseVerificationChallengeDeliveryData>(
+      `select
+       id as challenge_id,
+       user_id,
+       purpose,
+       generation,
+       expires_at,
+       consumed_at
+     from account_email_challenges
+     where order_id = $1
+       and user_id = $2
+       and purpose = 'purchase_verification'
+     limit 1`,
+      [orderId, userId]
+    );
+  return afterConflict.rows[0] ?? null;
+};
+
+const deliverPurchaseConfirmed = async ({
+  message,
+  payload,
+}: {
+  message: ClaimedOutboxMessage;
+  payload: OutboxPayload;
+}): Promise<boolean> => {
+  if (
+    message.topic !== OUTBOX_TOPICS.purchaseConfirmed ||
+    !("orderId" in payload && "userId" in payload)
+  ) {
+    return false;
+  }
+  if (message.aggregateId !== payload.orderId) {
+    throw unavailableAggregate();
+  }
+
+  const data = await getPurchaseConfirmedDeliveryData({
+    orderId: payload.orderId,
+    userId: payload.userId,
+  });
+  if (!data) {
+    throw unavailableAggregate();
+  }
+
+  const safePurchaseReturnTo = getSafeAuthReturnTo(
+    `/comprar/${data.course_slug}`
+  );
+  if (!safePurchaseReturnTo) {
+    throw unavailableAggregate();
+  }
+
+  const verificationRequired = data.purchase_verification_required;
+  let actionUrl: string;
+  let actionLabel: "Acessar Curso" | "Confirmar e-mail";
+  if (verificationRequired) {
+    const challenge = await getPurchaseVerificationChallenge({
+      orderId: payload.orderId,
+      outboxMessageId: message.id,
+      userId: payload.userId,
+    });
+    if (
+      challenge?.purpose !== "purchase_verification" ||
+      challenge.user_id !== payload.userId ||
+      (challenge.consumed_at !== null && !data.email_verified) ||
+      challenge.expires_at.getTime() <= Date.now()
+    ) {
+      throw new OutboxSupersededError(
+        "purchase_verification_challenge_missing"
+      );
+    }
+
+    const verificationUrl = new URL(getApplicationUrl("/confirmar-email"));
+    verificationUrl.hash = new URLSearchParams({
+      token: createEmailChallengeToken({
+        challengeId: challenge.challenge_id,
+        expiresAt: challenge.expires_at,
+        generation: challenge.generation,
+        purpose: "purchase_verification",
+        secret: getServerEnv().BETTER_AUTH_SECRET,
+      }),
+    }).toString();
+    actionUrl = verificationUrl.toString();
+    actionLabel = "Confirmar e-mail";
+  } else {
+    actionUrl = getApplicationUrl(safePurchaseReturnTo);
+    actionLabel = "Acessar Curso";
+  }
+
+  try {
+    await sendPurchaseConfirmedEmail({
+      actionLabel,
+      actionUrl,
+      courseTitle: data.course_title,
+      deliveryContext: createEmailDeliveryContext(message),
+      idempotencyKey: message.idempotencyKey,
+      to: data.student_email,
+      userName: data.student_name,
+    });
+  } catch {
+    throw deliveryFailure();
+  }
+  return true;
+};
+
+const deliverStaffInvitation = async ({
+  message,
+  payload,
+}: {
+  message: ClaimedOutboxMessage;
+  payload: OutboxPayload;
+}): Promise<boolean> => {
+  if (
+    message.topic !== OUTBOX_TOPICS.staffInvitation ||
+    !("invitationId" in payload && "generation" in payload)
+  ) {
+    return false;
+  }
+  if (message.aggregateId !== payload.invitationId) {
+    throw unavailableAggregate();
+  }
+
+  const invitation = await getStaffInvitationDeliveryData(payload);
+  if (!invitation) {
+    throw new OutboxSupersededError("staff_invitation_stale");
+  }
+  const invitationUrl = new URL(getApplicationUrl("/convites/equipe/aceitar"));
+  invitationUrl.hash = new URLSearchParams({
+    token: createStaffInvitationUrlToken({
+      expiresAt: invitation.expiresAt,
+      generation: invitation.generation,
+      invitationId: payload.invitationId,
+    }),
+  }).toString();
+
+  try {
+    await sendStaffInvitationEmail({
+      actionUrl: invitationUrl.toString(),
+      deliveryContext: createEmailDeliveryContext(message),
+      expiresAt: new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "long",
+        timeZone: "America/Sao_Paulo",
+      }).format(invitation.expiresAt),
+      inviterName: invitation.inviterName,
+      roleLabel: invitation.role === "admin" ? "Admin" : "Suporte",
+      to: invitation.email,
+    });
+  } catch {
+    throw staffInvitationFailure();
+  }
+  return true;
+};
+
+const deliverEmailChangeConfirmation = async ({
+  message,
+  payload,
+}: {
+  message: ClaimedOutboxMessage;
+  payload: OutboxPayload;
+}): Promise<boolean> => {
+  if (
+    message.topic !== OUTBOX_TOPICS.emailChangeConfirmation ||
+    !("changeRequestId" in payload && "generation" in payload)
+  ) {
+    return false;
+  }
+  if (message.aggregateId !== payload.changeRequestId) {
+    throw unavailableAggregate();
+  }
+  const request = await getEmailChangeConfirmationDeliveryData(payload);
+  if (!request) {
+    throw new OutboxSupersededError("email_change_request_stale");
+  }
+
+  const actionUrl = new URL(getApplicationUrl("/confirmar-troca-email"));
+  actionUrl.hash = new URLSearchParams({
+    token: createEmailChangeToken({
+      changeRequestId: payload.changeRequestId,
+      expiresAt: request.expiresAt,
+      generation: request.generation,
+    }),
+  }).toString();
+  try {
+    await sendEmailChangeConfirmationEmail({
+      actionUrl: actionUrl.toString(),
+      currentEmail: request.currentEmail,
+      deliveryContext: createEmailDeliveryContext(message),
+      newEmail: request.newEmail,
+      stepLabel:
+        request.stage === "pending_current"
+          ? "Confirmar e-mail atual"
+          : "Confirmar novo e-mail",
+      to: request.to,
+      userName: request.userName,
+    });
+  } catch {
+    throw deliveryFailure();
+  }
+  return true;
+};
+
+const deliverEmailChangeNotice = async ({
+  message,
+  payload,
+}: {
+  message: ClaimedOutboxMessage;
+  payload: OutboxPayload;
+}): Promise<boolean> => {
+  if (
+    message.topic !== OUTBOX_TOPICS.emailChangeNotice ||
+    !("changeRequestId" in payload && "recipient" in payload)
+  ) {
+    return false;
+  }
+  if (message.aggregateId !== payload.changeRequestId) {
+    throw unavailableAggregate();
+  }
+  const notice = await getEmailChangeNoticeDeliveryData(payload);
+  if (!notice) {
+    throw new OutboxSupersededError("email_change_request_stale");
+  }
+  const environment = getServerEnv();
+  try {
+    await sendEmailChangeNoticeEmail({
+      changeDate: new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "long",
+        timeStyle: "short",
+        timeZone: "America/Sao_Paulo",
+      }).format(notice.completedAt),
+      currentEmail: notice.currentEmail,
+      deliveryContext: createEmailDeliveryContext(message),
+      newEmail: notice.newEmail,
+      supportEmail: environment.SUPPORT_EMAIL ?? environment.RESEND_FROM_EMAIL,
+      to: notice.to,
+      userName: notice.userName,
+    });
+  } catch {
+    throw deliveryFailure();
+  }
+  return true;
 };
 
 interface ExpiryWarningState {
@@ -658,6 +1234,26 @@ export const deliverOutboxMessage = async (
   const payload = parseClaimedOutboxPayload(message);
 
   try {
+    if (await deliverPurchaseConfirmed({ message, payload })) {
+      return;
+    }
+
+    if (await deliverEmailVerification({ message, payload })) {
+      return;
+    }
+
+    if (await deliverStaffInvitation({ message, payload })) {
+      return;
+    }
+
+    if (await deliverEmailChangeConfirmation({ message, payload })) {
+      return;
+    }
+
+    if (await deliverEmailChangeNotice({ message, payload })) {
+      return;
+    }
+
     if (await deliverAccountActivation({ message, payload })) {
       return;
     }

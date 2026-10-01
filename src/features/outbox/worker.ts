@@ -30,6 +30,11 @@ export class OutboxDeliveryError extends Error {
 }
 
 export type OutboxSupersededReason =
+  | "email_challenge_stale"
+  | "email_challenge_unsupported"
+  | "email_change_request_stale"
+  | "staff_invitation_stale"
+  | "purchase_verification_challenge_missing"
   | "expiry_generation_changed"
   | "expiry_inactive"
   | "expiry_payload_v1"

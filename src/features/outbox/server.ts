@@ -274,6 +274,7 @@ export const requeueDeadLetterMessage = async ({
       where id = $1
         and status = 'dead_letter'
         and manual_reprocess_count = 0
+        and topic not in ('auth.account-activation', 'email.access-released')
         and (
           topic <> 'email.support-request'
           or exists (

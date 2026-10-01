@@ -20,6 +20,7 @@ const CANONICAL_DOCUMENT_PATHS = [
   "docs/architecture.md",
   "docs/decisions.md",
   "docs/domain/identity-and-authorization.md",
+  "docs/domain/account-profile-and-access.md",
   "docs/domain/commerce-and-access.md",
   "docs/domain/learning-content-and-progress.md",
   "docs/domain/certificates-and-data-rights.md",

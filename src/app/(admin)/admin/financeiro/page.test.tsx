@@ -165,9 +165,9 @@ describe("PaymentReviewOperation", () => {
       "Nenhum acesso é liberado enquanto a revisão de identidade estiver pendente."
     );
     expect(markup.split("Solicitar reembolso integral")).toHaveLength(2);
-    expect(markup.match(/<form/g)).toHaveLength(1);
-    expect(markup.match(/name="orderId"/g)).toHaveLength(1);
-    expect(markup.match(/id="refund-password-order-1"/g)).toHaveLength(1);
+    expect(markup).toContain("Verificando o método de acesso…");
+    expect(markup.match(/<form/g) ?? []).toHaveLength(0);
+    expect(markup).not.toContain('name="password"');
     expect(markup).not.toContain("Aprovar");
     expect(markup).not.toContain("Rejeitar");
   });
@@ -188,9 +188,9 @@ describe("PaymentReviewOperation", () => {
     );
 
     expect(markup.split("Solicitar reembolso integral")).toHaveLength(2);
-    expect(markup.match(/<form/g)).toHaveLength(1);
-    expect(markup.match(/name="orderId"/g)).toHaveLength(1);
-    expect(markup.match(/id="refund-password-order-1"/g)).toHaveLength(1);
+    expect(markup).toContain("Verificando o método de acesso…");
+    expect(markup.match(/<form/g) ?? []).toHaveLength(0);
+    expect(markup).not.toContain('name="password"');
   });
 
   it("keeps resolved buyer identity reviews as history without another refund operation", () => {

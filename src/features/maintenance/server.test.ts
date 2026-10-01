@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   getPool: vi.fn(),
+  expireAccountEmailChangeRequests: vi.fn().mockResolvedValue({
+    expired: 0,
+    removed: 0,
+  }),
+  expireStaffInvitations: vi.fn().mockResolvedValue(0),
   reconcileDashboardBannerStorage: vi.fn().mockResolvedValue(0),
   reconcileCourseCoverStorage: vi.fn().mockResolvedValue(0),
   pruneEmailDeliveryRecords: vi.fn().mockResolvedValue({
@@ -13,10 +18,21 @@ const dependencies = vi.hoisted(() => ({
   reconcileRevokedCertificateArtifacts: vi.fn(),
   reconcileStagedAdminImageUploads: vi.fn(),
   reconcileExpiredLessonResourceUploads: vi.fn(),
+  reconcileUnusedUserAvatars: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/db", () => ({ getPool: dependencies.getPool }));
+vi.mock("@/features/account/email-change", () => ({
+  expireAccountEmailChangeRequests:
+    dependencies.expireAccountEmailChangeRequests,
+}));
+vi.mock("@/features/admin/staff-invitations", () => ({
+  expireStaffInvitations: dependencies.expireStaffInvitations,
+}));
+vi.mock("@/features/account/avatar-storage", () => ({
+  reconcileUnusedUserAvatars: dependencies.reconcileUnusedUserAvatars,
+}));
 vi.mock("@/features/email-delivery/server", () => ({
   pruneEmailDeliveryRecords: dependencies.pruneEmailDeliveryRecords,
 }));
@@ -51,7 +67,8 @@ import { runMaintenance } from "./server";
 describe("runMaintenance", () => {
   it("does not mutate data after its invocation deadline", async () => {
     const query = vi.fn();
-    dependencies.getPool.mockReturnValue({ query });
+    const pool = { query };
+    dependencies.getPool.mockReturnValue(pool);
 
     await expect(
       runMaintenance({ clock: () => 500, deadlineAt: 500 })
@@ -96,6 +113,10 @@ describe("runMaintenance", () => {
       .mockResolvedValueOnce({ rowCount: 2 })
       .mockResolvedValueOnce({ rowCount: 3 })
       .mockResolvedValueOnce({ rowCount: 4 })
+      .mockResolvedValueOnce({ rowCount: 5 })
+      .mockResolvedValueOnce({ rowCount: 8 })
+      .mockResolvedValueOnce({ rowCount: 9 })
+      .mockResolvedValueOnce({ rowCount: 13 })
       .mockResolvedValueOnce({ rowCount: 10 })
       .mockResolvedValueOnce({ rowCount: 11 })
       .mockResolvedValueOnce({ rowCount: 5 })
@@ -103,32 +124,60 @@ describe("runMaintenance", () => {
       .mockResolvedValueOnce({ rowCount: 12 })
       .mockResolvedValueOnce({ rowCount: 7 })
       .mockResolvedValueOnce({ rowCount: 1 });
-    dependencies.getPool.mockReturnValue({ query });
+    const pool = { query };
+    dependencies.getPool.mockReturnValue(pool);
 
     await expect(runMaintenance()).resolves.toEqual({
       authMediaObjectsReconciled: 0,
+      directAccountEmailChallengesRemoved: 9,
+      emailChangeRequestsExpired: 0,
+      emailChangeRequestsRemoved: 0,
       courseCoverObjectsReconciled: 16,
       dashboardBannerObjectsReconciled: 15,
       certificateTemplateAssetsRemoved: 9,
       checkoutReservationsRemoved: 10,
       deadlineReached: false,
-      expiredRateLimitsRemoved: 7,
+      expiredRateLimitsRemoved: 12,
       expiredSessionsRemoved: 2,
+      expiredStaffInvitations: 0,
       emailDeliveryEventsRemoved: 13,
       emailDeliveryMessagesRemoved: 14,
+      expiredPasswordResetOperationsRemoved: 13,
       expiredLessonResourceUploadsRemoved: 10,
       learningAnalyticsAggregated: 5,
       learningAnalyticsEventsRemoved: 6,
       leaseLost: false,
+      pendingSignupsRemoved: 8,
       revokedCertificateCleanupItemsReconciled: 7,
       stagedAdminImagesRemoved: 8,
       supportRequestsRemoved: 12,
+      userAvatarObjectsReconciled: 0,
       webhookPayloadsSanitized: 11,
     });
 
     expect(query).toHaveBeenCalledWith(
       "delete from public_checkout_rate_limits where expires_at < now()"
     );
+    expect(query).toHaveBeenCalledWith(
+      "delete from account_email_challenge_rate_limits where expires_at < now()"
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("delete from pending_signups")
+    );
+    expect(
+      query.mock.calls.find(([sql]) =>
+        String(sql).includes("delete from pending_signups")
+      )?.[0]
+    ).toContain("updated_at < now() - interval '1 hour'");
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("delete from account_email_challenges")
+    );
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("delete from account_password_reset_operations")
+    );
+    expect(dependencies.expireStaffInvitations).toHaveBeenCalledWith({
+      client: pool,
+    });
     const cleanupQuery = query.mock.calls.find(([sql]) =>
       String(sql).includes("with stale_reservations")
     )?.[0];
@@ -198,15 +247,21 @@ describe("runMaintenance", () => {
       [
         JSON.stringify({
           authMediaObjectsReconciled: 0,
+          directAccountEmailChallengesRemoved: 9,
+          emailChangeRequestsExpired: 0,
+          emailChangeRequestsRemoved: 0,
           certificateTemplateAssetsRemoved: 9,
           checkoutReservationsRemoved: 10,
           courseCoverObjectsReconciled: 16,
           dashboardBannerObjectsReconciled: 15,
           deadlineReached: false,
-          expiredRateLimitsRemoved: 7,
+          expiredRateLimitsRemoved: 12,
           expiredSessionsRemoved: 2,
+          expiredStaffInvitations: 0,
+          pendingSignupsRemoved: 8,
           emailDeliveryEventsRemoved: 13,
           emailDeliveryMessagesRemoved: 14,
+          expiredPasswordResetOperationsRemoved: 13,
           expiredLessonResourceUploadsRemoved: 10,
           learningAnalyticsAggregated: 5,
           learningAnalyticsEventsRemoved: 6,
@@ -214,6 +269,7 @@ describe("runMaintenance", () => {
           revokedCertificateCleanupItemsReconciled: 7,
           stagedAdminImagesRemoved: 8,
           supportRequestsRemoved: 12,
+          userAvatarObjectsReconciled: 0,
           webhookPayloadsSanitized: 11,
         }),
       ]
@@ -246,10 +302,16 @@ describe("runMaintenance", () => {
       .fn()
       .mockResolvedValueOnce({ rowCount: 2 })
       .mockResolvedValueOnce({ rowCount: 3 })
-      .mockResolvedValueOnce({ rowCount: 4 });
+      .mockResolvedValueOnce({ rowCount: 4 })
+      .mockResolvedValueOnce({ rowCount: 5 })
+      .mockResolvedValueOnce({ rowCount: 8 })
+      .mockResolvedValueOnce({ rowCount: 9 });
     dependencies.getPool.mockReturnValue({ query });
     const isLeaseOwner = vi
       .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
@@ -257,7 +319,9 @@ describe("runMaintenance", () => {
 
     await expect(runMaintenance({ isLeaseOwner })).resolves.toMatchObject({
       checkoutReservationsRemoved: 0,
-      expiredRateLimitsRemoved: 7,
+      expiredRateLimitsRemoved: 12,
+      pendingSignupsRemoved: 8,
+      directAccountEmailChallengesRemoved: 9,
       leaseLost: true,
     });
     expect(query).not.toHaveBeenCalledWith(
@@ -271,10 +335,16 @@ describe("runMaintenance", () => {
       .mockResolvedValueOnce({ rowCount: 2 })
       .mockResolvedValueOnce({ rowCount: 3 })
       .mockResolvedValueOnce({ rowCount: 4 })
-      .mockResolvedValueOnce({ rowCount: 5 });
+      .mockResolvedValueOnce({ rowCount: 5 })
+      .mockResolvedValueOnce({ rowCount: 6 })
+      .mockResolvedValueOnce({ rowCount: 7 })
+      .mockResolvedValueOnce({ rowCount: 8 });
     dependencies.getPool.mockReturnValue({ query });
     const isLeaseOwner = vi
       .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)

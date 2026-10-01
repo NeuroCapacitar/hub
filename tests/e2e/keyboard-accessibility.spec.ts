@@ -33,9 +33,20 @@ const signInWithKeyboard = async (
   const passwordVisibilityToggle = page.getByRole("button", {
     name: "Mostrar conteúdo confidencial",
   });
-  const submitButton = page.getByRole("button", { name: "Entrar" });
+  const submitButton = page.getByRole("button", {
+    exact: true,
+    name: "Entrar",
+  });
+  const googleButton = page.getByRole("button", {
+    exact: true,
+    name: "Entrar com Google",
+  });
 
   await page.keyboard.press("Tab");
+  if (await googleButton.isVisible()) {
+    await expect(googleButton).toBeFocused();
+    await page.keyboard.press("Tab");
+  }
   await expect(emailInput).toBeFocused();
   await page.keyboard.type(credentials.email);
   await page.keyboard.press("Tab");

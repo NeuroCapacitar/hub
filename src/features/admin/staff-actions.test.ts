@@ -51,7 +51,7 @@ const CREDENTIAL_FIELD_PATTERN =
 const createClient = ({
   adminCount = 2,
   target = {
-    role: "student" as const,
+    role: "admin" as const,
     support_permission_grants: [],
     support_permission_views: [],
     user_id: "target-1",
@@ -127,11 +127,12 @@ describe("staff access mutation", () => {
       "select pg_advisory_xact_lock(hashtextextended('staff-access-management', 0))",
       expect.stringContaining("for share"),
       expect.stringContaining("for update"),
+      "select count(*)::int as admin_count from profiles where role = 'admin'",
       expect.stringContaining("update profiles"),
       "delete from sessions where user_id = $1",
       "commit",
     ]);
-    expect(calls[4]?.values).toEqual([
+    expect(calls[5]?.values).toEqual([
       "target-1",
       "support",
       ["manageEnrollmentSupport", "executeRefund"],
@@ -148,7 +149,7 @@ describe("staff access mutation", () => {
           role: "support",
           views: ["viewFinancialOrders"],
         },
-        before: { grants: [], role: "student", views: [] },
+        before: { grants: [], role: "admin", views: [] },
         correlationId: expect.any(String),
         reason: "Promoção para atendimento operacional",
       }),
@@ -194,6 +195,37 @@ describe("staff access mutation", () => {
       "delete from sessions where user_id = $1"
     );
     expect(calls.at(-1)?.sql).toBe("commit");
+  });
+
+  it("requires an invitation acceptance instead of directly promoting a Student", async () => {
+    const { calls, client, query } = createClient({
+      target: {
+        role: "student",
+        support_permission_grants: [],
+        support_permission_views: [],
+        user_id: "target-1",
+      },
+    });
+
+    await expect(
+      changeStaffAccessAction(
+        createFormData({
+          reason: "Entrada na equipe",
+          role: "support",
+          supportPermissionGrants: [],
+          supportPermissionViews: [],
+          targetUserId: "target-1",
+        })
+      )
+    ).rejects.toThrow("aceite de um convite");
+
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("update profiles"),
+      expect.anything()
+    );
+    expect(calls.at(-1)?.sql).toBe("rollback");
+    expect(dependencies.writeAuditLog).not.toHaveBeenCalled();
+    expect(client.release).toHaveBeenCalledOnce();
   });
 
   it("refuses to demote the last Admin inside the protected transaction", async () => {
@@ -248,7 +280,7 @@ describe("staff access mutation", () => {
   it("fails closed when a non-Support target has grants", async () => {
     const { calls, query } = createClient({
       target: {
-        role: "student",
+        role: "admin",
         support_permission_grants: ["executeRefund"],
         support_permission_views: [],
         user_id: "target-1",
@@ -259,7 +291,7 @@ describe("staff access mutation", () => {
       changeStaffAccessAction(
         createFormData({
           reason: "Corrigir perfil inconsistente",
-          role: "student",
+          role: "support",
           supportPermissionGrants: [],
           targetUserId: "target-1",
         })

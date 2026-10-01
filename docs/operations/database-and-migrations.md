@@ -1,10 +1,10 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: c10f0d2
-current_migration_tag: 0096_google_provider_account_identity_unique_index
-migration_entry_count: 97
-schema_table_count: 51
+last_verified_commit: 6bf5d693fd565c7c4c0c4bd9b7754efca92c2b44
+current_migration_tag: 0103_purchase_confirmation_delivery_decision
+migration_entry_count: 104
+schema_table_count: 58
 ---
 
 # Banco e migrations
@@ -310,6 +310,91 @@ Com migration:
 
 Migrations Production são forward-only e devem ser compatíveis com o código
 anterior durante a janela entre alteração do banco e promoção.
+
+## Identidade, confirmação de compra e recuperação (0097–0102)
+
+`0097_identity_email_challenges` adiciona cadastros pendentes, desafios de
+e-mail, rate limits HMAC e uma função/índice único para a identidade canônica
+de e-mail. O preflight da própria migration falha se encontrar contas legadas
+que colidem em `canonicalize_auth_email_identity`; isso exige inventário
+sanitizado e resolução manual, nunca merge automático. Não aplique a migration
+até confirmar as colisões no alvo permitido.
+
+`0098_purchase_confirmed_email` adiciona os tópicos/alias da confirmação de
+compra e o ledger permanente `purchase_confirmation_intents`. Seu backfill
+registra somente o `order_id` e origem histórica para Pedidos `paid` com
+identidade já `resolved`; não altera Pedido, Conta, credencial, Concessão ou
+Matrícula, nem copia PII. Pedidos que permanecem em Revisão não recebem o
+marcador e podem emitir a confirmação depois que a identidade for resolvida.
+O Hosted Template `purchase-confirmed` é publicado manualmente conforme o
+[runbook Resend](../integrations/resend-templates.md); migration/build nunca
+publicam o template.
+
+`0101_nice_dormammu` adiciona `verification_required` ao ledger e preenche as
+intenções existentes usando `users.email_verified`. `0103_purchase_confirmation_delivery_decision`
+remove default/not-null e deixa pendente a decisão das intenções atuais ainda
+enfileiradas sem tentativa ao provider; decisões de mensagens já tentadas são
+preservadas. Novas intenções também começam nulas até a primeira preparação da
+entrega, que registra o estado atual da Conta uma única vez. Assim, uma confirmação
+feita enquanto o e-mail aguardava é respeitada, e o retry continua estável. O token
+de prova fica fora do ledger e só é reconstruído no delivery. O preflight do corte
+verifica essa coluna antes de contar ou substituir mensagens legadas.
+
+`0102_account_password_reset_operation_guard` cria
+`account_password_reset_operations`, sem e-mail, senha ou token. Ela mantém um
+marcador curto para os endpoints Better Auth de solicitar/consumir reset. O
+marcador é coordenado pelo mesmo advisory lock transacional usado pela troca de
+e-mail; se uma redefinição estiver em andamento, a conclusão da troca responde
+temporariamente indisponível e preserva o mesmo link para nova tentativa. A
+limpeza normal acontece ao sair do handler e registros abandonados expiram em
+15 minutos; a manutenção também remove globalmente os marcadores expirados.
+
+`0103_purchase_confirmation_delivery_decision` torna a decisão do CTA nullable e
+remove seu default. Intenções `current` sem tentativa ao provider ainda em estados
+reprocessáveis voltam a nulo; entregas já tentadas mantêm o CTA persistido. O
+delivery resolve e grava a situação atual de verificação antes do primeiro envio.
+
+### Corte da confirmação de compra legada
+
+O backfill de 0098 representa apenas os Pedidos elegíveis no instante da
+migration. Enquanto a versão anterior ainda processa pagamentos, ela pode gravar
+mensagens v1 para Pedidos pagos depois do backfill, sem uma linha correspondente
+em `purchase_confirmation_intents`. Depois de publicar o template e implantar a
+versão que usa `email.purchase-confirmed`, faça o corte explícito; não trate a
+contagem do ledger como inventário completo.
+
+Primeiro rode o dry-run com `DATABASE_URL_DIRECT` e o host explícito do mesmo
+ambiente (`DEVELOPMENT_DATABASE_HOST`, `STAGING_DATABASE_HOST` ou
+`PRODUCTION_DATABASE_HOST`):
+
+```powershell
+bun run ops:reconcile:legacy-purchase-confirmations -- --environment=development --dry-run
+```
+
+O comando aceita somente URL direta PostgreSQL com TLS `verify-full`. Confira
+as contagens sanitizadas de `eligible`, `ambiguousLegacy`, `inFlightLegacy` e
+`remaining`; não copie URLs nem credenciais para logs. A execução exige
+`PURCHASE_CONFIRMED_TEMPLATE_PUBLISHED=true` e
+`PURCHASE_CONFIRMATION_CUTOVER_CONFIRMATION=REPLACE_UNACCEPTED_PURCHASE_CONFIRMATION_V1`.
+Use o mesmo ambiente e troque `--dry-run` por `--execute` somente após conferir
+o resultado:
+
+```powershell
+bun run ops:reconcile:legacy-purchase-confirmations -- --environment=development --execute
+```
+
+Cada execução usa transação serializável, advisory lock do corte e locks dos
+Pedidos/mensagens que processa. O inventário parte dos Pedidos pagos com
+identidade resolvida e inclui linhas sem ledger ou com origem `historical`; uma
+intenção `current` não é reaberta. O helper de domínio inspeciona e bloqueia as
+mensagens v1 do Pedido. Evidência de aceitação ou estado ambíguo registra o
+Pedido como satisfeito sem enfileirar outro e-mail; somente mensagem substituível
+sem evidência de aceitação pode ser superseded e trocada pela confirmação nova.
+Mensagens `processing` ficam fora do lote até terminarem. Rode dry-run e execute
+novamente depois que os escritores v1 tiverem sido retirados e os envios em voo
+forem drenados; encerre o corte quando `eligible`, `ambiguousLegacy`,
+`inFlightLegacy` e `remaining` forem zero. A repetição é idempotente e captura
+Pedidos v1 criados depois de uma execução anterior.
 
 A migration histórica `0065_gray_siren` contém estruturas de uma tentativa de MFA
 administrativo. Elas permanecem no schema e no histórico para evitar uma remoção
