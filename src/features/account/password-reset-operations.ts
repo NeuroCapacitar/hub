@@ -268,8 +268,9 @@ const createRateLimitedResponse = (
 const waitForPublicResetResponseFloor = async (
   startedAt: number
 ): Promise<void> => {
-  const remainingMs =
-    PUBLIC_PASSWORD_RESET_RESPONSE_FLOOR_MS - (performance.now() - startedAt);
+  const remainingMs = Math.ceil(
+    PUBLIC_PASSWORD_RESET_RESPONSE_FLOOR_MS - (performance.now() - startedAt)
+  );
   if (remainingMs > 0) {
     await new Promise<void>((resolve) => setTimeout(resolve, remainingMs));
   }
