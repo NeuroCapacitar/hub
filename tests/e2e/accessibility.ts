@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import type { Page } from "@playwright/test";
+import type { Page } from "playwright-core";
 import {
   formatBlockingAccessibilityViolations,
   getBlockingAccessibilityViolations,
