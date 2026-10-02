@@ -1,6 +1,4 @@
 import {
-  DELEGABLE_SUPPORT_PERMISSIONS,
-  DELEGABLE_SUPPORT_VIEWS,
   parseSupportPermissionGrants,
   parseSupportPermissionViews,
   SUPPORT_PERMISSION_VIEW_REQUIREMENTS,
@@ -9,8 +7,6 @@ import {
 } from "@/lib/support-permissions";
 
 export const STAFF_ROLES = ["admin", "support", "student"] as const;
-export const STAFF_SUPPORT_PERMISSIONS = DELEGABLE_SUPPORT_PERMISSIONS;
-export const STAFF_SUPPORT_VIEWS = DELEGABLE_SUPPORT_VIEWS;
 
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
