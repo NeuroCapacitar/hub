@@ -31,9 +31,20 @@ const createClient = (
       | "partial_refund"
       | "terminal_conflict";
     user_id: string | null;
-  } | null
+  } | null,
+  siblingReviews: { id: string; orderId: string; status: string }[] = []
 ) => {
-  const query = vi.fn((statement: string) => {
+  const query = vi.fn((statement: string, parameters?: unknown[]) => {
+    if (statement.includes("and id <> $2")) {
+      return {
+        rows: siblingReviews.filter(
+          (sibling) =>
+            sibling.orderId === parameters?.[0] &&
+            sibling.id !== parameters?.[1] &&
+            sibling.status === "pending"
+        ),
+      };
+    }
     if (statement.includes("from payment_reviews")) {
       return { rows: review ? [review] : [] };
     }
@@ -266,5 +277,82 @@ describe("payment review resolution", () => {
     );
     expect(client.query).toHaveBeenCalledWith("commit");
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the order and access unchanged when another review is pending", async () => {
+    const client = createClient(
+      {
+        access_duration_months: 12,
+        course_id: "course-1",
+        order_id: "order-1",
+        observed_amount_in_cents: 13_000,
+        status: "pending",
+        type: "amount_mismatch",
+        user_id: "user-1",
+      },
+      [{ id: "review-2", orderId: "order-1", status: "pending" }]
+    );
+    dependencies.connect.mockResolvedValue(client);
+
+    await expect(
+      resolvePaymentReview({
+        actorUserId: "admin-1",
+        decision: "approved",
+        decisionReason: "valor conferido",
+        reviewId: "review-1",
+      })
+    ).rejects.toThrow(
+      "Outra revisao financeira pendente impede a liberacao do acesso."
+    );
+
+    expect(String(client.query.mock.calls[1]?.[0])).toContain(
+      "for update of payment_reviews, orders"
+    );
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining("and id <> $2"),
+      ["order-1", "review-1"]
+    );
+    const statements = client.query.mock.calls.map(([statement]) => statement);
+    expect(statements).not.toContain(expect.stringContaining("update orders"));
+    expect(statements).not.toContain(
+      expect.stringContaining("update payment_reviews")
+    );
+    expect(statements).not.toContain(
+      expect.stringContaining("insert into audit_logs")
+    );
+    expect(dependencies.applyPaidWebhookAccess).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith("rollback");
+    expect(client.query).not.toHaveBeenCalledWith("commit");
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it("ignores the selected review, resolved siblings and other orders", async () => {
+    const client = createClient(
+      {
+        access_duration_months: 12,
+        course_id: "course-1",
+        order_id: "order-1",
+        observed_amount_in_cents: 13_000,
+        status: "pending",
+        type: "amount_mismatch",
+        user_id: "user-1",
+      },
+      [
+        { id: "review-1", orderId: "order-1", status: "pending" },
+        { id: "review-2", orderId: "order-1", status: "rejected" },
+        { id: "review-3", orderId: "order-2", status: "pending" },
+      ]
+    );
+    dependencies.connect.mockResolvedValue(client);
+
+    await resolvePaymentReview({
+      actorUserId: "admin-1",
+      decision: "approved",
+      decisionReason: "valor conferido",
+      reviewId: "review-1",
+    });
+
+    expect(dependencies.applyPaidWebhookAccess).toHaveBeenCalledOnce();
+    expect(client.query).toHaveBeenCalledWith("commit");
   });
 });

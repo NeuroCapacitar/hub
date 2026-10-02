@@ -82,13 +82,16 @@ describe("R2 lesson resource signing", () => {
     expect(prepared.reference.key).toMatch(RESOURCE_KEY_PATTERN);
     expect(state.signed[0]?.command.input).toMatchObject({
       Bucket: "neuro-prod-private",
+      IfNoneMatch: "*",
       Key: prepared.reference.key,
     });
     expect(state.signed[0]?.command.input).not.toHaveProperty("ContentType");
     expect(state.signed[0]?.options).toMatchObject({
       expiresIn: 10 * 60,
     });
-    expect(state.signed[0]?.options).not.toHaveProperty("signableHeaders");
+    expect(state.signed[0]?.options.signableHeaders).toEqual(
+      new Set(["if-none-match"])
+    );
   });
 
   it("reissues a signed URL without changing the prepared object key", async () => {
@@ -109,6 +112,7 @@ describe("R2 lesson resource signing", () => {
     expect(prepared.reference).toEqual(reference);
     expect(state.signed[0]?.command.input).toMatchObject({
       Bucket: "neuro-prod-private",
+      IfNoneMatch: "*",
       Key: reference.key,
     });
     expect(state.signed[0]?.command.input).not.toHaveProperty("ContentType");

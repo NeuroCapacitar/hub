@@ -17,7 +17,8 @@ vi.mock("@/lib/auth-permissions", () => ({
 
 import { GET } from "./route";
 
-const assetKey = "certificates/templates/course-1/asset.webp";
+const assetKey =
+  "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp";
 
 const getAsset = async ({
   asset = "background",
@@ -69,6 +70,42 @@ describe("certificate template image delivery", () => {
 
     expect(response.status).toBe(404);
     expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "certificates/revoked.pdf",
+    "certificates/templates/course-2/11111111-1111-4111-8111-111111111111.webp",
+    "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.pdf",
+    "certificates/templates/course-1/../revoked.pdf",
+    "certificates/templates/course-1/signatures/11111111-1111-4111-8111-111111111111.webp",
+  ])("does not sign an invalid stored background reference: %s", async (key) => {
+    dependencies.query.mockResolvedValue({
+      rows: [{ background_key: key, signature_key: null }],
+    });
+
+    const response = await getAsset({ version: key });
+
+    expect(response.status).toBe(404);
+    expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();
+  });
+
+  it("signs a legitimate signature from its own asset namespace", async () => {
+    const signatureKey =
+      "certificates/templates/course-1/signatures/11111111-1111-4111-8111-111111111111.webp";
+    dependencies.query.mockResolvedValue({
+      rows: [{ background_key: assetKey, signature_key: signatureKey }],
+    });
+
+    const response = await getAsset({
+      asset: "signature",
+      version: signatureKey,
+    });
+
+    expect(response.status).toBe(302);
+    expect(dependencies.createR2ObjectReadUrl).toHaveBeenCalledWith({
+      key: signatureKey,
+      responseCacheControl: "private, max-age=240",
+    });
   });
 
   it("does not expose an asset type outside the two supported fields", async () => {

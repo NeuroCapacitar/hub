@@ -100,8 +100,13 @@ const handleRequest = async (
   }
 
   if (request.method === "PUT") {
+    const body = await readRequestBody(request);
+    if (request.headers["if-none-match"] === "*" && objects.has(objectId)) {
+      sendXml(response, "<Error><Code>PreconditionFailed</Code></Error>", 412);
+      return;
+    }
     objects.set(objectId, {
-      body: await readRequestBody(request),
+      body,
       contentType:
         request.headers["content-type"] ?? "application/octet-stream",
       metadataHeaders: getE2eObjectStorageMetadataHeaders(request.headers),

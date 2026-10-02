@@ -9,7 +9,7 @@ import {
 } from "@/features/storage/lesson-resource-upload-registry";
 import {
   confirmLessonResourceUpload,
-  uploadPrivateR2Object,
+  uploadPrivateR2ObjectIfAbsent,
 } from "@/features/storage/r2";
 import {
   validateLessonAttachmentUpload,
@@ -93,12 +93,6 @@ export async function POST(
       throw new Error("O arquivo enviado nao corresponde ao upload preparado.");
     }
 
-    await uploadPrivateR2Object({
-      body: Buffer.from(await file.arrayBuffer()),
-      contentType: reference.contentType,
-      key: reference.key,
-    });
-
     if (reference.preview) {
       if (!(preview instanceof File)) {
         throw new Error("Preview do arquivo ausente.");
@@ -115,13 +109,21 @@ export async function POST(
       ) {
         throw new Error("O preview enviado nao corresponde ao preparado.");
       }
-      await uploadPrivateR2Object({
+    } else if (preview instanceof File) {
+      throw new Error("Preview nao esperado.");
+    }
+
+    await uploadPrivateR2ObjectIfAbsent({
+      body: Buffer.from(await file.arrayBuffer()),
+      contentType: reference.contentType,
+      key: reference.key,
+    });
+    if (reference.preview && preview instanceof File) {
+      await uploadPrivateR2ObjectIfAbsent({
         body: Buffer.from(await preview.arrayBuffer()),
         contentType: reference.preview.contentType,
         key: reference.preview.key,
       });
-    } else if (preview instanceof File) {
-      throw new Error("Preview nao esperado.");
     }
 
     await confirmLessonResourceUpload({

@@ -65,7 +65,8 @@ describe("lesson resource upload client", () => {
     expect(uploadBlobWithProgressMock).toHaveBeenCalledWith(
       expect.objectContaining({
         body: expect.any(File),
-        headers: { "Content-Type": "application/pdf" },
+        headers: { "Content-Type": "application/pdf", "If-None-Match": "*" },
+        acceptedStatusCodes: [412],
         url: "https://r2.test/u1",
       })
     );
@@ -255,7 +256,8 @@ describe("lesson resource upload client", () => {
       2,
       expect.objectContaining({
         body: preview.blob,
-        headers: { "Content-Type": "image/webp" },
+        headers: { "Content-Type": "image/webp", "If-None-Match": "*" },
+        acceptedStatusCodes: [412],
         url: "https://r2.test/p1",
       })
     );
