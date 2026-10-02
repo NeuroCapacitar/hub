@@ -84,6 +84,18 @@ do repositório.
 
 ## Dependabot e forks
 
+Atualizações agrupadas precisam manter compatíveis as dependências com peers
+compartilhados. `@playwright/test` e `playwright-core` usam a mesma versão;
+os pacotes Tiptap, incluindo `core` e `pm`, são fixados na mesma versão exata.
+`@better-auth/core` acompanha `better-auth`, enquanto `@better-auth/utils`
+respeita a versão exigida pelo framework para manter compatível a validação de
+senhas. O override de `sharp` acompanha a dependência direta e precisa satisfazer
+a faixa aceita pelo Next.js, evitando runtimes nativos duplicados.
+
+Atualizações de Biome e Ultracite que introduzem novas regras de estilo exigem
+uma migração própria; não inclua uma reformatação ampla da aplicação em um PR
+de atualização geral de dependências.
+
 Pull requests de forks não recebem secrets. Os testes locais e estáticos ainda
 podem executar; qualquer gate que exigisse provider real deve falhar de forma
 explícita ou ser coberto por fixture local. Não copie secrets para tornar um

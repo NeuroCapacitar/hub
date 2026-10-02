@@ -1,4 +1,5 @@
 import "server-only";
+import type { BetterAuthOptions } from "@better-auth/core";
 import { dash, sentinel } from "@better-auth/infra";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -37,7 +38,7 @@ import { parseTrustedOrigins } from "@/lib/trusted-origins";
 // Keep stored identity fields authoritative; use Google's picture only when no local image exists.
 const mapGoogleProfileToUser = async (
   profile: GoogleProfile
-): Promise<{ email?: string | null; image?: string | null; name?: string }> => {
+): Promise<{ email?: string | null; image?: string; name?: string }> => {
   try {
     const linkedAccounts = await getDb()
       .select({
@@ -318,7 +319,7 @@ const createAuth = () => {
         }
       : {}),
     plugins: [...infraPlugins, nextCookies()],
-  });
+  } satisfies BetterAuthOptions);
 };
 
 let authInstance: ReturnType<typeof createAuth> | null = null;
