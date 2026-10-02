@@ -14,6 +14,10 @@ const readRepositoryFile = (fileName: string): string =>
 const DEPENDABOT_UPDATE_BLOCK_PATTERN = /\n\s{2}- package-ecosystem:/;
 const EMPTY_STAGING_WORKER_ENV_PATTERN =
   /name: Invoke authenticated Staging workers[\r\n]+\s+env:\s*[\r\n]+\s+run:/;
+const RELEASE_BACKUP_CLEANUP_JOB_GATE_PATTERN =
+  /jobs:\r?\n {2}manual:\r?\n {4}if: >-\r?\n {6}\(inputs\.environment == 'staging' && github\.ref == 'refs\/heads\/staging'\) \|\|\r?\n {6}\(inputs\.environment == 'production' && github\.ref == 'refs\/heads\/main'\)/;
+const RELEASE_BACKUP_CLEANUP_CHECKOUT_PATTERN =
+  /uses: actions\/checkout@[^\r\n]+\r?\n {8}with:\r?\n {10}fetch-depth: 1\r?\n {10}ref: \$\{\{ inputs\.environment == 'staging' && 'staging' \|\| 'main' \}\}/;
 
 describe("CI and deployment workflow contracts", () => {
   it("routes every Dependabot update to Staging", () => {
@@ -52,6 +56,13 @@ describe("CI and deployment workflow contracts", () => {
       "{{ inputs.environment == 'staging' && vars.STAGING_NEON_PROJECT_ID || vars.PRODUCTION_NEON_PROJECT_ID }}",
     ].join("");
     expect(source).toContain(expression);
+  });
+
+  it("binds cleanup secrets only to the matching persistent event and checkout branch", () => {
+    const source = readWorkflow("cleanup-neon-release-backups.yml");
+
+    expect(source).toMatch(RELEASE_BACKUP_CLEANUP_JOB_GATE_PATTERN);
+    expect(source).toMatch(RELEASE_BACKUP_CLEANUP_CHECKOUT_PATTERN);
   });
 
   it("runs CI only for pull requests and manual verification", () => {

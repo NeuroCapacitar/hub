@@ -101,6 +101,37 @@ describe("uploadBlobWithProgress", () => {
     });
   });
 
+  it("accepts an existing conditional object only when explicitly requested", async () => {
+    const upload = uploadBlobWithProgress({
+      acceptedStatusCodes: [412],
+      body: new Blob(["pdf"]),
+      headers: { "If-None-Match": "*" },
+      url: "https://r2.example.test/signed-put",
+    });
+    const xhr = xhrInstances[0];
+    if (xhr) {
+      xhr.status = 412;
+      xhr.dispatchEvent(new Event("load"));
+    }
+    await expect(upload).resolves.toBeUndefined();
+  });
+
+  it("rejects a precondition failure for ordinary uploads", async () => {
+    const upload = uploadBlobWithProgress({
+      body: new Blob(["image"]),
+      url: "https://r2.example.test/signed-put",
+    });
+    const rejected = expect(upload).rejects.toThrow(
+      "R2 recusou o upload direto."
+    );
+    const xhr = xhrInstances[0];
+    if (xhr) {
+      xhr.status = 412;
+      xhr.dispatchEvent(new Event("load"));
+    }
+    await rejected;
+  });
+
   it("reports only meaningful percentage changes", async () => {
     const onProgress = vi.fn();
     const upload = uploadBlobWithProgress({

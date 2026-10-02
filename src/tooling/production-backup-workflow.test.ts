@@ -10,10 +10,21 @@ const workflowPath = join(
 const deployWorkflowPath = join(root, ".github/workflows/deploy-vercel.yml");
 const packagePath = join(root, "package.json");
 const CRON_PATTERN = /cron:\s*["']([^"']+)["']/g;
+const BACKUP_JOB_GATE_PATTERN =
+  /jobs:\r?\n {2}backup:\r?\n {4}if: github\.ref == 'refs\/heads\/main'/;
+const MAIN_CHECKOUT_PATTERN =
+  /uses: actions\/checkout@[^\r\n]+\r?\n {8}with:\r?\n {10}fetch-depth: 1\r?\n {10}ref: main/;
 const githubVariableReference = (name: string): string =>
   `${name}: ${String.fromCharCode(36)}{{ vars.${name} }}`;
 
 describe("production database backup workflow", () => {
+  it("rejects non-main events before binding backup secrets and checks out main", async () => {
+    const source = await readFile(workflowPath, "utf8");
+
+    expect(source).toMatch(BACKUP_JOB_GATE_PATTERN);
+    expect(source).toMatch(MAIN_CHECKOUT_PATTERN);
+  });
+
   it("keeps one literal six-hour schedule synchronized with the public cadence", async () => {
     const source = await readFile(workflowPath, "utf8");
     const crons = [...source.matchAll(CRON_PATTERN)].map((match) => match[1]);

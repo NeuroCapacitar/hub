@@ -32,6 +32,9 @@ concurrency:
 
 jobs:
   manual:
+    if: >-
+      (inputs.environment == 'staging' && github.ref == 'refs/heads/staging') ||
+      (inputs.environment == 'production' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
@@ -45,6 +48,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 1
+          ref: ${{ inputs.environment == 'staging' && 'staging' || 'main' }}
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:

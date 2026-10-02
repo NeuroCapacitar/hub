@@ -10,6 +10,7 @@ import {
   queueCertificateTemplateAssetCleanup,
   scheduleCertificateTemplateAssetCleanup,
 } from "./template-asset-cleanup";
+import { isCertificateTemplateAssetKey } from "./template-asset-key";
 import { CertificateTemplateDomainError } from "./template-errors";
 import {
   normalizeCertificateBackground,
@@ -96,6 +97,23 @@ export const saveCertificateTemplateDraft = async ({
   signatureKey: string | null;
   spec: CertificateTemplateSpec;
 }): Promise<string[]> => {
+  if (
+    !isCertificateTemplateAssetKey({
+      courseId,
+      key: spec.backgroundKey,
+      kind: "background",
+    }) ||
+    (signatureKey !== null &&
+      !isCertificateTemplateAssetKey({
+        courseId,
+        key: signatureKey,
+        kind: "signature",
+      }))
+  ) {
+    throw new CertificateTemplateDomainError(
+      "Use somente imagens de certificado enviadas para este Curso."
+    );
+  }
   const errors = validateCertificateTemplate(spec);
   const firstError = errors[0];
   if (firstError) {
@@ -158,8 +176,22 @@ export const saveCertificateTemplateDraft = async ({
     }
 
     const replacedKeys = [
-      previousDraft?.background_key,
-      previousDraft?.signature_key,
+      previousDraft?.background_key &&
+      isCertificateTemplateAssetKey({
+        courseId,
+        key: previousDraft.background_key,
+        kind: "background",
+      })
+        ? previousDraft.background_key
+        : null,
+      previousDraft?.signature_key &&
+      isCertificateTemplateAssetKey({
+        courseId,
+        key: previousDraft.signature_key,
+        kind: "signature",
+      })
+        ? previousDraft.signature_key
+        : null,
     ].filter(
       (key): key is string =>
         Boolean(key) && key !== spec.backgroundKey && key !== signatureKey

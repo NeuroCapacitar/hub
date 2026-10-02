@@ -7,6 +7,7 @@ import {
   restoreLessonComment,
 } from "@/features/comments/server";
 import { canMutateStudentExperience } from "@/features/courses/preview";
+import { requirePermission } from "@/lib/auth-permissions";
 import { requireSession } from "@/lib/session";
 import { isLessonCommentManager } from "./rules";
 
@@ -53,10 +54,7 @@ export const createLessonCommentAction = async (
 export const hideLessonCommentAction = async (
   formData: FormData
 ): Promise<void> => {
-  const session = await requireSession();
-  if (!isLessonCommentManager(session.role)) {
-    throw new Error("Apenas Admin e Suporte podem gerenciar comentários.");
-  }
+  const session = await requirePermission("manageContent");
   const commentId = readString(formData, "commentId");
 
   if (!commentId) {
@@ -79,10 +77,7 @@ export const hideLessonCommentAction = async (
 export const restoreLessonCommentAction = async (
   formData: FormData
 ): Promise<void> => {
-  const session = await requireSession();
-  if (!isLessonCommentManager(session.role)) {
-    throw new Error("Apenas Admin e Suporte podem gerenciar comentários.");
-  }
+  const session = await requirePermission("manageContent");
   const commentId = readString(formData, "commentId");
 
   if (!commentId) {

@@ -69,6 +69,12 @@ conteúdo como carga oficial.
 
 Vídeo usa JMVStream; capa, banner e materiais usam R2. Um ativo R2 referenciado por publicação `published` ou `retired` permanece protegido. Ver [JMVStream](../integrations/jmvstream.md) e [R2](../integrations/r2.md).
 
+Comentários têm leitura e resposta administrativas compartilhadas entre Admin
+e Suporte. Ocultar ou restaurar comentários exige `manageContent`, exclusiva de
+Admin conforme o [ADR-0017](../adr/0017-support-granular-permissions.md). As
+Server Actions verificam essa capacidade antes da mutação; a interface exibe
+controles de moderação somente para quem possui a mesma permissão.
+
 ## Analytics de aprendizagem
 
 Analytics é minimizado, habilitado por padrão e pode ser desligado em **Conta > Configurações**. Não altera acesso, sequência, progresso, conclusão ou certificado. O servidor deriva Matrícula, Aula e `CoursePublication`; o cliente não escolhe a identidade do evento. Eventos e métricas preservam a publicação para auditoria e comparação histórica, enquanto as consultas de elegibilidade usam a publicação vigente.
