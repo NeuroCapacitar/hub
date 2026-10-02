@@ -689,7 +689,7 @@ export const seedE2e = async (): Promise<E2eFixture> => {
     if (!certifiableLessonId) {
       throw new Error("Could not create certifiable E2E lesson.");
     }
-    const certificateBackgroundKey = `certificates/templates/${certifiableCourseId}/background-v1.png`;
+    const certificateBackgroundKey = `certificates/templates/${certifiableCourseId}/11111111-1111-4111-8111-111111111111.png`;
     await client.query(
       `
         insert into certificate_templates (

@@ -24,14 +24,10 @@ import type {
 
 export type {
   LearningAnalyticsCourseOption,
-  LearningAnalyticsKpis,
   LearningAnalyticsPeriod,
-  LessonAnalyticsLessonReport,
   LessonAnalyticsMetric,
   LessonAnalyticsMetricPage,
   LessonAnalyticsMetricQuery,
-  LessonAnalyticsPublicationStatus,
-  LessonAnalyticsVersionMetric,
 } from "./types";
 
 const ERROR_CODE_PATTERN = /^[a-z0-9_.-]{1,80}$/i;

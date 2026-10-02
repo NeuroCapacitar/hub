@@ -13,6 +13,7 @@ export type UploadStatusPhase =
   | "uploading";
 
 export interface UploadBlobWithProgressInput {
+  acceptedStatusCodes?: readonly number[];
   body: Blob;
   headers?: Record<string, string>;
   onProgress?: ((progress: UploadTransferProgress) => void) | undefined;
@@ -125,7 +126,8 @@ export const uploadBlobWithProgress = (
     };
 
     const handleLoad = (): void => {
-      if (request.status < 200 || request.status >= 300) {
+      const succeeded = request.status >= 200 && request.status < 300;
+      if (!(succeeded || input.acceptedStatusCodes?.includes(request.status))) {
         finish(new Error("R2 recusou o upload direto."));
         return;
       }

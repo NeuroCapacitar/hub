@@ -247,8 +247,9 @@ const putExact = async ({
 }): Promise<void> => {
   try {
     await uploadBlobWithProgress({
+      acceptedStatusCodes: [412],
       body,
-      headers: { "Content-Type": contentType },
+      headers: { "Content-Type": contentType, "If-None-Match": "*" },
       onProgress,
       signal,
       url: uploadUrl,

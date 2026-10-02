@@ -218,7 +218,7 @@ export default async function AdminLessonEditPage({
             >
               <LessonCommentsSection
                 canComment={canManageComments}
-                canModerate={canManageComments}
+                canModerate={canPerform(session, "manageContent")}
                 comments={commentsData.comments}
                 context="admin"
                 lessonId={lesson.id}

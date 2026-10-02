@@ -139,6 +139,12 @@ enfileirados para novos Pedidos.
 - evento parcial, desconhecido, regressivo ou contraditório abre revisão ou alerta;
 - decisão manual exige permissão, motivo e auditoria.
 
+A aprovação manual de `amount_mismatch` verifica, sob o mesmo lock do Pedido,
+se existe outra Revisão pendente para esse Pedido. A Revisão selecionada é a
+única excluída dessa verificação; qualquer outra pendência impede marcar o
+Pedido como pago e conceder acesso. A tentativa bloqueada mantém ambas as
+Revisões sem resolução.
+
 **Implementação atual:** `decideAsaasFinancialEvent` produz a decisão pura para webhook
 e `decideQueriedAsaasPayment` adapta a consulta da conciliação para a mesma matriz.
 `applyConfirmedPaymentAccess` converge identidade autenticada ou pública, estado pago,

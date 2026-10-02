@@ -151,6 +151,14 @@ Release Production usa expiração de 14 dias, reset de Staging usa sete dias e
 backup de cleanup Production usa 14 dias. O inventário e a exclusão de
 branches antigas continuam operações manuais, sempre começando por dry-run.
 
+`Cleanup Neon release backups` exige que a branch selecionada no dispatch
+corresponda ao ambiente: `staging` para Staging e `main` para Production. O
+gate fica no job, antes do acesso ao Environment; o checkout usa explicitamente
+a mesma branch persistente. Tags, branches de trabalho e combinações trocadas
+são recusadas. As políticas de branches dos Environments `vercel-staging` e
+`vercel-production` devem manter essas mesmas restrições, inclusive contra
+definições de workflow modificadas em branches não aprovadas.
+
 ## Checklist de segurança
 
 Antes de promover:

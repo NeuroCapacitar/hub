@@ -14,6 +14,12 @@ normalizadas. A administração recorta a arte na proporção A4 e envia o resul
 diretamente ao R2 por URL assinada. A Server Action recebe somente a referência
 temporária; o servidor confirma tipo e tamanho, decodifica e normaliza a imagem
 em WebP. Fundo e assinatura aceitam, respectivamente, até 10 MiB e 2 MiB.
+O salvamento e a entrega privada do editor aceitam apenas chaves geradas para
+imagens do mesmo Curso em `certificates/templates/<courseId>/`: fundo na raiz,
+assinatura em `signatures/`, nome UUID v4 e extensão WebP. Imagens legadas
+geradas pelo mesmo fluxo em PNG e JPG continuam aceitas. Referências a PDFs,
+outros Cursos, uploads temporários ou caminhos arbitrários são rejeitadas,
+inclusive quando já constam em um template salvo.
 Rascunho e publicação são separados; publicar substitui a versão ativa apenas
 para emissões futuras. O perfil emissor global, com razão social, marca e CNPJ,
 é obrigatório para publicar. O nome e o cargo/função do signatário devem ser

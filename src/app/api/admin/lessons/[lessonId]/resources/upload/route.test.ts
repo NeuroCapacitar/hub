@@ -5,13 +5,13 @@ const dependencies = vi.hoisted(() => ({
   getPreparedLessonResourceUpload: vi.fn(),
   markLessonResourceUploadUploaded: vi.fn(),
   requirePermission: vi.fn(),
-  uploadPrivateR2Object: vi.fn(),
+  uploadPrivateR2ObjectIfAbsent: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/features/storage/r2", () => ({
   confirmLessonResourceUpload: dependencies.confirmLessonResourceUpload,
-  uploadPrivateR2Object: dependencies.uploadPrivateR2Object,
+  uploadPrivateR2ObjectIfAbsent: dependencies.uploadPrivateR2ObjectIfAbsent,
 }));
 vi.mock("@/features/storage/lesson-resource-upload-registry", () => ({
   getPreparedLessonResourceUpload: dependencies.getPreparedLessonResourceUpload,
@@ -71,7 +71,7 @@ describe("POST /api/admin/lessons/:lessonId/resources/upload", () => {
       user: { id: "admin-1" },
     });
     dependencies.getPreparedLessonResourceUpload.mockResolvedValue(session);
-    dependencies.uploadPrivateR2Object.mockResolvedValue(undefined);
+    dependencies.uploadPrivateR2ObjectIfAbsent.mockResolvedValue(undefined);
     dependencies.confirmLessonResourceUpload.mockResolvedValue(undefined);
     dependencies.markLessonResourceUploadUploaded.mockResolvedValue(undefined);
   });
@@ -83,7 +83,7 @@ describe("POST /api/admin/lessons/:lessonId/resources/upload", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(dependencies.uploadPrivateR2Object).toHaveBeenCalledWith({
+    expect(dependencies.uploadPrivateR2ObjectIfAbsent).toHaveBeenCalledWith({
       body: Buffer.from("pdf"),
       contentType: "application/pdf",
       key: reference.key,
@@ -112,7 +112,47 @@ describe("POST /api/admin/lessons/:lessonId/resources/upload", () => {
     );
 
     expect(response.status).toBe(413);
-    expect(dependencies.uploadPrivateR2Object).not.toHaveBeenCalled();
+    expect(dependencies.uploadPrivateR2ObjectIfAbsent).not.toHaveBeenCalled();
+  });
+
+  it("confirms an existing object without replacing it on a fallback retry", async () => {
+    dependencies.uploadPrivateR2ObjectIfAbsent.mockResolvedValue("existing");
+    const response = await POST(createRequest(), {
+      params: Promise.resolve({ lessonId: "lesson-1" }),
+    });
+    expect(response.status).toBe(200);
+    expect(dependencies.confirmLessonResourceUpload).toHaveBeenCalledWith({
+      contentType: reference.contentType,
+      key: reference.key,
+      sizeBytes: reference.sizeBytes,
+    });
+    expect(
+      dependencies.markLessonResourceUploadUploaded
+    ).toHaveBeenCalledOnce();
+  });
+
+  it("validates a required preview before writing any object", async () => {
+    dependencies.getPreparedLessonResourceUpload.mockResolvedValue({
+      ...session,
+      reference: {
+        ...reference,
+        preview: {
+          contentType: "image/webp",
+          height: 180,
+          key: "lessons/lesson-1/resources/resource-1-preview.webp",
+          sizeBytes: 7,
+          width: 320,
+        },
+      },
+    });
+    const response = await POST(createRequest(), {
+      params: Promise.resolve({ lessonId: "lesson-1" }),
+    });
+    expect(response.status).toBe(400);
+    expect(dependencies.uploadPrivateR2ObjectIfAbsent).not.toHaveBeenCalled();
+    expect(
+      dependencies.markLessonResourceUploadUploaded
+    ).not.toHaveBeenCalled();
   });
 
   it("rejects a missing or mismatched session", async () => {
@@ -123,7 +163,7 @@ describe("POST /api/admin/lessons/:lessonId/resources/upload", () => {
     });
 
     expect(response.status).toBe(404);
-    expect(dependencies.uploadPrivateR2Object).not.toHaveBeenCalled();
+    expect(dependencies.uploadPrivateR2ObjectIfAbsent).not.toHaveBeenCalled();
   });
 
   it("uploads and confirms a prepared preview together with the attachment", async () => {
@@ -159,7 +199,7 @@ describe("POST /api/admin/lessons/:lessonId/resources/upload", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(dependencies.uploadPrivateR2Object).toHaveBeenCalledTimes(2);
+    expect(dependencies.uploadPrivateR2ObjectIfAbsent).toHaveBeenCalledTimes(2);
     expect(dependencies.confirmLessonResourceUpload).toHaveBeenCalledTimes(2);
   });
 });
