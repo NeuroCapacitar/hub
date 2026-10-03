@@ -5,9 +5,10 @@ import {
   isCertificateTemplateAssetKey,
 } from "./template-asset-ownership";
 
-const backgroundKey = "certificates/templates/course-1/background.webp";
+const backgroundKey =
+  "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp";
 const signatureKey =
-  "certificates/templates/course-1/signatures/signature.webp";
+  "certificates/templates/course-1/signatures/22222222-2222-4222-8222-222222222222.webp";
 
 describe("certificate template asset ownership", () => {
   it.each([
@@ -16,16 +17,17 @@ describe("certificate template asset ownership", () => {
       signatureKey: null,
     },
     {
-      backgroundKey: "certificates/templates/course-2/background.webp",
+      backgroundKey:
+        "certificates/templates/course-2/11111111-1111-4111-8111-111111111111.webp",
       signatureKey: null,
     },
     {
       backgroundKey,
-      signatureKey: "certificates/templates/course-1/background.webp",
+      signatureKey: backgroundKey,
     },
     {
       backgroundKey:
-        "certificates/templates/course-1/signatures/signature.webp",
+        "certificates/templates/course-1/signatures/22222222-2222-4222-8222-222222222222.webp",
       signatureKey: null,
     },
   ])("rejects legacy asset namespace and slot substitutions", (assets) => {
@@ -39,10 +41,10 @@ describe("certificate template asset ownership", () => {
 
   it.each([
     "certificates/certificate-1/certificate.pdf",
-    "certificates/templates/course-2/signatures/signature.webp",
-    "certificates/templates/course-1/signatures/../signature.webp",
-    "certificates/templates/course-1/signatures/signature.webp/extra",
-    "certificates/templates/course-1/signatures/signature.pdf",
+    "certificates/templates/course-2/signatures/22222222-2222-4222-8222-222222222222.webp",
+    "certificates/templates/course-1/signatures/../22222222-2222-4222-8222-222222222222.webp",
+    "certificates/templates/course-1/signatures/22222222-2222-4222-8222-222222222222.webp/extra",
+    "certificates/templates/course-1/signatures/22222222-2222-4222-8222-222222222222.pdf",
     "certificates/templates/course-1/signatures/signature%2Ewebp",
   ])("rejects an unscoped signature before reading or saving metadata: %s", async (key) => {
     const client = { query: vi.fn() };
@@ -120,5 +122,39 @@ describe("certificate template asset ownership", () => {
       })
     ).resolves.toBeUndefined();
     expect(client.query).not.toHaveBeenCalled();
+  });
+
+  it("preserves catalogued legacy PNG and JPG assets in their existing slots", async () => {
+    const legacyBackgroundKey =
+      "certificates/templates/course-1/33333333-3333-4333-8333-333333333333.png";
+    const legacySignatureKey =
+      "certificates/templates/course-1/signatures/44444444-4444-4444-8444-444444444444.jpg";
+    const client = {
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            background_key: legacyBackgroundKey,
+            signature_key: legacySignatureKey,
+          },
+        ],
+      }),
+    };
+
+    await expect(
+      assertCertificateTemplateAssetOwnership({
+        backgroundKey: legacyBackgroundKey,
+        client,
+        courseId: "course-1",
+        signatureKey: legacySignatureKey,
+        uploadedAssetKeys: [],
+      })
+    ).resolves.toBeUndefined();
+    expect(
+      isCertificateTemplateAssetKey({
+        asset: "background",
+        courseId: "course-1",
+        key: legacyBackgroundKey,
+      })
+    ).toBe(true);
   });
 });

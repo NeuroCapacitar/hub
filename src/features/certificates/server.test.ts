@@ -124,7 +124,8 @@ const renderSnapshot = {
   },
   student: { name: "Aluno" },
   template: {
-    backgroundKey: "certificates/templates/course-1/background.webp",
+    backgroundKey:
+      "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
     fields: [
       {
         align: "center",
@@ -139,7 +140,8 @@ const renderSnapshot = {
       },
     ],
     id: "2c5c41a6-29c1-4a42-8474-f1f7021d5137",
-    signatureKey: "certificates/templates/course-1/signatures/signature.webp",
+    signatureKey:
+      "certificates/templates/course-1/signatures/22222222-2222-4222-8222-222222222222.webp",
     signerName: "Responsavel",
     signerRole: "Especialista",
     version: 1,
@@ -181,7 +183,8 @@ describe("certificate lifecycle reasons", () => {
         return {
           rows: [
             {
-              background_key: "certificates/templates/course-1/background.webp",
+              background_key:
+                "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
               completed_at: new Date("2026-06-10T15:30:00.000Z"),
               course_title: "Curso",
               issuer_cnpj: "00.000.000/0001-00",
@@ -194,7 +197,7 @@ describe("certificate lifecycle reasons", () => {
               signer_role: null,
               spec: {
                 backgroundKey:
-                  "certificates/templates/course-1/background.webp",
+                  "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
                 fields: renderSnapshot.template.fields,
               },
               student_name: "Aluno",
@@ -257,7 +260,8 @@ describe("certificate lifecycle reasons", () => {
         return {
           rows: [
             {
-              background_key: "certificates/templates/course-1/background.webp",
+              background_key:
+                "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
               completed_at: completedAt,
               course_title: "Curso atual",
               issuer_cnpj: "00.000.000/0001-00",
@@ -364,7 +368,8 @@ describe("certificate lifecycle reasons", () => {
         return {
           rows: [
             {
-              background_key: "certificates/templates/course-1/background.webp",
+              background_key:
+                "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
               completed_at: new Date("2026-06-10T15:30:00.000Z"),
               course_title: "Curso",
               issuer_cnpj: "00.000.000/0001-00",
@@ -375,7 +380,7 @@ describe("certificate lifecycle reasons", () => {
               signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey:
-                  "certificates/templates/course-1/background.webp",
+                  "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
                 fields: renderSnapshot.template.fields,
               },
               student_name: "Aluno",
@@ -492,7 +497,8 @@ describe("certificate lifecycle reasons", () => {
         return {
           rows: [
             {
-              background_key: "certificates/templates/course-1/background.webp",
+              background_key:
+                "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
               completed_at: new Date("2026-06-10T15:30:00.000Z"),
               course_title: "Curso",
               issuer_cnpj: "00.000.000/0001-00",
@@ -588,7 +594,8 @@ describe("certificate lifecycle reasons", () => {
         return {
           rows: [
             {
-              background_key: "certificates/templates/course-1/background.webp",
+              background_key:
+                "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
               completed_at: new Date("2026-06-10T15:30:00.000Z"),
               course_title: "Curso",
               issuer_cnpj: "00.000.000/0001-00",
@@ -599,7 +606,7 @@ describe("certificate lifecycle reasons", () => {
               signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey:
-                  "certificates/templates/course-1/background.webp",
+                  "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
                 fields: renderSnapshot.template.fields,
               },
               student_name: "Aluno",
@@ -960,7 +967,8 @@ describe("automatic completion certificate retries", () => {
         return {
           rows: [
             {
-              background_key: "certificates/templates/course-1/background.webp",
+              background_key:
+                "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
               id: renderSnapshot.template.id,
               issuer_cnpj: renderSnapshot.issuer.cnpj,
               issuer_display_name: renderSnapshot.issuer.displayName,
@@ -970,7 +978,7 @@ describe("automatic completion certificate retries", () => {
               signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey:
-                  "certificates/templates/course-1/background.webp",
+                  "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
                 fields: renderSnapshot.template.fields,
               },
               version: 1,
@@ -1019,7 +1027,8 @@ describe("automatic completion certificate retries", () => {
         return {
           rows: [
             {
-              background_key: "certificates/templates/course-1/background.webp",
+              background_key:
+                "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
               id: renderSnapshot.template.id,
               issuer_cnpj: renderSnapshot.issuer.cnpj,
               issuer_display_name: renderSnapshot.issuer.displayName,
@@ -1029,7 +1038,7 @@ describe("automatic completion certificate retries", () => {
               signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey:
-                  "certificates/templates/course-1/background.webp",
+                  "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
                 fields: renderSnapshot.template.fields,
               },
               version: 1,
@@ -1081,7 +1090,8 @@ describe("automatic completion certificate retries", () => {
         return {
           rows: [
             {
-              background_key: "certificates/templates/course-1/background.webp",
+              background_key:
+                "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
               id: "2c5c41a6-29c1-4a42-8474-f1f7021d5137",
               issuer_cnpj: "00.000.000/0001-00",
               issuer_display_name: "Emissora",
@@ -1091,7 +1101,7 @@ describe("automatic completion certificate retries", () => {
               signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey:
-                  "certificates/templates/course-1/background.webp",
+                  "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
                 fields: [
                   {
                     align: "center",
@@ -1265,7 +1275,8 @@ describe("automatic completion certificate retries", () => {
         return {
           rows: [
             {
-              background_key: "certificates/templates/course-1/background.webp",
+              background_key:
+                "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
               completed_at: completedAt,
               course_title: "Publicacao historica",
               issuer_cnpj: "00.000.000/0001-00",
@@ -1277,7 +1288,7 @@ describe("automatic completion certificate retries", () => {
               signer_role: renderSnapshot.template.signerRole,
               spec: {
                 backgroundKey:
-                  "certificates/templates/course-1/background.webp",
+                  "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
                 fields: renderSnapshot.template.fields,
               },
               student_name:
@@ -1575,7 +1586,7 @@ describe("certificate rendering assets", () => {
         if (url.endsWith("certificate.pdf")) {
           return new Response(null, { status: 404 });
         }
-        if (url.endsWith("signature.webp")) {
+        if (url.endsWith("22222222-2222-4222-8222-222222222222.webp")) {
           return new Response(null, { status: 503 });
         }
         return new Response(Buffer.from("background"), { status: 200 });

@@ -170,9 +170,9 @@ const createFixture = async ({
     `,
     [
       courseId,
-      `certificates/test-backgrounds/${courseId}.png`,
+      `certificates/templates/${courseId}/11111111-1111-4111-8111-111111111111.png`,
       JSON.stringify({
-        backgroundKey: `certificates/test-backgrounds/${courseId}.png`,
+        backgroundKey: `certificates/templates/${courseId}/11111111-1111-4111-8111-111111111111.png`,
         fields: createDefaultCertificateTemplateFields(),
       }),
     ]

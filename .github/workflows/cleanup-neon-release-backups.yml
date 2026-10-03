@@ -32,7 +32,9 @@ concurrency:
 
 jobs:
   manual:
-    if: (inputs.environment == 'production' && github.ref == 'refs/heads/main') || (inputs.environment == 'staging' && github.ref == 'refs/heads/staging')
+    if: >-
+      (inputs.environment == 'staging' && github.ref == 'refs/heads/staging') ||
+      (inputs.environment == 'production' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:

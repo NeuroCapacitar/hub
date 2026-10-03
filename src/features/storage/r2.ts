@@ -208,10 +208,12 @@ export const createLessonResourceUploadUrlForReference = async ({
     client,
     new PutObjectCommand({
       Bucket: config.bucketName,
+      IfNoneMatch: "*",
       Key: config.namespace.toPhysicalKey(reference.key),
     }),
     {
       expiresIn: R2_UPLOAD_URL_EXPIRES_SECONDS,
+      signableHeaders: new Set(["if-none-match"]),
     }
   );
   const previewUploadUrl = reference.preview
@@ -219,10 +221,12 @@ export const createLessonResourceUploadUrlForReference = async ({
         client,
         new PutObjectCommand({
           Bucket: config.bucketName,
+          IfNoneMatch: "*",
           Key: config.namespace.toPhysicalKey(reference.preview.key),
         }),
         {
           expiresIn: R2_UPLOAD_URL_EXPIRES_SECONDS,
+          signableHeaders: new Set(["if-none-match"]),
         }
       )
     : undefined;

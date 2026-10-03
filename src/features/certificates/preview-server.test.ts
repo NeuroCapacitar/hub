@@ -25,7 +25,8 @@ vi.mock("@/lib/env", () => ({
 vi.mock("./render-snapshot", () => ({
   parseCertificateRenderSnapshot: () => ({
     template: {
-      backgroundKey: "certificates/templates/course-1/background.webp",
+      backgroundKey:
+        "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
       signatureKey: null,
     },
   }),

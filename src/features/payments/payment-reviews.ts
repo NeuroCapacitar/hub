@@ -61,16 +61,7 @@ const approveAmountMismatch = async ({
   review: PaymentReviewRow;
   reviewId: string;
 }): Promise<void> => {
-  if (!(review.user_id && review.access_duration_months)) {
-    throw new Error("Pedido sem dados suficientes para liberar o acesso.");
-  }
-  if (review.observed_amount_in_cents == null) {
-    throw new Error(
-      "Divergencia sem valor observado; concilie o pagamento antes de liberar o acesso."
-    );
-  }
-
-  const otherPendingReview = await client.query<{ id: string }>(
+  const pendingReview = await client.query<{ id: string }>(
     `
       select id
       from payment_reviews
@@ -81,9 +72,17 @@ const approveAmountMismatch = async ({
     `,
     [review.order_id, reviewId]
   );
-  if (otherPendingReview.rows[0]) {
+  if (pendingReview.rows[0]) {
     throw new Error(
-      "O pedido possui outra revisao pendente; resolva as demais revisoes antes de liberar o acesso."
+      "Outra revisao financeira pendente impede a liberacao do acesso."
+    );
+  }
+  if (!(review.user_id && review.access_duration_months)) {
+    throw new Error("Pedido sem dados suficientes para liberar o acesso.");
+  }
+  if (review.observed_amount_in_cents == null) {
+    throw new Error(
+      "Divergencia sem valor observado; concilie o pagamento antes de liberar o acesso."
     );
   }
 

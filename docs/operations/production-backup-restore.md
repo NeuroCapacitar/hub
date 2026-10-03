@@ -307,6 +307,13 @@ workflow `.github/workflows/backup-production-database.yml` usa cron literal
 `17 */6 * * *`, dispatch manual, `cancel-in-progress: false` e summary
 sanitizado.
 
+O job aceita somente eventos de `refs/heads/main`, antes de acessar o
+Environment `production-backup`, e faz checkout explícito de `main`. No
+dispatch manual, selecione `main`; tags e branches de trabalho são recusadas.
+Mantenha também a política de branches do Environment restrita a `main`: o
+gate versionado complementa essa proteção, mas não controla definições de
+workflow alteradas em outras branches.
+
 ## Execução do backup
 
 O comando guardado é `bun run ops:backup:production`. Ele:

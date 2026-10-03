@@ -15,6 +15,8 @@ vi.mock("@/features/enrollments/server", () => ({
 
 import { resolvePaymentReview } from "./payment-reviews";
 
+const PENDING_REVIEW_ERROR_PATTERN = /revisao.*pendente/i;
+
 const createClient = (
   review: {
     access_duration_months: number | null;
@@ -32,17 +34,21 @@ const createClient = (
       | "terminal_conflict";
     user_id: string | null;
   } | null,
-  pendingReviews: readonly { id: string; orderId: string }[] = [
-    { id: "review-1", orderId: "order-1" },
-  ]
+  siblingReviews: readonly {
+    id: string;
+    orderId: string;
+    status: "pending" | "rejected" | "approved";
+  }[] = []
 ) => {
   const query = vi.fn((statement: string, values?: unknown[]) => {
     if (statement.includes("and id <> $2")) {
       const [orderId, selectedReviewId] = values ?? [];
       return {
-        rows: pendingReviews.filter(
-          (pending) =>
-            pending.orderId === orderId && pending.id !== selectedReviewId
+        rows: siblingReviews.filter(
+          (sibling) =>
+            sibling.orderId === orderId &&
+            sibling.id !== selectedReviewId &&
+            sibling.status === "pending"
         ),
       };
     }
@@ -292,23 +298,29 @@ describe("payment review resolution", () => {
         user_id: "user-1",
       },
       [
-        { id: "review-1", orderId: "order-1" },
-        { id: "anomaly-review", orderId: "order-1" },
+        { id: "review-1", orderId: "order-1", status: "pending" },
+        { id: "anomaly-review", orderId: "order-1", status: "pending" },
       ]
     );
     dependencies.connect.mockResolvedValue(client);
 
     await expect(
       resolvePaymentReview({
-        actorUserId: "support-1",
+        actorUserId: "admin-1",
         decision: "approved",
         decisionReason: "valor conferido",
         reviewId: "review-1",
       })
-    ).rejects.toThrow("O pedido possui outra revisao pendente");
+    ).rejects.toThrow(PENDING_REVIEW_ERROR_PATTERN);
 
+    expect(String(client.query.mock.calls[1]?.[0])).toContain(
+      "for update of payment_reviews, orders"
+    );
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining("and id <> $2"),
+      ["order-1", "review-1"]
+    );
     const statements = client.query.mock.calls.map(([statement]) => statement);
-    expect(statements[1]).toContain("for update of payment_reviews, orders");
     expect(statements).not.toContain(expect.stringContaining("update orders"));
     expect(statements).not.toContain(
       expect.stringContaining("update payment_reviews")
@@ -322,7 +334,7 @@ describe("payment review resolution", () => {
     expect(client.release).toHaveBeenCalledOnce();
   });
 
-  it("does not let another order's pending review block the selected review", async () => {
+  it("ignores the selected review, resolved siblings and other orders", async () => {
     const client = createClient(
       {
         access_duration_months: 12,
@@ -334,14 +346,15 @@ describe("payment review resolution", () => {
         user_id: "user-1",
       },
       [
-        { id: "review-1", orderId: "order-1" },
-        { id: "other-review", orderId: "order-2" },
+        { id: "review-1", orderId: "order-1", status: "pending" },
+        { id: "review-2", orderId: "order-1", status: "rejected" },
+        { id: "review-3", orderId: "order-2", status: "pending" },
       ]
     );
     dependencies.connect.mockResolvedValue(client);
 
     await resolvePaymentReview({
-      actorUserId: "support-1",
+      actorUserId: "admin-1",
       decision: "approved",
       decisionReason: "valor conferido",
       reviewId: "review-1",
@@ -350,7 +363,6 @@ describe("payment review resolution", () => {
     expect(dependencies.applyPaidWebhookAccess).toHaveBeenCalledOnce();
     expect(client.query).toHaveBeenCalledWith("commit");
   });
-
   it("can reject the selected amount review while leaving sibling reviews and access unchanged", async () => {
     const client = createClient(
       {
@@ -362,8 +374,8 @@ describe("payment review resolution", () => {
         user_id: "user-1",
       },
       [
-        { id: "review-1", orderId: "order-1" },
-        { id: "anomaly-review", orderId: "order-1" },
+        { id: "review-1", orderId: "order-1", status: "pending" },
+        { id: "anomaly-review", orderId: "order-1", status: "pending" },
       ]
     );
     dependencies.connect.mockResolvedValue(client);

@@ -1,4 +1,7 @@
-import { LESSON_SERVER_FALLBACK_MAX_BYTES } from "@/features/storage/lesson-resource-upload";
+import {
+  LESSON_SERVER_FALLBACK_MAX_BYTES,
+  type LessonResourceUploadReference,
+} from "@/features/storage/lesson-resource-upload";
 import {
   getLessonResourceUploadCorrelationId,
   logLessonResourceUploadEvent,
@@ -9,7 +12,7 @@ import {
 } from "@/features/storage/lesson-resource-upload-registry";
 import {
   confirmLessonResourceUpload,
-  uploadPrivateR2Object,
+  uploadPrivateR2ObjectIfAbsent,
 } from "@/features/storage/r2";
 import {
   LESSON_RESOURCE_IMAGE_PREVIEW,
@@ -27,6 +30,33 @@ export const runtime = "nodejs";
 
 const isValidResourceId = (value: FormDataEntryValue | null): value is string =>
   typeof value === "string" && value.trim().length > 0;
+
+const validatePreparedPreview = (
+  reference: LessonResourceUploadReference,
+  preview: FormDataEntryValue | null
+): void => {
+  if (!reference.preview) {
+    if (preview instanceof File) {
+      throw new Error("Preview nao esperado.");
+    }
+    return;
+  }
+  if (!(preview instanceof File)) {
+    throw new Error("Preview do arquivo ausente.");
+  }
+  validateLessonImagePreviewUpload({
+    contentType: preview.type,
+    height: reference.preview.height,
+    sizeBytes: preview.size,
+    width: reference.preview.width,
+  });
+  if (
+    preview.type !== reference.preview.contentType ||
+    preview.size !== reference.preview.sizeBytes
+  ) {
+    throw new Error("O preview enviado nao corresponde ao preparado.");
+  }
+};
 
 export async function POST(
   request: Request,
@@ -107,35 +137,19 @@ export async function POST(
       throw new Error("O arquivo enviado nao corresponde ao upload preparado.");
     }
 
-    await uploadPrivateR2Object({
+    validatePreparedPreview(reference, preview);
+
+    await uploadPrivateR2ObjectIfAbsent({
       body: Buffer.from(await file.arrayBuffer()),
       contentType: reference.contentType,
       key: reference.key,
     });
-
-    if (reference.preview) {
-      if (!(preview instanceof File)) {
-        throw new Error("Preview do arquivo ausente.");
-      }
-      validateLessonImagePreviewUpload({
-        contentType: preview.type,
-        height: reference.preview.height,
-        sizeBytes: preview.size,
-        width: reference.preview.width,
-      });
-      if (
-        preview.type !== reference.preview.contentType ||
-        preview.size !== reference.preview.sizeBytes
-      ) {
-        throw new Error("O preview enviado nao corresponde ao preparado.");
-      }
-      await uploadPrivateR2Object({
+    if (reference.preview && preview instanceof File) {
+      await uploadPrivateR2ObjectIfAbsent({
         body: Buffer.from(await preview.arrayBuffer()),
         contentType: reference.preview.contentType,
         key: reference.preview.key,
       });
-    } else if (preview instanceof File) {
-      throw new Error("Preview nao esperado.");
     }
 
     await confirmLessonResourceUpload({

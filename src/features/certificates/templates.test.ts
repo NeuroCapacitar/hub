@@ -70,10 +70,10 @@ describe("certificate template asset lifecycle", () => {
         courseId: "course-1",
         operation: (trackUploadedKey) => {
           trackUploadedKey(
-            "certificates/templates/course-1/new-background.webp"
+            "certificates/templates/course-1/22222222-2222-4222-8222-222222222222.webp"
           );
           trackUploadedKey(
-            "certificates/templates/course-1/signatures/new-signature.webp"
+            "certificates/templates/course-1/signatures/33333333-3333-4333-8333-333333333333.webp"
           );
           return Promise.reject(persistenceError);
         },
@@ -85,8 +85,8 @@ describe("certificate template asset lifecycle", () => {
     ).toHaveBeenCalledWith({
       courseId: "course-1",
       keys: [
-        "certificates/templates/course-1/new-background.webp",
-        "certificates/templates/course-1/signatures/new-signature.webp",
+        "certificates/templates/course-1/22222222-2222-4222-8222-222222222222.webp",
+        "certificates/templates/course-1/signatures/33333333-3333-4333-8333-333333333333.webp",
       ],
     });
   });
@@ -157,8 +157,7 @@ describe("certificate template editor image URLs", () => {
         {
           background_key: "certificates/templates/course-1/bg.webp",
           id: "template-1",
-          signature_key:
-            "certificates/templates/course-1/signatures/signature.webp",
+          signature_key: "certificates/templates/course-1/signature.webp",
           spec: {
             backgroundKey: "certificates/templates/course-1/bg.webp",
             fields: createDefaultCertificateTemplateFields(),
@@ -176,13 +175,97 @@ describe("certificate template editor image URLs", () => {
       "/api/admin/courses/course-1/certificate-templates/template-1/assets/background?v=certificates%2Ftemplates%2Fcourse-1%2Fbg.webp"
     );
     expect(template?.signatureUrl).toBe(
-      "/api/admin/courses/course-1/certificate-templates/template-1/assets/signature?v=certificates%2Ftemplates%2Fcourse-1%2Fsignatures%2Fsignature.webp"
+      "/api/admin/courses/course-1/certificate-templates/template-1/assets/signature?v=certificates%2Ftemplates%2Fcourse-1%2Fsignature.webp"
     );
     expect(dependencies.requirePermission).toHaveBeenCalledWith("viewCourses");
   });
 });
 
 describe("certificate template draft serialization", () => {
+  it("does not schedule unrelated private objects from a poisoned previous draft for deletion", async () => {
+    const query = vi.fn((statement: string) => ({
+      rows: statement.includes("from certificate_templates")
+        ? [
+            {
+              id: "draft-1",
+              background_key: "certificates/revoked.pdf",
+              signature_key:
+                "certificates/templates/course-2/signatures/11111111-1111-4111-8111-111111111111.webp",
+            },
+          ]
+        : [],
+      rowCount: 1,
+    }));
+    dependencies.getPool.mockReturnValue({
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    });
+
+    await expect(
+      saveCertificateTemplateDraft({
+        uploadedAssetKeys: [
+          "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+        ],
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        signatureKey: null,
+        spec: {
+          backgroundKey:
+            "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+          fields: createDefaultCertificateTemplateFields(),
+        },
+      })
+    ).resolves.toEqual([]);
+    expect(
+      dependencies.queueCertificateTemplateAssetCleanup
+    ).toHaveBeenCalledWith({
+      client: expect.objectContaining({ query }),
+      courseId: "course-1",
+      keys: [],
+    });
+  });
+
+  it.each([
+    { backgroundKey: "certificates/revoked.pdf", signatureKey: null },
+    {
+      backgroundKey:
+        "certificates/templates/course-2/11111111-1111-4111-8111-111111111111.webp",
+      signatureKey: null,
+    },
+    {
+      backgroundKey:
+        "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+      signatureKey: "certificates/revoked.pdf",
+    },
+    {
+      backgroundKey:
+        "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+      signatureKey:
+        "certificates/templates/course-2/signatures/11111111-1111-4111-8111-111111111111.webp",
+    },
+  ])("rejects unrelated private asset references before opening a transaction", async ({
+    backgroundKey,
+    signatureKey,
+  }) => {
+    await expect(
+      saveCertificateTemplateDraft({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        signatureKey,
+        spec: {
+          backgroundKey,
+          fields: createDefaultCertificateTemplateFields(),
+        },
+      })
+    ).rejects.toThrow(
+      "Use somente imagens de certificado enviadas para este Curso."
+    );
+
+    expect(dependencies.getPool).not.toHaveBeenCalled();
+    expect(
+      dependencies.prepareCertificateTemplateAssetReferences
+    ).not.toHaveBeenCalled();
+  });
+
   it("persists intentional overlaps instead of rejecting the draft", async () => {
     const query = vi.fn((statement: string) => {
       if (statement.includes("from certificate_templates")) {
@@ -197,12 +280,15 @@ describe("certificate template draft serialization", () => {
 
     await expect(
       saveCertificateTemplateDraft({
-        uploadedAssetKeys: ["certificates/templates/course-1/background.webp"],
+        uploadedAssetKeys: [
+          "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+        ],
         actorUserId: "admin-1",
         courseId: "course-1",
         signatureKey: null,
         spec: {
-          backgroundKey: "certificates/templates/course-1/background.webp",
+          backgroundKey:
+            "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
           fields: [
             "studentName",
             "courseTitle",
@@ -246,12 +332,15 @@ describe("certificate template draft serialization", () => {
     });
 
     await saveCertificateTemplateDraft({
-      uploadedAssetKeys: ["certificates/templates/course-1/background.webp"],
+      uploadedAssetKeys: [
+        "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+      ],
       actorUserId: "admin-1",
       courseId: "course-1",
       signatureKey: null,
       spec: {
-        backgroundKey: "certificates/templates/course-1/background.webp",
+        backgroundKey:
+          "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
         fields: [
           "studentName",
           "courseTitle",
@@ -294,10 +383,10 @@ describe("certificate template draft serialization", () => {
           rows: [
             {
               background_key:
-                "certificates/templates/course-1/old-background.webp",
+                "certificates/templates/course-1/44444444-4444-4444-8444-444444444444.webp",
               id: "draft-1",
               signature_key:
-                "certificates/templates/course-1/signatures/old-signature.webp",
+                "certificates/templates/course-1/signatures/55555555-5555-4555-8555-555555555555.webp",
             },
           ],
         };
@@ -315,15 +404,16 @@ describe("certificate template draft serialization", () => {
     await expect(
       saveCertificateTemplateDraft({
         uploadedAssetKeys: [
-          "certificates/templates/course-1/new-background.webp",
-          "certificates/templates/course-1/signatures/new-signature.webp",
+          "certificates/templates/course-1/22222222-2222-4222-8222-222222222222.webp",
+          "certificates/templates/course-1/signatures/33333333-3333-4333-8333-333333333333.webp",
         ],
         actorUserId: "admin-1",
         courseId: "course-1",
         signatureKey:
-          "certificates/templates/course-1/signatures/new-signature.webp",
+          "certificates/templates/course-1/signatures/33333333-3333-4333-8333-333333333333.webp",
         spec: {
-          backgroundKey: "certificates/templates/course-1/new-background.webp",
+          backgroundKey:
+            "certificates/templates/course-1/22222222-2222-4222-8222-222222222222.webp",
           fields: [
             "studentName",
             "courseTitle",
@@ -349,8 +439,8 @@ describe("certificate template draft serialization", () => {
         },
       })
     ).resolves.toEqual([
-      "certificates/templates/course-1/old-background.webp",
-      "certificates/templates/course-1/signatures/old-signature.webp",
+      "certificates/templates/course-1/44444444-4444-4444-8444-444444444444.webp",
+      "certificates/templates/course-1/signatures/55555555-5555-4555-8555-555555555555.webp",
     ]);
 
     expect(query).toHaveBeenNthCalledWith(1, "begin");
@@ -369,8 +459,8 @@ describe("certificate template draft serialization", () => {
     ).toHaveBeenCalledWith({
       client: expect.objectContaining({ query }),
       keys: [
-        "certificates/templates/course-1/new-background.webp",
-        "certificates/templates/course-1/signatures/new-signature.webp",
+        "certificates/templates/course-1/22222222-2222-4222-8222-222222222222.webp",
+        "certificates/templates/course-1/signatures/33333333-3333-4333-8333-333333333333.webp",
       ],
     });
     expect(
@@ -379,8 +469,8 @@ describe("certificate template draft serialization", () => {
       client: expect.objectContaining({ query }),
       courseId: "course-1",
       keys: [
-        "certificates/templates/course-1/old-background.webp",
-        "certificates/templates/course-1/signatures/old-signature.webp",
+        "certificates/templates/course-1/44444444-4444-4444-8444-444444444444.webp",
+        "certificates/templates/course-1/signatures/55555555-5555-4555-8555-555555555555.webp",
       ],
     });
     expect(query).toHaveBeenLastCalledWith("commit");
@@ -400,12 +490,15 @@ describe("certificate template draft serialization", () => {
     });
 
     await saveCertificateTemplateDraft({
-      uploadedAssetKeys: ["certificates/templates/course-1/background.webp"],
+      uploadedAssetKeys: [
+        "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+      ],
       actorUserId: "admin-1",
       courseId: "course-1",
       signatureKey: null,
       spec: {
-        backgroundKey: "certificates/templates/course-1/background.webp",
+        backgroundKey:
+          "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
         fields: [
           "studentName",
           "courseTitle",
@@ -562,6 +655,8 @@ describe("certificate course activation", () => {
   });
 
   it("audits publication after enabling the course", async () => {
+    const backgroundKey =
+      "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp";
     const query = vi.fn((statement: string) => {
       if (statement.includes("certificate_issuer_profiles")) {
         return Promise.resolve({ rows: [completeIssuerProfile] });
@@ -571,11 +666,10 @@ describe("certificate course activation", () => {
           rows: [
             {
               id: "template-draft",
-              background_key: "certificates/templates/course-1/background.webp",
+              background_key: backgroundKey,
               signature_key: null,
               spec: {
-                backgroundKey:
-                  "certificates/templates/course-1/background.webp",
+                backgroundKey,
                 fields: createDefaultCertificateTemplateFields(),
               },
             },
@@ -614,9 +708,9 @@ describe("certificate course activation", () => {
 
   it.each([
     "certificates/private/certificate.pdf",
-    "certificates/templates/course-2/background.webp",
-    "certificates/templates/course-1/signatures/signature.webp",
-  ])("does not publish legacy drafts with invalid background namespace: %s", async (backgroundKey) => {
+    "certificates/templates/course-2/11111111-1111-4111-8111-111111111111.webp",
+    "certificates/templates/course-1/signatures/11111111-1111-4111-8111-111111111111.webp",
+  ])("does not publish a draft with an invalid background namespace: %s", async (backgroundKey) => {
     const query = vi.fn((statement: string) => {
       if (statement.includes("certificate_issuer_profiles")) {
         return Promise.resolve({ rows: [completeIssuerProfile] });
@@ -700,18 +794,7 @@ describe("certificate course activation", () => {
       }
       if (statement.includes("status = 'draft'")) {
         return Promise.resolve({
-          rows: [
-            {
-              id: "template-draft",
-              background_key: "certificates/templates/course-1/background.webp",
-              signature_key: null,
-              spec: {
-                backgroundKey:
-                  "certificates/templates/course-1/background.webp",
-                fields: createDefaultCertificateTemplateFields(),
-              },
-            },
-          ],
+          rows: [{ id: "template-draft" }],
         });
       }
       if (statement.includes("from courses")) {

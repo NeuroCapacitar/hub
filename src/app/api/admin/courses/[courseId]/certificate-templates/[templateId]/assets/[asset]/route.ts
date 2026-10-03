@@ -1,5 +1,5 @@
 import { getPool } from "@/db";
-import { isCertificateTemplateAssetKey } from "@/features/certificates/template-asset-ownership";
+import { isCertificateTemplateAssetKey } from "@/features/certificates/template-asset-key";
 import { createR2ObjectReadUrl } from "@/features/storage/r2";
 import { requirePermission } from "@/lib/auth-permissions";
 
@@ -41,7 +41,7 @@ export async function GET(
   if (
     !key ||
     requestedVersion !== key ||
-    !isCertificateTemplateAssetKey({ asset, courseId, key })
+    !isCertificateTemplateAssetKey({ courseId, key, kind: asset })
   ) {
     return Response.json(
       { error: "Imagem não encontrada." },

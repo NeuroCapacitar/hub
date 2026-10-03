@@ -129,7 +129,6 @@ const createSocialAuth = ({
           return {
             data: profile,
             user: {
-              id: profile.sub,
               email: profile.email,
               emailVerified: profile.email_verified,
               name: profile.name,

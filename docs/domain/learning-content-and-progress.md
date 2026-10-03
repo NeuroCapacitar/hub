@@ -69,6 +69,12 @@ conteúdo como carga oficial.
 
 Vídeo usa JMVStream; capa, banner e materiais usam R2. Um ativo R2 referenciado por publicação `published` ou `retired` permanece protegido. Ver [JMVStream](../integrations/jmvstream.md) e [R2](../integrations/r2.md).
 
+Comentários têm leitura e resposta administrativas compartilhadas entre Admin
+e Suporte. Ocultar ou restaurar comentários exige `manageContent`, exclusiva de
+Admin conforme o [ADR-0017](../adr/0017-support-granular-permissions.md). As
+Server Actions verificam essa capacidade antes da mutação; a interface exibe
+controles de moderação somente para quem possui a mesma permissão.
+
 ## Analytics de aprendizagem
 
 Admin e Suporte podem participar das discussões de Aula e responder aos Alunos

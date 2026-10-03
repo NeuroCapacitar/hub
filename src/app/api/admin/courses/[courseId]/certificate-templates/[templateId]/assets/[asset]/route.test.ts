@@ -17,7 +17,8 @@ vi.mock("@/lib/auth-permissions", () => ({
 
 import { GET } from "./route";
 
-const assetKey = "certificates/templates/course-1/asset.webp";
+const assetKey =
+  "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp";
 
 const getAsset = async ({
   asset = "background",
@@ -72,26 +73,60 @@ describe("certificate template image delivery", () => {
   });
 
   it.each([
+    "certificates/revoked.pdf",
+    "certificates/templates/course-2/11111111-1111-4111-8111-111111111111.webp",
+    "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.pdf",
+    "certificates/templates/course-1/../revoked.pdf",
+    "certificates/templates/course-1/signatures/11111111-1111-4111-8111-111111111111.webp",
+  ])("does not sign an invalid stored background reference: %s", async (key) => {
+    dependencies.query.mockResolvedValue({
+      rows: [{ background_key: key, signature_key: null }],
+    });
+    const response = await getAsset({ version: key });
+    expect(response.status).toBe(404);
+    expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();
+  });
+
+  it.each([
     "certificates/revoked-certificate/certificate.pdf",
-    "certificates/templates/course-2/signatures/signature.webp",
-    "certificates/templates/course-1/signatures/../signature.webp",
+    "certificates/templates/course-2/signatures/11111111-1111-4111-8111-111111111111.webp",
+    "certificates/templates/course-1/signatures/../11111111-1111-4111-8111-111111111111.webp",
+    "certificates/templates/course-1/signatures/signature.webp",
   ])("refuses a persisted unsafe signature even when version matches: %s", async (key) => {
     dependencies.query.mockResolvedValue({
       rows: [{ background_key: assetKey, signature_key: key }],
     });
     const response = await getAsset({ asset: "signature", version: key });
+
     expect(response.status).toBe(404);
     expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();
   });
 
   it("serves a valid signature owned by this Course", async () => {
-    const key = "certificates/templates/course-1/signatures/signature.webp";
+    const key =
+      "certificates/templates/course-1/signatures/11111111-1111-4111-8111-111111111111.webp";
     dependencies.query.mockResolvedValue({
       rows: [{ background_key: assetKey, signature_key: key }],
     });
-    expect((await getAsset({ asset: "signature", version: key })).status).toBe(
-      302
-    );
+    const response = await getAsset({ asset: "signature", version: key });
+
+    expect(response.status).toBe(302);
+    expect(dependencies.createR2ObjectReadUrl).toHaveBeenCalledWith({
+      key,
+      responseCacheControl: "private, max-age=240",
+    });
+  });
+
+  it("serves a generated legacy PNG signature from this Course", async () => {
+    const key =
+      "certificates/templates/course-1/signatures/22222222-2222-4222-8222-222222222222.png";
+    dependencies.query.mockResolvedValue({
+      rows: [{ background_key: assetKey, signature_key: key }],
+    });
+
+    const response = await getAsset({ asset: "signature", version: key });
+
+    expect(response.status).toBe(302);
     expect(dependencies.createR2ObjectReadUrl).toHaveBeenCalledWith({
       key,
       responseCacheControl: "private, max-age=240",

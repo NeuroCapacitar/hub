@@ -1,10 +1,8 @@
 import type { PoolClient } from "pg";
+import { isCertificateTemplateAssetKey as isCataloguedTemplateAssetKey } from "./template-asset-key";
 import { CertificateTemplateDomainError } from "./template-errors";
 
 export type CertificateTemplateAsset = "background" | "signature";
-
-const SAFE_PATH_SEGMENT = /^[A-Za-z0-9_-]+$/;
-const WEBP_FILE_NAME = /^[A-Za-z0-9_-]+\.webp$/;
 
 export const isCertificateTemplateAssetKey = ({
   asset,
@@ -14,20 +12,7 @@ export const isCertificateTemplateAssetKey = ({
   asset: CertificateTemplateAsset;
   courseId: string;
   key: string;
-}): boolean => {
-  if (!SAFE_PATH_SEGMENT.test(courseId)) {
-    return false;
-  }
-  const prefix = `certificates/templates/${courseId}/`;
-  if (!key.startsWith(prefix)) {
-    return false;
-  }
-  const relativeKey = key.slice(prefix.length);
-  return asset === "background"
-    ? WEBP_FILE_NAME.test(relativeKey)
-    : relativeKey.startsWith("signatures/") &&
-        WEBP_FILE_NAME.test(relativeKey.slice("signatures/".length));
-};
+}): boolean => isCataloguedTemplateAssetKey({ courseId, key, kind: asset });
 
 export const assertCertificateTemplateAssetNamespace = ({
   backgroundKey,

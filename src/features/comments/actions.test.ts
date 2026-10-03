@@ -54,7 +54,7 @@ const commentForm = (): FormData => {
   return form;
 };
 
-describe("lesson comment authorization", () => {
+describe("lesson comments actions", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     dependencies.hideLessonComment.mockResolvedValue({
@@ -67,6 +67,75 @@ describe("lesson comment authorization", () => {
     });
     dependencies.createLessonComment.mockResolvedValue({
       courseId: "course-1",
+    });
+  });
+
+  it("authenticates comment creation and revalidates both lesson views", async () => {
+    configureSession("student");
+    const form = new FormData();
+    form.set("lessonId", "lesson-1");
+    form.set("body", "Comentário do aluno");
+
+    await createLessonCommentAction(form);
+
+    expect(dependencies.requireSession).toHaveBeenCalledOnce();
+    expect(dependencies.createLessonComment).toHaveBeenCalledWith({
+      body: "Comentário do aluno",
+      lessonId: "lesson-1",
+      parentId: null,
+      role: "student",
+      userId: "student-1",
+    });
+    expect(dependencies.revalidatePath).toHaveBeenNthCalledWith(
+      1,
+      "/app/aulas/lesson-1"
+    );
+    expect(dependencies.revalidatePath).toHaveBeenNthCalledWith(
+      2,
+      "/admin/cursos/course-1/aulas/lesson-1"
+    );
+    expect(dependencies.requirePermission).not.toHaveBeenCalled();
+  });
+
+  it("keeps Support replies available without moderation authority", async () => {
+    configureSession("support");
+    const form = new FormData();
+    form.set("lessonId", "lesson-1");
+    form.set("parentId", "parent-1");
+    form.set("context", "admin");
+    form.set("body", "Resposta do Suporte");
+
+    await createLessonCommentAction(form);
+
+    expect(dependencies.createLessonComment).toHaveBeenCalledWith({
+      body: "Resposta do Suporte",
+      lessonId: "lesson-1",
+      parentId: "parent-1",
+      role: "support",
+      userId: "support-1",
+    });
+    expect(dependencies.requirePermission).not.toHaveBeenCalled();
+    expect(dependencies.revalidatePath).toHaveBeenNthCalledWith(
+      1,
+      "/app/aulas/lesson-1"
+    );
+    expect(dependencies.revalidatePath).toHaveBeenNthCalledWith(
+      2,
+      "/admin/cursos/course-1/aulas/lesson-1"
+    );
+  });
+});
+
+describe("lesson comment moderation authorization", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    dependencies.hideLessonComment.mockResolvedValue({
+      courseId: "course-1",
+      lessonId: "lesson-1",
+    });
+    dependencies.restoreLessonComment.mockResolvedValue({
+      courseId: "course-1",
+      lessonId: "lesson-1",
     });
   });
 
@@ -93,6 +162,7 @@ describe("lesson comment authorization", () => {
     configureSession("admin");
     await hideLessonCommentAction(commentForm());
     await restoreLessonCommentAction(commentForm());
+
     expect(dependencies.hideLessonComment).toHaveBeenCalledWith({
       actorUserId: "admin-1",
       commentId: "comment-1",
@@ -101,26 +171,21 @@ describe("lesson comment authorization", () => {
       actorUserId: "admin-1",
       commentId: "comment-1",
     });
-    expect(dependencies.revalidatePath).toHaveBeenCalledWith(
+    expect(dependencies.revalidatePath).toHaveBeenNthCalledWith(
+      1,
       "/app/aulas/lesson-1"
     );
-  });
-
-  it("keeps Support replies available without moderation authority", async () => {
-    configureSession("support");
-    const form = new FormData();
-    form.set("lessonId", "lesson-1");
-    form.set("parentId", "parent-1");
-    form.set("context", "admin");
-    form.set("body", "Resposta do Suporte");
-    await createLessonCommentAction(form);
-    expect(dependencies.createLessonComment).toHaveBeenCalledWith({
-      body: "Resposta do Suporte",
-      lessonId: "lesson-1",
-      parentId: "parent-1",
-      role: "support",
-      userId: "support-1",
-    });
-    expect(dependencies.requirePermission).not.toHaveBeenCalled();
+    expect(dependencies.revalidatePath).toHaveBeenNthCalledWith(
+      2,
+      "/admin/cursos/course-1/aulas/lesson-1"
+    );
+    expect(dependencies.revalidatePath).toHaveBeenNthCalledWith(
+      3,
+      "/app/aulas/lesson-1"
+    );
+    expect(dependencies.revalidatePath).toHaveBeenNthCalledWith(
+      4,
+      "/admin/cursos/course-1/aulas/lesson-1"
+    );
   });
 });

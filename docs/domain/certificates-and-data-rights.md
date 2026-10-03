@@ -14,14 +14,18 @@ normalizadas. A administração recorta a arte na proporção A4 e envia o resul
 diretamente ao R2 por URL assinada. A Server Action recebe somente a referência
 temporária; o servidor confirma tipo e tamanho, decodifica e normaliza a imagem
 em WebP. Fundo e assinatura aceitam, respectivamente, até 10 MiB e 2 MiB.
-As referências persistidas de fundo e assinatura ficam no namespace privado do
-template do próprio Curso e aceitam somente arquivos WebP. Uma referência nova
-precisa ter sido produzida pelo upload server-side da mesma mutação; sem upload,
-o salvamento só preserva uma referência já registrada no mesmo campo de um
-template desse Curso. Remover a assinatura continua permitido. A rota de artes
-revalida namespace, tipo de campo e Curso antes de assinar a leitura, inclusive
-para referências legadas; chaves de PDFs de Certificados e de outros Cursos
-não são aceitas como imagens.
+O salvamento e a entrega privada do editor aceitam apenas chaves geradas para
+imagens do mesmo Curso em `certificates/templates/<courseId>/`: fundo na raiz,
+assinatura em `signatures/`, nome UUID v4 e extensão WebP. Imagens PNG e JPG
+legadas geradas pelo mesmo fluxo continuam aceitas. Referências a PDFs, outros
+Cursos, uploads temporários ou caminhos arbitrários são rejeitadas, inclusive
+quando já constam em um template salvo. Uma referência nova precisa ter sido
+produzida pelo upload server-side da mesma mutação; sem upload, o salvamento só
+preserva uma referência já registrada no mesmo campo de um template desse Curso.
+Remover a assinatura continua permitido. A rota de artes revalida namespace,
+tipo de campo e Curso antes de assinar a leitura, inclusive para referências
+legadas; chaves de PDFs de Certificados e de outros Cursos não são aceitas como
+imagens.
 Publicação, emissão do snapshot e regeneração de PDF/PNG repetem a validação
 semântica por Curso e campo antes de ler a arte no R2. Na renderização, o Curso
 vem do registro do Certificado, não de uma referência informada no snapshot.
