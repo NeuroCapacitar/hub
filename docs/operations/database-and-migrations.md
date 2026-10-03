@@ -2,12 +2,22 @@
 status: canonical
 owner: engineering
 last_verified_commit: 6bf5d693fd565c7c4c0c4bd9b7754efca92c2b44
-current_migration_tag: 0103_purchase_confirmation_delivery_decision
-migration_entry_count: 104
+current_migration_tag: 0105_lesson_resource_cleanup_tombstones
+migration_entry_count: 106
 schema_table_count: 58
 ---
 
 # Banco e migrations
+
+As migrations `0104_video_player_identity` e
+`0105_lesson_resource_cleanup_tombstones` fazem parte do fechamento de segurança.
+A primeira adiciona `jmvstream_video_assets.player_url` nullable e preenche somente
+hashes com uma única URL oficial conhecida nas Aulas; ativos ambíguos continuam
+sem identidade e são preservados de forma conservadora pela aplicação. A segunda
+permite tombstones `deleted` na registry de anexos, impedindo que um formulário
+antigo volte a referenciar bytes já removidos. O journal e os snapshots foram
+gerados pelo Drizzle; não aplicar essas migrations manualmente em Production.
+Seguir Staging, backup e promoção pelo fluxo canônico.
 
 ## Ambientes
 

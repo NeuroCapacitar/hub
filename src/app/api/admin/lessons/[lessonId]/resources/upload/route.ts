@@ -1,4 +1,7 @@
-import { LESSON_SERVER_FALLBACK_MAX_BYTES } from "@/features/storage/lesson-resource-upload";
+import {
+  LESSON_SERVER_FALLBACK_MAX_BYTES,
+  type LessonResourceUploadReference,
+} from "@/features/storage/lesson-resource-upload";
 import {
   getLessonResourceUploadCorrelationId,
   logLessonResourceUploadEvent,
@@ -12,15 +15,48 @@ import {
   uploadPrivateR2ObjectIfAbsent,
 } from "@/features/storage/r2";
 import {
+  LESSON_RESOURCE_IMAGE_PREVIEW,
   validateLessonAttachmentUpload,
   validateLessonImagePreviewUpload,
 } from "@/features/storage/r2-objects";
 import { requirePermission } from "@/lib/auth-permissions";
+import {
+  MULTIPART_OVERHEAD_MAX_BYTES,
+  RequestBodyLimitError,
+  readBoundedMultipart,
+} from "@/lib/request-body-limits";
 
 export const runtime = "nodejs";
 
 const isValidResourceId = (value: FormDataEntryValue | null): value is string =>
   typeof value === "string" && value.trim().length > 0;
+
+const validatePreparedPreview = (
+  reference: LessonResourceUploadReference,
+  preview: FormDataEntryValue | null
+): void => {
+  if (!reference.preview) {
+    if (preview instanceof File) {
+      throw new Error("Preview nao esperado.");
+    }
+    return;
+  }
+  if (!(preview instanceof File)) {
+    throw new Error("Preview do arquivo ausente.");
+  }
+  validateLessonImagePreviewUpload({
+    contentType: preview.type,
+    height: reference.preview.height,
+    sizeBytes: preview.size,
+    width: reference.preview.width,
+  });
+  if (
+    preview.type !== reference.preview.contentType ||
+    preview.size !== reference.preview.sizeBytes
+  ) {
+    throw new Error("O preview enviado nao corresponde ao preparado.");
+  }
+};
 
 export async function POST(
   request: Request,
@@ -32,9 +68,17 @@ export async function POST(
   let formData: FormData;
 
   try {
-    formData = await request.formData();
-  } catch {
-    return Response.json({ error: "Dados invalidos." }, { status: 400 });
+    formData = await readBoundedMultipart(
+      request,
+      LESSON_SERVER_FALLBACK_MAX_BYTES +
+        LESSON_RESOURCE_IMAGE_PREVIEW.maxSizeBytes +
+        MULTIPART_OVERHEAD_MAX_BYTES
+    );
+  } catch (error) {
+    return Response.json(
+      { error: "Dados invalidos ou limite do upload excedido." },
+      { status: error instanceof RequestBodyLimitError ? error.status : 400 }
+    );
   }
 
   const resourceId = formData.get("resourceId");
@@ -93,25 +137,7 @@ export async function POST(
       throw new Error("O arquivo enviado nao corresponde ao upload preparado.");
     }
 
-    if (reference.preview) {
-      if (!(preview instanceof File)) {
-        throw new Error("Preview do arquivo ausente.");
-      }
-      validateLessonImagePreviewUpload({
-        contentType: preview.type,
-        height: reference.preview.height,
-        sizeBytes: preview.size,
-        width: reference.preview.width,
-      });
-      if (
-        preview.type !== reference.preview.contentType ||
-        preview.size !== reference.preview.sizeBytes
-      ) {
-        throw new Error("O preview enviado nao corresponde ao preparado.");
-      }
-    } else if (preview instanceof File) {
-      throw new Error("Preview nao esperado.");
-    }
+    validatePreparedPreview(reference, preview);
 
     await uploadPrivateR2ObjectIfAbsent({
       body: Buffer.from(await file.arrayBuffer()),

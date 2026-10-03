@@ -1,7 +1,12 @@
 import "server-only";
 import { getPool } from "@/db";
+import { lockCourseContentRelease } from "@/features/courses/content-release-lock";
 import { getConfiguredJmvstreamClient } from "@/features/jmvstream/auth";
 import { isJmvstreamVideoNotFoundError } from "@/features/jmvstream/provider-mapper";
+import {
+  isJmvstreamAssetProtected,
+  lockJmvstreamVideoLifecycle,
+} from "./asset-lifecycle";
 
 export interface JmvstreamDeleteResult {
   attempted: number;
@@ -40,7 +45,7 @@ export const retryJmvstreamAssetDelete = async (
   assetId: string
 ): Promise<void> => {
   const { rows } = await getPool().query<{ id: string }>(
-    "select id from jmvstream_video_assets where id = $1 limit 1",
+    "select id from jmvstream_video_assets where id = $1 and delete_status in ('failed', 'pending') limit 1",
     [assetId]
   );
 
@@ -48,7 +53,7 @@ export const retryJmvstreamAssetDelete = async (
     throw new Error("Asset JMVStream invalido.");
   }
 
-  const deleted = await deleteAssetById(assetId);
+  const deleted = await deleteAssetById(assetId, true);
 
   if (!deleted) {
     throw new Error("Nao foi possivel apagar o video na JMVStream.");
@@ -97,28 +102,96 @@ const deleteAssetsByQuery = async (
   return result;
 };
 
-const deleteAssetById = async (assetId: string): Promise<boolean> => {
-  const { rows } = await getPool().query<{
-    video_hash: string;
-  }>("select video_hash from jmvstream_video_assets where id = $1 limit 1", [
-    assetId,
-  ]);
-  const asset = rows[0];
+const claimJmvstreamAssetDeletion = async (
+  assetId: string,
+  retryOnly: boolean
+): Promise<{ video_hash: string } | null> => {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    await lockJmvstreamVideoLifecycle(client);
+    const context = await client.query<{ course_id: string | null }>(
+      "select course_id from jmvstream_video_assets where id = $1",
+      [assetId]
+    );
+    const courseId = context.rows[0]?.course_id;
+    if (courseId) {
+      await lockCourseContentRelease(client, courseId);
+    }
+    const candidate = await client.query<{
+      video_hash: string;
+      player_url: string | null;
+    }>(
+      "select video_hash, player_url from jmvstream_video_assets where id = $1",
+      [assetId]
+    );
+    const asset = candidate.rows[0];
+    if (
+      !asset ||
+      (await isJmvstreamAssetProtected(
+        client,
+        asset.video_hash,
+        asset.player_url
+      ))
+    ) {
+      await client.query("commit");
+      return null;
+    }
+    const claimed = await client.query<{ video_hash: string }>(
+      `update jmvstream_video_assets a
+       set delete_status = 'pending', delete_attempts = delete_attempts + 1,
+           updated_at = now()
+       where a.id = $1 and a.delete_status <> 'deleted'
+         and (not $2::boolean or a.delete_status in ('failed', 'pending'))
+         and not exists (
+           select 1 from lessons l
+           join course_publications cp on cp.id = l.course_publication_id
+           where l.video_provider = 'jmvstream' and l.video_external_id = a.video_hash
+             and cp.status in ('published', 'retired')
+         )
+       returning a.video_hash`,
+      [assetId, retryOnly]
+    );
+    await client.query("commit");
+    return claimed.rows[0] ?? null;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
 
+export const deleteReplacedJmvstreamAssets = async (
+  assetIds: readonly string[]
+): Promise<JmvstreamDeleteResult> => {
+  const result: JmvstreamDeleteResult = { attempted: 0, failed: 0 };
+  for (const assetId of assetIds) {
+    result.attempted += 1;
+    try {
+      if (!(await deleteAssetById(assetId, true))) {
+        result.failed += 1;
+      }
+    } catch {
+      result.failed += 1;
+    }
+  }
+  return result;
+};
+
+const deleteAssetById = async (
+  assetId: string,
+  retryOnly = false
+): Promise<boolean> => {
+  const asset = await claimJmvstreamAssetDeletion(assetId, retryOnly);
   if (!asset) {
+    if (retryOnly) {
+      throw new Error(
+        "O video nao possui exclusao pendente ou esta protegido por uma publicacao."
+      );
+    }
     return true;
   }
-
-  await getPool().query(
-    `
-      update jmvstream_video_assets
-      set delete_status = 'pending',
-          delete_attempts = delete_attempts + 1,
-          updated_at = now()
-      where id = $1
-    `,
-    [assetId]
-  );
 
   const client = await getConfiguredJmvstreamClient();
 

@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { getPool } from "@/db";
 import type {
   LessonResourceUploadReference,
@@ -168,6 +169,83 @@ export const registerLessonResourceUpload = async ({
   assertMutation(result.rowCount);
 };
 
+export const registerLessonResourcePublicationCopy = async ({
+  actorUserId,
+  lessonId,
+  reference,
+  source,
+}: {
+  actorUserId: string;
+  lessonId: string;
+  reference: LessonResourceUploadReference;
+  source: LessonResourceUploadReference;
+}): Promise<void> => {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    await registerLessonResourceUpload({
+      actorUserId,
+      lessonId,
+      queryable: client,
+      reference,
+    });
+    await client.query(
+      "update staged_lesson_resource_uploads set status = 'uploaded' where resource_id = $1",
+      [reference.id]
+    );
+    const sourceObjects: LessonResourceUploadReference[] = [
+      source,
+      ...(source.preview
+        ? [
+            {
+              contentType: source.preview.contentType,
+              fileName: "preview.webp",
+              id: source.id,
+              key: source.preview.key,
+              label: "Preview",
+              sizeBytes: source.preview.sizeBytes,
+              storage: "r2" as const,
+            },
+          ]
+        : []),
+    ];
+    for (const sourceObject of sourceObjects) {
+      await client.query(
+        `insert into staged_lesson_resource_uploads (
+         resource_id, object_key, preview_object_key, lesson_id, actor_user_id,
+         content_type, file_name, size_bytes, preview_content_type,
+         preview_size_bytes, preview_width, preview_height, status, expires_at
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'consumed', now())
+       on conflict (object_key) do update set
+         status = case when staged_lesson_resource_uploads.status in ('cleaning', 'deleted')
+           then staged_lesson_resource_uploads.status else 'consumed' end,
+         expires_at = greatest(staged_lesson_resource_uploads.expires_at, now()),
+         updated_at = now()`,
+        [
+          `publication-source-${randomUUID()}`,
+          sourceObject.key,
+          sourceObject.preview?.key ?? null,
+          lessonId,
+          actorUserId,
+          sourceObject.contentType,
+          sourceObject.fileName,
+          sourceObject.sizeBytes,
+          sourceObject.preview?.contentType ?? null,
+          sourceObject.preview?.sizeBytes ?? null,
+          sourceObject.preview?.width ?? null,
+          sourceObject.preview?.height ?? null,
+        ]
+      );
+    }
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 const findLessonResourceUpload = async ({
   actorUserId,
   lessonId,
@@ -204,6 +282,27 @@ const findLessonResourceUpload = async ({
         and actor_user_id = $3
         and ${statusCondition}
         and expires_at > now()
+        and not exists (
+          select 1 from lessons protected_lesson
+          join course_publications publication
+            on publication.id = protected_lesson.course_publication_id
+          where publication.status in ('published', 'retired')
+            and (
+              protected_lesson.content_json @> jsonb_build_object(
+                'resources', jsonb_build_array(jsonb_build_object(
+                  'key', staged_lesson_resource_uploads.object_key
+                ))
+              )
+              or (
+                staged_lesson_resource_uploads.preview_object_key is not null
+                and protected_lesson.content_json @> jsonb_build_object(
+                  'resources', jsonb_build_array(jsonb_build_object(
+                    'preview', jsonb_build_object('key', staged_lesson_resource_uploads.preview_object_key)
+                  ))
+                )
+              )
+            )
+        )
       limit 1
     `,
     [resourceId, lessonId, actorUserId]

@@ -24,7 +24,11 @@ vi.mock("@/lib/env", () => ({
 }));
 vi.mock("./render-snapshot", () => ({
   parseCertificateRenderSnapshot: () => ({
-    template: { backgroundKey: "background.png", signatureKey: null },
+    template: {
+      backgroundKey:
+        "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+      signatureKey: null,
+    },
   }),
 }));
 vi.mock("./preview", () => ({
@@ -34,6 +38,7 @@ vi.mock("./preview", () => ({
 import { getCertificatePreviewReadUrl } from "./preview-server";
 
 const CERTIFICATE = {
+  course_id: "course-1",
   id: "certificate-1",
   preview_sha256: "stored-hash",
   render_snapshot: { template: {} },
@@ -71,6 +76,20 @@ describe("getCertificatePreviewReadUrl", () => {
       expect.stringContaining("update certificates"),
       expect.anything()
     );
+  });
+
+  it("rejects cross-course legacy snapshot art before deleting or signing any object", async () => {
+    dependencies.query.mockResolvedValue({
+      rows: [{ ...CERTIFICATE, course_id: "course-2" }],
+    });
+    dependencies.verifyPrivateR2ObjectSha256.mockResolvedValue("mismatch");
+
+    await expect(getCertificatePreviewReadUrl("PRT-001")).rejects.toThrow(
+      "não pertence"
+    );
+    expect(dependencies.deleteR2Objects).not.toHaveBeenCalled();
+    expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();
+    expect(dependencies.renderCertificatePreview).not.toHaveBeenCalled();
   });
 
   it("deletes and regenerates the object when the digest mismatches", async () => {

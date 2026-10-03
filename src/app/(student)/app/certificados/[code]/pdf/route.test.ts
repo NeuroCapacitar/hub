@@ -39,6 +39,7 @@ const certificates = new Map<string, StoredCertificate>([
     {
       code: "OWNER-READY",
       key: "certificates/owner-ready.pdf",
+      pdfSha256: "b".repeat(64),
       ownerId: "student-1",
       renderStatus: "ready",
       status: "valid",
@@ -105,7 +106,7 @@ describe("GET /app/certificados/[code]/pdf", () => {
     dependencies.createR2ObjectReadUrl.mockResolvedValue(
       "https://private-r2.example.test/signed"
     );
-    dependencies.verifyPrivateR2ObjectSha256.mockResolvedValue("unknown");
+    dependencies.verifyPrivateR2ObjectSha256.mockResolvedValue("match");
     dependencies.query.mockImplementation(
       (
         sql: string,
@@ -237,6 +238,33 @@ describe("GET /app/certificados/[code]/pdf", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("retry-after")).toBe("60");
+    expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();
+  });
+
+  it("does not sign legacy PDF records without a persisted digest", async () => {
+    dependencies.query.mockResolvedValueOnce({
+      rows: [
+        {
+          pdf_sha256: null,
+          pdf_storage_key: "certificates/legacy/certificate.pdf",
+        },
+      ],
+    });
+
+    const response = await requestCertificate("LEGACY");
+
+    expect(response.status).toBe(503);
+    expect(dependencies.verifyPrivateR2ObjectSha256).not.toHaveBeenCalled();
+    expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "unknown",
+    "missing",
+    "unavailable",
+  ])("does not sign an unverifiable PDF: %s", async (status) => {
+    dependencies.verifyPrivateR2ObjectSha256.mockResolvedValue(status);
+    expect((await requestCertificate("HASHED-READY")).status).toBe(503);
     expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();
   });
 });

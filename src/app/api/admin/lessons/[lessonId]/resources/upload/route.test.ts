@@ -65,6 +65,17 @@ const createRequest = ({
 };
 
 describe("POST /api/admin/lessons/:lessonId/resources/upload", () => {
+  it("rejects oversized surplus fields before resolving uploads despite a forged length", async () => {
+    const request = createRequest({ resourceId: "x".repeat(6 * 1024 * 1024) });
+    request.headers.set("content-length", "1");
+    const response = await POST(request, {
+      params: Promise.resolve({ lessonId: "lesson-1" }),
+    });
+    expect(response.status).toBe(413);
+    expect(dependencies.getPreparedLessonResourceUpload).not.toHaveBeenCalled();
+    expect(dependencies.uploadPrivateR2ObjectIfAbsent).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
     dependencies.requirePermission.mockResolvedValue({

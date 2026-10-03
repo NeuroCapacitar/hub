@@ -3,6 +3,7 @@ import {
   isCourseCoverVariant,
   parseCourseCoverImage,
 } from "@/features/storage/course-cover";
+import { isCourseCoverKeyForCourse } from "@/features/storage/course-cover-ownership";
 import {
   createR2ObjectReadUrl,
   getPublicMediaUrl,
@@ -32,7 +33,7 @@ export async function GET(
   const coverImage = parseCourseCoverImage(rows[0]?.cover_image_json);
   const image = coverImage?.variants[variant] ?? coverImage?.variants.card;
 
-  if (!image) {
+  if (!(image && isCourseCoverKeyForCourse(courseId, image.key))) {
     return Response.json({ error: "Capa nao encontrada." }, { status: 404 });
   }
 

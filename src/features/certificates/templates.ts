@@ -11,6 +11,10 @@ import {
   scheduleCertificateTemplateAssetCleanup,
 } from "./template-asset-cleanup";
 import { isCertificateTemplateAssetKey } from "./template-asset-key";
+import {
+  assertCertificateTemplateAssetNamespace,
+  assertCertificateTemplateAssetOwnership,
+} from "./template-asset-ownership";
 import { CertificateTemplateDomainError } from "./template-errors";
 import {
   normalizeCertificateBackground,
@@ -91,11 +95,13 @@ export const saveCertificateTemplateDraft = async ({
   courseId,
   signatureKey,
   spec,
+  uploadedAssetKeys = [],
 }: {
   actorUserId: string;
   courseId: string;
   signatureKey: string | null;
   spec: CertificateTemplateSpec;
+  uploadedAssetKeys?: readonly string[];
 }): Promise<string[]> => {
   if (
     !isCertificateTemplateAssetKey({
@@ -142,6 +148,13 @@ export const saveCertificateTemplateDraft = async ({
       [courseId]
     );
     const previousDraft = previous.rows[0];
+    await assertCertificateTemplateAssetOwnership({
+      backgroundKey: spec.backgroundKey,
+      client,
+      courseId,
+      signatureKey,
+      uploadedAssetKeys,
+    });
     const referencesAvailable = await prepareCertificateTemplateAssetReferences(
       {
         client,
@@ -330,8 +343,13 @@ export const publishCertificateTemplate = async (
         "Preencha o perfil emissor em Configuracoes antes de publicar o certificado."
       );
     }
-    const draft = await client.query<{ id: string }>(
-      `select id
+    const draft = await client.query<{
+      background_key: string;
+      id: string;
+      signature_key: string | null;
+      spec: unknown;
+    }>(
+      `select id, background_key, signature_key, spec
        from certificate_templates
        where course_id = $1 and status = 'draft'
        for update`,
@@ -364,6 +382,31 @@ export const publishCertificateTemplate = async (
     ) {
       throw new CertificateTemplateDomainError(
         CERTIFICATE_SIGNATORY_REQUIRED_MESSAGE
+      );
+    }
+    const template = draft.rows[0];
+    const spec = parseCertificateTemplateDraft(template.spec);
+    assertCertificateTemplateAssetNamespace({
+      backgroundKey: template.background_key,
+      courseId,
+      signatureKey: template.signature_key,
+    });
+    if (spec.backgroundKey !== template.background_key) {
+      throw new CertificateTemplateDomainError(
+        "A arte do template está inconsistente. Salve o rascunho novamente."
+      );
+    }
+    const firstError = validateCertificateTemplate(spec)[0];
+    if (firstError) {
+      throw new CertificateTemplateDomainError(firstError);
+    }
+    const assetsAvailable = await prepareCertificateTemplateAssetReferences({
+      client,
+      keys: [template.background_key, template.signature_key ?? ""],
+    });
+    if (!assetsAvailable) {
+      throw new CertificateTemplateDomainError(
+        "A arte do template não está disponível. Envie a imagem novamente."
       );
     }
     await client.query(

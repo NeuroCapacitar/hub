@@ -1,10 +1,9 @@
 import "server-only";
-import { deleteActiveAssetsForLesson } from "@/features/jmvstream/asset-deletion";
+import { deleteReplacedJmvstreamAssets } from "@/features/jmvstream/asset-deletion";
 import {
   assertJmvstreamUploadSessionMatches,
   assertJmvstreamVideoHashAvailable,
   getJmvstreamLessonContext,
-  linkJmvstreamVideoToLesson,
   markJmvstreamUploadFailed,
   recordCompletedJmvstreamUpload,
 } from "@/features/jmvstream/asset-persistence";
@@ -39,7 +38,11 @@ export const completeJmvstreamUpload = async ({
   }
 
   await assertJmvstreamUploadSessionMatches({
+    filename,
     lessonId,
+    objectName,
+    size,
+    uploadId,
     uploadSessionId,
     videoHash,
   });
@@ -64,9 +67,16 @@ export const completeJmvstreamUpload = async ({
         error instanceof Error
           ? error.message
           : "Nao foi possivel finalizar o upload na JMVStream.",
+      uploadSessionId,
       videoHash,
     });
     throw error;
+  }
+
+  if (response.videoHash !== videoHash) {
+    throw new Error(
+      "A JMVStream retornou um video diferente da sessao preparada."
+    );
   }
 
   const syncedVideo = await client.getVideo(videoHash).catch(() => null);
@@ -79,23 +89,20 @@ export const completeJmvstreamUpload = async ({
   const playerUrl = response.playerUrl ?? syncedVideo?.playerUrl ?? null;
   const thumbnailUrl = await resolveJmvstreamPlayerThumbnailUrl(playerUrl);
   const uploadStatus = playerUrl ? "ready" : "processing";
-  await recordCompletedJmvstreamUpload({
+  const supersededAssetIds = await recordCompletedJmvstreamUpload({
     filename,
     galleryUuid,
     jobId: response.jobId,
     lesson,
     lessonId,
     objectName,
+    playerUrl,
     size,
+    thumbnailUrl,
     uploadId,
+    uploadSessionId,
     uploadStatus,
     videoHash,
   });
-  await linkJmvstreamVideoToLesson({
-    lessonId,
-    playerUrl,
-    thumbnailUrl,
-    videoHash,
-  });
-  await deleteActiveAssetsForLesson(lessonId, videoHash);
+  await deleteReplacedJmvstreamAssets(supersededAssetIds);
 };

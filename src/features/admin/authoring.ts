@@ -20,7 +20,6 @@ import {
   lockCoursesContentRelease,
 } from "@/features/courses/content-release-lock";
 import {
-  getLessonContentStorageKeys,
   normalizeLessonContentFromForm,
   parseLessonContent,
 } from "@/features/courses/lesson-content";
@@ -32,6 +31,11 @@ import {
 import { recalculateCourseWorkloadHoursWithClient } from "@/features/courses/server";
 import { createCourseSlug } from "@/features/courses/slug";
 import { parseCourseWorkloadOverride } from "@/features/courses/workload";
+import {
+  assertJmvstreamVideoReferenceAvailable,
+  isJmvstreamAssetProtected,
+  lockJmvstreamVideoLifecycle,
+} from "@/features/jmvstream/asset-lifecycle";
 import {
   deleteJmvstreamAssetsForLesson,
   ensureJmvstreamCourseFolder,
@@ -50,9 +54,19 @@ import {
   parseCourseCoverImage,
 } from "@/features/storage/course-cover";
 import {
+  assertCourseCoverOwnership,
+  preserveCourseCover,
+} from "@/features/storage/course-cover-ownership";
+import {
   type CourseCoverFile,
   readCourseCoverFile,
 } from "@/features/storage/course-cover-upload";
+import {
+  assertLessonResourcesAvailable,
+  getLessonR2Resources,
+  lockLessonResourceLifecycle,
+  queueRemovedLessonResources,
+} from "@/features/storage/lesson-resource-lifecycle";
 import {
   assertLessonResourceUploadReferenceMatches,
   type LessonResourceUploadReference,
@@ -81,6 +95,10 @@ import {
   readAuthoringString,
   readRequiredAuthoringString,
 } from "./authoring-input";
+import {
+  type PublicationLessonMaterial,
+  preparePublicationLessonMaterials,
+} from "./publication-materials";
 
 const CREATED_CONTENT_STATUS = "draft";
 const PUBLISHED_CONTENT_STATUS = "active";
@@ -434,6 +452,8 @@ const withCourseContentReleaseLock = async <T>(
 
   try {
     await client.query("begin");
+    await lockLessonResourceLifecycle(client);
+    await lockJmvstreamVideoLifecycle(client);
     await lockCoursesContentRelease(client, courseIds);
     const result = await operation(client);
     await client.query("commit");
@@ -594,6 +614,8 @@ const assertExistingLessonPublicationIsEditable = async (
 interface PreparedCoursePublication {
   coursePublicationId: string;
   coverImage: CourseCoverImage | null;
+  materials: PublicationLessonMaterial[];
+  publishedMaterials?: PublicationLessonMaterial[];
 }
 
 const assertCoursePublicationVideoReadiness = async (
@@ -604,13 +626,18 @@ const assertCoursePublicationVideoReadiness = async (
     id: string;
     lesson_title: string;
     module_title: string;
-    readiness_failure: "duration" | "player";
+    readiness_failure: "deleting" | "duration" | "player";
   }>(
     `
       select l.id,
              l.title as lesson_title,
              m.title as module_title,
              case
+               when exists (
+                 select 1 from jmvstream_video_assets asset
+                 where asset.video_hash = l.video_external_id
+                   and asset.delete_status in ('pending', 'failed', 'deleted')
+               ) then 'deleting'
                when coalesce(l.video_embed_url, '') = '' then 'player'
                else 'duration'
              end as readiness_failure
@@ -619,6 +646,12 @@ const assertCoursePublicationVideoReadiness = async (
       where l.course_publication_id = $1
         and l.video_provider = 'jmvstream'
           and (
+            exists (
+              select 1 from jmvstream_video_assets asset
+              where asset.video_hash = l.video_external_id
+                and asset.delete_status in ('pending', 'failed', 'deleted')
+            )
+            or
             coalesce(l.video_embed_url, '') = ''
             or (
               nullif(l.video_external_id, '') is not null
@@ -631,6 +664,11 @@ const assertCoursePublicationVideoReadiness = async (
     [coursePublicationId]
   );
   const firstUnavailableVideo = unavailableVideo.rows[0];
+  if (firstUnavailableVideo?.readiness_failure === "deleting") {
+    throw new Error(
+      "A publicacao possui video com exclusao pendente ou concluida."
+    );
+  }
   if (firstUnavailableVideo?.readiness_failure === "player") {
     throw new Error("A publicacao possui video JMVStream sem player pronto.");
   }
@@ -638,6 +676,64 @@ const assertCoursePublicationVideoReadiness = async (
     throw new Error(
       `A publicacao possui video JMVStream sem duracao sincronizada: a Aula "${firstUnavailableVideo.lesson_title}" do Modulo "${firstUnavailableVideo.module_title}" ainda nao esta pronta.`
     );
+  }
+  const videoReferences = await client.query<{
+    video_external_id: string | null;
+    video_embed_url: string | null;
+  }>(
+    "select video_external_id, video_embed_url from lessons where course_publication_id = $1 and video_provider = 'jmvstream'",
+    [coursePublicationId]
+  );
+  for (const reference of videoReferences.rows) {
+    await assertJmvstreamVideoReferenceAvailable(client, {
+      videoHash: reference.video_external_id,
+      playerUrl: reference.video_embed_url,
+    });
+  }
+};
+
+const persistPreparedPublicationMaterials = async (
+  client: PoolClient,
+  coursePublicationId: string,
+  materials: PublicationLessonMaterial[],
+  preparedPublication: PreparedCoursePublication
+): Promise<void> => {
+  const publishedMaterials = preparedPublication.publishedMaterials;
+  if (!publishedMaterials || publishedMaterials.length !== materials.length) {
+    throw new Error("Os materiais da publicacao nao foram preparados.");
+  }
+  for (const material of publishedMaterials) {
+    await assertLessonResourcesAvailable({
+      queryable: client,
+      resources: getLessonR2Resources(material.contentJson),
+    });
+    const source = materials.find(
+      (candidate) => candidate.lessonId === material.lessonId
+    );
+    if (!source) {
+      throw new Error("A Aula mudou durante a publicacao.");
+    }
+    if (
+      JSON.stringify(material.contentJson) ===
+      JSON.stringify(source.contentJson)
+    ) {
+      continue;
+    }
+    const persisted = await client.query(
+      `update lessons
+         set content_json = $2::jsonb, updated_at = now()
+         where id = $1 and course_publication_id = $3
+           and content_json is not distinct from $4::jsonb`,
+      [
+        material.lessonId,
+        JSON.stringify(material.contentJson),
+        coursePublicationId,
+        JSON.stringify(source.contentJson),
+      ]
+    );
+    if (persisted.rowCount !== 1) {
+      throw new Error("O material mudou durante a publicacao.");
+    }
   }
 };
 
@@ -654,6 +750,8 @@ const runCoursePublicationTransaction = async ({
 
   try {
     await client.query("begin");
+    await lockLessonResourceLifecycle(client);
+    await lockJmvstreamVideoLifecycle(client);
     await lockCourseContentRelease(client, courseId);
     const { rows } = await client.query<{
       id: string;
@@ -820,10 +918,23 @@ const runCoursePublicationTransaction = async ({
       );
     }
 
+    const materialRows = await client.query<{
+      content_json: unknown;
+      id: string;
+    }>(
+      "select id, content_json from lessons where course_publication_id = $1 order by id",
+      [coursePublicationId]
+    );
+    const materials = materialRows.rows.map((lesson) => ({
+      contentJson: lesson.content_json,
+      lessonId: lesson.id,
+    }));
     const publication = {
       coursePublicationId,
       coverImage: parseCourseCoverImage(courseCover.rows[0]?.cover_image_json),
+      materials,
     };
+    assertCourseCoverOwnership(courseId, publication.coverImage);
     if (!preparedPublication) {
       await client.query("commit");
       return publication;
@@ -831,21 +942,29 @@ const runCoursePublicationTransaction = async ({
     if (
       coursePublicationId !== preparedPublication.coursePublicationId ||
       JSON.stringify(publication.coverImage) !==
-        JSON.stringify(preparedPublication.coverImage)
+        JSON.stringify(preparedPublication.coverImage) ||
+      JSON.stringify(materials) !==
+        JSON.stringify(preparedPublication.materials)
     ) {
       throw new Error(
         "O Curso mudou durante a publicação. Tente publicar novamente."
       );
     }
 
+    await persistPreparedPublicationMaterials(
+      client,
+      coursePublicationId,
+      materials,
+      preparedPublication
+    );
+
     await client.query(
-      `
-        update course_publications
-        set status = 'retired', retired_at = now(), updated_at = now()
-        where course_id = $1 and status = 'published'
-      `,
+      `update course_publications
+       set status = 'retired', retired_at = now(), updated_at = now()
+       where course_id = $1 and status = 'published'`,
       [courseId]
     );
+
     await client.query(
       `
         update course_publications
@@ -926,11 +1045,15 @@ export const publishCoursePublication = async ({
   }
 
   await publishCourseCover(preparedPublication.coverImage);
+  const publishedMaterials = await preparePublicationLessonMaterials({
+    actorUserId,
+    materials: preparedPublication.materials,
+  });
 
   const publication = await runCoursePublicationTransaction({
     actorUserId,
     courseId,
-    preparedPublication,
+    preparedPublication: { ...preparedPublication, publishedMaterials },
   });
   return publication ? "published" : "no_draft";
 };
@@ -1321,20 +1444,21 @@ const getLessonVideoFormState = async ({
   };
 };
 
-const getLessonR2ObjectKeys = async (lessonId: string): Promise<string[]> => {
+const getStoredLessonResources = async (
+  lessonId: string
+): Promise<LessonResourceUploadReference[]> => {
   const { rows } = await getPool().query<{ content_json: unknown }>(
     "select content_json from lessons where id = $1 limit 1",
     [lessonId]
   );
-
-  return getLessonContentStorageKeys(rows[0]?.content_json);
+  return getLessonR2Resources(rows[0]?.content_json);
 };
 
-const getInheritedLessonResourceKeys = async (
+const getInheritedLessonResources = async (
   lessonId: string
-): Promise<Set<string>> => {
+): Promise<LessonResourceUploadReference[]> => {
   if (!lessonId) {
-    return new Set();
+    return [];
   }
 
   const { rows } = await getPool().query<{ content_json: unknown }>(
@@ -1359,9 +1483,7 @@ const getInheritedLessonResourceKeys = async (
     [lessonId]
   );
 
-  return new Set(
-    rows.flatMap((row) => getLessonContentStorageKeys(row.content_json))
-  );
+  return rows.flatMap((row) => getLessonR2Resources(row.content_json));
 };
 
 const assertExistingLessonTargetMatches = ({
@@ -1406,73 +1528,12 @@ const recalculateCourseWorkloadForTransaction = async (
   }
 };
 
-const deleteRemovedR2Objects = async ({
-  lessonId,
-  nextKeys,
-  previousKeys,
-}: {
-  lessonId: string;
-  nextKeys: string[];
-  previousKeys: string[];
-}): Promise<void> => {
-  const nextKeySet = new Set(nextKeys);
-  const removedKeys = previousKeys.filter((key) => !nextKeySet.has(key));
-
-  const protectedKeys = await getR2KeysReferencedByProtectedPublication({
-    candidateKeys: removedKeys,
-    lessonId,
-  });
-
-  await deleteR2Objects(removedKeys.filter((key) => !protectedKeys.has(key)));
-};
-
-const getR2KeysReferencedByProtectedPublication = async ({
-  candidateKeys,
-  lessonId,
-}: {
-  candidateKeys: string[];
-  lessonId: string;
-}): Promise<Set<string>> => {
-  if (candidateKeys.length === 0) {
-    return new Set();
-  }
-
-  const { rows } = await getPool().query<{ content_json: unknown }>(
-    `
-      select published_lesson.content_json
-      from lessons published_lesson
-      join course_publications published_publication
-        on published_publication.id = published_lesson.course_publication_id
-      where published_lesson.id <> $1
-        and published_publication.status in ('published', 'retired')
-        and published_lesson.content_json is not null
-    `,
-    [lessonId]
-  );
-  const candidateKeySet = new Set(candidateKeys);
-  const protectedKeys = new Set<string>();
-
-  for (const row of rows) {
-    for (const key of getLessonContentStorageKeys(row.content_json)) {
-      if (candidateKeySet.has(key)) {
-        protectedKeys.add(key);
-      }
-    }
-  }
-
-  return protectedKeys;
-};
-
 const cleanupUpdatedLessonAssets = async ({
-  contentJson,
   lessonId,
-  previousR2Keys,
   shouldDeleteJmvstreamAsset,
   shouldKeepJmvstreamAsset,
 }: {
-  contentJson: unknown;
   lessonId: string;
-  previousR2Keys: string[];
   shouldDeleteJmvstreamAsset: boolean;
   shouldKeepJmvstreamAsset: boolean;
 }): Promise<void> => {
@@ -1483,35 +1544,26 @@ const cleanupUpdatedLessonAssets = async ({
   ) {
     await deleteJmvstreamAssetsForLesson(lessonId);
   }
-
-  await deleteRemovedR2Objects({
-    lessonId,
-    nextKeys: getLessonContentStorageKeys(contentJson),
-    previousKeys: previousR2Keys,
-  });
 };
 
 const isJmvstreamAssetReferencedByPublishedVersion = async (
   lessonId: string
 ): Promise<boolean> => {
-  const { rows } = await getPool().query<{ id: string }>(
-    `
-      select published_lesson.id
-      from lessons source_lesson
-      join lessons published_lesson
-        on published_lesson.video_external_id = source_lesson.video_external_id
-       and published_lesson.id <> source_lesson.id
-      join course_publications published_publication
-        on published_publication.id = published_lesson.course_publication_id
-      where source_lesson.id = $1
-        and source_lesson.video_provider = 'jmvstream'
-        and published_publication.status = 'published'
-      limit 1
-    `,
+  const { rows } = await getPool().query<{
+    video_external_id: string | null;
+    video_embed_url: string | null;
+  }>(
+    "select video_external_id, video_embed_url from lessons where id = $1 and video_provider = 'jmvstream'",
     [lessonId]
   );
-
-  return Boolean(rows[0]);
+  const source = rows[0];
+  return source?.video_external_id
+    ? await isJmvstreamAssetProtected(
+        getPool(),
+        source.video_external_id,
+        source.video_embed_url
+      )
+    : false;
 };
 
 const assertSafeLessonResourceUploadReference = ({
@@ -1534,20 +1586,25 @@ const assertSafeLessonResourceUploadReference = ({
 
 const confirmSingleLessonResourceUpload = async ({
   actorUserId,
-  inheritedResourceKeys,
   lessonId,
-  previousR2Keys,
+  preservedResources,
   resource,
 }: {
   actorUserId: string;
-  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   lessonId: string | null;
-  previousR2Keys: string[];
+  preservedResources: LessonResourceUploadReference[];
   resource: LessonResourceUploadReference;
 }): Promise<boolean> => {
-  const isExistingResource =
-    previousR2Keys.includes(resource.key) ||
-    (inheritedResourceKeys?.has(resource.key) ?? false);
+  const preserved = preservedResources.find(
+    (candidate) => candidate.key === resource.key
+  );
+  const isExistingResource = Boolean(preserved);
+  if (preserved) {
+    assertSafeLessonResourceUploadReference({
+      expected: preserved,
+      received: resource,
+    });
+  }
   if (!isExistingResource) {
     if (!lessonId) {
       throw new LessonAuthoringError(
@@ -1591,15 +1648,13 @@ const confirmSingleLessonResourceUpload = async ({
 const confirmLessonResourceUploads = async ({
   actorUserId,
   contentJson,
-  inheritedResourceKeys,
   lessonId,
-  previousR2Keys,
+  preservedResources,
 }: {
   actorUserId: string;
   contentJson: unknown;
-  inheritedResourceKeys?: ReadonlySet<string> | undefined;
   lessonId: string | null;
-  previousR2Keys: string[];
+  preservedResources: LessonResourceUploadReference[];
 }): Promise<string[]> => {
   const content = parseLessonContent(contentJson);
 
@@ -1615,9 +1670,8 @@ const confirmLessonResourceUploads = async ({
 
     const isNewUpload = await confirmSingleLessonResourceUpload({
       actorUserId,
-      inheritedResourceKeys,
       lessonId,
-      previousR2Keys,
+      preservedResources,
       resource,
     });
     if (isNewUpload) {
@@ -1897,7 +1951,12 @@ const updateExistingCourse = async ({
   try {
     nextCoverImage = coverFile
       ? await uploadCourseCoverFile({ courseId, file: coverFile })
-      : parseCourseCoverFormField(formData);
+      : preserveCourseCover({
+          courseId,
+          current: expectedPreviousCoverImage,
+          submitted: parseCourseCoverFormField(formData),
+        });
+    assertCourseCoverOwnership(courseId, nextCoverImage);
     uploadedCoverImage = coverFile ? nextCoverImage : null;
 
     if (shouldPublish) {
@@ -1943,7 +2002,12 @@ const createNewCourse = async ({
   try {
     const coverImage = coverFile
       ? await uploadCourseCoverFile({ courseId, file: coverFile })
-      : parseCourseCoverFormField(formData);
+      : preserveCourseCover({
+          courseId,
+          current: null,
+          submitted: parseCourseCoverFormField(formData),
+        });
+    assertCourseCoverOwnership(courseId, coverImage);
     uploadedCoverImage = coverFile ? coverImage : null;
     const insertedThumbnailUrl = getCourseCoverUrl({ courseId, coverImage });
     const client = await getPool().connect();
@@ -2433,9 +2497,15 @@ export const saveLesson = async ({
   await assertExistingLessonPublicationIsEditable(existingLessonId);
 
   let savedLessonId = existingLessonId;
-  const inheritedResourceKeys = existingLessonId
-    ? await getInheritedLessonResourceKeys(existingLessonId)
-    : new Set<string>();
+  const inheritedResources = existingLessonId
+    ? await getInheritedLessonResources(existingLessonId)
+    : [];
+  const inheritedResourceKeys = new Set(
+    inheritedResources.flatMap((resource) => [
+      resource.key,
+      ...(resource.preview ? [resource.preview.key] : []),
+    ])
+  );
   const contentJson = normalizeLessonContentForSave({
     formData,
     inheritedResourceKeys,
@@ -2454,15 +2524,14 @@ export const saveLesson = async ({
 
   assertLessonHasContent({ contentJson, hasVideoContent });
 
-  const previousR2Keys = existingLessonId
-    ? await getLessonR2ObjectKeys(existingLessonId)
+  const previousResources = existingLessonId
+    ? await getStoredLessonResources(existingLessonId)
     : [];
   const uploadedLessonResourceIds = await confirmLessonResourceUploads({
     actorUserId,
     contentJson,
-    inheritedResourceKeys,
     lessonId: existingLessonId,
-    previousR2Keys,
+    preservedResources: [...previousResources, ...inheritedResources],
   });
 
   const durationBreakdown = calculateLessonDurationBreakdown({
@@ -2563,6 +2632,24 @@ export const saveLesson = async ({
           currentModule: currentModule.rows[0],
         });
       }
+
+      await assertLessonResourcesAvailable({
+        queryable: client,
+        resources: getLessonR2Resources(contentJson),
+      });
+      await queueRemovedLessonResources({
+        actorUserId,
+        lessonId: existingLessonId,
+        queryable: client,
+        nextResources: getLessonR2Resources(contentJson),
+        previousResources: getLessonR2Resources(
+          currentLesson?.rows[0]?.content_json
+        ),
+      });
+      await assertJmvstreamVideoReferenceAvailable(client, {
+        videoHash: videoExternalId,
+        playerUrl: videoEmbedUrl,
+      });
 
       if (existingLessonId) {
         await client.query(
@@ -2721,9 +2808,7 @@ export const saveLesson = async ({
 
   if (existingLessonId) {
     await cleanupUpdatedLessonAssets({
-      contentJson,
       lessonId: existingLessonId,
-      previousR2Keys,
       shouldDeleteJmvstreamAsset,
       shouldKeepJmvstreamAsset,
     });

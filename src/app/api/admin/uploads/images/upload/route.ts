@@ -1,3 +1,4 @@
+import { MAX_CERTIFICATE_BACKGROUND_BYTES } from "@/features/certificates/template-image-contract";
 import { uploadStagedAdminImageFile } from "@/features/storage/r2";
 import {
   getStagedAdminImagePermission,
@@ -6,12 +7,28 @@ import {
 } from "@/features/storage/staged-image-upload";
 import { confirmStagedAdminImageUpload } from "@/features/storage/staged-image-upload-registry";
 import { requirePermission } from "@/lib/auth-permissions";
+import {
+  MULTIPART_OVERHEAD_MAX_BYTES,
+  RequestBodyLimitError,
+  readBoundedMultipart,
+} from "@/lib/request-body-limits";
 
 export const runtime = "nodejs";
 
 export const POST = async (request: Request): Promise<Response> => {
   await requirePermission("viewAdminPanel");
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await readBoundedMultipart(
+      request,
+      MAX_CERTIFICATE_BACKGROUND_BYTES + MULTIPART_OVERHEAD_MAX_BYTES
+    );
+  } catch (error) {
+    return Response.json(
+      { error: "Dados invalidos ou limite do upload excedido." },
+      { status: error instanceof RequestBodyLimitError ? error.status : 400 }
+    );
+  }
   const file = formData.get("file");
   const referenceValue = formData.get("reference");
   let reference: StagedAdminImageReference | null = null;

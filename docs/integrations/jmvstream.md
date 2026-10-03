@@ -88,6 +88,36 @@ Até lá, a documentação descreve o payload real do código e não promete com
 - `expireStaleJmvstreamUploads` marca sessões abandonadas;
 - remoções chamam funções por Aula/Módulo/Curso e persistem falha para retry;
 - `retryJmvstreamAssetDelete` só deve operar após conferir o hash;
+- Retry aceita somente exclusão `failed` ou `pending` e recusa hashes ainda
+  referenciados por publicação `published` ou `retired`. A mesma proteção
+  acompanha a limpeza de ativos substituídos.
+- A identidade do player é persistida em `jmvstream_video_assets.player_url`.
+  Exclusão protege também links manuais de publicações `published` e `retired`,
+  inclusive de outro Curso. A comparação usa origem/path oficial normalizados;
+  diferenças de query/fragment não autorizam excluir o player. Ativo legado sem
+  identidade comprovada é preservado quando há link manual protegido.
+- Salvamento, publicação, associação e claim de exclusão compartilham lock
+  transacional global de ciclo de vida JMVStream, antes do lock de Curso. O
+  claim grava `pending`; salvamento/publicação recusam essa identidade enquanto
+  a chamada ao provider ocorre fora da transação.
+  Uma identidade legada pendente/desconhecida também bloqueia referências
+  manuais novas até a reconciliação, fechando a ordem inversa claim→publicação.
+- Falha de upload só pode rebaixar `uploading`/`processing` sem publicação
+  protegida. Descarte local exige `failed`, sem referência de Aula, incluindo
+  rascunho. Um hash duplicado no início de upload nunca sobrescreve ativo antigo.
+- O complete confere nome, tamanho, objeto e upload ID contra a sessão
+  persistida. Após chamadas ao provider, associação e estado local são salvos
+  numa transação curta com o lock de publicação do Curso e nova confirmação de
+  rascunho. Se a publicação avançou, o banco não associa o vídeo; o ativo remoto
+  permanece disponível para recuperação, sem exclusão compensatória.
+- Sincronização de player revalida rascunho e hash atual nesse mesmo lock antes
+  de salvar. Chamadas externas nunca permanecem dentro dessa transação.
+- O cleanup após complete recebe somente os IDs antigos reservados pela própria
+  transação; não consulta novamente todos os vídeos da Aula. Outra conclusão ou
+  sessão de upload posterior não entra nessa exclusão. Falha de cleanup mantém
+  o ativo pendente/falho para retry e não transforma a associação já commitada
+  em falha de complete. Falha concorrente de complete só altera a sessão original
+  se ela ainda estiver `uploading`, sem rebaixar um ativo concluído.
 - upload manual por URL usa `syncManualJmvstreamVideoAsset`.
 
 `getJmvstreamHealthSummary`, usado em Admin > Configurações, é somente leitura:
@@ -114,7 +144,19 @@ deve mostrar o estado local mínimo e encaminhar o detalhe externo ao portal.
 
 ## Segurança
 
+Requisições à API e leitura de HTML de player têm prazo de 15 segundos e corpo
+máximo de 2 MiB; redirecionamentos são recusados. Upload direto e multipart
+validam tamanho inteiro seguro antes de chamar o provider. O detector de duração
+exige tanto a janela do iframe quanto a origem oficial, e usa destino exato em
+`postMessage`.
+
 URLs assinadas são temporárias; credenciais ficam server-only. Validar tipo/tamanho antes de iniciar. Não logar token, URLs assinadas completas ou payload com credenciais.
+
+Todos os tipos de upload validam tamanho inteiro seguro e o limite de 5 TiB
+antes das chamadas ao provider. API e leitura HTML do player têm timeout de
+15 segundos e corpo limitado a 2 MiB, sem seguir redirects. Leitura de player
+exige HTTPS no host oficial, sem credenciais ou porta alternativa. O detector
+de duração aceita mensagens somente da janela e origem oficiais do iframe.
 
 O cron JMVStream permanece ativo em Production para reconciliar vídeos que ainda
 estão em processamento, mas não roda automaticamente em Staging. Em Staging,

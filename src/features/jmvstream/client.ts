@@ -1,3 +1,8 @@
+import {
+  JMVSTREAM_REQUEST_TIMEOUT_MS,
+  readBoundedJmvstreamResponse,
+} from "./response-limits";
+
 type JmvstreamUploadType = "direct" | "multipart";
 
 interface JmvstreamUploadPartInput {
@@ -134,6 +139,8 @@ export const authenticateJmvstreamApi = async ({
   assertValidJmvstreamResource(resource);
   const baseUrl = normalizeJmvstreamApiBaseUrl(apiBaseUrl);
   const response = await fetcher(`${baseUrl}/v2/authenticate`, {
+    signal: AbortSignal.timeout(JMVSTREAM_REQUEST_TIMEOUT_MS),
+    redirect: "error",
     body: JSON.stringify({ resource }),
     headers: {
       Accept: "application/json",
@@ -281,6 +288,8 @@ export const createJmvstreamClient = ({
   ): Promise<ResponseBody> => {
     const response = await fetcher(`${baseUrl}${path}`, {
       ...init,
+      signal: AbortSignal.timeout(JMVSTREAM_REQUEST_TIMEOUT_MS),
+      redirect: "error",
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${apiToken}`,
@@ -567,7 +576,7 @@ const readFolderPayload = (response: UnknownRecord): UnknownRecord =>
   isRecord(response.data) ? response.data : response;
 
 const readResponseBody = async (response: Response): Promise<unknown> => {
-  const text = await response.text();
+  const text = await readBoundedJmvstreamResponse(response);
 
   if (!text) {
     return {};
@@ -693,7 +702,11 @@ const isOfficialJmvstreamPlayerUrl = (value: string): boolean => {
   try {
     const url = new URL(value);
     return (
-      url.protocol === "https:" && url.hostname === JMVSTREAM_PLAYER_HOSTNAME
+      url.protocol === "https:" &&
+      url.hostname === JMVSTREAM_PLAYER_HOSTNAME &&
+      url.port === "" &&
+      url.username === "" &&
+      url.password === ""
     );
   } catch {
     return false;

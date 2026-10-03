@@ -2,6 +2,16 @@ import { describe, expect, it } from "vitest";
 import { buildPublicMediaUrl } from "./public-media";
 
 describe("public media URLs", () => {
+  it.each([
+    "courses/../private.pdf",
+    "courses/course-1/cover/a.webp?token=bad",
+    "banners/%2e%2e/private.png",
+    "auth-media/\\private.webp",
+  ])("rejects an encoded or traversing key %s", (key) => {
+    expect(() =>
+      buildPublicMediaUrl({ baseUrl: "https://media.example.test", key })
+    ).toThrow("inválida");
+  });
   it("validates the logical key while exposing its physical namespace", () => {
     expect(
       buildPublicMediaUrl({

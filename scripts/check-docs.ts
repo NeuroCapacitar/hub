@@ -39,6 +39,7 @@ const CANONICAL_DOCUMENT_PATHS = [
   "docs/operations/vercel-first-launch-checklist.md",
   "docs/operations/vercel-migration-status.md",
   "docs/operations/testing-and-ci.md",
+  "docs/operations/security-audit-environment.md",
   "docs/operations/release-state.md",
   "docs/operations/outbox-and-transactional-effects.md",
   "docs/operations/observability-and-recovery.md",

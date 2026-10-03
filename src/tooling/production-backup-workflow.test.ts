@@ -10,21 +10,66 @@ const workflowPath = join(
 const deployWorkflowPath = join(root, ".github/workflows/deploy-vercel.yml");
 const packagePath = join(root, "package.json");
 const CRON_PATTERN = /cron:\s*["']([^"']+)["']/g;
-const BACKUP_JOB_GATE_PATTERN =
-  /jobs:\r?\n {2}backup:\r?\n {4}if: github\.ref == 'refs\/heads\/main'/;
-const MAIN_CHECKOUT_PATTERN =
-  /uses: actions\/checkout@[^\r\n]+\r?\n {8}with:\r?\n {10}fetch-depth: 1\r?\n {10}ref: main/;
 const githubVariableReference = (name: string): string =>
   `${name}: ${String.fromCharCode(36)}{{ vars.${name} }}`;
 
 describe("production database backup workflow", () => {
-  it("rejects non-main events before binding backup secrets and checks out main", async () => {
+  it("binds operational code to the approved event SHA and isolates secrets from install steps", async () => {
     const source = await readFile(workflowPath, "utf8");
+    expect(source).toContain("if: github.ref == 'refs/heads/main'");
+    expect(source).toContain(`ref: ${String.fromCharCode(36)}{{ github.sha }}`);
+    expect(source).toContain("persist-credentials: false");
+    expect(source).toContain(
+      `[[ "\${GITHUB_REF}" == "refs/heads/main" ]] || exit 1`
+    );
+    expect(source).toContain(
+      `[[ "$(git rev-parse HEAD)" == "\${GITHUB_SHA}" ]] || exit 1`
+    );
+    const backupStepStart = source.indexOf(
+      "- name: Create encrypted Production backup"
+    );
+    const backupStepEnd = source.indexOf(
+      "- name: Write sanitized backup summary"
+    );
+    const preparation = source.slice(0, backupStepStart);
+    expect(preparation).not.toContain("secrets.");
+    expect(preparation.indexOf("Verify approved backup source")).toBeLessThan(
+      preparation.indexOf("Install frozen dependencies")
+    );
+    const backupStep = source.slice(backupStepStart, backupStepEnd);
+    expect(backupStep).toContain(
+      `BACKUP_DATABASE_URL: ${String.fromCharCode(36)}{{ secrets.BACKUP_DATABASE_URL }}`
+    );
+    expect(source.slice(backupStepEnd)).not.toContain("secrets.");
 
-    expect(source).toMatch(BACKUP_JOB_GATE_PATTERN);
-    expect(source).toMatch(MAIN_CHECKOUT_PATTERN);
+    const cleanup = await readFile(
+      join(root, ".github/workflows/cleanup-neon-release-backups.yml"),
+      "utf8"
+    );
+    expect(cleanup).toContain(
+      "inputs.environment == 'production' && github.ref == 'refs/heads/main'"
+    );
+    expect(cleanup).toContain(
+      "inputs.environment == 'staging' && github.ref == 'refs/heads/staging'"
+    );
+    expect(cleanup).toContain(
+      `ref: ${String.fromCharCode(36)}{{ github.sha }}`
+    );
+    expect(cleanup).toContain("persist-credentials: false");
+    expect(cleanup).toContain(
+      `[[ "\${GITHUB_REF}" == "refs/heads/\${APPROVED_BRANCH}" ]] || exit 1`
+    );
+    expect(cleanup).toContain(
+      `[[ "$(git rev-parse HEAD)" == "\${GITHUB_SHA}" ]] || exit 1`
+    );
+    const cleanupStepStart = cleanup.indexOf(
+      "- name: Run approved release-backup cleanup"
+    );
+    expect(cleanup.slice(0, cleanupStepStart)).not.toContain("secrets.");
+    expect(cleanup.slice(cleanupStepStart)).toContain(
+      `NEON_API_KEY: ${String.fromCharCode(36)}{{ secrets.NEON_API_KEY }}`
+    );
   });
-
   it("keeps one literal six-hour schedule synchronized with the public cadence", async () => {
     const source = await readFile(workflowPath, "utf8");
     const crons = [...source.matchAll(CRON_PATTERN)].map((match) => match[1]);

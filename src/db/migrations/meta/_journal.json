@@ -729,6 +729,20 @@
       "when": 1790862961883,
       "tag": "0103_purchase_confirmation_delivery_decision",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1790994231677,
+      "tag": "0104_video_player_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1790994443033,
+      "tag": "0105_lesson_resource_cleanup_tombstones",
+      "breakpoints": true
     }
   ]
 }

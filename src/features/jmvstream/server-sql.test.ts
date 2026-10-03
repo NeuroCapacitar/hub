@@ -42,9 +42,11 @@ describe("JMVStream server SQL", () => {
       "utf8"
     );
 
-    const lessonUpdateIndex = source.indexOf("linkJmvstreamVideoToLesson");
+    const lessonUpdateIndex = source.indexOf(
+      "await recordCompletedJmvstreamUpload"
+    );
     const cleanupIndex = source.indexOf(
-      "await deleteActiveAssetsForLesson(lessonId, videoHash);"
+      "await deleteReplacedJmvstreamAssets(supersededAssetIds);"
     );
 
     expect(lessonUpdateIndex).toBeGreaterThan(-1);

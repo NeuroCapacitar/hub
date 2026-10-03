@@ -5,6 +5,9 @@ export const COMMENT_BODY_MAX_LENGTH = 2000;
 export type LessonCommentStatus = "hidden" | "visible";
 
 export const isLessonCommentManager = (role: AppRole): boolean =>
+  role === "admin";
+
+export const canParticipateInStaffDiscussion = (role: AppRole): boolean =>
   role === "admin" || role === "support";
 
 export interface LessonCommentAuthor {

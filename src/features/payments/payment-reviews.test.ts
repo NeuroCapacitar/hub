@@ -15,6 +15,8 @@ vi.mock("@/features/enrollments/server", () => ({
 
 import { resolvePaymentReview } from "./payment-reviews";
 
+const PENDING_REVIEW_ERROR_PATTERN = /revisao.*pendente/i;
+
 const createClient = (
   review: {
     access_duration_months: number | null;
@@ -32,15 +34,20 @@ const createClient = (
       | "terminal_conflict";
     user_id: string | null;
   } | null,
-  siblingReviews: { id: string; orderId: string; status: string }[] = []
+  siblingReviews: readonly {
+    id: string;
+    orderId: string;
+    status: "pending" | "rejected" | "approved";
+  }[] = []
 ) => {
-  const query = vi.fn((statement: string, parameters?: unknown[]) => {
+  const query = vi.fn((statement: string, values?: unknown[]) => {
     if (statement.includes("and id <> $2")) {
+      const [orderId, selectedReviewId] = values ?? [];
       return {
         rows: siblingReviews.filter(
           (sibling) =>
-            sibling.orderId === parameters?.[0] &&
-            sibling.id !== parameters?.[1] &&
+            sibling.orderId === orderId &&
+            sibling.id !== selectedReviewId &&
             sibling.status === "pending"
         ),
       };
@@ -279,7 +286,7 @@ describe("payment review resolution", () => {
     expect(client.release).toHaveBeenCalledOnce();
   });
 
-  it("keeps the order and access unchanged when another review is pending", async () => {
+  it("blocks approval before writes or access when another review on the order is pending", async () => {
     const client = createClient(
       {
         access_duration_months: 12,
@@ -290,7 +297,10 @@ describe("payment review resolution", () => {
         type: "amount_mismatch",
         user_id: "user-1",
       },
-      [{ id: "review-2", orderId: "order-1", status: "pending" }]
+      [
+        { id: "review-1", orderId: "order-1", status: "pending" },
+        { id: "anomaly-review", orderId: "order-1", status: "pending" },
+      ]
     );
     dependencies.connect.mockResolvedValue(client);
 
@@ -301,9 +311,7 @@ describe("payment review resolution", () => {
         decisionReason: "valor conferido",
         reviewId: "review-1",
       })
-    ).rejects.toThrow(
-      "Outra revisao financeira pendente impede a liberacao do acesso."
-    );
+    ).rejects.toThrow(PENDING_REVIEW_ERROR_PATTERN);
 
     expect(String(client.query.mock.calls[1]?.[0])).toContain(
       "for update of payment_reviews, orders"
@@ -353,6 +361,50 @@ describe("payment review resolution", () => {
     });
 
     expect(dependencies.applyPaidWebhookAccess).toHaveBeenCalledOnce();
+    expect(client.query).toHaveBeenCalledWith("commit");
+  });
+  it("can reject the selected amount review while leaving sibling reviews and access unchanged", async () => {
+    const client = createClient(
+      {
+        access_duration_months: 12,
+        course_id: "course-1",
+        order_id: "order-1",
+        status: "pending",
+        type: "amount_mismatch",
+        user_id: "user-1",
+      },
+      [
+        { id: "review-1", orderId: "order-1", status: "pending" },
+        { id: "anomaly-review", orderId: "order-1", status: "pending" },
+      ]
+    );
+    dependencies.connect.mockResolvedValue(client);
+
+    await resolvePaymentReview({
+      actorUserId: "support-1",
+      decision: "rejected",
+      decisionReason: "divergencia mantida",
+      reviewId: "review-1",
+    });
+
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining("update payment_reviews"),
+      ["review-1", "rejected", "divergencia mantida", "support-1"]
+    );
+    expect(
+      client.query.mock.calls.map(([statement]) => statement)
+    ).not.toContain(expect.stringContaining("update orders"));
+    expect(dependencies.applyPaidWebhookAccess).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining("insert into audit_logs"),
+      [
+        "support-1",
+        "payment_review.resolved",
+        "review-1",
+        "rejected",
+        "divergencia mantida",
+      ]
+    );
     expect(client.query).toHaveBeenCalledWith("commit");
   });
 });

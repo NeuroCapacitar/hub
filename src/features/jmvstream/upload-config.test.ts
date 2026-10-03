@@ -33,4 +33,10 @@ describe("JMVStream upload config", () => {
       "maior que zero"
     );
   });
+  it("rejects fractional and unsafe sizes before issuing provider requests", () => {
+    expect(() => getJmvstreamMultipartUploadConfig(1.5)).toThrow();
+    expect(() =>
+      getJmvstreamMultipartUploadConfig(Number.MAX_SAFE_INTEGER + 1)
+    ).toThrow();
+  });
 });

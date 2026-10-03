@@ -202,6 +202,9 @@ describe("certificate template draft serialization", () => {
 
     await expect(
       saveCertificateTemplateDraft({
+        uploadedAssetKeys: [
+          "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+        ],
         actorUserId: "admin-1",
         courseId: "course-1",
         signatureKey: null,
@@ -277,6 +280,9 @@ describe("certificate template draft serialization", () => {
 
     await expect(
       saveCertificateTemplateDraft({
+        uploadedAssetKeys: [
+          "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+        ],
         actorUserId: "admin-1",
         courseId: "course-1",
         signatureKey: null,
@@ -326,6 +332,9 @@ describe("certificate template draft serialization", () => {
     });
 
     await saveCertificateTemplateDraft({
+      uploadedAssetKeys: [
+        "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+      ],
       actorUserId: "admin-1",
       courseId: "course-1",
       signatureKey: null,
@@ -394,6 +403,10 @@ describe("certificate template draft serialization", () => {
 
     await expect(
       saveCertificateTemplateDraft({
+        uploadedAssetKeys: [
+          "certificates/templates/course-1/22222222-2222-4222-8222-222222222222.webp",
+          "certificates/templates/course-1/signatures/33333333-3333-4333-8333-333333333333.webp",
+        ],
         actorUserId: "admin-1",
         courseId: "course-1",
         signatureKey:
@@ -477,6 +490,9 @@ describe("certificate template draft serialization", () => {
     });
 
     await saveCertificateTemplateDraft({
+      uploadedAssetKeys: [
+        "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp",
+      ],
       actorUserId: "admin-1",
       courseId: "course-1",
       signatureKey: null,
@@ -639,13 +655,25 @@ describe("certificate course activation", () => {
   });
 
   it("audits publication after enabling the course", async () => {
+    const backgroundKey =
+      "certificates/templates/course-1/11111111-1111-4111-8111-111111111111.webp";
     const query = vi.fn((statement: string) => {
       if (statement.includes("certificate_issuer_profiles")) {
         return Promise.resolve({ rows: [completeIssuerProfile] });
       }
       if (statement.includes("status = 'draft'")) {
         return Promise.resolve({
-          rows: [{ id: "template-draft" }],
+          rows: [
+            {
+              id: "template-draft",
+              background_key: backgroundKey,
+              signature_key: null,
+              spec: {
+                backgroundKey,
+                fields: createDefaultCertificateTemplateFields(),
+              },
+            },
+          ],
         });
       }
       if (statement.includes("from courses")) {
@@ -676,6 +704,56 @@ describe("certificate course activation", () => {
       ])
     );
     expect(release).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    "certificates/private/certificate.pdf",
+    "certificates/templates/course-2/11111111-1111-4111-8111-111111111111.webp",
+    "certificates/templates/course-1/signatures/11111111-1111-4111-8111-111111111111.webp",
+  ])("does not publish a draft with an invalid background namespace: %s", async (backgroundKey) => {
+    const query = vi.fn((statement: string) => {
+      if (statement.includes("certificate_issuer_profiles")) {
+        return Promise.resolve({ rows: [completeIssuerProfile] });
+      }
+      if (statement.includes("status = 'draft'")) {
+        return Promise.resolve({
+          rows: [
+            {
+              id: "template-draft",
+              background_key: backgroundKey,
+              signature_key: null,
+              spec: {
+                backgroundKey,
+                fields: createDefaultCertificateTemplateFields(),
+              },
+            },
+          ],
+        });
+      }
+      if (statement.includes("from courses")) {
+        return Promise.resolve({
+          rows: [
+            {
+              certificate_signer_name: "Dra. Maria",
+              certificate_signer_role: "Especialista",
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ rows: [], rowCount: 1 });
+    });
+    dependencies.getPool.mockReturnValue({
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    });
+
+    await expect(
+      publishCertificateTemplate("course-1", "admin-1")
+    ).rejects.toThrow("não pertence");
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining("set status = 'published'"),
+      expect.anything()
+    );
+    expect(query).toHaveBeenCalledWith("rollback");
   });
 
   it("does not enable a published template missing course signatory data", async () => {

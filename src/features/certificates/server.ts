@@ -31,6 +31,7 @@ import {
 } from "@/features/storage/r2";
 import { getServerEnv } from "@/lib/env";
 import { CertificateDomainError } from "./errors";
+import { assertCertificateTemplateAssetNamespace } from "./template-asset-ownership";
 import { isCertificateSignatoryConfigured } from "./template-rules";
 
 const MAX_CERTIFICATE_CODE_ATTEMPTS = 3;
@@ -163,6 +164,11 @@ export const tryIssueAutomaticCompletionCertificate = async ({
   }
   const issuedAt = new Date().toISOString();
   const completionAt = completedAt.toISOString();
+  assertCertificateTemplateAssetNamespace({
+    backgroundKey: templateSnapshot.background_key,
+    courseId,
+    signatureKey: templateSnapshot.signature_key,
+  });
   const templateFields = parseCertificateTemplateDraft(
     templateSnapshot.spec
   ).fields;
@@ -467,6 +473,11 @@ const issueCertificate = async ({
   }
 
   const issuedAt = new Date().toISOString();
+  assertCertificateTemplateAssetNamespace({
+    backgroundKey: source.background_key,
+    courseId,
+    signatureKey: source.signature_key,
+  });
   const templateFields = parseCertificateTemplateDraft(source.spec).fields;
   const workloadHours =
     workloadSource === "publication"
@@ -1296,6 +1307,7 @@ export const renderPendingCertificate = async (
     );
   };
   const claim = await pool.query<{
+    course_id: string;
     pdf_sha256: string | null;
     render_snapshot: unknown;
   }>(
@@ -1310,7 +1322,7 @@ export const renderPendingCertificate = async (
          render_claim_token is null
          or render_claimed_at < now() - ($3 * interval '1 minute')
        )
-       returning render_snapshot, pdf_sha256`,
+       returning course_id, render_snapshot, pdf_sha256`,
     [certificateId, claimToken, CERTIFICATE_RENDER_CLAIM_LEASE_MINUTES]
   );
   const certificate = claim.rows[0];
@@ -1341,6 +1353,11 @@ export const renderPendingCertificate = async (
     const snapshot = parseCertificateRenderSnapshot(
       certificate.render_snapshot
     );
+    assertCertificateTemplateAssetNamespace({
+      backgroundKey: snapshot.template.backgroundKey,
+      courseId: certificate.course_id,
+      signatureKey: snapshot.template.signatureKey,
+    });
     const key = `certificates/${certificateId}/certificate.pdf`;
     const readStoredArtifact = async (): Promise<{
       pdf: Buffer;

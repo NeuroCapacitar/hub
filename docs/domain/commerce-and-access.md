@@ -271,7 +271,11 @@ Conciliação por pagamento e sincronização local do extrato exigem
 as capacidades administrativas; Suporte pode receber cada grant financeiro de forma
 independente conforme a matriz do [ADR-0017](../adr/0017-support-granular-permissions.md).
 `amount_mismatch` pode aceitar uma decisão explícita de
-liberar ou manter o bloqueio; `buyer_identity` exige reembolso integral;
+liberar ou manter o bloqueio. A aprovação só libera o acesso quando não existe
+outra Revisão pendente no mesmo Pedido; a Revisão selecionada não bloqueia sua
+própria aprovação. Rejeitar a divergência resolve somente essa Revisão, sem
+marcar o Pedido como pago ou conceder acesso, e as demais Revisões pendentes
+mantêm o bloqueio. `buyer_identity` exige reembolso integral;
 `event_anomaly`, `terminal_conflict` e `uncertain_result` exigem
 conciliação/reprocessamento; e `partial_refund` exige tratamento financeiro
 específico. Esses tipos não aceitam aprovação ou rejeição genérica. Uma conciliação

@@ -77,11 +77,23 @@ controles de moderação somente para quem possui a mesma permissão.
 
 ## Analytics de aprendizagem
 
+Admin e Suporte podem participar das discussões de Aula e responder aos Alunos
+pela área administrativa. Essa participação não concede moderação: ocultar ou
+restaurar comentários exige `manageContent`, capacidade exclusiva de Admin
+conforme o [ADR-0017](../adr/0017-support-granular-permissions.md). O servidor
+aplica essa capacidade antes da mutação; Suporte não recebe controles de
+moderação nem conteúdo de comentários ocultos. As respostas de equipe continuam
+auditadas sem armazenar o corpo na trilha de auditoria.
+
 Analytics é minimizado, habilitado por padrão e pode ser desligado em **Conta > Configurações**. Não altera acesso, sequência, progresso, conclusão ou certificado. O servidor deriva Matrícula, Aula e `CoursePublication`; o cliente não escolhe a identidade do evento. Eventos e métricas preservam a publicação para auditoria e comparação histórica, enquanto as consultas de elegibilidade usam a publicação vigente.
 
 O painel administrativo permite selecionar um Curso e um período de 1, 3, 6 ou 12 meses. Para o Curso escolhido, a tabela mostra uma linha por Aula da publicação vigente, na ordem do Curso; as contagens de início, conclusão e falha somam todas as versões da mesma chave curricular, checkpoint e tempos de calendário são recalculados sobre os registros disponíveis das versões, e o tempo reproduzido total soma a reprodução normal registrada no período. O KPI de visualização média do Curso calcula, para cada Matrícula ativa com analytics habilitado, a média da fronteira linear validada registrada em cada Aula ativa; uma Aula concluída vale 100% e uma Aula sem registro vale 0%, inclusive quando o registro veio de uma versão anterior da mesma Aula. Matrículas ativas representam a fotografia atual do Curso e não são somadas entre versões. As versões históricas ficam disponíveis nos detalhes, e os KPIs e a exportação CSV ficam limitados ao Curso e período selecionados. Não exibe Aluno, Conta, e-mail, inatividade ou automação de reengajamento.
 
 ## Evidências
+
+A exportação CSV neutraliza prefixos de fórmula em campos textuais, incluindo
+nomes de Curso, Módulo e Aula. Números permanecem números; escaping de aspas e
+neutralização de texto não alteram a autorização ou os filtros do relatório.
 
 - schema: `coursePublications`, `courseCompletions`, `modules`, `lessons`, `enrollments`, `certificates` em `src/db/schema.ts`;
 - autoria: `createCoursePublicationDraft` e `publishCoursePublication` em `src/features/admin/authoring.ts`;

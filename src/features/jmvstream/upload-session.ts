@@ -34,11 +34,9 @@ export const initJmvstreamUpload = async ({
   }
 
   assertSupportedJmvstreamVideoFile(fileName);
+  const validatedConfig = getJmvstreamMultipartUploadConfig(fileSize);
   const galleryUuid = await requireJmvstreamCourseFolder(lesson.course_id);
-  const multipartConfig =
-    uploadType === "multipart"
-      ? getJmvstreamMultipartUploadConfig(fileSize)
-      : null;
+  const multipartConfig = uploadType === "multipart" ? validatedConfig : null;
   const init = await (await getConfiguredJmvstreamClient()).initMultipartUpload(
     {
       ...(multipartConfig ? { chunkSize: multipartConfig.chunkSize } : {}),

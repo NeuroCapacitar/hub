@@ -10,6 +10,10 @@ import {
   createCorrelationId,
   logOperationalEvent,
 } from "@/lib/observability";
+import {
+  RequestBodyLimitError,
+  readBoundedMultipart,
+} from "@/lib/request-body-limits";
 import { type AppSession, getCurrentSession } from "@/lib/session";
 import { parseTrustedOrigins } from "@/lib/trusted-origins";
 
@@ -86,6 +90,7 @@ export const POST = async (request: Request): Promise<Response> => {
     Number.isFinite(contentLength) &&
     contentLength > MAX_MULTIPART_REQUEST_BYTES
   ) {
+    request.body?.cancel().catch(() => undefined);
     return Response.json(
       { error: "avatar_too_large" },
       { headers: noStoreHeaders, status: 413 }
@@ -115,8 +120,19 @@ export const POST = async (request: Request): Promise<Response> => {
   }
   let formData: FormData;
   try {
-    formData = await request.formData();
-  } catch {
+    formData = await readBoundedMultipart(request, MAX_MULTIPART_REQUEST_BYTES);
+  } catch (error) {
+    if (error instanceof RequestBodyLimitError) {
+      return Response.json(
+        {
+          error:
+            error.status === 413
+              ? "avatar_too_large"
+              : "avatar_request_timeout",
+        },
+        { headers: noStoreHeaders, status: error.status }
+      );
+    }
     return Response.json(
       { error: "invalid_avatar_request" },
       { headers: noStoreHeaders, status: 400 }

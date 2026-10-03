@@ -17,7 +17,7 @@ const EMPTY_STAGING_WORKER_ENV_PATTERN =
 const RELEASE_BACKUP_CLEANUP_JOB_GATE_PATTERN =
   /jobs:\r?\n {2}manual:\r?\n {4}if: >-\r?\n {6}\(inputs\.environment == 'staging' && github\.ref == 'refs\/heads\/staging'\) \|\|\r?\n {6}\(inputs\.environment == 'production' && github\.ref == 'refs\/heads\/main'\)/;
 const RELEASE_BACKUP_CLEANUP_CHECKOUT_PATTERN =
-  /uses: actions\/checkout@[^\r\n]+\r?\n {8}with:\r?\n {10}fetch-depth: 1\r?\n {10}ref: \$\{\{ inputs\.environment == 'staging' && 'staging' \|\| 'main' \}\}/;
+  /uses: actions\/checkout@[^\r\n]+\r?\n {8}with:\r?\n {10}fetch-depth: 1\r?\n {10}ref: \$\{\{ github\.sha \}\}/;
 
 describe("CI and deployment workflow contracts", () => {
   it("routes every Dependabot update to Staging", () => {
