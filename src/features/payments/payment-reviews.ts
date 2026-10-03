@@ -55,9 +55,11 @@ const selectPendingReview = async ({
 const approveAmountMismatch = async ({
   client,
   review,
+  reviewId,
 }: {
   client: PoolClient;
   review: PaymentReviewRow;
+  reviewId: string;
 }): Promise<void> => {
   if (!(review.user_id && review.access_duration_months)) {
     throw new Error("Pedido sem dados suficientes para liberar o acesso.");
@@ -65,6 +67,23 @@ const approveAmountMismatch = async ({
   if (review.observed_amount_in_cents == null) {
     throw new Error(
       "Divergencia sem valor observado; concilie o pagamento antes de liberar o acesso."
+    );
+  }
+
+  const otherPendingReview = await client.query<{ id: string }>(
+    `
+      select id
+      from payment_reviews
+      where order_id = $1
+        and status = 'pending'
+        and id <> $2
+      limit 1
+    `,
+    [review.order_id, reviewId]
+  );
+  if (otherPendingReview.rows[0]) {
+    throw new Error(
+      "O pedido possui outra revisao pendente; resolva as demais revisoes antes de liberar o acesso."
     );
   }
 
@@ -153,7 +172,7 @@ export const resolvePaymentReview = async ({
     }
 
     if (review.type === "amount_mismatch" && decision === "approved") {
-      await approveAmountMismatch({ client, review });
+      await approveAmountMismatch({ client, review, reviewId });
     }
 
     await client.query(

@@ -1377,18 +1377,21 @@ const persistCertificateTemplateDraft = async ({
     await runCertificateTemplateAssetMutation({
       courseId,
       operation: async (trackUploadedKey) => {
+        const uploadedAssetKeys: string[] = [];
         if (background?.size) {
           spec.backgroundKey = await uploadCertificateBackground({
             courseId,
             file: background,
           });
           trackUploadedKey(spec.backgroundKey);
+          uploadedAssetKeys.push(spec.backgroundKey);
         }
         const nextSignatureKey = signature?.size
           ? await uploadCertificateSignature({ courseId, file: signature })
           : signatureKey;
         if (signature?.size && nextSignatureKey) {
           trackUploadedKey(nextSignatureKey);
+          uploadedAssetKeys.push(nextSignatureKey);
         }
         signatureKey = nextSignatureKey;
         return await saveCertificateTemplateDraft({
@@ -1396,6 +1399,7 @@ const persistCertificateTemplateDraft = async ({
           courseId,
           signatureKey: nextSignatureKey,
           spec,
+          uploadedAssetKeys,
         });
       },
     });

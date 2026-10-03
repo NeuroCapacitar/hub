@@ -18,6 +18,12 @@ O endpoint deriva a Conta exclusivamente da sessão atual, verifica o estado de
 suspensão e responde com `Cache-Control: private, no-store`. O navegador nunca
 envia um `userId` nem recebe a chave do objeto R2.
 
+O upload limita os bytes reais de todo o multipart antes de materializar campos:
+5 MiB de imagem mais 1 MiB para campos e envelope. O limite vale também para
+campos excedentes e requisições sem `Content-Length` ou com tamanho declarado
+incorreto. A leitura termina em até 15 segundos; excesso retorna `413`, leitura
+incompleta por prazo retorna `408`, sem gravar o avatar.
+
 Para que a substituição da imagem seja refletida após `router.refresh()`, a
 sessão inclui na URL um `revision` opaco calculado a partir da chave ativa. A
 revisão serve apenas para mudar o `src` quando o upload troca o objeto; não

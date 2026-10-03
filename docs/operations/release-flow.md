@@ -34,6 +34,13 @@ force-push e merges sem o check `CI`; um ruleset separado exige Pull Request
 para `staging`. `main` é avançada somente pelo workflow de release depois dos
 gates descritos abaixo. Não faça push manual em `main`.
 
+O backup operacional aceita somente `main`; o cleanup de backups Neon exige
+`main` para Production e `staging` para Staging. Ambos fixam o checkout no SHA
+do evento, verificam branch/SHA antes de executar código e limitam secrets ao
+step operacional. Os Environments correspondentes devem ter allowlists de
+branch explícitas; o gate no YAML não substitui a proteção externa da própria
+definição do workflow.
+
 Depois de uma release normal, `main` e `staging` apontam para o mesmo commit.
 A promoção de `staging` para `main` usa fast-forward; não se deve criar um
 segundo PR de release, fazer squash da promoção ou criar uma branch de

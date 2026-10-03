@@ -17,6 +17,11 @@ import {
   getJmvstreamVideoPlacement,
   isJmvstreamVideoNotFoundError,
 } from "@/features/jmvstream/provider-mapper";
+import { isJmvstreamPlayerUrl } from "@/features/videos/jmvstream";
+import {
+  JMVSTREAM_REQUEST_TIMEOUT_MS,
+  readBoundedJmvstreamResponse,
+} from "./response-limits";
 
 export interface JmvstreamPlayerSyncResult {
   playerUrl: null | string;
@@ -36,20 +41,24 @@ export interface JmvstreamPlayerSyncSummary {
 export const resolveJmvstreamPlayerThumbnailUrl = async (
   playerUrl: string | null
 ): Promise<string | null> => {
-  if (!playerUrl) {
+  if (!(playerUrl && isJmvstreamPlayerUrl(playerUrl))) {
     return null;
   }
 
   try {
     const response = await fetch(playerUrl, {
       headers: { "User-Agent": "Mozilla/5.0" },
+      redirect: "error",
+      signal: AbortSignal.timeout(JMVSTREAM_REQUEST_TIMEOUT_MS),
     });
 
     if (!response.ok) {
       return null;
     }
 
-    return getJmvstreamThumbnailUrlFromPlayerHtml(await response.text());
+    return getJmvstreamThumbnailUrlFromPlayerHtml(
+      await readBoundedJmvstreamResponse(response)
+    );
   } catch {
     return null;
   }
@@ -77,7 +86,7 @@ export const syncJmvstreamLessonPlayer = async (
     videoHash,
   });
 
-  if (!playerUrl) {
+  if (!(playerUrl && isJmvstreamPlayerUrl(playerUrl))) {
     const jobStatus = await client.getVideoJobStatus(videoHash);
 
     if (jobStatus === "ERROR") {
@@ -94,6 +103,7 @@ export const syncJmvstreamLessonPlayer = async (
 
   const thumbnailUrl = await resolveJmvstreamPlayerThumbnailUrl(playerUrl);
   await recordJmvstreamReadyPlayer({
+    courseId,
     lessonId,
     playerUrl,
     thumbnailUrl,

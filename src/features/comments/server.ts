@@ -11,6 +11,7 @@ import { lockEnrollmentAggregate } from "@/features/enrollments/enrollment-aggre
 import type { AppRole } from "@/lib/session";
 import {
   buildLessonCommentTree,
+  canParticipateInStaffDiscussion,
   isLessonCommentManager,
   type LessonCommentRecord,
   type LessonCommentView,
@@ -65,7 +66,7 @@ export const ensureCanCommentOnLesson = async ({
   role: AppRole;
   userId: string;
 }): Promise<LessonAccessResult> => {
-  if (isLessonCommentManager(role)) {
+  if (canParticipateInStaffDiscussion(role)) {
     const db = client ?? getPool();
     const { rows } = await db.query<{
       course_id: string;
@@ -247,7 +248,7 @@ export const createLessonComment = async ({
       throw new Error("Aula invalida.");
     }
 
-    if (!isLessonCommentManager(role)) {
+    if (!canParticipateInStaffDiscussion(role)) {
       await lockEnrollmentAggregate(client, userId, courseId);
       const access = await resolveLessonAccessWithClient({
         client,
@@ -310,7 +311,7 @@ export const createLessonComment = async ({
       throw new Error("Nao foi possivel salvar o comentario.");
     }
 
-    if (isLessonCommentManager(role)) {
+    if (canParticipateInStaffDiscussion(role)) {
       await writeAuditLog({
         action: "lesson_comment.created",
         actorUserId: userId,

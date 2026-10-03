@@ -14,6 +14,36 @@ const githubVariableReference = (name: string): string =>
   `${name}: ${String.fromCharCode(36)}{{ vars.${name} }}`;
 
 describe("production database backup workflow", () => {
+  it("binds operational code to the approved event SHA and isolates secrets from install steps", async () => {
+    const source = await readFile(workflowPath, "utf8");
+    expect(source).toContain("if: github.ref == 'refs/heads/main'");
+    expect(source).toContain(`ref: ${String.fromCharCode(36)}{{ github.sha }}`);
+    expect(source).toContain("persist-credentials: false");
+    const preparation = source.slice(
+      0,
+      source.indexOf("- name: Create encrypted Production backup")
+    );
+    expect(preparation).not.toContain("secrets.");
+    expect(preparation.indexOf("Verify approved backup source")).toBeLessThan(
+      preparation.indexOf("Install frozen dependencies")
+    );
+    const cleanup = await readFile(
+      join(root, ".github/workflows/cleanup-neon-release-backups.yml"),
+      "utf8"
+    );
+    expect(cleanup).toContain(
+      "inputs.environment == 'production' && github.ref == 'refs/heads/main'"
+    );
+    expect(cleanup).toContain(
+      "inputs.environment == 'staging' && github.ref == 'refs/heads/staging'"
+    );
+    expect(
+      cleanup.slice(
+        0,
+        cleanup.indexOf("- name: Run approved release-backup cleanup")
+      )
+    ).not.toContain("secrets.");
+  });
   it("keeps one literal six-hour schedule synchronized with the public cadence", async () => {
     const source = await readFile(workflowPath, "utf8");
     const crons = [...source.matchAll(CRON_PATTERN)].map((match) => match[1]);

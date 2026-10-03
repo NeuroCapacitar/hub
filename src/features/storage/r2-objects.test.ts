@@ -7,6 +7,18 @@ import {
 } from "./r2-objects";
 
 describe("R2 lesson objects", () => {
+  it("separates a browser attachment named preview.webp from its thumbnail", () => {
+    const attachment = buildLessonResourceObjectKey({
+      fileName: "preview.webp",
+      lessonId: "lesson-1",
+      nonce: "upload-1",
+    });
+    const preview = buildLessonResourcePreviewObjectKey({
+      lessonId: "lesson-1",
+      nonce: "upload-1",
+    });
+    expect(attachment).not.toBe(preview);
+  });
   it("builds scoped object keys with normalized file names", () => {
     expect(
       buildLessonResourceObjectKey({
@@ -20,7 +32,7 @@ describe("R2 lesson objects", () => {
         lessonId: "lesson-1",
         nonce: "upload-1",
       })
-    ).toBe("lessons/lesson-1/resources/upload-1-preview.webp");
+    ).toBe("lessons/lesson-1/resources/previews/upload-1.webp");
   });
 
   it("accepts common course materials up to the per-file limit", () => {

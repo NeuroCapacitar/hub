@@ -7,8 +7,9 @@ import {
   restoreLessonComment,
 } from "@/features/comments/server";
 import { canMutateStudentExperience } from "@/features/courses/preview";
+import { requirePermission } from "@/lib/auth-permissions";
 import { requireSession } from "@/lib/session";
-import { isLessonCommentManager } from "./rules";
+import { canParticipateInStaffDiscussion } from "./rules";
 
 const readString = (formData: FormData, key: string): string =>
   String(formData.get(key) ?? "").trim();
@@ -34,7 +35,7 @@ export const createLessonCommentAction = async (
     throw new Error("Preview de aluno nao permite comentar.");
   }
 
-  if (context === "admin" && !isLessonCommentManager(session.role)) {
+  if (context === "admin" && !canParticipateInStaffDiscussion(session.role)) {
     throw new Error("Apenas Admin e Suporte podem gerenciar comentários.");
   }
 
@@ -53,10 +54,7 @@ export const createLessonCommentAction = async (
 export const hideLessonCommentAction = async (
   formData: FormData
 ): Promise<void> => {
-  const session = await requireSession();
-  if (!isLessonCommentManager(session.role)) {
-    throw new Error("Apenas Admin e Suporte podem gerenciar comentários.");
-  }
+  const session = await requirePermission("manageContent");
   const commentId = readString(formData, "commentId");
 
   if (!commentId) {
@@ -79,10 +77,7 @@ export const hideLessonCommentAction = async (
 export const restoreLessonCommentAction = async (
   formData: FormData
 ): Promise<void> => {
-  const session = await requireSession();
-  if (!isLessonCommentManager(session.role)) {
-    throw new Error("Apenas Admin e Suporte podem gerenciar comentários.");
-  }
+  const session = await requirePermission("manageContent");
   const commentId = readString(formData, "commentId");
 
   if (!commentId) {

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildLessonCommentTree,
   COMMENT_BODY_MAX_LENGTH,
+  canParticipateInStaffDiscussion,
+  isLessonCommentManager,
   normalizeCommentBody,
   sanitizeLessonComment,
   validateReplyTarget,
@@ -23,6 +25,14 @@ const visibleRoot = {
 };
 
 describe("lesson comment rules", () => {
+  it("separates staff replies from Admin-only moderation", () => {
+    expect(canParticipateInStaffDiscussion("admin")).toBe(true);
+    expect(canParticipateInStaffDiscussion("support")).toBe(true);
+    expect(canParticipateInStaffDiscussion("student")).toBe(false);
+    expect(isLessonCommentManager("admin")).toBe(true);
+    expect(isLessonCommentManager("support")).toBe(false);
+    expect(isLessonCommentManager("student")).toBe(false);
+  });
   it("trims body text and rejects empty comments", () => {
     expect(normalizeCommentBody("  Minha duvida  ")).toBe("Minha duvida");
     expect(() => normalizeCommentBody("   ")).toThrow(

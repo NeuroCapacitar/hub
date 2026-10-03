@@ -1,10 +1,8 @@
+import { escapeAnalyticsCsv } from "@/features/learning-analytics/csv";
 import { parseLearningAnalyticsPeriod } from "@/features/learning-analytics/period";
 import { getLessonAnalyticsExportMetrics } from "@/features/learning-analytics/server";
 
 export const runtime = "nodejs";
-
-const escapeCsv = (value: number | string | null): string =>
-  `"${String(value ?? "").replaceAll('"', '""')}"`;
 
 export async function GET(request: Request): Promise<Response> {
   const requestUrl = new URL(request.url);
@@ -56,7 +54,7 @@ export async function GET(request: Request): Promise<Response> {
       metric.medianHoursToNextLesson,
       metric.errorCount,
     ]
-      .map(escapeCsv)
+      .map(escapeAnalyticsCsv)
       .join(",")
   );
 

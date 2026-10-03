@@ -75,7 +75,7 @@ export const buildLessonResourcePreviewObjectKey = ({
 }: {
   lessonId: string;
   nonce: string;
-}): string => `lessons/${lessonId}/resources/${nonce}-preview.webp`;
+}): string => `lessons/${lessonId}/resources/previews/${nonce}.webp`;
 
 export const validateLessonAttachmentUpload = ({
   contentType,

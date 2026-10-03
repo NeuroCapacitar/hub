@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   confirmLessonResourceUpload,
+  copyLessonResourceForPublication,
+  registerLessonResourcePublicationCopy,
   consumeLessonResourceUpload,
   consumeStagedAdminImageUpload,
   deletePublicR2Objects,
@@ -20,6 +22,8 @@ const {
   release,
 } = vi.hoisted(() => ({
   confirmLessonResourceUpload: vi.fn(),
+  copyLessonResourceForPublication: vi.fn(),
+  registerLessonResourcePublicationCopy: vi.fn(),
   consumeLessonResourceUpload: vi.fn(),
   consumeStagedAdminImageUpload: vi.fn(),
   deletePublicR2Objects: vi.fn(),
@@ -50,6 +54,7 @@ vi.mock("@/features/jmvstream/server", () => ({
 }));
 vi.mock("@/features/storage/r2", () => ({
   confirmLessonResourceUpload,
+  copyLessonResourceForPublication,
   deletePublicR2Objects,
   deleteR2Objects,
   publishR2Object,
@@ -62,6 +67,7 @@ vi.mock("@/features/storage/staged-image-upload-registry", () => ({
 vi.mock("@/features/storage/lesson-resource-upload-registry", () => ({
   consumeLessonResourceUpload,
   getLessonResourceUpload,
+  registerLessonResourcePublicationCopy,
 }));
 vi.mock("@/features/storage/lesson-resource-upload-observability", () => ({
   logLessonResourceUploadEvent,
@@ -185,6 +191,8 @@ const setDefaultMocks = (): void => {
     (sql: string) => versioningQueryResult(sql) ?? { rows: [] }
   );
   confirmLessonResourceUpload.mockResolvedValue(undefined);
+  copyLessonResourceForPublication.mockResolvedValue(undefined);
+  registerLessonResourcePublicationCopy.mockResolvedValue(undefined);
   consumeLessonResourceUpload.mockResolvedValue(undefined);
   consumeStagedAdminImageUpload.mockImplementation(
     async ({ operation }: { operation: (file: File) => Promise<unknown> }) =>
@@ -218,6 +226,70 @@ afterEach(() => {
 });
 
 describe("admin authoring", () => {
+  it("refuses publication when a material changes while its immutable copy is prepared", async () => {
+    const initialResource = {
+      contentType: "application/pdf",
+      fileName: "material.pdf",
+      id: "resource-1",
+      key: "lessons/lesson-1/resources/upload-material.pdf",
+      label: "Material",
+      sizeBytes: 10,
+      storage: "r2",
+    };
+    const initialContent = {
+      document: textDocument,
+      resources: [initialResource],
+      type: "text",
+    };
+    let currentContent = initialContent;
+    query.mockImplementation((sql: string) => {
+      if (sql.startsWith("select id, content_json from lessons")) {
+        return { rows: [{ id: "lesson-1", content_json: currentContent }] };
+      }
+      return versioningQueryResult(sql) ?? { rows: [] };
+    });
+    copyLessonResourceForPublication.mockImplementation(() => {
+      currentContent = {
+        ...initialContent,
+        resources: [{ ...initialResource, label: "Alterado" }],
+      };
+    });
+    await expect(
+      publishCoursePublication({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+      })
+    ).rejects.toThrow("O Curso mudou durante a publicação");
+    expect(registerLessonResourcePublicationCopy).toHaveBeenCalledOnce();
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes("set status = 'published'")
+      )
+    ).toBe(false);
+    expect(query).toHaveBeenCalledWith("rollback");
+  });
+
+  it("refuses to publish a video reserved for deletion before copying material or retiring a publication", async () => {
+    query.mockImplementation((sql: string) => {
+      if (sql.includes("readiness_failure")) {
+        return { rows: [{ readiness_failure: "deleting" }] };
+      }
+      return versioningQueryResult(sql) ?? { rows: [] };
+    });
+    await expect(
+      publishCoursePublication({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+      })
+    ).rejects.toThrow("exclusao pendente ou concluida");
+    expect(copyLessonResourceForPublication).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes("set status = 'retired'")
+      )
+    ).toBe(false);
+  });
+
   it("rejects delayed publication while the rollout flag is disabled", async () => {
     process.env.CONTENT_RELEASE_DELAYED_PUBLISHING_ENABLED = "false";
     query.mockImplementation((sql: string) => {
@@ -737,6 +809,13 @@ describe("admin authoring", () => {
   });
 
   it("removes a newly uploaded course cover when course creation fails", async () => {
+    const uploadedCover = JSON.parse(
+      JSON.stringify(coverImage).replaceAll(
+        "course-1",
+        "c989d54d-d13f-46a1-89ed-2069d7c1c45b"
+      )
+    ) as typeof coverImage;
+    uploadCourseCoverFile.mockResolvedValue(uploadedCover);
     query.mockImplementation((sql: string) => {
       if (sql.includes("insert into courses")) {
         throw new Error("database unavailable");
@@ -764,9 +843,9 @@ describe("admin authoring", () => {
     ).rejects.toThrow("database unavailable");
 
     expect(deleteR2Objects).toHaveBeenCalledWith([
-      coverImage.original.key,
-      coverImage.variants.card.key,
-      coverImage.variants.thumb.key,
+      uploadedCover.original.key,
+      uploadedCover.variants.card.key,
+      uploadedCover.variants.thumb.key,
     ]);
     expect(ensureJmvstreamCourseFolder).not.toHaveBeenCalled();
   });
@@ -829,7 +908,7 @@ describe("admin authoring", () => {
         card: {
           contentType: "image/webp",
           height: 720,
-          key: "courses/course-1/cover/previous-card.webp",
+          key: `courses/${courseId}/cover/previous-card.webp`,
           sizeBytes: 10,
           width: 1280,
         },
@@ -840,7 +919,7 @@ describe("admin authoring", () => {
         card: {
           contentType: "image/webp",
           height: 720,
-          key: "courses/course-1/cover/next-card.webp",
+          key: `courses/${courseId}/cover/next-card.webp`,
           sizeBytes: 12,
           width: 1280,
         },
@@ -901,6 +980,12 @@ describe("admin authoring", () => {
   });
 
   it("rechecks a duration reduction after R2 and cleans a rejected upload outside database transactions", async () => {
+    const uploadedCover = JSON.parse(
+      JSON.stringify(coverImage).replaceAll(
+        "course-1",
+        "c989d54d-d13f-46a1-89ed-2069d7c1c45b"
+      )
+    ) as typeof coverImage;
     let currentMaxDelay = 0;
     let transactionOpen = false;
     let connectionHeld = false;
@@ -942,7 +1027,7 @@ describe("admin authoring", () => {
     uploadCourseCoverFile.mockImplementation(() => {
       recordProviderState();
       currentMaxDelay = 28;
-      return coverImage;
+      return uploadedCover;
     });
     publishR2Object.mockImplementation(recordProviderState);
     deleteR2Objects.mockImplementation(recordProviderState);
@@ -978,9 +1063,9 @@ describe("admin authoring", () => {
       )
     ).toBe(true);
     const uploadedKeys = [
-      coverImage.original.key,
-      coverImage.variants.card.key,
-      coverImage.variants.thumb.key,
+      uploadedCover.original.key,
+      uploadedCover.variants.card.key,
+      uploadedCover.variants.thumb.key,
     ];
     expect(deleteR2Objects).toHaveBeenCalledWith(uploadedKeys);
     expect(deletePublicR2Objects).toHaveBeenCalledWith(uploadedKeys);
@@ -1644,9 +1729,7 @@ describe("admin authoring", () => {
       "lesson-1",
     ]);
     expect(deleteJmvstreamAssetsForLesson).not.toHaveBeenCalled();
-    expect(deleteR2Objects).toHaveBeenCalledWith([
-      "lessons/lesson-1/resources/old.pdf",
-    ]);
+    expect(deleteR2Objects).not.toHaveBeenCalled();
     expect(recalculateCourseWorkloadHoursWithClient).toHaveBeenCalledWith(
       expect.anything(),
       "course-1"
@@ -1773,7 +1856,7 @@ describe("admin authoring", () => {
 
     await saveLesson({ actorUserId: "admin-1", formData });
 
-    expect(deleteR2Objects).toHaveBeenCalledWith([]);
+    expect(deleteR2Objects).not.toHaveBeenCalled();
   });
 
   it("requires a documented compatible-correction reason before changing a published lesson", async () => {

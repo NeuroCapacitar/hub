@@ -56,6 +56,17 @@ const createRequest = ({
 };
 
 describe("POST /api/admin/uploads/images/upload", () => {
+  it("rejects oversized surplus fields before upload even with a forged length", async () => {
+    const request = createRequest({
+      referenceValue: "x".repeat(11 * 1024 * 1024),
+    });
+    request.headers.set("content-length", "1");
+    const response = await POST(request);
+    expect(response.status).toBe(413);
+    expect(dependencies.uploadStagedAdminImageFile).not.toHaveBeenCalled();
+    expect(dependencies.parseStagedAdminImageReference).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
     dependencies.requirePermission.mockResolvedValue({

@@ -3,6 +3,7 @@ export const LESSON_SERVER_FALLBACK_MAX_BYTES = 4 * 1024 * 1024;
 export type LessonResourceUploadStatus =
   | "cleaning"
   | "consumed"
+  | "deleted"
   | "prepared"
   | "uploaded";
 

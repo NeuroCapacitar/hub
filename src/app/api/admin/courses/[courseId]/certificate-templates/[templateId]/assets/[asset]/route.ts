@@ -1,4 +1,5 @@
 import { getPool } from "@/db";
+import { isCertificateTemplateAssetKey } from "@/features/certificates/template-asset-ownership";
 import { createR2ObjectReadUrl } from "@/features/storage/r2";
 import { requirePermission } from "@/lib/auth-permissions";
 
@@ -37,7 +38,11 @@ export async function GET(
   const key = asset === "background" ? row?.background_key : row?.signature_key;
   const requestedVersion = new URL(request.url).searchParams.get("v");
 
-  if (!key || requestedVersion !== key) {
+  if (
+    !key ||
+    requestedVersion !== key ||
+    !isCertificateTemplateAssetKey({ asset, courseId, key })
+  ) {
     return Response.json(
       { error: "Imagem não encontrada." },
       { headers: { "Cache-Control": "no-store" }, status: 404 }

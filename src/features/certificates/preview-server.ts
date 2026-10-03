@@ -10,6 +10,7 @@ import {
 import { getServerEnv } from "@/lib/env";
 import { renderCertificatePreview } from "./preview";
 import { parseCertificateRenderSnapshot } from "./render-snapshot";
+import { assertCertificateTemplateAssetNamespace } from "./template-asset-ownership";
 
 const previewKeyForCertificate = (certificateId: string): string =>
   `certificates/${certificateId}/certificate-preview.png`;
@@ -19,16 +20,21 @@ const regeneratePreview = async ({
   certificateId,
   removeStaleObject,
 }: {
-  certificate: { render_snapshot: unknown };
+  certificate: { course_id: string; render_snapshot: unknown };
   certificateId: string;
   removeStaleObject: boolean;
 }): Promise<boolean> => {
   const key = previewKeyForCertificate(certificateId);
+  const snapshot = parseCertificateRenderSnapshot(certificate.render_snapshot);
+  assertCertificateTemplateAssetNamespace({
+    backgroundKey: snapshot.template.backgroundKey,
+    courseId: certificate.course_id,
+    signatureKey: snapshot.template.signatureKey,
+  });
   if (removeStaleObject) {
     await deleteR2Objects([key]);
   }
 
-  const snapshot = parseCertificateRenderSnapshot(certificate.render_snapshot);
   const backgroundUrl = await createR2ObjectReadUrl({
     key: snapshot.template.backgroundKey,
     responseContentDisposition: "inline",
@@ -86,12 +92,13 @@ export const getCertificatePreviewReadUrl = async (
   code: string
 ): Promise<string | null> => {
   const result = await getPool().query<{
+    course_id: string;
     id: string;
     preview_sha256: string | null;
     render_snapshot: unknown;
   }>(
     `
-      select id, preview_sha256, render_snapshot
+      select id, course_id, preview_sha256, render_snapshot
       from certificates
       where code = $1
         and status = 'valid'

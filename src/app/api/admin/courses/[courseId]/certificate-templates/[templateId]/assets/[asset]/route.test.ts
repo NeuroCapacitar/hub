@@ -71,6 +71,33 @@ describe("certificate template image delivery", () => {
     expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();
   });
 
+  it.each([
+    "certificates/revoked-certificate/certificate.pdf",
+    "certificates/templates/course-2/signatures/signature.webp",
+    "certificates/templates/course-1/signatures/../signature.webp",
+  ])("refuses a persisted unsafe signature even when version matches: %s", async (key) => {
+    dependencies.query.mockResolvedValue({
+      rows: [{ background_key: assetKey, signature_key: key }],
+    });
+    const response = await getAsset({ asset: "signature", version: key });
+    expect(response.status).toBe(404);
+    expect(dependencies.createR2ObjectReadUrl).not.toHaveBeenCalled();
+  });
+
+  it("serves a valid signature owned by this Course", async () => {
+    const key = "certificates/templates/course-1/signatures/signature.webp";
+    dependencies.query.mockResolvedValue({
+      rows: [{ background_key: assetKey, signature_key: key }],
+    });
+    expect((await getAsset({ asset: "signature", version: key })).status).toBe(
+      302
+    );
+    expect(dependencies.createR2ObjectReadUrl).toHaveBeenCalledWith({
+      key,
+      responseCacheControl: "private, max-age=240",
+    });
+  });
+
   it("does not expose an asset type outside the two supported fields", async () => {
     const response = await getAsset({ asset: "other" });
 

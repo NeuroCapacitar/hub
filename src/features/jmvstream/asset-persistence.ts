@@ -1,5 +1,11 @@
 import "server-only";
+import type { PoolClient } from "pg";
 import { getPool } from "@/db";
+import {
+  isJmvstreamAssetProtected,
+  lockJmvstreamVideoLifecycle,
+} from "./asset-lifecycle";
+import { withJmvstreamLessonDraft } from "./lesson-lifecycle";
 
 export interface JmvstreamAsset {
   deleteStatus: string;
@@ -116,19 +122,7 @@ export const recordJmvstreamUploadSession = async ({
         size_bytes, object_name, upload_id, upload_status, delete_status
       )
       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'uploading', 'none')
-      on conflict (video_hash) do update set
-        lesson_id = excluded.lesson_id,
-        module_id = excluded.module_id,
-        course_id = excluded.course_id,
-        gallery_uuid = excluded.gallery_uuid,
-        filename = excluded.filename,
-        size_bytes = excluded.size_bytes,
-        object_name = excluded.object_name,
-        upload_id = excluded.upload_id,
-        upload_status = 'uploading',
-        delete_status = 'none',
-        last_error = null,
-        updated_at = now()
+      on conflict (video_hash) do nothing
       returning id
     `,
     [
@@ -176,15 +170,25 @@ export const assertJmvstreamVideoHashAvailable = async (
 };
 
 export const assertJmvstreamUploadSessionMatches = async ({
+  filename,
   lessonId,
+  objectName,
+  size,
+  uploadId,
   uploadSessionId,
   videoHash,
+  queryable = getPool(),
 }: {
+  filename: string;
   lessonId: string;
+  objectName: string;
+  size: number;
+  uploadId: string;
   uploadSessionId: string;
   videoHash: string;
+  queryable?: Pick<PoolClient, "query">;
 }): Promise<void> => {
-  const { rows } = await getPool().query<{ id: string }>(
+  const { rows } = await queryable.query<{ id: string }>(
     `
       select id
       from jmvstream_video_assets
@@ -193,9 +197,13 @@ export const assertJmvstreamUploadSessionMatches = async ({
         and video_hash = $3
         and upload_status = 'uploading'
         and delete_status = 'none'
+        and filename = $4
+        and object_name = $5
+        and size_bytes = $6
+        and upload_id = $7
       limit 1
     `,
-    [uploadSessionId, lessonId, videoHash]
+    [uploadSessionId, lessonId, videoHash, filename, objectName, size, uploadId]
   );
 
   if (!rows[0]) {
@@ -205,20 +213,29 @@ export const assertJmvstreamUploadSessionMatches = async ({
 
 export const markJmvstreamUploadFailed = async ({
   lastError,
+  uploadSessionId,
   videoHash,
 }: {
   lastError: string;
+  uploadSessionId?: string;
   videoHash: string;
 }): Promise<void> => {
-  await getPool().query(
-    `
+  await mutateUnprotectedJmvstreamAsset(videoHash, false, async (client) =>
+    client.query(
+      `
       update jmvstream_video_assets
       set upload_status = 'failed',
           last_error = $2,
           updated_at = now()
       where video_hash = $1
+        and upload_status in ('uploading', 'processing')
+        and delete_status = 'none'
+        and ($3::uuid is null or (
+          id = $3 and upload_status = 'uploading' and delete_status = 'none'
+        ))
     `,
-    [videoHash, lastError]
+      [videoHash, lastError, uploadSessionId ?? null]
+    )
   );
 };
 
@@ -227,8 +244,12 @@ export const discardJmvstreamUpload = async ({
 }: {
   assetId: string;
 }): Promise<void> => {
-  await getPool().query(
-    `
+  await mutateUnprotectedJmvstreamAsset(
+    assetId,
+    true,
+    async (client) =>
+      client.query(
+        `
       update jmvstream_video_assets
       set delete_status = 'deleted',
           lesson_id = null,
@@ -238,8 +259,48 @@ export const discardJmvstreamUpload = async ({
         and upload_status = 'failed'
         and delete_status = 'none'
     `,
-    [assetId]
+        [assetId]
+      ),
+    true
   );
+};
+
+const mutateUnprotectedJmvstreamAsset = async (
+  identifier: string,
+  byId: boolean,
+  operation: (client: PoolClient) => Promise<unknown>,
+  includeDrafts = false
+): Promise<void> => {
+  const client = await getPool().connect();
+  try {
+    await client.query("begin");
+    await lockJmvstreamVideoLifecycle(client);
+    const { rows } = await client.query<{
+      video_hash: string;
+      player_url: string | null;
+    }>(
+      `select video_hash, player_url from jmvstream_video_assets where ${byId ? "id" : "video_hash"} = $1`,
+      [identifier]
+    );
+    const asset = rows[0];
+    if (
+      asset &&
+      !(await isJmvstreamAssetProtected(
+        client,
+        asset.video_hash,
+        asset.player_url,
+        includeDrafts
+      ))
+    ) {
+      await operation(client);
+    }
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 export const recordCompletedJmvstreamUpload = async ({
@@ -249,8 +310,11 @@ export const recordCompletedJmvstreamUpload = async ({
   lesson,
   lessonId,
   objectName,
+  playerUrl,
   size,
+  thumbnailUrl,
   uploadId,
+  uploadSessionId,
   uploadStatus,
   videoHash,
 }: {
@@ -260,73 +324,104 @@ export const recordCompletedJmvstreamUpload = async ({
   lesson: JmvstreamLessonContext;
   lessonId: string;
   objectName: string;
+  playerUrl: string | null;
   size: number;
+  thumbnailUrl: string | null;
   uploadId: string;
+  uploadSessionId: string;
   uploadStatus: "processing" | "ready";
   videoHash: string;
-}): Promise<void> => {
-  await getPool().query(
-    `
-      insert into jmvstream_video_assets (
-        lesson_id, module_id, course_id, video_hash, gallery_uuid, filename,
-        size_bytes, object_name, upload_id, job_id, upload_status, delete_status
-      )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'none')
-      on conflict (video_hash) do update set
-        lesson_id = excluded.lesson_id,
-        module_id = excluded.module_id,
-        course_id = excluded.course_id,
-        gallery_uuid = excluded.gallery_uuid,
-        filename = excluded.filename,
-        size_bytes = excluded.size_bytes,
-        object_name = excluded.object_name,
-        upload_id = excluded.upload_id,
-        job_id = excluded.job_id,
-        upload_status = excluded.upload_status,
-        delete_status = 'none',
-        last_error = null,
-        updated_at = now()
-    `,
-    [
-      lessonId,
-      lesson.module_id,
-      lesson.course_id,
-      videoHash,
-      galleryUuid,
-      filename,
-      size,
-      objectName,
-      uploadId,
-      jobId,
-      uploadStatus,
-    ]
-  );
-};
-
-export const linkJmvstreamVideoToLesson = async ({
-  lessonId,
-  playerUrl,
-  thumbnailUrl,
-  videoHash,
-}: {
-  lessonId: string;
-  playerUrl: string | null;
-  thumbnailUrl: string | null;
-  videoHash: string;
-}): Promise<void> => {
-  await getPool().query(
-    `
-      update lessons
-      set video_provider = 'jmvstream',
-          video_external_id = $1,
-          video_embed_url = $3,
-          thumbnail_url = $4,
-          updated_at = now()
-      where id = $2
-    `,
-    [videoHash, lessonId, playerUrl, thumbnailUrl]
-  );
-};
+}): Promise<string[]> =>
+  await withJmvstreamLessonDraft({
+    courseId: lesson.course_id,
+    lessonId,
+    operation: async (client) => {
+      await assertJmvstreamUploadSessionMatches({
+        filename,
+        lessonId,
+        objectName,
+        size,
+        uploadId,
+        uploadSessionId,
+        videoHash,
+        queryable: client,
+      });
+      const priorAssets = await client.query<{
+        id: string;
+        video_hash: string;
+        player_url: string | null;
+      }>(
+        `select id, video_hash, player_url from jmvstream_video_assets
+         where lesson_id = $1 and video_hash <> $2 and delete_status = 'none'
+           and upload_status in ('processing', 'ready')`,
+        [lessonId, videoHash]
+      );
+      for (const prior of priorAssets.rows) {
+        if (
+          await isJmvstreamAssetProtected(
+            client,
+            prior.video_hash,
+            prior.player_url
+          )
+        ) {
+          await client.query(
+            "update jmvstream_video_assets set lesson_id = null, updated_at = now() where id = $1",
+            [prior.id]
+          );
+        }
+      }
+      await client.query(
+        `update jmvstream_video_assets a
+         set lesson_id = null, updated_at = now()
+         where a.lesson_id = $1 and a.video_hash <> $2 and a.delete_status = 'none'
+           and a.upload_status in ('processing', 'ready')
+           and exists (select 1 from lessons l
+             join course_publications cp on cp.id = l.course_publication_id
+             where l.video_provider = 'jmvstream' and l.video_external_id = a.video_hash
+               and cp.status in ('published', 'retired'))`,
+        [lessonId, videoHash]
+      );
+      const supersededAssets = await client.query<{ id: string }>(
+        `update jmvstream_video_assets
+         set delete_status = 'pending', updated_at = now()
+         where lesson_id = $1 and video_hash <> $2 and delete_status = 'none'
+           and upload_status in ('processing', 'ready')
+         returning id`,
+        [lessonId, videoHash]
+      );
+      const asset = await client.query(
+        `update jmvstream_video_assets
+         set gallery_uuid = $2, job_id = $3, upload_status = $4, player_url = $7,
+             last_error = null, updated_at = now()
+         where id = $1 and lesson_id = $5 and video_hash = $6
+           and upload_status = 'uploading' and delete_status = 'none'`,
+        [
+          uploadSessionId,
+          galleryUuid,
+          jobId,
+          uploadStatus,
+          lessonId,
+          videoHash,
+          playerUrl,
+        ]
+      );
+      if (asset.rowCount !== 1) {
+        throw new Error("Sessao de upload JMVStream invalida ou expirada.");
+      }
+      const linked = await client.query(
+        `update lessons l
+         set video_provider = 'jmvstream', video_external_id = $1,
+             video_embed_url = $3, thumbnail_url = $4, updated_at = now()
+         from course_publications cp
+         where l.id = $2 and cp.id = l.course_publication_id and cp.status = 'draft'`,
+        [videoHash, lessonId, playerUrl, thumbnailUrl]
+      );
+      if (linked.rowCount !== 1) {
+        throw new Error("A Aula deixou de pertencer a um rascunho editavel.");
+      }
+      return supersededAssets.rows.map((supersededAsset) => supersededAsset.id);
+    },
+  });
 
 export const getJmvstreamLessonVideo = async (
   lessonId: string
@@ -353,38 +448,44 @@ export const getJmvstreamLessonVideo = async (
 };
 
 export const recordJmvstreamReadyPlayer = async ({
+  courseId,
   lessonId,
   playerUrl,
   thumbnailUrl,
   videoHash,
 }: {
+  courseId: string;
   lessonId: string;
   playerUrl: string;
   thumbnailUrl: string | null;
   videoHash: string;
 }): Promise<void> => {
-  await getPool().query(
-    `
-      update lessons
-      set video_embed_url = $1,
-          thumbnail_url = $3,
-          updated_at = now()
-      where id = $2
-    `,
-    [playerUrl, lessonId, thumbnailUrl]
-  );
-  await getPool().query(
-    `
-      update jmvstream_video_assets
-      set upload_status = 'ready',
-          last_error = null,
-          updated_at = now()
-      where video_hash = $1
-    `,
-    [videoHash]
-  );
+  await withJmvstreamLessonDraft({
+    courseId,
+    lessonId,
+    operation: async (client) => {
+      const linked = await client.query(
+        `update lessons l
+         set video_embed_url = $1, thumbnail_url = $3, updated_at = now()
+         from course_publications cp
+         where l.id = $2 and cp.id = l.course_publication_id and cp.status = 'draft'
+           and l.video_provider = 'jmvstream' and l.video_external_id = $4
+           and exists (select 1 from jmvstream_video_assets a
+             where a.video_hash = $4 and a.delete_status = 'none')`,
+        [playerUrl, lessonId, thumbnailUrl, videoHash]
+      );
+      if (linked.rowCount !== 1) {
+        throw new Error("O video da Aula mudou durante a sincronizacao.");
+      }
+      await client.query(
+        `update jmvstream_video_assets
+         set upload_status = 'ready', player_url = $2, last_error = null, updated_at = now()
+         where video_hash = $1 and delete_status = 'none'`,
+        [videoHash, playerUrl]
+      );
+    },
+  });
 };
-
 export const getPendingJmvstreamPlayerLessons = async (
   limit: number
 ): Promise<string[]> => {

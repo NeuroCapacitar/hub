@@ -37,7 +37,10 @@ export function JmvstreamDurationDetector({
   }, [embedUrl, provider]);
 
   const syncPlayer = useCallback(() => {
-    iframeRef.current?.contentWindow?.postMessage(SYNC_MESSAGE, "*");
+    iframeRef.current?.contentWindow?.postMessage(
+      SYNC_MESSAGE,
+      "https://player.jmvstream.com"
+    );
   }, []);
 
   useEffect(() => {
@@ -92,7 +95,10 @@ export function JmvstreamDurationDetector({
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.source !== iframeRef.current?.contentWindow) {
+      if (
+        event.origin !== "https://player.jmvstream.com" ||
+        event.source !== iframeRef.current?.contentWindow
+      ) {
         return;
       }
 

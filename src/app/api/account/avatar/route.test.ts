@@ -28,6 +28,20 @@ vi.mock("@/features/account/avatar-storage", () => ({
 import { GET, POST } from "./route";
 
 describe("account avatar route", () => {
+  it("rejects actual oversized multipart bytes despite a small declared length", async () => {
+    const form = new FormData();
+    form.set("file", new File(["small"], "avatar.png", { type: "image/png" }));
+    form.set("unused", "x".repeat(6 * 1024 * 1024));
+    const request = new Request("https://app.example.test/api/account/avatar", {
+      body: form,
+      headers: { origin: "https://app.example.test", "content-length": "1" },
+      method: "POST",
+    });
+    const response = await POST(request);
+    expect(response.status).toBe(413);
+    expect(dependencies.saveUserAvatar).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
     dependencies.getServerEnv.mockReturnValue({

@@ -51,6 +51,7 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 - [Configuração inicial Vercel-first, concluída](operations/vercel-first-launch-checklist.md)
 - [Registro histórico da migração Vercel-first](operations/vercel-migration-status.md)
 - [Testes e CI](operations/testing-and-ci.md)
+- [Ambiente para auditoria de segurança completa](operations/security-audit-environment.md)
 - [Estado de release](operations/release-state.md)
 - [Outbox e efeitos transacionais](operations/outbox-and-transactional-effects.md)
 - [Observabilidade e recuperação](operations/observability-and-recovery.md)

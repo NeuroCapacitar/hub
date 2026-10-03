@@ -27,24 +27,23 @@ export const GET = async (
     return new NextResponse(null, { status: 404 });
   }
 
-  if (certificate.pdf_sha256) {
-    const artifactStatus = await verifyPrivateR2ObjectSha256({
-      expectedSha256: certificate.pdf_sha256,
-      key,
+  const unavailable = () =>
+    new NextResponse(null, {
+      headers: {
+        "Cache-Control": "no-store",
+        "Retry-After": "60",
+      },
+      status: 503,
     });
-    if (
-      artifactStatus === "mismatch" ||
-      artifactStatus === "missing" ||
-      artifactStatus === "unavailable"
-    ) {
-      return new NextResponse(null, {
-        headers: {
-          "Cache-Control": "no-store",
-          "Retry-After": "60",
-        },
-        status: 503,
-      });
-    }
+  if (!certificate.pdf_sha256) {
+    return unavailable();
+  }
+  const artifactStatus = await verifyPrivateR2ObjectSha256({
+    expectedSha256: certificate.pdf_sha256,
+    key,
+  });
+  if (artifactStatus !== "match") {
+    return unavailable();
   }
 
   return NextResponse.redirect(await createR2ObjectReadUrl({ key }));

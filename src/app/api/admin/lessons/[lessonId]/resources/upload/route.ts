@@ -12,10 +12,16 @@ import {
   uploadPrivateR2Object,
 } from "@/features/storage/r2";
 import {
+  LESSON_RESOURCE_IMAGE_PREVIEW,
   validateLessonAttachmentUpload,
   validateLessonImagePreviewUpload,
 } from "@/features/storage/r2-objects";
 import { requirePermission } from "@/lib/auth-permissions";
+import {
+  MULTIPART_OVERHEAD_MAX_BYTES,
+  RequestBodyLimitError,
+  readBoundedMultipart,
+} from "@/lib/request-body-limits";
 
 export const runtime = "nodejs";
 
@@ -32,9 +38,17 @@ export async function POST(
   let formData: FormData;
 
   try {
-    formData = await request.formData();
-  } catch {
-    return Response.json({ error: "Dados invalidos." }, { status: 400 });
+    formData = await readBoundedMultipart(
+      request,
+      LESSON_SERVER_FALLBACK_MAX_BYTES +
+        LESSON_RESOURCE_IMAGE_PREVIEW.maxSizeBytes +
+        MULTIPART_OVERHEAD_MAX_BYTES
+    );
+  } catch (error) {
+    return Response.json(
+      { error: "Dados invalidos ou limite do upload excedido." },
+      { status: error instanceof RequestBodyLimitError ? error.status : 400 }
+    );
   }
 
   const resourceId = formData.get("resourceId");

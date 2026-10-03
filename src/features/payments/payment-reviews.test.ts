@@ -31,9 +31,21 @@ const createClient = (
       | "partial_refund"
       | "terminal_conflict";
     user_id: string | null;
-  } | null
+  } | null,
+  pendingReviews: readonly { id: string; orderId: string }[] = [
+    { id: "review-1", orderId: "order-1" },
+  ]
 ) => {
-  const query = vi.fn((statement: string) => {
+  const query = vi.fn((statement: string, values?: unknown[]) => {
+    if (statement.includes("and id <> $2")) {
+      const [orderId, selectedReviewId] = values ?? [];
+      return {
+        rows: pendingReviews.filter(
+          (pending) =>
+            pending.orderId === orderId && pending.id !== selectedReviewId
+        ),
+      };
+    }
     if (statement.includes("from payment_reviews")) {
       return { rows: review ? [review] : [] };
     }
@@ -266,5 +278,121 @@ describe("payment review resolution", () => {
     );
     expect(client.query).toHaveBeenCalledWith("commit");
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it("blocks approval before writes or access when another review on the order is pending", async () => {
+    const client = createClient(
+      {
+        access_duration_months: 12,
+        course_id: "course-1",
+        order_id: "order-1",
+        observed_amount_in_cents: 13_000,
+        status: "pending",
+        type: "amount_mismatch",
+        user_id: "user-1",
+      },
+      [
+        { id: "review-1", orderId: "order-1" },
+        { id: "anomaly-review", orderId: "order-1" },
+      ]
+    );
+    dependencies.connect.mockResolvedValue(client);
+
+    await expect(
+      resolvePaymentReview({
+        actorUserId: "support-1",
+        decision: "approved",
+        decisionReason: "valor conferido",
+        reviewId: "review-1",
+      })
+    ).rejects.toThrow("O pedido possui outra revisao pendente");
+
+    const statements = client.query.mock.calls.map(([statement]) => statement);
+    expect(statements[1]).toContain("for update of payment_reviews, orders");
+    expect(statements).not.toContain(expect.stringContaining("update orders"));
+    expect(statements).not.toContain(
+      expect.stringContaining("update payment_reviews")
+    );
+    expect(statements).not.toContain(
+      expect.stringContaining("insert into audit_logs")
+    );
+    expect(dependencies.applyPaidWebhookAccess).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith("rollback");
+    expect(client.query).not.toHaveBeenCalledWith("commit");
+    expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it("does not let another order's pending review block the selected review", async () => {
+    const client = createClient(
+      {
+        access_duration_months: 12,
+        course_id: "course-1",
+        order_id: "order-1",
+        observed_amount_in_cents: 13_000,
+        status: "pending",
+        type: "amount_mismatch",
+        user_id: "user-1",
+      },
+      [
+        { id: "review-1", orderId: "order-1" },
+        { id: "other-review", orderId: "order-2" },
+      ]
+    );
+    dependencies.connect.mockResolvedValue(client);
+
+    await resolvePaymentReview({
+      actorUserId: "support-1",
+      decision: "approved",
+      decisionReason: "valor conferido",
+      reviewId: "review-1",
+    });
+
+    expect(dependencies.applyPaidWebhookAccess).toHaveBeenCalledOnce();
+    expect(client.query).toHaveBeenCalledWith("commit");
+  });
+
+  it("can reject the selected amount review while leaving sibling reviews and access unchanged", async () => {
+    const client = createClient(
+      {
+        access_duration_months: 12,
+        course_id: "course-1",
+        order_id: "order-1",
+        status: "pending",
+        type: "amount_mismatch",
+        user_id: "user-1",
+      },
+      [
+        { id: "review-1", orderId: "order-1" },
+        { id: "anomaly-review", orderId: "order-1" },
+      ]
+    );
+    dependencies.connect.mockResolvedValue(client);
+
+    await resolvePaymentReview({
+      actorUserId: "support-1",
+      decision: "rejected",
+      decisionReason: "divergencia mantida",
+      reviewId: "review-1",
+    });
+
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining("update payment_reviews"),
+      ["review-1", "rejected", "divergencia mantida", "support-1"]
+    );
+    expect(
+      client.query.mock.calls.map(([statement]) => statement)
+    ).not.toContain(expect.stringContaining("update orders"));
+    expect(dependencies.applyPaidWebhookAccess).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining("insert into audit_logs"),
+      [
+        "support-1",
+        "payment_review.resolved",
+        "review-1",
+        "rejected",
+        "divergencia mantida",
+      ]
+    );
+    expect(client.query).toHaveBeenCalledWith("commit");
   });
 });

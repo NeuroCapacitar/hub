@@ -260,6 +260,18 @@ intervenção.
 
 ## GitHub Environment `production-backup`
 
+O workflow de backup aceita somente `refs/heads/main`, tanto no agendamento
+quanto no dispatch. O checkout usa o SHA imutável do evento e o confirma antes
+de instalar dependências. Secrets de banco, storage e providers são fornecidas
+somente ao step de backup, não à instalação ou aos steps de resumo.
+
+O Environment deve permitir apenas `main` por regra explícita de deployment
+branches e manter a aprovação/revisão operacional aplicável. Esses controles
+externos protegem também a definição do workflow: um `if` no YAML de `main`
+não protege uma cópia do YAML modificada em outra branch. Inspecionar regras e
+permissões por metadados, sem revelar valores de secrets ou executar backup
+para testar uma ref não aprovada.
+
 Configure sem passar valores pela linha de comando ou por este chat:
 
 - secrets: `BACKUP_DATABASE_URL`, `BACKUP_R2_ACCESS_KEY_ID`,

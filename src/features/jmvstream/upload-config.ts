@@ -11,7 +11,7 @@ const MEBIBYTE = 1024 * 1024;
 export const getJmvstreamMultipartUploadConfig = (
   fileSize: number
 ): { chunkSize: number; totalParts: number } => {
-  if (!(Number.isFinite(fileSize) && fileSize > 0)) {
+  if (!(Number.isSafeInteger(fileSize) && fileSize > 0)) {
     throw new Error("O arquivo de video deve ter tamanho maior que zero.");
   }
 

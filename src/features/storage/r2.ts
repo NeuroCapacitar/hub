@@ -18,7 +18,11 @@ import type {
   LessonResourceUploadReference,
   PreparedLessonResourceUpload,
 } from "@/features/storage/lesson-resource-upload";
-import { buildPublicMediaUrl } from "@/features/storage/public-media";
+import {
+  assertPublicMediaKey,
+  buildPublicMediaUrl,
+} from "@/features/storage/public-media";
+import { isPublishedLessonResourceKey } from "@/features/storage/published-lesson-resource";
 import { resolveR2ClientEndpoint } from "@/features/storage/r2-endpoint";
 import { createR2ObjectNamespace } from "@/features/storage/r2-object-namespace";
 import {
@@ -35,6 +39,7 @@ import {
   type StagedAdminImageReference,
 } from "@/features/storage/staged-image-upload";
 import { getServerEnv } from "@/lib/env";
+import { readBoundedBody } from "@/lib/request-body-limits";
 
 export const R2_UPLOAD_URL_EXPIRES_SECONDS = 10 * 60;
 const DOWNLOAD_URL_EXPIRES_SECONDS = 5 * 60;
@@ -182,6 +187,12 @@ export const createLessonResourceUploadUrlForReference = async ({
 }: {
   reference: R2LessonResource;
 }): Promise<PreparedLessonResourceUpload> => {
+  if (
+    isPublishedLessonResourceKey(reference.key) ||
+    (reference.preview && isPublishedLessonResourceKey(reference.preview.key))
+  ) {
+    throw new Error("Material publicado nao aceita uma URL de upload.");
+  }
   validateLessonAttachmentUpload({
     contentType: reference.contentType,
     fileName: reference.fileName,
@@ -225,6 +236,95 @@ export const createLessonResourceUploadUrlForReference = async ({
     reference,
     uploadUrl,
   };
+};
+
+const copyValidatedLessonResourceObject = async ({
+  contentType,
+  destinationKey,
+  sizeBytes,
+  sourceKey,
+}: {
+  contentType: string;
+  destinationKey: string;
+  sizeBytes: number;
+  sourceKey: string;
+}): Promise<void> => {
+  const config = getR2Config();
+  const client = getR2Client(config);
+  const physicalSourceKey = config.namespace.toPhysicalKey(sourceKey);
+  const source = await client.send(
+    new HeadObjectCommand({
+      Bucket: config.bucketName,
+      Key: physicalSourceKey,
+    })
+  );
+  if (
+    source.ContentLength !== sizeBytes ||
+    source.ContentType !== contentType ||
+    !source.ETag
+  ) {
+    throw new Error("O material mudou antes da publicacao.");
+  }
+  await client.send(
+    new CopyObjectCommand({
+      Bucket: config.bucketName,
+      CacheControl: PRIVATE_MEDIA_CACHE_CONTROL,
+      ContentType: contentType,
+      CopySource: `/${config.bucketName}/${encodeURIComponent(physicalSourceKey)}`,
+      CopySourceIfMatch: source.ETag,
+      Key: config.namespace.toPhysicalKey(destinationKey),
+      MetadataDirective: "REPLACE",
+    })
+  );
+  await confirmLessonResourceUpload({
+    contentType,
+    key: destinationKey,
+    sizeBytes,
+  });
+};
+
+export const copyLessonResourceForPublication = async ({
+  destination,
+  resource,
+}: {
+  destination: R2LessonResource;
+  resource: R2LessonResource;
+}): Promise<void> => {
+  validateLessonAttachmentUpload(resource);
+  if (
+    !isPublishedLessonResourceKey(destination.key) ||
+    destination.key === resource.key
+  ) {
+    throw new Error("Destino do material publicado invalido.");
+  }
+  if (resource.preview) {
+    validateLessonImagePreviewUpload(resource.preview);
+    if (
+      !(
+        destination.preview &&
+        isPublishedLessonResourceKey(destination.preview.key)
+      ) ||
+      destination.preview.key === resource.preview.key
+    ) {
+      throw new Error("Destino do preview publicado invalido.");
+    }
+  } else if (destination.preview) {
+    throw new Error("Preview publicado nao corresponde ao material preparado.");
+  }
+  await copyValidatedLessonResourceObject({
+    contentType: resource.contentType,
+    destinationKey: destination.key,
+    sizeBytes: resource.sizeBytes,
+    sourceKey: resource.key,
+  });
+  if (resource.preview && destination.preview) {
+    await copyValidatedLessonResourceObject({
+      contentType: resource.preview.contentType,
+      destinationKey: destination.preview.key,
+      sizeBytes: resource.preview.sizeBytes,
+      sourceKey: resource.preview.key,
+    });
+  }
 };
 
 export const createStagedAdminImageUploadUrl = async ({
@@ -323,41 +423,80 @@ export const readStagedAdminImageFile = async ({
     reference,
   });
 
-  await verifyStagedAdminImageObject(reference);
+  const etag = await verifyStagedAdminImageObject(reference);
 
   const config = getR2Config();
   const client = getR2Client(config);
-  const object = await client.send(
-    new GetObjectCommand({
-      Bucket: config.bucketName,
-      Key: config.namespace.toPhysicalKey(reference.key),
-    })
-  );
-  if (!object.Body) {
-    throw new Error("O arquivo temporario nao esta disponivel.");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const object = await client.send(
+      new GetObjectCommand({
+        Bucket: config.bucketName,
+        IfMatch: etag,
+        Key: config.namespace.toPhysicalKey(reference.key),
+      }),
+      { abortSignal: controller.signal }
+    );
+    if (!object.Body) {
+      throw new Error("O arquivo temporario nao esta disponivel.");
+    }
+    const stream = object.Body.transformToWebStream();
+    if (
+      object.ETag !== etag ||
+      object.ContentLength !== reference.sizeBytes ||
+      object.ContentType !== reference.contentType
+    ) {
+      stream.cancel().catch(() => undefined);
+      throw new Error("O arquivo enviado nao corresponde ao upload preparado.");
+    }
+    const body = await readBoundedBody(stream, reference.sizeBytes);
+    if (body.byteLength !== reference.sizeBytes) {
+      throw new Error("O arquivo enviado nao corresponde ao upload preparado.");
+    }
+    return new File([body.buffer], reference.fileName, {
+      type: reference.contentType,
+    });
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
   }
-
-  const body = Uint8Array.from(await object.Body.transformToByteArray());
-  return new File([body.buffer], reference.fileName, {
-    type: reference.contentType,
-  });
 };
 
 export const verifyStagedAdminImageObject = async (
   reference: StagedAdminImageReference
-): Promise<void> => {
+): Promise<string> => {
+  // Revalidate even references constructed outside the JSON parser.
+  buildStagedAdminImageUpload({
+    actorUserId: reference.key.split("/")[2] ?? "",
+    aggregateId: reference.aggregateId,
+    contentType: reference.contentType,
+    fileName: reference.fileName,
+    nonce: "validation",
+    purpose: reference.purpose,
+    sizeBytes: reference.sizeBytes,
+  });
   const config = getR2Config();
-  const objectHead = await getR2Client(config).send(
-    new HeadObjectCommand({
-      Bucket: config.bucketName,
-      Key: config.namespace.toPhysicalKey(reference.key),
-    })
-  );
-  if (
-    objectHead.ContentLength !== reference.sizeBytes ||
-    objectHead.ContentType !== reference.contentType
-  ) {
-    throw new Error("O arquivo enviado nao corresponde ao upload preparado.");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const objectHead = await getR2Client(config).send(
+      new HeadObjectCommand({
+        Bucket: config.bucketName,
+        Key: config.namespace.toPhysicalKey(reference.key),
+      }),
+      { abortSignal: controller.signal }
+    );
+    if (
+      objectHead.ContentLength !== reference.sizeBytes ||
+      objectHead.ContentType !== reference.contentType ||
+      !objectHead.ETag
+    ) {
+      throw new Error("O arquivo enviado nao corresponde ao upload preparado.");
+    }
+    return objectHead.ETag;
+  } finally {
+    clearTimeout(timer);
   }
 };
 
@@ -680,6 +819,7 @@ export const checkR2ObjectStorage = async (): Promise<void> => {
 };
 
 export const publishR2Object = async (key: string): Promise<void> => {
+  assertPublicMediaKey(key);
   const config = getPublicR2Config();
   const physicalKey = config.namespace.toPhysicalKey(key);
   const client = getR2Client(config);

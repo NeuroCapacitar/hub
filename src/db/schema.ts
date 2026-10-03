@@ -803,6 +803,7 @@ export const jmvstreamVideoAssets = pgTable(
       onDelete: "set null",
     }),
     videoHash: text("video_hash").notNull(),
+    playerUrl: text("player_url"),
     galleryUuid: text("gallery_uuid"),
     filename: text("filename").notNull(),
     sizeBytes: bigint("size_bytes", { mode: "number" }),
@@ -2398,7 +2399,7 @@ export const stagedLessonResourceUploads = pgTable(
   (table) => [
     check(
       "staged_lesson_resource_uploads_status_check",
-      sql`${table.status} in ('prepared', 'uploaded', 'cleaning', 'consumed')`
+      sql`${table.status} in ('prepared', 'uploaded', 'cleaning', 'consumed', 'deleted')`
     ),
     check(
       "staged_lesson_resource_uploads_size_check",
