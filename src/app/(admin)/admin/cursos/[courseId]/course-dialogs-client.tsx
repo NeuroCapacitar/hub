@@ -2,8 +2,12 @@
 
 import { AlertCircleIcon, FloppyDiskIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import {
+  CoursePriceInput,
+  CoursePricingModeField,
+} from "@/components/admin/course-pricing-fields";
 import { CourseCoverUploadField } from "@/components/course-cover-upload-field";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -22,6 +26,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldLabel,
   FieldLegend,
   FieldSet,
@@ -43,7 +48,13 @@ import {
   MAX_INSTALLMENT_COUNT,
   MIN_INSTALLMENT_COUNT,
 } from "@/features/payments/course-payment-offer";
-import { parseCoursePriceToCents } from "@/features/payments/course-price";
+import {
+  COURSE_PRICE_FIELD_ERROR_MESSAGE,
+  COURSE_PRICING_MODE_ERROR_MESSAGE,
+  type CoursePricingMode,
+  parseCoursePriceToCents,
+  parsePaidCoursePriceToCents,
+} from "@/features/payments/course-price";
 import { formatCurrencyInCents } from "@/lib/formatters";
 import {
   CourseAvailabilityFields,
@@ -90,6 +101,141 @@ const INSTALLMENT_OPTIONS = Array.from(
   { length: MAX_INSTALLMENT_COUNT },
   (_, index) => index + MIN_INSTALLMENT_COUNT
 );
+const COURSE_PRICE_INVALID_MESSAGE_RE = /pre[cç]o do curso inv[aá]lido/i;
+
+type CoursePricingSubmission =
+  | { ok: true; priceInCents: number }
+  | {
+      field: "price" | "pricingMode";
+      message: string;
+      ok: false;
+    };
+
+const getCoursePricingSubmission = (
+  formData: FormData
+): CoursePricingSubmission => {
+  const pricingMode = formData.get("pricingMode");
+
+  if (pricingMode === "free") {
+    return { ok: true, priceInCents: 0 };
+  }
+
+  if (pricingMode !== "paid") {
+    return {
+      field: "pricingMode",
+      message: COURSE_PRICING_MODE_ERROR_MESSAGE,
+      ok: false,
+    };
+  }
+
+  try {
+    return {
+      ok: true,
+      priceInCents: parsePaidCoursePriceToCents(
+        String(formData.get("price") ?? "")
+      ),
+    };
+  } catch {
+    return {
+      field: "price",
+      message: COURSE_PRICE_FIELD_ERROR_MESSAGE,
+      ok: false,
+    };
+  }
+};
+
+interface CourseSettingsFailure {
+  field: "general" | "price" | "pricingMode";
+  message: string;
+}
+
+const getCourseSettingsFailure = (error: unknown): CourseSettingsFailure => {
+  const rawMessage =
+    error instanceof Error ? error.message : "Não foi possível salvar o curso.";
+
+  if (
+    rawMessage === COURSE_PRICE_FIELD_ERROR_MESSAGE ||
+    COURSE_PRICE_INVALID_MESSAGE_RE.test(rawMessage)
+  ) {
+    return { field: "price", message: COURSE_PRICE_FIELD_ERROR_MESSAGE };
+  }
+
+  if (rawMessage === COURSE_PRICING_MODE_ERROR_MESSAGE) {
+    return {
+      field: "pricingMode",
+      message: COURSE_PRICING_MODE_ERROR_MESSAGE,
+    };
+  }
+
+  return { field: "general", message: rawMessage };
+};
+
+const applyCourseSettingsFailure = (
+  failure: CourseSettingsFailure,
+  setErrorMessage: (message: string | null) => void,
+  setPriceError: (message: string | null) => void,
+  setPricingModeError: (message: string | null) => void
+): void => {
+  switch (failure.field) {
+    case "price":
+      setPriceError(failure.message);
+      setPricingModeError(null);
+      setErrorMessage(null);
+      return;
+    case "pricingMode":
+      setPricingModeError(failure.message);
+      setPriceError(null);
+      setErrorMessage(null);
+      return;
+    default:
+      setErrorMessage(failure.message);
+  }
+};
+
+const submitCourseSettings = ({
+  currentPriceInCents,
+  formData,
+  onInvalidPrice,
+  onInvalidPricingMode,
+  onPriceChange,
+  readOnly,
+  save,
+}: {
+  currentPriceInCents: number;
+  formData: FormData;
+  onInvalidPrice: () => void;
+  onInvalidPricingMode: () => void;
+  onPriceChange: (formData: FormData, priceInCents: number) => void;
+  readOnly: boolean;
+  save: (formData: FormData) => void;
+}): void => {
+  if (readOnly) {
+    save(formData);
+    return;
+  }
+
+  const pricingSubmission = getCoursePricingSubmission(formData);
+  if (!pricingSubmission.ok) {
+    if (pricingSubmission.field === "price") {
+      onInvalidPrice();
+    } else {
+      onInvalidPricingMode();
+    }
+    return;
+  }
+
+  if (pricingSubmission.priceInCents !== currentPriceInCents) {
+    onPriceChange(formData, pricingSubmission.priceInCents);
+    return;
+  }
+
+  save(formData);
+};
+
+const formatCoursePriceChangeLabel = (priceInCents: number): string =>
+  priceInCents === 0
+    ? "Gratuito"
+    : `Pago (${formatCurrencyInCents(priceInCents)})`;
 
 function ReadOnlyValue({
   label,
@@ -366,6 +512,7 @@ function CourseGeneralSettingsFields({
   course,
   effectiveMaxInstallmentCount,
   isFreeCourse,
+  isPaidPriceValid,
   isPending,
   maxInstallmentsAllowedByPrice,
   onCoverUploadingChange,
@@ -373,10 +520,14 @@ function CourseGeneralSettingsFields({
   onPaymentAllowPixChange,
   onPaymentMaxInstallmentCountChange,
   onPriceChange,
+  onPricingModeChange,
   onWorkloadHoursOverrideChange,
   paymentAllowCreditCard,
   paymentAllowPix,
   paymentMaxInstallmentCount,
+  pricingMode,
+  pricingModeError,
+  priceError,
   priceValue,
   validInstallmentCount,
   workloadHoursOverride,
@@ -385,6 +536,7 @@ function CourseGeneralSettingsFields({
   course: CourseData;
   effectiveMaxInstallmentCount: number;
   isFreeCourse: boolean;
+  isPaidPriceValid: boolean;
   isPending: boolean;
   manualWorkloadHours: number | null;
   maxInstallmentsAllowedByPrice: number;
@@ -393,10 +545,14 @@ function CourseGeneralSettingsFields({
   onPaymentAllowPixChange: (enabled: boolean) => void;
   onPaymentMaxInstallmentCountChange: (value: string) => void;
   onPriceChange: (value: string) => void;
+  onPricingModeChange: (value: CoursePricingMode) => void;
   onWorkloadHoursOverrideChange: (value: number | null) => void;
   paymentAllowCreditCard: boolean;
   paymentAllowPix: boolean;
   paymentMaxInstallmentCount: string;
+  pricingMode: CoursePricingMode;
+  pricingModeError?: string | undefined;
+  priceError?: string | undefined;
   priceValue: string;
   validInstallmentCount: number;
   workloadHoursOverride: string;
@@ -485,38 +641,70 @@ function CourseGeneralSettingsFields({
         <section className="space-y-5">
           <h3 className="font-medium text-base">Oferta de pagamento</h3>
           <input name="paymentOfferPresent" type="hidden" value="on" />
-          <Field className="max-w-sm">
-            <FieldLabel htmlFor="course-settings-price">
-              Preço do curso
-            </FieldLabel>
-            <Input
-              id="course-settings-price"
-              inputMode="decimal"
-              name="price"
-              onChange={(event) => onPriceChange(event.currentTarget.value)}
-              required
-              value={priceValue}
-            />
-          </Field>
+          <input name="pricingMode" type="hidden" value={pricingMode} />
+          <CoursePricingModeField
+            error={pricingModeError}
+            idPrefix="course-settings-pricing-mode"
+            onValueChange={onPricingModeChange}
+            value={pricingMode}
+          />
           {isFreeCourse ? (
-            <p className="max-w-2xl text-muted-foreground text-sm">
-              Curso gratuito. A inscrição é feita diretamente pelo Hub.
-            </p>
+            <>
+              <input
+                name="price"
+                type="hidden"
+                value={formatCurrencyInCents(0)}
+              />
+              <p className="max-w-2xl text-muted-foreground text-sm">
+                Curso gratuito. A inscrição é feita diretamente pelo Hub.
+              </p>
+            </>
           ) : (
-            <CoursePaidPaymentFields
-              effectiveMaxInstallmentCount={effectiveMaxInstallmentCount}
-              isPending={isPending}
-              maxInstallmentsAllowedByPrice={maxInstallmentsAllowedByPrice}
-              onPaymentAllowCreditCardChange={onPaymentAllowCreditCardChange}
-              onPaymentAllowPixChange={onPaymentAllowPixChange}
-              onPaymentMaxInstallmentCountChange={
-                onPaymentMaxInstallmentCountChange
-              }
-              paymentAllowCreditCard={paymentAllowCreditCard}
-              paymentAllowPix={paymentAllowPix}
-              paymentMaxInstallmentCount={paymentMaxInstallmentCount}
-              validInstallmentCount={validInstallmentCount}
-            />
+            <>
+              <Field className="max-w-sm" data-invalid={Boolean(priceError)}>
+                <FieldLabel htmlFor="course-settings-price">
+                  Valor do curso
+                  <span aria-hidden="true" className="text-destructive">
+                    *
+                  </span>
+                  <span className="sr-only"> obrigatório</span>
+                </FieldLabel>
+                <CoursePriceInput
+                  ariaDescribedBy={`course-settings-price-description${priceError ? " course-settings-price-error" : ""}`}
+                  ariaInvalid={Boolean(priceError)}
+                  id="course-settings-price"
+                  onValueChange={onPriceChange}
+                  value={priceValue}
+                />
+                <FieldDescription id="course-settings-price-description">
+                  Mínimo para Curso pago: R$ 10,00. O valor é formatado em reais
+                  ao sair do campo.
+                </FieldDescription>
+                {priceError ? (
+                  <FieldError id="course-settings-price-error">
+                    {priceError}
+                  </FieldError>
+                ) : null}
+              </Field>
+              {isPaidPriceValid ? (
+                <CoursePaidPaymentFields
+                  effectiveMaxInstallmentCount={effectiveMaxInstallmentCount}
+                  isPending={isPending}
+                  maxInstallmentsAllowedByPrice={maxInstallmentsAllowedByPrice}
+                  onPaymentAllowCreditCardChange={
+                    onPaymentAllowCreditCardChange
+                  }
+                  onPaymentAllowPixChange={onPaymentAllowPixChange}
+                  onPaymentMaxInstallmentCountChange={
+                    onPaymentMaxInstallmentCountChange
+                  }
+                  paymentAllowCreditCard={paymentAllowCreditCard}
+                  paymentAllowPix={paymentAllowPix}
+                  paymentMaxInstallmentCount={paymentMaxInstallmentCount}
+                  validInstallmentCount={validInstallmentCount}
+                />
+              ) : null}
+            </>
           )}
         </section>
       </div>
@@ -658,6 +846,125 @@ export function CourseSettingsForm({
   );
 }
 
+function CourseSettingsSaveFlags({
+  availabilityPreset,
+  availabilityReadOnly,
+  courseId,
+  readOnly,
+  signatoryReadOnly,
+}: {
+  availabilityPreset: ReturnType<typeof getCourseAvailabilityPreset>;
+  availabilityReadOnly: boolean;
+  courseId: string;
+  readOnly: boolean;
+  signatoryReadOnly: boolean;
+}): React.JSX.Element {
+  return (
+    <>
+      <input name="courseId" type="hidden" value={courseId} />
+      {readOnly ? null : (
+        <input name="saveCourseDetails" type="hidden" value="on" />
+      )}
+      {signatoryReadOnly ? null : (
+        <input name="saveCourseResponsible" type="hidden" value="on" />
+      )}
+      {availabilityReadOnly || availabilityPreset === "archived" ? null : (
+        <input name="saveCourseAvailability" type="hidden" value="on" />
+      )}
+    </>
+  );
+}
+
+function CourseSettingsSaveButton({
+  canSaveSettings,
+  isCoverUploading,
+  isPending,
+}: {
+  canSaveSettings: boolean;
+  isCoverUploading: boolean;
+  isPending: boolean;
+}): React.JSX.Element | null {
+  if (!canSaveSettings) {
+    return null;
+  }
+
+  return (
+    <div className="flex justify-end border-t pt-6">
+      <Button loading={isPending || isCoverUploading} type="submit">
+        {isPending ? null : (
+          <HugeiconsIcon
+            aria-hidden="true"
+            data-icon="inline-start"
+            icon={FloppyDiskIcon}
+            size={18}
+            strokeWidth={2}
+          />
+        )}
+        Salvar configurações
+      </Button>
+    </div>
+  );
+}
+
+function CoursePriceChangeDialog({
+  currentPriceInCents,
+  onCancel,
+  onConfirm,
+  pendingPriceChange,
+}: {
+  currentPriceInCents: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+  pendingPriceChange: PendingPriceChange | null;
+}): React.JSX.Element | null {
+  if (!pendingPriceChange) {
+    return null;
+  }
+
+  return (
+    <AlertDialog
+      onOpenChange={(open) => {
+        if (!open) {
+          onCancel();
+        }
+      }}
+      open
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogMedia>
+            <HugeiconsIcon aria-hidden="true" icon={AlertCircleIcon} />
+          </AlertDialogMedia>
+          <AlertDialogTitle>Confirmar alteração de preço?</AlertDialogTitle>
+          <AlertDialogDescription>
+            O preço do Curso será alterado de{" "}
+            <span className="font-medium text-foreground">
+              {formatCoursePriceChangeLabel(currentPriceInCents)}
+            </span>{" "}
+            para{" "}
+            <span className="font-medium text-foreground">
+              {formatCoursePriceChangeLabel(pendingPriceChange.priceInCents)}
+            </span>
+            . A mudança vale para novas inscrições; Matrículas existentes e
+            Pedidos já criados não serão alterados.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(event) => {
+              event.preventDefault();
+              onConfirm();
+            }}
+          >
+            Confirmar alteração
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 function CourseSettingsEditor({
   availabilityReadOnly = false,
   course,
@@ -673,10 +980,15 @@ function CourseSettingsEditor({
   const [isCoverUploading, setIsCoverUploading] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const [pricingModeError, setPricingModeError] = useState<string | null>(null);
   const [pendingPriceChange, setPendingPriceChange] =
     useState<PendingPriceChange | null>(null);
+  const [pricingMode, setPricingMode] = useState<CoursePricingMode>(
+    course.priceInCents === 0 ? "free" : "paid"
+  );
   const [priceValue, setPriceValue] = useState(() =>
-    formatCurrencyInCents(course.priceInCents)
+    course.priceInCents === 0 ? "" : formatCurrencyInCents(course.priceInCents)
   );
   const [workloadHoursOverride, setWorkloadHoursOverride] = useState(
     course.workloadHoursOverride?.toString() ?? ""
@@ -715,7 +1027,9 @@ function CourseSettingsEditor({
       return null;
     }
   })();
-  const isFreeCourse = parsedPriceInCents === 0;
+  const isFreeCourse = pricingMode === "free";
+  const isPaidPriceValid =
+    parsedPriceInCents !== null && parsedPriceInCents > 0;
   const priceInCentsForInstallments = parsedPriceInCents ?? course.priceInCents;
   const maxInstallmentsAllowedByPrice = getEffectiveMaxInstallmentCount({
     configuredMaxInstallmentCount: MAX_INSTALLMENT_COUNT,
@@ -728,6 +1042,12 @@ function CourseSettingsEditor({
   const canSaveSettings =
     !(readOnly && signatoryReadOnly) ||
     (!availabilityReadOnly && availabilityPreset !== "archived");
+
+  useEffect(() => {
+    if (priceError) {
+      document.getElementById("course-settings-price")?.focus();
+    }
+  }, [priceError]);
 
   const saveCourseSettings = (formData: FormData): void => {
     if (isCoverUploading) {
@@ -751,12 +1071,14 @@ function CourseSettingsEditor({
           { id: toastId }
         );
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Não foi possível salvar o curso.";
-        setErrorMessage(message);
-        toast.error(message, { id: toastId });
+        const failure = getCourseSettingsFailure(error);
+        applyCourseSettingsFailure(
+          failure,
+          setErrorMessage,
+          setPriceError,
+          setPricingModeError
+        );
+        toast.error(failure.message, { id: toastId });
       }
     });
   };
@@ -769,20 +1091,34 @@ function CourseSettingsEditor({
     }
     const formData = new FormData(e.currentTarget);
 
-    try {
-      const priceInCents = parseCoursePriceToCents(
-        String(formData.get("price") ?? "")
-      );
+    submitCourseSettings({
+      currentPriceInCents: course.priceInCents,
+      formData,
+      onInvalidPrice: () => {
+        setPriceError(COURSE_PRICE_FIELD_ERROR_MESSAGE);
+        setPricingModeError(null);
+      },
+      onInvalidPricingMode: () => {
+        setPricingModeError(COURSE_PRICING_MODE_ERROR_MESSAGE);
+        setPriceError(null);
+        document.getElementById("course-settings-pricing-mode-free")?.focus();
+      },
+      onPriceChange: (submittedFormData, priceInCents) => {
+        setPriceError(null);
+        setPricingModeError(null);
+        setPendingPriceChange({ formData: submittedFormData, priceInCents });
+      },
+      readOnly,
+      save: saveCourseSettings,
+    });
+  };
 
-      if (!readOnly && priceInCents !== course.priceInCents) {
-        setPendingPriceChange({ formData, priceInCents });
-        return;
-      }
-    } catch {
-      // Let the server keep reporting invalid price input through the existing flow.
+  const confirmPendingPriceChange = (): void => {
+    const priceChange = pendingPriceChange;
+    setPendingPriceChange(null);
+    if (priceChange) {
+      saveCourseSettings(priceChange.formData);
     }
-
-    saveCourseSettings(formData);
   };
 
   return (
@@ -800,16 +1136,13 @@ function CourseSettingsEditor({
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         ) : null}
-        <input name="courseId" type="hidden" value={course.id} />
-        {readOnly ? null : (
-          <input name="saveCourseDetails" type="hidden" value="on" />
-        )}
-        {signatoryReadOnly ? null : (
-          <input name="saveCourseResponsible" type="hidden" value="on" />
-        )}
-        {availabilityReadOnly || availabilityPreset === "archived" ? null : (
-          <input name="saveCourseAvailability" type="hidden" value="on" />
-        )}
+        <CourseSettingsSaveFlags
+          availabilityPreset={availabilityPreset}
+          availabilityReadOnly={availabilityReadOnly}
+          courseId={course.id}
+          readOnly={readOnly}
+          signatoryReadOnly={signatoryReadOnly}
+        />
 
         {readOnly ? (
           <CourseSettingsReadOnly
@@ -823,6 +1156,7 @@ function CourseSettingsEditor({
               course={course}
               effectiveMaxInstallmentCount={effectiveMaxInstallmentCount}
               isFreeCourse={isFreeCourse}
+              isPaidPriceValid={isPaidPriceValid}
               isPending={isPending}
               manualWorkloadHours={manualWorkloadHours}
               maxInstallmentsAllowedByPrice={maxInstallmentsAllowedByPrice}
@@ -830,14 +1164,26 @@ function CourseSettingsEditor({
               onPaymentAllowCreditCardChange={setPaymentAllowCreditCard}
               onPaymentAllowPixChange={setPaymentAllowPix}
               onPaymentMaxInstallmentCountChange={setPaymentMaxInstallmentCount}
-              onPriceChange={setPriceValue}
+              onPriceChange={(value) => {
+                setPriceValue(value);
+                setPriceError(null);
+              }}
+              onPricingModeChange={(value) => {
+                setPricingMode(value);
+                setPriceError(null);
+                setPricingModeError(null);
+                setIsDirty(true);
+              }}
               onWorkloadHoursOverrideChange={(value) => {
                 setWorkloadHoursOverride(value?.toString() ?? "");
               }}
               paymentAllowCreditCard={paymentAllowCreditCard}
               paymentAllowPix={paymentAllowPix}
               paymentMaxInstallmentCount={paymentMaxInstallmentCount}
+              priceError={priceError ?? undefined}
               priceValue={priceValue}
+              pricingMode={pricingMode}
+              pricingModeError={pricingModeError ?? undefined}
               validInstallmentCount={validInstallmentCount}
               workloadHoursOverride={workloadHoursOverride}
             />
@@ -883,71 +1229,19 @@ function CourseSettingsEditor({
           />
         </section>
 
-        {canSaveSettings ? (
-          <div className="flex justify-end border-t pt-6">
-            <Button loading={isPending || isCoverUploading} type="submit">
-              {isPending ? null : (
-                <HugeiconsIcon
-                  aria-hidden="true"
-                  data-icon="inline-start"
-                  icon={FloppyDiskIcon}
-                  size={18}
-                  strokeWidth={2}
-                />
-              )}
-              Salvar configurações
-            </Button>
-          </div>
-        ) : null}
+        <CourseSettingsSaveButton
+          canSaveSettings={canSaveSettings}
+          isCoverUploading={isCoverUploading}
+          isPending={isPending}
+        />
       </form>
 
-      <AlertDialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingPriceChange(null);
-          }
-        }}
-        open={pendingPriceChange !== null}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogMedia>
-              <HugeiconsIcon aria-hidden="true" icon={AlertCircleIcon} />
-            </AlertDialogMedia>
-            <AlertDialogTitle>Confirmar alteração de preço?</AlertDialogTitle>
-            <AlertDialogDescription>
-              O preço do curso será alterado de{" "}
-              <span className="font-medium text-foreground">
-                {formatCurrencyInCents(course.priceInCents)}
-              </span>{" "}
-              para{" "}
-              <span className="font-medium text-foreground">
-                {pendingPriceChange
-                  ? formatCurrencyInCents(pendingPriceChange.priceInCents)
-                  : ""}
-              </span>
-              . Confirme para salvar a alteração.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingPriceChange(null)}>
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
-                const priceChange = pendingPriceChange;
-                setPendingPriceChange(null);
-                if (priceChange) {
-                  saveCourseSettings(priceChange.formData);
-                }
-              }}
-            >
-              Confirmar alteração
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <CoursePriceChangeDialog
+        currentPriceInCents={course.priceInCents}
+        onCancel={() => setPendingPriceChange(null)}
+        onConfirm={confirmPendingPriceChange}
+        pendingPriceChange={pendingPriceChange}
+      />
     </>
   );
 }

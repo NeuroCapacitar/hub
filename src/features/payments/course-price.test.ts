@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseCoursePriceToCents } from "./course-price";
+import {
+  parseCoursePriceToCents,
+  parsePaidCoursePriceToCents,
+} from "./course-price";
 
 describe("course price", () => {
   it.each([
@@ -31,6 +34,16 @@ describe("course price", () => {
 
   it("rejects values that overflow safe integer cents", () => {
     expect(() => parseCoursePriceToCents("90.071.992.547.409,92")).toThrow(
+      "Preco do curso invalido."
+    );
+  });
+
+  it("rejects free and subminimum values when Paid is selected", () => {
+    expect(parsePaidCoursePriceToCents("10,00")).toBe(1000);
+    expect(() => parsePaidCoursePriceToCents("0,00")).toThrow(
+      "Preco do curso invalido."
+    );
+    expect(() => parsePaidCoursePriceToCents("9,99")).toThrow(
       "Preco do curso invalido."
     );
   });

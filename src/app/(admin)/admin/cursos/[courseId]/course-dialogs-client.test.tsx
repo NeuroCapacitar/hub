@@ -123,9 +123,21 @@ const renderCourseSettingsForm = (courseToRender = course): void => {
 };
 
 const setPrice = (value: string): void => {
-  const input = container?.querySelector<HTMLInputElement>(
-    'input[name="price"]'
+  let input = container?.querySelector<HTMLInputElement>(
+    'input[name="price"]:not([type="hidden"])'
   );
+  if (!input) {
+    const paidMode = container?.querySelector<HTMLButtonElement>(
+      "#course-settings-pricing-mode-paid"
+    );
+    if (!paidMode) {
+      throw new Error("Expected the paid course option.");
+    }
+    act(() => paidMode.click());
+    input = container?.querySelector<HTMLInputElement>(
+      'input[name="price"]:not([type="hidden"])'
+    );
+  }
   if (!input) {
     throw new Error("Expected price input.");
   }

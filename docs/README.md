@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: abb3b3ecae681dd5eea4da839ace41e2b926431c
+last_verified_commit: ee0baa396cbb38d76cd2a0e168e8738aea751bd8
 ---
 
 # Documentação do Hub
@@ -85,6 +85,7 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 
 ### Revisões
 
+- [Pesquisa de UX: preço gratuito ou pago para Cursos](reviews/2026-10-03-course-pricing-mode-ux-research.md)
 - [Revisão de UX das configurações de conta e métodos de entrada](reviews/2026-09-30-account-settings-ux-review.md)
 - [Pesquisa de versionamento de templates de Certificado e publicações de Curso](reviews/2026-09-25-certificate-template-and-course-versioning-research.md)
 - [Pesquisa de migração do código público de Certificado para Base64URL](reviews/2026-09-25-certificate-code-base64url-migration-research.md)
