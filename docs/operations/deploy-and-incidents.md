@@ -22,6 +22,15 @@ sem homologação.
 
 ## Antes de promover
 
+A instalação na Vercel usa `bun install --frozen-lockfile --force`: o lockfile
+não pode ser reescrito e todas as dependências são reinstaladas, inclusive as
+versões transitivas aninhadas. O cache de build pode permanecer ativo, mas não
+deve preservar uma árvore `node_modules` incompatível após atualizações.
+Em 2026-10-03, uma build Production que reaproveitou o cache anterior carregou
+`@noble/hashes` 2.x no PDFKit, que requer 1.x, e falhou com
+`ERR_PACKAGE_PATH_NOT_EXPORTED`. A correção da instalação segue PR para
+Staging e o workflow de release; não usar deploy avulso para contornar o gate.
+
 - confirme CI verde do candidato;
 - confirme deployment e domínio de Staging saudáveis;
 - confirme reconciliação de `main` e `staging`;
