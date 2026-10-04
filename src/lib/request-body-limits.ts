@@ -51,6 +51,24 @@ export const readBoundedBody = async (
   }
 };
 
+export const PUBLIC_JSON_BODY_MAX_BYTES = 4 * 1024;
+
+export const readBoundedJsonBody = async (
+  request: Request,
+  maxBytes: number,
+  timeoutMs = 15_000
+): Promise<unknown> => {
+  const declaredLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    request.body?.cancel().catch(() => undefined);
+    throw new RequestBodyLimitError(413);
+  }
+
+  const bytes = await readBoundedBody(request.body, maxBytes, timeoutMs);
+  const body = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  return JSON.parse(body) as unknown;
+};
+
 export const readBoundedMultipart = async (
   request: Request,
   maxBytes: number

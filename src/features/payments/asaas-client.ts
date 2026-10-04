@@ -490,6 +490,19 @@ const parseRetryAfter = (header: string | null): number | undefined => {
   return Math.max(0, date - Date.now());
 };
 
+const parseRateLimitReset = (header: string | null): number | undefined => {
+  if (!header) {
+    return;
+  }
+
+  const seconds = Number(header);
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return;
+  }
+
+  return Math.ceil(seconds * 1000);
+};
+
 const getHttpError = ({
   accessToken,
   payload,
@@ -549,7 +562,9 @@ const getHttpError = ({
       kind: "rate_limited",
       message: "Limite de requisicoes do Asaas atingido.",
       retryable: true,
-      retryAfterMs: parseRetryAfter(response.headers.get("Retry-After")),
+      retryAfterMs:
+        parseRetryAfter(response.headers.get("Retry-After")) ??
+        parseRateLimitReset(response.headers.get("RateLimit-Reset")),
     });
   }
 

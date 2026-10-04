@@ -132,6 +132,14 @@ export const runMaintenance = async ({
   if (!(await canContinue())) {
     return result;
   }
+  const betterAuthRateLimits = await pool.query(
+    "delete from better_auth_rate_limits where expires_at < now()"
+  );
+  result.expiredRateLimitsRemoved += betterAuthRateLimits.rowCount ?? 0;
+
+  if (!(await canContinue())) {
+    return result;
+  }
   const pendingSignups = await pool.query(
     `delete from pending_signups
      where (status = 'pending' and expires_at <= now())

@@ -46,9 +46,11 @@ export const consumeAccountRateLimit = async ({
           else account_email_challenge_rate_limits.expires_at
         end,
         updated_at = now()
+      where account_email_challenge_rate_limits.expires_at <= now()
+         or account_email_challenge_rate_limits.request_count < $3
       returning request_count
     `,
-    [keyHash, windowMs]
+    [keyHash, windowMs, limit]
   );
   return (result.rows[0]?.request_count ?? Number.MAX_SAFE_INTEGER) <= limit;
 };

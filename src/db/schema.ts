@@ -2097,6 +2097,24 @@ export const courseCompletions = pgTable(
   ]
 );
 
+export const betterAuthRateLimits = pgTable(
+  "better_auth_rate_limits",
+  {
+    keyHash: text("key_hash").primaryKey(),
+    lastRequestAt: timestamp("last_request_at", tz).defaultNow().notNull(),
+    requestCount: integer("request_count").default(0).notNull(),
+    expiresAt: timestamp("expires_at", tz).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    check(
+      "better_auth_rate_limits_request_count_positive_check",
+      sql`${table.requestCount} > 0`
+    ),
+    index("better_auth_rate_limits_expires_at_idx").on(table.expiresAt),
+  ]
+);
+
 export const publicCertificateRateLimits = pgTable(
   "public_certificate_rate_limits",
   {

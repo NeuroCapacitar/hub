@@ -1,7 +1,7 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: ee0baa396cbb38d76cd2a0e168e8738aea751bd8
+last_verified_commit: d27d9a1b77914192e31c1b3c8c28c516d8f6e3a5
 ---
 
 # Documentação do Hub
@@ -85,6 +85,8 @@ Esse percurso permite localizar propósito, regra, racional, código, teste e op
 
 ### Revisões
 
+- [Auditoria de rate limits do Hub e pesquisa de arquitetura](reviews/2026-10-03-rate-limits-project-audit.md)
+- [Pesquisa de rate limiting progressivo em Cloudflare](reviews/2026-10-03-cloudflare-rate-limit-research.md)
 - [Pesquisa de UX: preço gratuito ou pago para Cursos](reviews/2026-10-03-course-pricing-mode-ux-research.md)
 - [Revisão de UX das configurações de conta e métodos de entrada](reviews/2026-09-30-account-settings-ux-review.md)
 - [Pesquisa de versionamento de templates de Certificado e publicações de Curso](reviews/2026-09-25-certificate-template-and-course-versioning-research.md)
