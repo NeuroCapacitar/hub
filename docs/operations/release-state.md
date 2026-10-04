@@ -281,12 +281,24 @@ depois da confirmação do merge; worktrees abandonados devem ser removidos
 somente após conferir seu branch e status. Stashes permanecem até que cada
 patch seja classificado como recuperável ou explicitamente obsoleto.
 
-No projeto Neon, preserve sempre `production`, `staging`, `development`,
-`vercel-preview` e `asaas-cutover-backup-*`. Backups de release usam apenas os
-prefixos `staging-release-*` e `production-release-*`; preserve o mais recente
-de cada ambiente e remova superseded somente pelo cleanup separado, após
-dry-run, confirmação `cleanup-release-backups`, conferência de projeto/parent
-e nova leitura do inventário.
+O objetivo aprovado em 2026-10-04 é deixar somente a branch `production` no
+projeto Neon `damp-snow-22911188` e concentrar Development/Staging no projeto
+`shy-bar-59728129`. Até concluir o cutover, preserve todas as branches de
+origem: deploy, migrations e consumidores externos ainda podem depender delas.
+
+Depois do cutover e da verificação de readiness, remova as branches antigas de
+Development, Staging e `vercel-preview` somente após confirmar que nenhum
+runtime, workflow, preview, backup ou job aponta para elas. Branches temporárias
+de release podem ser removidas após o TTL e a leitura do inventário. A branch
+`asaas-cutover-backup-*` continua protegida até existir evidência de backup
+externo independente ou uma decisão explícita de descarte; enquanto ela existir,
+o estado literal “somente Production” ainda não foi atingido.
+
+Backups de release usam apenas os prefixos `staging-release-*` e
+`production-release-*`; preserve o mais recente de cada ambiente e remova
+superseded somente pelo cleanup separado, após dry-run, confirmação
+`cleanup-release-backups`, conferência de projeto/parent e nova leitura do
+inventário.
 
 Estado operacional de Production verificado em 2026-08-21: manutenção `off`,
 `PAYMENTS_CHECKOUT_MODE=public`, `ASAAS_WEBHOOK_ENABLED=true` e

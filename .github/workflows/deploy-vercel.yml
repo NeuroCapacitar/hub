@@ -290,6 +290,7 @@ jobs:
           RESTORE_R2_SECRET_ACCESS_KEY: ${{ secrets.RESTORE_R2_SECRET_ACCESS_KEY }}
           BACKUP_R2_ACCOUNT_ID: ${{ vars.BACKUP_R2_ACCOUNT_ID }}
           BACKUP_R2_BUCKET_NAME: ${{ vars.BACKUP_R2_BUCKET_NAME }}
+          PRODUCTION_DATABASE_HOST: ${{ vars.PRODUCTION_DATABASE_HOST }}
           PRODUCTION_NEON_BRANCH_ID: ${{ vars.PRODUCTION_NEON_BRANCH_ID }}
           PRODUCTION_NEON_PROJECT_ID: ${{ vars.PRODUCTION_NEON_PROJECT_ID }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
@@ -298,7 +299,7 @@ jobs:
           set -euo pipefail
           required_names=(HEALTHCHECK_SECRET VERCEL_AUTOMATION_BYPASS_SECRET VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_SCOPE VERCEL_TOKEN)
           if [[ "${HAS_MIGRATIONS}" == "true" ]]; then
-            required_names+=(DATABASE_URL_DIRECT NEON_API_KEY RESTORE_R2_ACCESS_KEY_ID RESTORE_R2_SECRET_ACCESS_KEY BACKUP_R2_ACCOUNT_ID BACKUP_R2_BUCKET_NAME PRODUCTION_NEON_BRANCH_ID PRODUCTION_NEON_PROJECT_ID)
+            required_names+=(DATABASE_URL_DIRECT NEON_API_KEY RESTORE_R2_ACCESS_KEY_ID RESTORE_R2_SECRET_ACCESS_KEY BACKUP_R2_ACCOUNT_ID BACKUP_R2_BUCKET_NAME PRODUCTION_DATABASE_HOST PRODUCTION_NEON_BRANCH_ID PRODUCTION_NEON_PROJECT_ID)
           fi
           for name in "${required_names[@]}"; do
             if [[ -z "${!name:-}" ]]; then
@@ -306,6 +307,9 @@ jobs:
               exit 1
             fi
           done
+          if [[ "${HAS_MIGRATIONS}" == "true" ]]; then
+            bun run db:preflight:production-target
+          fi
 
       - name: Advance main to the approved Staging candidate
         if: inputs.mode == 'release-staging'
@@ -412,12 +416,18 @@ jobs:
         if: steps.release.outputs.has_migrations == 'true'
         env:
           DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+          PRODUCTION_DATABASE_HOST: ${{ vars.PRODUCTION_DATABASE_HOST }}
+          PRODUCTION_NEON_BRANCH_ID: ${{ vars.PRODUCTION_NEON_BRANCH_ID }}
+          PRODUCTION_NEON_PROJECT_ID: ${{ vars.PRODUCTION_NEON_PROJECT_ID }}
         run: bun run db:migrate:production
 
       - name: Audit Production migration state
         if: steps.release.outputs.has_migrations == 'true'
         env:
           DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+          PRODUCTION_DATABASE_HOST: ${{ vars.PRODUCTION_DATABASE_HOST }}
+          PRODUCTION_NEON_BRANCH_ID: ${{ vars.PRODUCTION_NEON_BRANCH_ID }}
+          PRODUCTION_NEON_PROJECT_ID: ${{ vars.PRODUCTION_NEON_PROJECT_ID }}
         run: bun run db:migrations:inspect -- --environment=vercel-production
 
       - name: Smoke unpromoted Production deployment

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { config } from "dotenv";
 import { Pool, type PoolClient } from "pg";
 import { withVerifiedSslMode } from "../src/db/connection-url";
-import { getMigrationTargetProblems } from "../src/db/migration-target";
+import { getNeonTargetProblems } from "../src/db/neon-database-target";
 import { scanBuyerIdentityCollisions } from "../src/features/payments/identity-collision-audit";
 
 config({ path: ".env.local", override: true, quiet: true });
@@ -19,7 +19,7 @@ const hashIdentifier = (value: string): string =>
   createHash("sha256").update(value).digest("hex");
 
 const main = async (): Promise<void> => {
-  const targetProblems = getMigrationTargetProblems(process.env, "development");
+  const targetProblems = getNeonTargetProblems(process.env, "development");
   if (targetProblems.length > 0) {
     for (const problem of targetProblems) {
       process.stderr.write(`- ${problem}\n`);

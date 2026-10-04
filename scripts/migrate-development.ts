@@ -6,17 +6,21 @@ import { withVerifiedSslMode } from "../src/db/connection-url";
 import { DEVELOPMENT_LEGACY_MIGRATIONS } from "../src/db/development-migration-compatibility";
 import { applyMigrationsPerFile } from "../src/db/e2e-migrator";
 import { runMigrationWithLock } from "../src/db/migration-lock";
-import { getMigrationTargetProblems } from "../src/db/migration-target";
+import { assertNeonDatabaseTarget } from "../src/db/neon-database-target";
 
 config({ path: ".env.local", quiet: true });
 config({ path: ".env", quiet: true });
 
-const problems = getMigrationTargetProblems(process.env, "development");
-if (problems.length > 0) {
+if (process.env.DEVELOPMENT_OPERATION_CONFIRMATION?.trim() !== "development") {
   throw new Error(
-    `Development migration target is unsafe:\n- ${problems.join("\n- ")}`
+    "Set DEVELOPMENT_OPERATION_CONFIRMATION=development to run this migration."
   );
 }
+
+const target = assertNeonDatabaseTarget({
+  environment: process.env,
+  target: "development",
+});
 
 const directDatabaseUrl = process.env.DATABASE_URL_DIRECT?.trim();
 if (!directDatabaseUrl) {
@@ -48,7 +52,9 @@ try {
         verifyAppliedHashes: false,
       }),
   });
-  process.stdout.write("Development migrations applied.\n");
+  process.stdout.write(
+    `Development migrations applied to ${target.databaseName} at ${target.host}; project ${target.projectId}, branch ${target.branchId}.\n`
+  );
 } finally {
   await pool.end();
 }

@@ -1,4 +1,4 @@
-import { isProductionNeonHost } from "./migration-target";
+import { isProductionNeonHost } from "./neon-database-target";
 
 type Environment = Readonly<Record<string, string | undefined>>;
 

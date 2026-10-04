@@ -48,6 +48,7 @@ jobs:
       STAGING_NEON_PROJECT_ID: ${{ vars.STAGING_NEON_PROJECT_ID }}
       STAGING_OPERATION_CONFIRMATION: staging
       STAGING_R2_USES_DEVELOPMENT: "true"
+      STAGING_TARGET_READY: ${{ vars.STAGING_TARGET_READY }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -69,6 +70,28 @@ jobs:
             echo "Execute reset was not explicitly confirmed." >&2
             exit 1
           fi
+      - name: Verify exact current Staging ref and SHA
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" != "refs/heads/staging" ]]; then
+            echo "Staging reset must be dispatched from the staging branch." >&2
+            exit 1
+          fi
+          git fetch --no-tags origin staging
+          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/staging)" ]]; then
+            echo "Staging reset must use the exact current staging SHA." >&2
+            exit 1
+          fi
+      - name: Require configured Staging target before execute
+        if: inputs.mode == 'execute'
+        run: |
+          if [[ "${STAGING_TARGET_READY:-}" != "true" ]]; then
+            echo "STAGING_TARGET_READY must be true before executing a Staging reset." >&2
+            exit 1
+          fi
+      - name: Validate Staging Neon target before creating a backup
+        if: inputs.mode == 'execute'
+        run: bun run db:preflight:staging-target
       - name: Set backup expiry
         if: inputs.mode == 'execute'
         run: echo "NEON_BACKUP_EXPIRES_AT=$(date -u --date '+7 days' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"

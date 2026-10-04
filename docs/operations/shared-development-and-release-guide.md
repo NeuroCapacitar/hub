@@ -51,40 +51,41 @@ classificada deve ser preservado até que seu destino seja decidido.
 
 ### Estado atual
 
-Em 2026-07-27, a estação principal passou pelo preflight de Development com o
-compute Neon `ep-silent-leaf-aclmy5uk`, os dois buckets
-`hub-development-*` e o plano JMVStream compartilhado aprovado. O Sentry é
-Production-only; a configuração está liberada para desenvolvimento sem DSN Sentry.
+Em 2026-10-04, a separação Neon está em migração. O novo projeto e as branches
+vazias já existem, mas migrations, seed e troca das conexões ainda não foram
+feitos. A aplicação continua dependendo da configuração externa atual até que
+o cutover seja concluído. Não apague branches do projeto de origem antes de
+validar os consumidores e concluir a sequência no runbook.
 
 Em uma estação nova, conclua todos os itens da seção
-[Preparação única](#preparação-única) antes de executar a aplicação.
-
-Estado confirmado em 2026-07-27:
-
-- buckets `hub-development-private` e `hub-development-public` criados;
-- API key, acesso público e CORS dos buckets R2 Development configurados;
-- branch Neon `development` (`br-cool-voice-acsxtxyv`) criada com compute
-  `ep-silent-leaf-aclmy5uk`;
-- a leitura da branch confirmou 44 migrations e zero usuários, cursos e
-  matrículas antes do seed;
-- Resend Development reutiliza o domínio verificado
-  `neurocapacitar.com.br`, protegido por allowlist de destinatários;
-- JMVStream reutiliza conscientemente o plano Production `OD-20912`;
-- Asaas usa Sandbox; o Sentry não é inicializado em Development.
+[Preparação única](#preparação-única) e use somente a branch Development do
+projeto não produtivo.
 
 ## Topologia aprovada
 
 ### Neon
 
-- projeto: `damp-snow-22911188`;
-- branch Production: `production` (`br-dark-boat-ac5ju6m4`);
-- branch Preview: `vercel-preview` (`br-cool-leaf-acabyy5q`);
-- branch compartilhada: `development` (`br-cool-voice-acsxtxyv`);
-- compute Development: `ep-silent-leaf-aclmy5uk`;
-- pai da branch: `vercel-preview`, não `production`.
-
-Em 2026-07-27, a branch `development` possuía 44 migrations e zero usuários,
-cursos e matrículas antes do seed.
+- Production permanece no projeto `damp-snow-22911188`, branch
+  `production` (`br-dark-boat-ac5ju6m4`), compute
+  `ep-hidden-tooth-ac843qc2`.
+- Development e Staging migram para o projeto `shy-bar-59728129`, na região
+  AWS South America East 1 (São Paulo).
+- Branch raiz do projeto não produtivo: `nonprod-base`
+  (`br-sparkling-tree-b6c6emws`). É uma base vazia e não recebe tráfego da
+  aplicação.
+- Development: `development` (`br-square-recipe-b67a4ch7`), host direto
+  `ep-autumn-hill-b6erdexq.c-2.sa-east-1.aws.neon.tech`.
+- Staging: `staging` (`br-cool-bread-b69twnrp`), host direto
+  `ep-noisy-band-b6lcc8jk.c-2.sa-east-1.aws.neon.tech`.
+- As duas branches novas são filhas de `nonprod-base`; não descendem de
+  Production nem copiam seus dados.
+- Estado da preparação: endpoints criados e ociosos; ainda sem migrations,
+  seed, connection strings aplicadas ou tráfego de aplicação.
+- A branch antiga `vercel-preview` e os backups de release/Asaas continuam no
+  projeto de origem até que cada consumidor e retenção sejam verificados.
+  A intenção de estado final é manter somente Production nesse projeto; o
+  runbook registra os gates de limpeza e a decisão pendente sobre o backup
+  Asaas.
 
 ### Cloudflare R2
 
@@ -116,40 +117,61 @@ Esta seção é executada uma vez por uma pessoa responsável pela infraestrutur
 O estagiário recebe somente os valores de Development necessários ao
 `.env.local`.
 
-### 1. Criar a branch Neon `development`
+### 1. Conectar Development à branch Neon já provisionada
 
 No painel Neon:
 
-1. Abra o projeto `damp-snow-22911188`.
-2. Abra **Branches**.
-3. Clique em **Create branch**.
-4. Informe `development`.
-5. Selecione `vercel-preview` como branch pai.
-6. Não selecione `production`.
-7. Crie um compute com capacidade mínima e suspensão automática.
-8. Copie a conexão pooled para um gerenciador de segredos.
-9. Copie a conexão direta para o mesmo gerenciador.
-10. Não cole nenhuma das URLs em documento ou chat.
+1. Abra o projeto `neuro-development` (`shy-bar-59728129`).
+2. Abra **Branches** e selecione `development`
+   (`br-square-recipe-b67a4ch7`).
+3. Confirme que o host direto termina em
+   `ep-autumn-hill-b6erdexq.c-2.sa-east-1.aws.neon.tech`.
+4. Copie a conexão pooled para `DATABASE_URL` e a conexão direta para
+   `DATABASE_URL_DIRECT`, em um gerenciador seguro.
+5. Não cole nenhuma das URLs em documento ou chat.
 
-Depois de criar, confirme:
+Depois de confirmar a branch, valide:
 
-- branch chamada exatamente `development`;
-- origem `vercel-preview`;
+- projeto `shy-bar-59728129`;
+- branch chamada exatamente `development`, ID
+  `br-square-recipe-b67a4ch7`;
+- origem `nonprod-base` (`br-sparkling-tree-b6c6emws`);
 - banco `neondb`;
-- schema com 44 migrations;
-- zero usuários antes do seed;
-- hostname diferente do compute Production
-  `ep-hidden-tooth-ac843qc2`.
+- ausência de tabelas/migrations antes de aplicar o schema;
+- host direto igual a
+  `ep-autumn-hill-b6erdexq.c-2.sa-east-1.aws.neon.tech`.
 
 Use:
 
 - conexão pooled em `DATABASE_URL`;
 - conexão direta em `DATABASE_URL_DIRECT`, somente para migrations e
-  auditoria.
+  auditoria; ela deve usar o endpoint direto, nunca `-pooler`;
+- `DEVELOPMENT_DATABASE_HOST=ep-autumn-hill-b6erdexq.c-2.sa-east-1.aws.neon.tech`;
+- `DEVELOPMENT_NEON_PROJECT_ID=shy-bar-59728129`;
+- `DEVELOPMENT_NEON_BRANCH_ID=br-square-recipe-b67a4ch7`;
+- `DEVELOPMENT_OPERATION_CONFIRMATION=development` ao aplicar migrations.
 
 Não rode `db:push`. O projeto usa migrations forward-only.
 
-### 2. Criar os buckets R2
+### 2. Provisionar Staging no mesmo projeto isolado
+
+Staging já existe como branch `staging` (`br-cool-bread-b69twnrp`) sob
+`nonprod-base`. Copie as URLs pooled e direta pelo Neon Console e configure-as
+somente nos ambientes corretos: `DATABASE_URL` pooled no Custom Environment
+`staging` da Vercel; `DATABASE_URL_DIRECT` como secret do GitHub Environment
+`vercel-staging`. Configure também, sem segredo, os valores
+`STAGING_DATABASE_HOST`, `STAGING_NEON_PROJECT_ID` e
+`STAGING_NEON_BRANCH_ID` nos escopos que executam o guard. Só defina
+`STAGING_TARGET_READY=true` como variável do repositório GitHub `hub` depois de
+conferir as URLs, IDs e o Custom Environment Vercel. A flag precisa ser de
+repositório para o job `if` avaliá-la antes de iniciar; ela habilita migration e deploy
+sequenciados pelo workflow; sem ela, os jobs automáticos ficam desativados.
+
+Aplicar migrations e seed segue o runbook de migração; esses passos são
+separados do ajuste dos providers externos e não autorizam usar recursos de
+Production.
+
+### 3. Criar os buckets R2
 
 No Cloudflare:
 
@@ -193,7 +215,7 @@ Valores resultantes:
 - `R2_PUBLIC_BUCKET_NAME=hub-development-public`;
 - `R2_PUBLIC_BASE_URL` com a URL pública do bucket Development.
 
-### 3. Preparar o Resend Development
+### 4. Preparar o Resend Development
 
 Development reutiliza o domínio Resend verificado
 `neurocapacitar.com.br`. Não é necessário criar subdomínio adicional.
@@ -223,7 +245,7 @@ Teste inicial:
 4. confira que o link aponta ao Development ativo;
 5. tente um destinatário fora da allowlist e confirme que o envio é bloqueado.
 
-### 4. Preparar o Asaas Sandbox
+### 5. Preparar o Asaas Sandbox
 
 Use somente a conta e a chave Sandbox. Nunca use a credencial financeira
 Production localmente.
@@ -247,7 +269,7 @@ Faça um checkout de valor fictício e confirme:
 O contrato completo e os limites do ensaio ficam em
 [Asaas](../integrations/asaas.md).
 
-### 5. Preparar a JMVStream Development
+### 6. Preparar a JMVStream Development
 
 A integração reutiliza o plano Production `OD-20912`. A API oficial permite
 excluir vídeo por hash e Plan ID; portanto, não existe isolamento técnico entre
@@ -270,7 +292,7 @@ Regras obrigatórias:
 4. confira o hash e a Aula local antes de qualquer deleção;
 5. trate a credencial local como segredo Production.
 
-### 6. Manter Sentry somente em Production
+### 7. Manter Sentry somente em Production
 
 Development não configura `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`,
 `SENTRY_AUTH_TOKEN` ou variáveis de readiness Sentry. O runtime não inicializa o
@@ -283,7 +305,7 @@ arquivo local sem copiar seus valores para outro arquivo. Não execute um build
 Production local com credenciais Production apenas para testar Sentry; use o
 workflow manual de readiness quando houver autorização.
 
-### 7. Gerar segredos próprios
+### 8. Gerar segredos próprios
 
 Gere valores diferentes de Production e com pelo menos 32 caracteres:
 
@@ -295,7 +317,7 @@ Gere valores diferentes de Production e com pelo menos 32 caracteres:
 Não derive um segredo do outro. Não reutilize o token Vercel, webhook secret ou
 senha de usuário.
 
-### 8. Criar dados fictícios
+### 9. Criar dados fictícios
 
 Development possui o comando protegido:
 
@@ -344,6 +366,9 @@ Development:
 DATABASE_URL=<pooled-development>
 DATABASE_URL_DIRECT=<direct-development>
 DEVELOPMENT_DATABASE_HOST=<host-direto-development>
+DEVELOPMENT_NEON_PROJECT_ID=shy-bar-59728129
+DEVELOPMENT_NEON_BRANCH_ID=br-square-recipe-b67a4ch7
+DEVELOPMENT_OPERATION_CONFIRMATION=development
 SHARED_DEVELOPMENT_SEED_CONFIRMATION=development
 DEVELOPMENT_ADMIN_EMAIL=<caixa-interna-allowlisted>
 DEVELOPMENT_ADMIN_PASSWORD=<segredo>
@@ -571,8 +596,9 @@ Quando o Pull Request contiver migration, aguarde a CI verde do commit final da
 6. execute uma única vez e aguarde migration e auditoria verdes.
 
 O workflow deriva o SHA da `main`, exige CI verde e confere o hostname do secret
-`DATABASE_URL_DIRECT` contra `DEVELOPMENT_DATABASE_HOST` antes de abrir a
-conexão. Ele não aceita migration de uma feature ainda não integrada.
+`DATABASE_URL_DIRECT` e os IDs de projeto/branch contra o manifesto aprovado
+antes de abrir a conexão. Ele exige endpoint direto (sem `-pooler`) e não aceita
+migration de uma feature ainda não integrada.
 
 ## Da mudança local até Production
 

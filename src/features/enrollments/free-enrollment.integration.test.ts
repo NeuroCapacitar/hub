@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { withVerifiedSslMode } from "@/db/connection-url";
-import { isProductionNeonHost } from "@/db/migration-target";
+import { isProductionNeonHost } from "@/db/neon-database-target";
 import { lockCourseContentRelease } from "@/features/courses/content-release-lock";
 
 const databaseUrl =

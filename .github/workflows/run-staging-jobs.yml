@@ -24,7 +24,11 @@ permissions:
 
 jobs:
   run:
-    if: inputs.operation == 'run-jobs'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.operation == 'run-jobs' &&
+      github.ref == 'refs/heads/staging' &&
+      vars.STAGING_TARGET_READY == 'true'
     runs-on: ubuntu-24.04
     environment:
       name: vercel-staging
@@ -56,7 +60,11 @@ jobs:
           exit "${failed}"
 
   verify-resend-lifecycle:
-    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify-resend-lifecycle'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.operation == 'verify-resend-lifecycle' &&
+      github.ref == 'refs/heads/staging' &&
+      vars.STAGING_TARGET_READY == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
@@ -68,6 +76,7 @@ jobs:
       RESEND_LIFECYCLE_CONFIRMATION: ${{ inputs.confirmation }}
       STAGING_DATABASE_HOST: ${{ vars.STAGING_DATABASE_HOST }}
       STAGING_NEON_BRANCH_ID: ${{ vars.STAGING_NEON_BRANCH_ID }}
+      STAGING_NEON_PROJECT_ID: ${{ vars.STAGING_NEON_PROJECT_ID }}
       STAGING_OPERATION_CONFIRMATION: staging
       STAGING_ORIGIN: https://preview.neurocapacitar.com.br
     steps:
