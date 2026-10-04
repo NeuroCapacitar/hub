@@ -5,15 +5,15 @@ import { Pool } from "pg";
 import { withVerifiedSslMode } from "../src/db/connection-url";
 import { applyMigrationsPerFile } from "../src/db/e2e-migrator";
 import { runMigrationWithLock } from "../src/db/migration-lock";
+import { assertProductionNeonDatabaseTarget } from "../src/db/neon-database-target";
 
 config({ path: ".env.local", quiet: true });
 config({ path: ".env", quiet: true });
 
+assertProductionNeonDatabaseTarget(process.env);
 const directDatabaseUrl = process.env.DATABASE_URL_DIRECT?.trim();
 if (!directDatabaseUrl) {
-  throw new Error(
-    "DATABASE_URL_DIRECT is required for the production migration job."
-  );
+  throw new Error("DATABASE_URL_DIRECT is required for Production migrations.");
 }
 
 const pool = new Pool({

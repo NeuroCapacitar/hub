@@ -15,7 +15,7 @@ const COMPLETE_STAGING_ENVIRONMENT: Record<string, string> = {
   CLIENT_IP_SOURCE: "x-forwarded-for",
   CRON_SECRET: "staging-cron-secret-at-least-thirty-two-characters",
   DATABASE_URL:
-    "postgresql://user:secret@ep-staging-pooler.sa-east-1.aws.neon.tech/neondb",
+    "postgresql://user:secret@ep-noisy-band-b6lcc8jk-pooler.c-2.sa-east-1.aws.neon.tech/neondb",
   HEALTHCHECK_SECRET: "staging-health-secret-at-least-thirty-two-characters",
   JMVSTREAM_AUTH_RESOURCE: "6a05c62e-5e71-47b8-9ac7-9c787ec626db",
   JMVSTREAM_PLAN_ID: "OD-20912",
@@ -32,7 +32,9 @@ const COMPLETE_STAGING_ENVIRONMENT: Record<string, string> = {
   RESEND_FROM_EMAIL: "Neuro Capacitar <notificacoes@neurocapacitar.com.br>",
   RESEND_WEBHOOK_SECRET: "resend-webhook-secret-at-least-32-characters",
   SCHEDULED_JOBS_ENABLED: "true",
-  STAGING_DATABASE_HOST: "ep-staging.sa-east-1.aws.neon.tech",
+  STAGING_DATABASE_HOST: "ep-noisy-band-b6lcc8jk.c-2.sa-east-1.aws.neon.tech",
+  STAGING_NEON_BRANCH_ID: "br-cool-bread-b69twnrp",
+  STAGING_NEON_PROJECT_ID: "shy-bar-59728129",
   STAGING_EMAIL_RECIPIENT_ALLOWLIST:
     "staging-recipient@example.com,staging-ops@example.com",
   STAGING_JMVSTREAM_USES_PRODUCTION: "true",
@@ -93,7 +95,7 @@ describe("Staging environment contract", () => {
     const productionProblems = getStagingEnvironmentProblems({
       ...COMPLETE_STAGING_ENVIRONMENT,
       DATABASE_URL:
-        "postgresql://user:do-not-print@ep-hidden-tooth-ac843qc2-pooler.sa-east-1.aws.neon.tech/neondb",
+        "postgresql://user:do-not-print@ep-hidden-tooth-ac843qc2-pooler.c-2.sa-east-1.aws.neon.tech/neondb",
       STAGING_DATABASE_HOST: "ep-hidden-tooth-ac843qc2.sa-east-1.aws.neon.tech",
     });
     expect(productionProblems).toContain(

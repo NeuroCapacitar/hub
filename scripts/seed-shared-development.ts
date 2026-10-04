@@ -36,9 +36,11 @@ if (!databaseUrl) {
 }
 
 const target = assertSharedDevelopmentDatabase({
+  branchId: process.env.DEVELOPMENT_NEON_BRANCH_ID,
   confirmation: process.env.SHARED_DEVELOPMENT_SEED_CONFIRMATION,
   databaseUrl,
   expectedHost: process.env.DEVELOPMENT_DATABASE_HOST,
+  projectId: process.env.DEVELOPMENT_NEON_PROJECT_ID,
 });
 const pool = new Pool({
   connectionString: withVerifiedSslMode(databaseUrl),

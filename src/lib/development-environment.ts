@@ -1,6 +1,10 @@
 import { getNonProductionSentryProblems } from "./sentry-environment";
+import {
+  EXPECTED_NEON_TARGETS,
+  getNeonTargetProblems,
+  isProductionNeonHost,
+} from "../db/neon-database-target";
 
-const PRODUCTION_NEON_COMPUTE = "ep-hidden-tooth-ac843qc2";
 const PRODUCTION_JMVSTREAM_PLAN_ID = "OD-20912";
 const DEVELOPMENT_PRIVATE_BUCKET = "hub-development-private";
 const DEVELOPMENT_PUBLIC_BUCKET = "hub-development-public";
@@ -37,32 +41,25 @@ const normalizeNeonHost = (host: string): string =>
   host.replace(POOLED_HOST_MARKER, ".");
 
 const getDatabaseProblems = (environment: Environment): string[] => {
-  const problems: string[] = [];
-  const expectedHost = environment.DEVELOPMENT_DATABASE_HOST?.trim();
+  const problems = getNeonTargetProblems(environment, "development");
+  const key = "DATABASE_URL";
+  const url = readUrl(environment, key);
+  const expectedHost = EXPECTED_NEON_TARGETS.development.host;
 
-  for (const key of ["DATABASE_URL", "DATABASE_URL_DIRECT"] as const) {
-    const url = readUrl(environment, key);
-    if (!hasConfiguredValue(environment, key)) {
-      problems.push(`${key} is required`);
-      continue;
-    }
-    if (!(url && ["postgres:", "postgresql:"].includes(url.protocol))) {
-      problems.push(`${key} must be a valid PostgreSQL URL`);
-      continue;
-    }
-
-    const normalizedHost = normalizeNeonHost(url.hostname);
-    if (normalizedHost.startsWith(PRODUCTION_NEON_COMPUTE)) {
+  if (!hasConfiguredValue(environment, key)) {
+    problems.push(`${key} is required`);
+  } else if (!(url && ["postgres:", "postgresql:"].includes(url.protocol))) {
+    problems.push(`${key} must be a valid PostgreSQL URL`);
+  } else {
+    const normalizedHost = normalizeNeonHost(url.hostname).toLowerCase();
+    if (isProductionNeonHost(url.hostname)) {
       problems.push(`${key} must not target the Production Neon compute`);
     }
-    if (expectedHost && normalizedHost !== normalizeNeonHost(expectedHost)) {
-      problems.push(`${key} must target DEVELOPMENT_DATABASE_HOST`);
+    if (normalizedHost !== expectedHost) {
+      problems.push(`${key} must target the approved Development Neon host`);
     }
   }
 
-  if (!expectedHost) {
-    problems.push("DEVELOPMENT_DATABASE_HOST is required");
-  }
   return problems;
 };
 

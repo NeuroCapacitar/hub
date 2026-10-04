@@ -12,10 +12,12 @@ const COMPLETE_DEVELOPMENT_ENVIRONMENT: Record<string, string> = {
   CERTIFICATE_PUBLIC_BASE_URL: "http://localhost:3000",
   CRON_SECRET: "development-cron-secret-at-least-thirty-two-characters",
   DATABASE_URL:
-    "postgresql://owner:secret@ep-shared-development-pooler.sa-east-1.aws.neon.tech/neondb",
+    "postgresql://owner:secret@ep-autumn-hill-b6erdexq-pooler.c-2.sa-east-1.aws.neon.tech/neondb",
   DATABASE_URL_DIRECT:
-    "postgresql://owner:secret@ep-shared-development.sa-east-1.aws.neon.tech/neondb",
-  DEVELOPMENT_DATABASE_HOST: "ep-shared-development.sa-east-1.aws.neon.tech",
+    "postgresql://owner:secret@ep-autumn-hill-b6erdexq.c-2.sa-east-1.aws.neon.tech/neondb",
+  DEVELOPMENT_DATABASE_HOST: "ep-autumn-hill-b6erdexq.c-2.sa-east-1.aws.neon.tech",
+  DEVELOPMENT_NEON_BRANCH_ID: "br-square-recipe-b67a4ch7",
+  DEVELOPMENT_NEON_PROJECT_ID: "shy-bar-59728129",
   DEVELOPMENT_EMAIL_RECIPIENT_ALLOWLIST: "dev@example.com",
   DEVELOPMENT_JMVSTREAM_PLAN_ID: "OD-30000",
   E2E_TEST_MODE: "false",

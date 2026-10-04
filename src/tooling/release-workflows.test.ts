@@ -99,7 +99,7 @@ describe("CI and deployment workflow contracts", () => {
     expect(workflow).toContain("bun run knip");
   });
 
-  it("migrates Staging after its branch changes but never deploys from Actions", () => {
+  it("migrates and audits Staging before its controlled Vercel deploy", () => {
     const workflow = readWorkflow("deploy-staging.yml");
 
     expect(workflow).toContain("push:");
@@ -107,7 +107,9 @@ describe("CI and deployment workflow contracts", () => {
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).not.toContain("workflow_run:");
     expect(workflow).toContain("bun run db:migrate:staging");
-    expect(workflow).not.toContain("vercel deploy");
+    expect(workflow).toContain("STAGING_TARGET_READY");
+    expect(workflow).toContain("needs: migrate");
+    expect(workflow).toContain("vercel@57.0.0 deploy --prebuilt");
     expect(workflow).toContain("preview.neurocapacitar.com.br");
     expect(workflow).toContain("api/health/ready");
   });

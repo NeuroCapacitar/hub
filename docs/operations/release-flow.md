@@ -20,9 +20,12 @@ Branches de trabalho nascem de `staging`:
 feature/*, fix/*, chore/* → staging → main → Production
 ```
 
-Um PR normal deve ter `staging` como base. O merge em `staging` publica o
-mesmo SHA no Custom Environment `staging` da Vercel, disponível em
-`https://preview.neurocapacitar.com.br`.
+Um PR normal deve ter `staging` como base. O merge em `staging` inicia o
+workflow `Prepare Vercel staging`. Quando a variável de repositório GitHub
+`STAGING_TARGET_READY` está ativada, o workflow aplica e audita
+migrations antes de construir e publicar o mesmo SHA no Custom Environment
+`staging`, disponível em `https://preview.neurocapacitar.com.br`. Enquanto a
+flag estiver ausente ou falsa, migrations e deploy ficam bloqueados.
 
 Como `main` é a branch padrão do GitHub, a CI também roda PRs direcionados a
 ela, mas falha deliberadamente para PRs normais e orienta a trocar a base para
@@ -80,9 +83,11 @@ A CI completa executa uma vez por PR para `staging` ou `main`. Ela usa
 PostgreSQL 18 local no runner, com bancos separados para integração e E2E.
 Não cria branches Neon, não usa dados Production e não executa em todo push.
 
-O merge em `staging` tem uma operação pequena e separada que aplica migrations
-no banco persistente de Staging. Essa operação não faz deployment Vercel e não
-repete a CI.
+O workflow `Prepare Vercel staging` serializa migration, inspeção do journal,
+build e deploy; o push do Git não inicia um deploy Vercel concorrente. As
+operações manuais `migration-only`, `seed-only` e `migrate-and-deploy` exigem
+confirmação explícita e branch `staging`; `verify` somente executa smoke.
+O fluxo não repete a CI.
 
 Antes de abrir o Pull Request, tente a revisão opcional do [runbook do
 CodeRabbit](code-review-with-coderabbit.md), usando `staging` como base para o
@@ -112,7 +117,10 @@ promoção. Falha de build, migration ou smoke não deve alterar o tráfego púb
 
 ## Vercel
 
-O Git Integration publica `staging` e também cria a build Production quando o
+O Git Integration não publica `staging` diretamente: `vercel.json` desabilita
+esse caminho para impedir que o deploy corra junto com as migrations. O
+workflow GitHub usa Vercel CLI para publicar o Custom Environment `staging`
+depois dos gates do banco. O Git Integration cria a build Production quando o
 workflow avança `main`. Feature branches não geram previews automáticos porque
 o `ignoreCommand` encerra essas builds. O domínio Production não é
 autoatribuído durante a build; o workflow aguarda a build do SHA exato, executa
@@ -134,7 +142,9 @@ vídeos em `processing`, atualiza player e thumbnail, reconcilia a pasta do curs
 e expira uploads abandonados.
 
 Em Staging, os workers são executados somente pela operação manual
-`Run Staging jobs`. O agendamento periódico anterior do GitHub Actions foi removido.
+`Run Staging jobs`, depois que a variável de repositório
+`STAGING_TARGET_READY` confirma GitHub/Vercel configurados. O agendamento
+periódico anterior do GitHub Actions foi removido.
 
 As inboxes Asaas/Resend, leases, retries, dead-letter e outbox são mantidos.
 Qualquer redução adicional de frequência exige evidência de que o processamento

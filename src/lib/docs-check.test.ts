@@ -143,14 +143,16 @@ describe("release workflow contracts", () => {
     expect(source).toContain("create database hub_e2e");
   });
 
-  it("migrates Staging after its branch changes without deploying from Actions", () => {
+  it("migrates Staging before the gated Vercel deploy", () => {
     const source = readWorkflow("deploy-staging.yml");
     expect(source).not.toContain("workflow_run:");
     expect(source).toContain("branches: [staging]");
     expect(source).toContain("name: vercel-staging");
     expect(source).toContain("origin/staging");
     expect(source).toContain("db:migrate:staging");
-    expect(source).not.toContain("vercel deploy");
+    expect(source).toContain("STAGING_TARGET_READY");
+    expect(source).toContain("needs: migrate");
+    expect(source).toContain("vercel@57.0.0 deploy --prebuilt");
     expect(source).toContain("preview.neurocapacitar.com.br");
   });
 

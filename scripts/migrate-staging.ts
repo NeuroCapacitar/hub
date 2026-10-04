@@ -18,8 +18,8 @@ const target = assertStagingTarget({
   branchId: process.env.STAGING_NEON_BRANCH_ID,
   confirmation: process.env.STAGING_OPERATION_CONFIRMATION,
   databaseUrl: directDatabaseUrl,
-  expectedBranchId: process.env.STAGING_NEON_BRANCH_ID,
   expectedHost: process.env.STAGING_DATABASE_HOST,
+  projectId: process.env.STAGING_NEON_PROJECT_ID,
 });
 
 const pool = new Pool({

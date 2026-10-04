@@ -1,58 +1,33 @@
-const PRODUCTION_NEON_COMPUTE = "ep-hidden-tooth-ac843qc2";
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "[::1]", "localhost"]);
-const LEADING_SLASHES = /^\/+/;
-
-const normalizeNeonHost = (host: string): string =>
-  host.replace("-pooler.", ".");
+import { assertNeonDatabaseTarget } from "../db/neon-database-target";
 
 export const assertSharedDevelopmentDatabase = ({
+  branchId,
   confirmation,
   databaseUrl,
   expectedHost,
+  projectId,
 }: {
+  branchId: string | undefined;
   confirmation: string | undefined;
   databaseUrl: string;
   expectedHost: string | undefined;
+  projectId: string | undefined;
 }): { databaseName: string; host: string } => {
   if (confirmation?.trim().toLowerCase() !== "development") {
     throw new Error(
       "Set SHARED_DEVELOPMENT_SEED_CONFIRMATION=development to run this seed."
     );
   }
-  if (!expectedHost?.trim()) {
-    throw new Error("DEVELOPMENT_DATABASE_HOST is required.");
-  }
 
-  let url: URL;
-  try {
-    url = new URL(databaseUrl);
-  } catch {
-    throw new Error("Shared Development database URL is invalid.");
-  }
+  const target = assertNeonDatabaseTarget({
+    environment: {
+      DATABASE_URL_DIRECT: databaseUrl,
+      DEVELOPMENT_DATABASE_HOST: expectedHost,
+      DEVELOPMENT_NEON_BRANCH_ID: branchId,
+      DEVELOPMENT_NEON_PROJECT_ID: projectId,
+    },
+    target: "development",
+  });
 
-  const host = normalizeNeonHost(url.hostname);
-  const confirmedHost = normalizeNeonHost(expectedHost.trim());
-  if (host.startsWith(PRODUCTION_NEON_COMPUTE)) {
-    throw new Error(
-      "Shared Development seed refuses the Production Neon compute."
-    );
-  }
-  if (LOOPBACK_HOSTS.has(host)) {
-    throw new Error("Shared Development seed requires a remote Neon host.");
-  }
-  if (host !== confirmedHost) {
-    throw new Error(
-      "Shared Development database host does not match DEVELOPMENT_DATABASE_HOST."
-    );
-  }
-
-  const databaseName = decodeURIComponent(url.pathname).replace(
-    LEADING_SLASHES,
-    ""
-  );
-  if (!databaseName) {
-    throw new Error("Shared Development database name is missing.");
-  }
-
-  return { databaseName, host };
+  return { databaseName: target.databaseName, host: target.host };
 };

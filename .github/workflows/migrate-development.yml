@@ -86,9 +86,12 @@ jobs:
         env:
           DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
           DEVELOPMENT_DATABASE_HOST: ${{ vars.DEVELOPMENT_DATABASE_HOST }}
+          DEVELOPMENT_NEON_BRANCH_ID: ${{ vars.DEVELOPMENT_NEON_BRANCH_ID }}
+          DEVELOPMENT_NEON_PROJECT_ID: ${{ vars.DEVELOPMENT_NEON_PROJECT_ID }}
+          DEVELOPMENT_OPERATION_CONFIRMATION: development
         run: |
           set -euo pipefail
-          for name in DATABASE_URL_DIRECT DEVELOPMENT_DATABASE_HOST; do
+          for name in DATABASE_URL_DIRECT DEVELOPMENT_DATABASE_HOST DEVELOPMENT_NEON_BRANCH_ID DEVELOPMENT_NEON_PROJECT_ID DEVELOPMENT_OPERATION_CONFIRMATION; do
             if [[ -z "${!name:-}" ]]; then
               echo "${name} is required by the neon-development environment." >&2
               exit 1
@@ -98,8 +101,14 @@ jobs:
         env:
           DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
           DEVELOPMENT_DATABASE_HOST: ${{ vars.DEVELOPMENT_DATABASE_HOST }}
+          DEVELOPMENT_NEON_BRANCH_ID: ${{ vars.DEVELOPMENT_NEON_BRANCH_ID }}
+          DEVELOPMENT_NEON_PROJECT_ID: ${{ vars.DEVELOPMENT_NEON_PROJECT_ID }}
+          DEVELOPMENT_OPERATION_CONFIRMATION: development
         run: bun run db:migrate:development
       - name: Audit Development migration state
         env:
           DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+          DEVELOPMENT_DATABASE_HOST: ${{ vars.DEVELOPMENT_DATABASE_HOST }}
+          DEVELOPMENT_NEON_BRANCH_ID: ${{ vars.DEVELOPMENT_NEON_BRANCH_ID }}
+          DEVELOPMENT_NEON_PROJECT_ID: ${{ vars.DEVELOPMENT_NEON_PROJECT_ID }}
         run: bun run db:migrations:inspect -- --environment=neon-development
