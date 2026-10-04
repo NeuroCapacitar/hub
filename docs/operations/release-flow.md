@@ -84,10 +84,18 @@ PostgreSQL 18 local no runner, com bancos separados para integração e E2E.
 Não cria branches Neon, não usa dados Production e não executa em todo push.
 
 O workflow `Prepare Vercel staging` serializa migration, inspeção do journal,
-build e deploy; o push do Git não inicia um deploy Vercel concorrente. As
-operações manuais `migration-only`, `seed-only` e `migrate-and-deploy` exigem
-confirmação explícita e branch `staging`; `verify` somente executa smoke.
-O fluxo não repete a CI.
+build e deploy. O job de deploy usa o SHA validado e emitido pelo job de
+migration, confere a ponta da branch Staging antes do build e repete a checagem
+imediatamente antes da publicação. Se a branch avançar durante a preparação, o
+workflow aborta sem publicar um deployment desatualizado. O push do Git não
+inicia um deploy Vercel concorrente.
+
+As operações manuais `migration-only`, `seed-only` e `migrate-and-deploy` exigem
+confirmação explícita e branch `staging`. O smoke do deploy verifica apenas
+readiness, compatível com manutenção integral. A operação manual `verify`
+exige confirmação de que `APPLICATION_MAINTENANCE_MODE=off` e testa readiness
+mais a rejeição de um POST sem assinatura ao webhook Resend, que deve retornar
+HTTP 400. O fluxo não repete a CI.
 
 Antes de abrir o Pull Request, tente a revisão opcional do [runbook do
 CodeRabbit](code-review-with-coderabbit.md), usando `staging` como base para o

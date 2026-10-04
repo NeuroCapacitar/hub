@@ -15,7 +15,8 @@ const COMPLETE_DEVELOPMENT_ENVIRONMENT: Record<string, string> = {
     "postgresql://owner:secret@ep-autumn-hill-b6erdexq-pooler.c-2.sa-east-1.aws.neon.tech/neondb",
   DATABASE_URL_DIRECT:
     "postgresql://owner:secret@ep-autumn-hill-b6erdexq.c-2.sa-east-1.aws.neon.tech/neondb",
-  DEVELOPMENT_DATABASE_HOST: "ep-autumn-hill-b6erdexq.c-2.sa-east-1.aws.neon.tech",
+  DEVELOPMENT_DATABASE_HOST:
+    "ep-autumn-hill-b6erdexq.c-2.sa-east-1.aws.neon.tech",
   DEVELOPMENT_NEON_BRANCH_ID: "br-square-recipe-b67a4ch7",
   DEVELOPMENT_NEON_PROJECT_ID: "shy-bar-59728129",
   DEVELOPMENT_EMAIL_RECIPIENT_ALLOWLIST: "dev@example.com",

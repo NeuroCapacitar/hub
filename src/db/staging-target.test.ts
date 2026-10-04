@@ -25,9 +25,7 @@ const createStagingTarget = (
 
 describe("Staging database target", () => {
   it("accepts the explicitly confirmed Staging compute", () => {
-    expect(
-      assertStagingTarget(createStagingTarget())
-    ).toEqual({
+    expect(assertStagingTarget(createStagingTarget())).toEqual({
       branchId: expected.branchId,
       databaseName: "neondb",
       host: expected.host,
@@ -42,7 +40,9 @@ describe("Staging database target", () => {
             "postgresql://user:do-not-print@ep-hidden-tooth-ac843qc2.sa-east-1.aws.neon.tech/neondb",
         })
       )
-    ).toThrow("DATABASE_URL_DIRECT must not target the Production Neon compute");
+    ).toThrow(
+      "DATABASE_URL_DIRECT must not target the Production Neon compute"
+    );
     expect(() =>
       assertStagingTarget(createStagingTarget({ branchId: "br-other" }))
     ).toThrow("STAGING_NEON_BRANCH_ID does not match the approved Neon branch");

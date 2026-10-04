@@ -1,9 +1,9 @@
-import { getNonProductionSentryProblems } from "./sentry-environment";
 import {
   EXPECTED_NEON_TARGETS,
   getNeonMetadataProblems,
   isProductionNeonHost,
 } from "../db/neon-database-target";
+import { getNonProductionSentryProblems } from "./sentry-environment";
 
 const STAGING_ORIGIN = "https://preview.neurocapacitar.com.br";
 const ASAAS_SANDBOX_ORIGIN = "https://api-sandbox.asaas.com";

@@ -99,7 +99,7 @@ describe("CI and deployment workflow contracts", () => {
     expect(workflow).toContain("bun run knip");
   });
 
-  it("migrates and audits Staging before its controlled Vercel deploy", () => {
+  it("binds the Staging deploy to its migration SHA and gates webhook smoke until maintenance is off", () => {
     const workflow = readWorkflow("deploy-staging.yml");
 
     expect(workflow).toContain("push:");
@@ -109,9 +109,34 @@ describe("CI and deployment workflow contracts", () => {
     expect(workflow).toContain("bun run db:migrate:staging");
     expect(workflow).toContain("STAGING_TARGET_READY");
     expect(workflow).toContain("needs: migrate");
+    expect(workflow).toContain(
+      "migrated_sha: " +
+        String.fromCharCode(36) +
+        "{{ steps.verify_target.outputs.sha }}"
+    );
+    expect(workflow).toContain(
+      "ref: " +
+        String.fromCharCode(36) +
+        "{{ needs.migrate.outputs.migrated_sha }}"
+    );
+    expect(workflow).toContain("MIGRATED_STAGING_SHA");
+    expect(workflow).toContain(
+      "Reconfirm the migrated Staging SHA immediately before deploy"
+    );
+    expect(workflow).toContain("inputs.confirm_maintenance_off == true");
     expect(workflow).toContain("vercel@57.0.0 deploy --prebuilt");
     expect(workflow).toContain("preview.neurocapacitar.com.br");
     expect(workflow).toContain("api/health/ready");
+
+    const verifyStart = workflow.indexOf("  verify:");
+    expect(verifyStart).toBeGreaterThanOrEqual(0);
+    const deployBlock = workflow.slice(
+      workflow.indexOf("  deploy:"),
+      verifyStart
+    );
+    const verifyBlock = workflow.slice(verifyStart);
+    expect(deployBlock).not.toContain("/api/webhooks/resend");
+    expect(verifyBlock).toContain("/api/webhooks/resend");
   });
 
   it("creates a reconciliation PR when main contains Production-only changes", () => {

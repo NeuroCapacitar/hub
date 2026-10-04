@@ -121,56 +121,64 @@ export interface NeonDatabaseTarget {
   projectId: string;
 }
 
+const getDatabaseUrlProblems = (
+  databaseUrl: URL,
+  target: NeonNonProductionEnvironment
+): string[] => {
+  const problems: string[] = [];
+  const expected = EXPECTED_NEON_TARGETS[target];
+  const rawHost = databaseUrl.hostname.trim().toLowerCase();
+  const host = normalizeNeonHost(rawHost);
+
+  if (isPooledNeonHost(rawHost)) {
+    problems.push(
+      "DATABASE_URL_DIRECT must use the direct Neon endpoint, not a pooler"
+    );
+  }
+  if (host.startsWith(PRODUCTION_NEON_COMPUTE)) {
+    problems.push(
+      "DATABASE_URL_DIRECT must not target the Production Neon compute"
+    );
+  } else if (LOOPBACK_HOSTS.has(host)) {
+    problems.push("Non-Production database target must be a remote Neon host");
+  } else if (!isPooledNeonHost(rawHost) && rawHost !== expected.host) {
+    problems.push(
+      `DATABASE_URL_DIRECT must target the approved ${target} Neon host`
+    );
+  }
+
+  const databaseName = decodeURIComponent(databaseUrl.pathname).replace(
+    LEADING_SLASHES,
+    ""
+  );
+  if (databaseName !== expected.databaseName) {
+    problems.push(`DATABASE_URL_DIRECT must target the ${target} database`);
+  }
+
+  return problems;
+};
+
 export const getNeonTargetProblems = (
   environment: Environment,
   target: NeonNonProductionEnvironment
 ): string[] => {
   const problems: string[] = [];
-  const expected = EXPECTED_NEON_TARGETS[target];
   const rawDatabaseUrl = environment.DATABASE_URL_DIRECT?.trim();
 
-  if (!rawDatabaseUrl) {
-    problems.push("DATABASE_URL_DIRECT is required");
-  } else {
+  if (rawDatabaseUrl) {
     const databaseUrl = parsePostgresUrl(rawDatabaseUrl);
-    if (!databaseUrl) {
-      problems.push("DATABASE_URL_DIRECT must be a valid PostgreSQL URL");
+    if (databaseUrl) {
+      problems.push(...getDatabaseUrlProblems(databaseUrl, target));
     } else {
-      const rawHost = databaseUrl.hostname.trim().toLowerCase();
-      const host = normalizeNeonHost(rawHost);
-      if (isPooledNeonHost(rawHost)) {
-        problems.push(
-          "DATABASE_URL_DIRECT must use the direct Neon endpoint, not a pooler"
-        );
-      }
-      if (host.startsWith(PRODUCTION_NEON_COMPUTE)) {
-        problems.push(
-          "DATABASE_URL_DIRECT must not target the Production Neon compute"
-        );
-      } else if (LOOPBACK_HOSTS.has(host)) {
-        problems.push("Non-Production database target must be a remote Neon host");
-      } else if (!isPooledNeonHost(rawHost) && rawHost !== expected.host) {
-        problems.push(
-          `DATABASE_URL_DIRECT must target the approved ${target} Neon host`
-        );
-      }
-
-      const databaseName = decodeURIComponent(databaseUrl.pathname).replace(
-        LEADING_SLASHES,
-        ""
-      );
-      if (databaseName !== expected.databaseName) {
-        problems.push(
-          `DATABASE_URL_DIRECT must target the ${target} database`
-        );
-      }
+      problems.push("DATABASE_URL_DIRECT must be a valid PostgreSQL URL");
     }
+  } else {
+    problems.push("DATABASE_URL_DIRECT is required");
   }
 
   problems.push(...getNeonMetadataProblems(environment, target));
   return problems;
 };
-
 export const assertNeonDatabaseTarget = ({
   environment,
   target,
@@ -202,13 +210,9 @@ export const getProductionNeonTargetProblems = (
   const projectId = environment.PRODUCTION_NEON_PROJECT_ID?.trim();
   const branchId = environment.PRODUCTION_NEON_BRANCH_ID?.trim();
 
-  if (!rawDatabaseUrl) {
-    problems.push("DATABASE_URL_DIRECT is required");
-  } else {
+  if (rawDatabaseUrl) {
     const databaseUrl = parsePostgresUrl(rawDatabaseUrl);
-    if (!databaseUrl) {
-      problems.push("DATABASE_URL_DIRECT must be a valid PostgreSQL URL");
-    } else {
+    if (databaseUrl) {
       const host = databaseUrl.hostname.trim().toLowerCase();
       if (isPooledNeonHost(host)) {
         problems.push(
@@ -225,27 +229,39 @@ export const getProductionNeonTargetProblems = (
         ""
       );
       if (databaseName !== expected.databaseName) {
-        problems.push("DATABASE_URL_DIRECT must target the Production database");
+        problems.push(
+          "DATABASE_URL_DIRECT must target the Production database"
+        );
       }
+    } else {
+      problems.push("DATABASE_URL_DIRECT must be a valid PostgreSQL URL");
     }
+  } else {
+    problems.push("DATABASE_URL_DIRECT is required");
   }
 
   if (!expectedHost) {
     problems.push("PRODUCTION_DATABASE_HOST is required");
   } else if (expectedHost.toLowerCase() !== expected.host) {
-    problems.push("PRODUCTION_DATABASE_HOST does not match the approved Neon host");
+    problems.push(
+      "PRODUCTION_DATABASE_HOST does not match the approved Neon host"
+    );
   }
 
   if (!projectId) {
     problems.push("PRODUCTION_NEON_PROJECT_ID is required");
   } else if (projectId !== expected.projectId) {
-    problems.push("PRODUCTION_NEON_PROJECT_ID does not match the approved Neon project");
+    problems.push(
+      "PRODUCTION_NEON_PROJECT_ID does not match the approved Neon project"
+    );
   }
 
   if (!branchId) {
     problems.push("PRODUCTION_NEON_BRANCH_ID is required");
   } else if (branchId !== expected.branchId) {
-    problems.push("PRODUCTION_NEON_BRANCH_ID does not match the approved Neon branch");
+    problems.push(
+      "PRODUCTION_NEON_BRANCH_ID does not match the approved Neon branch"
+    );
   }
 
   return problems;

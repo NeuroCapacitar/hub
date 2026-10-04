@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   EXPECTED_NEON_TARGETS,
   getNeonTargetProblems,
-  PRODUCTION_NEON_COMPUTE,
   type NeonNonProductionEnvironment,
+  PRODUCTION_NEON_COMPUTE,
 } from "./neon-database-target";
 
 const TARGET_KEYS = {
@@ -59,45 +59,45 @@ describe("Neon non-production database target", () => {
     });
   });
 
-  it.each(["development", "staging"] as const)(
-    "accepts the approved %s branch on its direct endpoint",
-    (target) => {
-      const expected = EXPECTED_NEON_TARGETS[target];
-      const keys = TARGET_KEYS[target];
-      const environment = createTargetEnvironment(target);
+  it.each([
+    "development",
+    "staging",
+  ] as const)("accepts the approved %s branch on its direct endpoint", (target) => {
+    const expected = EXPECTED_NEON_TARGETS[target];
+    const keys = TARGET_KEYS[target];
+    const environment = createTargetEnvironment(target);
 
-      expect(getNeonTargetProblems(environment, target)).toEqual([]);
-      expect(environment[keys.branchId]).toBe(expected.branchId);
-    }
-  );
+    expect(getNeonTargetProblems(environment, target)).toEqual([]);
+    expect(environment[keys.branchId]).toBe(expected.branchId);
+  });
 
-  it.each(["development", "staging"] as const)(
-    "rejects a pooled endpoint for %s migration credentials",
-    (target) => {
-      const expected = EXPECTED_NEON_TARGETS[target];
-      const pooledHost = expected.host.replace(".c-2.", "-pooler.c-2.");
-      const environment = createTargetEnvironment(target, {
-        DATABASE_URL_DIRECT: `postgresql://owner:secret@${pooledHost}/${expected.databaseName}`,
-      });
+  it.each([
+    "development",
+    "staging",
+  ] as const)("rejects a pooled endpoint for %s migration credentials", (target) => {
+    const expected = EXPECTED_NEON_TARGETS[target];
+    const pooledHost = expected.host.replace(".c-2.", "-pooler.c-2.");
+    const environment = createTargetEnvironment(target, {
+      DATABASE_URL_DIRECT: `postgresql://owner:secret@${pooledHost}/${expected.databaseName}`,
+    });
 
-      expect(getNeonTargetProblems(environment, target)).toContain(
-        "DATABASE_URL_DIRECT must use the direct Neon endpoint, not a pooler"
-      );
-    }
-  );
+    expect(getNeonTargetProblems(environment, target)).toContain(
+      "DATABASE_URL_DIRECT must use the direct Neon endpoint, not a pooler"
+    );
+  });
 
-  it.each(["development", "staging"] as const)(
-    "requires project, branch, host, and direct URL for %s",
-    (target) => {
-      const keys = TARGET_KEYS[target];
-      expect(getNeonTargetProblems({}, target)).toEqual([
-        "DATABASE_URL_DIRECT is required",
-        `${keys.host} is required`,
-        `${keys.projectId} is required`,
-        `${keys.branchId} is required`,
-      ]);
-    }
-  );
+  it.each([
+    "development",
+    "staging",
+  ] as const)("requires project, branch, host, and direct URL for %s", (target) => {
+    const keys = TARGET_KEYS[target];
+    expect(getNeonTargetProblems({}, target)).toEqual([
+      "DATABASE_URL_DIRECT is required",
+      `${keys.host} is required`,
+      `${keys.projectId} is required`,
+      `${keys.branchId} is required`,
+    ]);
+  });
 
   it("rejects the Production compute even if every supplied ID is changed", () => {
     const target = "development";
@@ -141,11 +141,11 @@ describe("Neon non-production database target", () => {
       DATABASE_URL_DIRECT: `postgresql://owner:secret@${expected.host}/otherdb`,
     });
 
-    expect(
-      getNeonTargetProblems(invalidProtocol, "development")
-    ).toContain("DATABASE_URL_DIRECT must be a valid PostgreSQL URL");
-    expect(
-      getNeonTargetProblems(wrongDatabase, "development")
-    ).toContain("DATABASE_URL_DIRECT must target the development database");
+    expect(getNeonTargetProblems(invalidProtocol, "development")).toContain(
+      "DATABASE_URL_DIRECT must be a valid PostgreSQL URL"
+    );
+    expect(getNeonTargetProblems(wrongDatabase, "development")).toContain(
+      "DATABASE_URL_DIRECT must target the development database"
+    );
   });
 });

@@ -20,6 +20,11 @@ on:
         required: true
         default: false
         type: boolean
+      confirm_maintenance_off:
+        description: Confirm APPLICATION_MAINTENANCE_MODE is off before the Staging webhook smoke
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: vercel-staging-operations
@@ -31,6 +36,8 @@ permissions:
 jobs:
   migrate:
     name: Apply and inspect Staging migrations
+    outputs:
+      migrated_sha: ${{ steps.verify_target.outputs.sha }}
     if: >-
       (github.event_name == 'push' && vars.STAGING_TARGET_READY == 'true') ||
       (github.event_name == 'workflow_dispatch' &&
@@ -55,6 +62,7 @@ jobs:
           ref: staging
 
       - name: Verify target configuration and exact current Staging SHA
+        id: verify_target
         run: |
           set -euo pipefail
           if [[ "${GITHUB_REF}" != "refs/heads/staging" ]]; then
@@ -72,7 +80,9 @@ jobs:
             exit 1
           fi
           git fetch --no-tags origin staging
-          [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/staging)" ]]
+          staging_sha="$(git rev-parse origin/staging)"
+          [[ "$(git rev-parse HEAD)" == "${staging_sha}" ]]
+          printf 'sha=%s\n' "${staging_sha}" >> "${GITHUB_OUTPUT}"
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -158,11 +168,12 @@ jobs:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      MIGRATED_STAGING_SHA: ${{ needs.migrate.outputs.migrated_sha }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
-          ref: staging
+          ref: ${{ needs.migrate.outputs.migrated_sha }}
 
       - name: Verify exact current Staging SHA and Vercel configuration
         run: |
@@ -177,8 +188,21 @@ jobs:
               exit 1
             fi
           done
+          if [[ ! "${MIGRATED_STAGING_SHA:-}" =~ ^[[:xdigit:]]{40}$ ]]; then
+            echo "The migration job did not provide a full Staging commit SHA." >&2
+            exit 1
+          fi
           git fetch --no-tags origin staging
-          [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/staging)" ]]
+          checkout_sha="$(git rev-parse HEAD)"
+          if [[ "${checkout_sha}" != "${MIGRATED_STAGING_SHA}" ]]; then
+            echo "The Staging deploy checkout does not match the migrated SHA." >&2
+            exit 1
+          fi
+          current_staging_sha="$(git rev-parse origin/staging)"
+          if [[ "${current_staging_sha}" != "${MIGRATED_STAGING_SHA}" ]]; then
+            echo "Staging advanced after migration; refusing to deploy a different SHA." >&2
+            exit 1
+          fi
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -192,6 +216,17 @@ jobs:
       - name: Build Staging deployment
         run: bunx vercel@57.0.0 build --target=staging --token="$VERCEL_TOKEN"
 
+      - name: Reconfirm the migrated Staging SHA immediately before deploy
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin staging
+          checkout_sha="$(git rev-parse HEAD)"
+          current_staging_sha="$(git rev-parse origin/staging)"
+          if [[ "${checkout_sha}" != "${MIGRATED_STAGING_SHA}" || "${current_staging_sha}" != "${MIGRATED_STAGING_SHA}" ]]; then
+            echo "Staging advanced during the Vercel build; refusing to publish a stale deployment." >&2
+            exit 1
+          fi
+
       - name: Deploy the verified Staging build
         run: bunx vercel@57.0.0 deploy --prebuilt --target=staging --yes --token="$VERCEL_TOKEN"
 
@@ -201,16 +236,16 @@ jobs:
           curl --fail --silent --show-error \
             --header "Authorization: Bearer ${HEALTHCHECK_SECRET}" \
             "${STAGING_ORIGIN}/api/health/ready" > /dev/null
-          webhook_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-            --request POST \
-            --header 'Content-Type: application/json' \
-            --data '{}' \
-            "${STAGING_ORIGIN}/api/webhooks/resend")"
-          [[ "${webhook_status}" == "400" ]]
 
   verify:
     name: Verify current Staging deployment
-    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'verify'
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.operation == 'verify' &&
+      inputs.confirm_staging == true &&
+      inputs.confirm_maintenance_off == true &&
+      github.ref == 'refs/heads/staging' &&
+      vars.STAGING_TARGET_READY == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
@@ -219,7 +254,7 @@ jobs:
       HEALTHCHECK_SECRET: ${{ secrets.HEALTHCHECK_SECRET }}
       STAGING_ORIGIN: https://preview.neurocapacitar.com.br
     steps:
-      - name: Smoke Staging
+      - name: Smoke Staging after maintenance is off
         run: |
           set -euo pipefail
           curl --fail --silent --show-error \

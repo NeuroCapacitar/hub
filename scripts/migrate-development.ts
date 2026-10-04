@@ -4,9 +4,9 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { Pool } from "pg";
 import { withVerifiedSslMode } from "../src/db/connection-url";
 import { DEVELOPMENT_LEGACY_MIGRATIONS } from "../src/db/development-migration-compatibility";
-import { assertNeonDatabaseTarget } from "../src/db/neon-database-target";
 import { applyMigrationsPerFile } from "../src/db/e2e-migrator";
 import { runMigrationWithLock } from "../src/db/migration-lock";
+import { assertNeonDatabaseTarget } from "../src/db/neon-database-target";
 
 config({ path: ".env.local", quiet: true });
 config({ path: ".env", quiet: true });

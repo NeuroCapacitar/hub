@@ -1,9 +1,9 @@
-import { getNonProductionSentryProblems } from "./sentry-environment";
 import {
   EXPECTED_NEON_TARGETS,
   getNeonTargetProblems,
   isProductionNeonHost,
 } from "../db/neon-database-target";
+import { getNonProductionSentryProblems } from "./sentry-environment";
 
 const PRODUCTION_JMVSTREAM_PLAN_ID = "OD-20912";
 const DEVELOPMENT_PRIVATE_BUCKET = "hub-development-private";
@@ -48,9 +48,7 @@ const getDatabaseProblems = (environment: Environment): string[] => {
 
   if (!hasConfiguredValue(environment, key)) {
     problems.push(`${key} is required`);
-  } else if (!(url && ["postgres:", "postgresql:"].includes(url.protocol))) {
-    problems.push(`${key} must be a valid PostgreSQL URL`);
-  } else {
+  } else if (url && ["postgres:", "postgresql:"].includes(url.protocol)) {
     const normalizedHost = normalizeNeonHost(url.hostname).toLowerCase();
     if (isProductionNeonHost(url.hostname)) {
       problems.push(`${key} must not target the Production Neon compute`);
@@ -58,6 +56,8 @@ const getDatabaseProblems = (environment: Environment): string[] => {
     if (normalizedHost !== expectedHost) {
       problems.push(`${key} must target the approved Development Neon host`);
     }
+  } else {
+    problems.push(`${key} must be a valid PostgreSQL URL`);
   }
 
   return problems;
@@ -240,11 +240,7 @@ const getIsolatedE2eProblems = (environment: Environment): string[] => {
   const parsedE2eDatabaseUrl = readUrl(environment, "E2E_DATABASE_URL");
   if (!parsedE2eDatabaseUrl) {
     problems.push("E2E_DATABASE_URL must be a valid PostgreSQL URL");
-  } else if (
-    normalizeNeonHost(parsedE2eDatabaseUrl.hostname).startsWith(
-      PRODUCTION_NEON_COMPUTE
-    )
-  ) {
+  } else if (isProductionNeonHost(parsedE2eDatabaseUrl.hostname)) {
     problems.push(
       "E2E_DATABASE_URL must not target the Production Neon compute"
     );

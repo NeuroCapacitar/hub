@@ -54,7 +54,9 @@ describe("shared Development database target", () => {
           projectId: "wrong-project",
         })
       )
-    ).toThrow("DEVELOPMENT_NEON_PROJECT_ID does not match the approved Neon project");
+    ).toThrow(
+      "DEVELOPMENT_NEON_PROJECT_ID does not match the approved Neon project"
+    );
 
     expect(() =>
       assertSharedDevelopmentDatabase(
@@ -63,13 +65,17 @@ describe("shared Development database target", () => {
           projectId: expected.projectId,
         })
       )
-    ).toThrow("DEVELOPMENT_NEON_BRANCH_ID does not match the approved Neon branch");
+    ).toThrow(
+      "DEVELOPMENT_NEON_BRANCH_ID does not match the approved Neon branch"
+    );
 
     expect(() =>
       assertSharedDevelopmentDatabase(
         createSeedTarget({ expectedHost: "ep-other.sa-east-1.aws.neon.tech" })
       )
-    ).toThrow("DEVELOPMENT_DATABASE_HOST must match the approved development Neon host");
+    ).toThrow(
+      "DEVELOPMENT_DATABASE_HOST must match the approved development Neon host"
+    );
   });
 
   it("rejects a missing seed confirmation", () => {
