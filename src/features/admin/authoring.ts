@@ -45,7 +45,12 @@ import {
   DEFAULT_COURSE_PAYMENT_OFFER,
   parseCoursePaymentOffer,
 } from "@/features/payments/course-payment-offer";
-import { parseCoursePriceToCents } from "@/features/payments/course-price";
+import {
+  COURSE_PRICE_FIELD_ERROR_MESSAGE,
+  COURSE_PRICING_MODE_ERROR_MESSAGE,
+  parseCoursePriceToCents,
+  parsePaidCoursePriceToCents,
+} from "@/features/payments/course-price";
 import {
   type CourseCoverImage,
   getCourseCoverPublicStorageKeys,
@@ -382,8 +387,33 @@ const publishCourseCover = async (
 const readContentStatus = (formData: FormData): ContentStatus =>
   readAuthoringContentStatus(formData, CREATED_CONTENT_STATUS);
 
+const readCoursePriceInCents = (formData: FormData): number => {
+  if (!formData.has("pricingMode")) {
+    return parseCoursePriceToCents(readString(formData, "price"));
+  }
+
+  const pricingMode = readString(formData, "pricingMode");
+
+  if (pricingMode === "free") {
+    return 0;
+  }
+
+  if (pricingMode !== "paid") {
+    throw new LessonAuthoringError(
+      COURSE_PRICING_MODE_ERROR_MESSAGE,
+      "pricingMode"
+    );
+  }
+
+  try {
+    return parsePaidCoursePriceToCents(readString(formData, "price"));
+  } catch {
+    throw new LessonAuthoringError(COURSE_PRICE_FIELD_ERROR_MESSAGE, "price");
+  }
+};
+
 const readCourseFormValues = (formData: FormData): CourseFormValues => {
-  const priceInCents = parseCoursePriceToCents(readString(formData, "price"));
+  const priceInCents = readCoursePriceInCents(formData);
   const paymentOffer =
     priceInCents === 0 || !formData.has("paymentOfferPresent")
       ? DEFAULT_COURSE_PAYMENT_OFFER

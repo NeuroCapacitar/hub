@@ -271,6 +271,14 @@ porta com respostas e erros determinísticos e registro de chamadas. Essa unidad
 seleciona múltiplos gateways. As entradas da aplicação chamam o adapter somente depois
 de persistir uma nova intenção local.
 
+O cliente lê `Retry-After` em respostas HTTP `429` e, quando ausente, usa
+`RateLimit-Reset` do Asaas, que expressa os segundos restantes até o reset. A fila
+`runCoordinatedAsaasQuery` serializa leituras somente dentro do processo e limita
+cada espera a 30 segundos. Com até duas repetições, a espera acumulada pode chegar a
+60 segundos; quando uma resposta pede mais de 30 segundos, não repete antes do reset
+e devolve o erro ao chamador. Essa fila não coordena Functions distintas nem
+substitui telemetria da quota compartilhada por conta.
+
 ## Entradas de checkout
 
 `POST /api/checkouts/course` não é cacheado e aceita JSON com exatamente:

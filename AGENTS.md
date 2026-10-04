@@ -250,12 +250,12 @@ When reporting completion, include:
 * Decisive result.
 * Remaining risk, if any.
 
-## Graphify (ferramenta local opcional)
+## Graphify
 
-O skill Graphify está em `.codex/skills/graphify/`; o grafo gerado fica em `graphify-out/`, ignorado pelo Git. Use-o para perguntas amplas sobre fluxos, relações entre domínios e impacto de mudanças. Para localização exata de símbolo ou texto, siga o fluxo normal de busca no código.
+O skill Graphify está em `.codex/skills/graphify/`; o grafo gerado fica em `graphify-out/`, ignorado pelo Git. Use o Graphify como etapa obrigatória de mapeamento em tarefas que exijam entender arquitetura, fluxos entre módulos ou domínios, dependências ou impacto de mudanças. Para localização exata de símbolo ou texto e mudanças isoladas sem impacto entre partes do sistema, siga o fluxo normal de busca no código.
 
 - O grafo é um índice auxiliar, não fonte de verdade. Confirme fatos no código, schema, migrations, testes e documentação canônica conforme `docs/README.md`; trate arestas `INFERRED` como hipóteses.
-- Se `graphify-out/graph.json` existir, consulte-o para perguntas de arquitetura e impacto. Se estiver ausente ou desatualizado, use `$graphify .` para reconstruí-lo ou investigue diretamente; não deixe um grafo ausente bloquear a tarefa.
+- Em tarefas desse escopo, consulte `graphify-out/graph.json` antes da investigação detalhada. Se estiver ausente, use `$graphify .` para gerá-lo; se estiver desatualizado, use `$graphify . --update`. Se o Graphify falhar ou não estiver disponível, registre a limitação e continue pelas fontes canônicas.
 - A extração AST do código é local. A extração semântica inclui apenas os documentos permitidos em `.graphifyignore` e usa o modelo da sessão Codex. Mesmo que `GEMINI_API_KEY`/`GOOGLE_API_KEY` estejam no ambiente, não use essas chaves nem outro provedor/Graphify Cloud sem autorização explícita.
 - O Graphify reingere `graphify-out/memory/` por desenho, mesmo com a pasta ignorada pelo Git. Salve ali somente respostas verificadas nas fontes e sem PII/segredos; memória do grafo continua sendo uma pista local, não autoridade.
 - Após mudanças relevantes em código ou documentos canônicos, atualize o grafo antes de depender dele em uma nova análise. Essa atualização não substitui nem bloqueia testes e verificações do projeto.

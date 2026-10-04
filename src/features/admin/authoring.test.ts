@@ -658,6 +658,7 @@ describe("admin authoring", () => {
     const formData = new FormData();
     formData.set("title", " Curso novo ");
     formData.set("description", " Descricao ");
+    formData.set("pricingMode", "paid");
     formData.set("price", "R$ 129,90");
     formData.set("accessDurationMonths", "6");
     formData.set("status", "active");
@@ -738,7 +739,8 @@ describe("admin authoring", () => {
     });
     const formData = new FormData();
     formData.set("title", "Curso gratuito");
-    formData.set("price", "0");
+    formData.set("pricingMode", "free");
+    formData.set("price", "R$ 129,90");
     formData.set("accessDurationMonths", "6");
     formData.set("paymentOfferPresent", "on");
     formData.set("paymentMaxInstallmentCount", "99");

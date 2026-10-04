@@ -691,6 +691,24 @@ describe("AsaasClient", () => {
     });
   });
 
+  it("uses RateLimit-Reset seconds when Retry-After is absent", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json(
+          { errors: [{ code: "rate_limit" }] },
+          { headers: { "RateLimit-Reset": "7" }, status: 429 }
+        )
+      );
+
+    await expect(
+      createClient(fetcher).getPayment("pay_123")
+    ).rejects.toMatchObject({
+      kind: "rate_limited",
+      retryAfterMs: 7000,
+    });
+  });
+
   it.each([
     "sandbox-token",
     "prefix-sandbox-token-suffix",

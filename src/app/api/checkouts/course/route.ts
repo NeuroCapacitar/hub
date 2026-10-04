@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { CheckoutIntentError } from "@/features/payments/checkout";
 import {
   type CheckoutApiResponse,
+  type PublicCheckoutBody,
   parseCheckoutRequest,
   parseCheckoutStatusRequest,
 } from "@/features/payments/checkout-api";
@@ -18,6 +19,11 @@ import {
   createCorrelationId,
 } from "@/lib/observability";
 import { observeOperation } from "@/lib/observe-operation";
+import {
+  PUBLIC_JSON_BODY_MAX_BYTES,
+  RequestBodyLimitError,
+  readBoundedJsonBody,
+} from "@/lib/request-body-limits";
 import { getCurrentSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +103,31 @@ const readAllowedSession = async (): Promise<
   }
 };
 
+interface PublicCheckoutBodyResult {
+  body: PublicCheckoutBody | null;
+  errorStatus: number | null;
+}
+
+const readPublicCheckoutBody = async (
+  request: Request
+): Promise<PublicCheckoutBodyResult> => {
+  try {
+    const requestBody = await readBoundedJsonBody(
+      request,
+      PUBLIC_JSON_BODY_MAX_BYTES
+    );
+    const body = parseCheckoutRequest(requestBody);
+    return body
+      ? { body, errorStatus: null }
+      : { body: null, errorStatus: 400 };
+  } catch (error) {
+    return {
+      body: null,
+      errorStatus: error instanceof RequestBodyLimitError ? error.status : 400,
+    };
+  }
+};
+
 export const GET = async (
   request: Request
 ): Promise<NextResponse<CheckoutApiResponse>> => {
@@ -169,10 +200,16 @@ export const POST = async (
     return unavailableResponse("Serviço de checkout indisponível.", 503);
   }
 
-  const body = parseCheckoutRequest(await request.json().catch(() => null));
-  if (!body) {
-    return unavailableResponse("Dados de checkout invalidos.", 400);
+  const bodyResult = await readPublicCheckoutBody(request);
+  if (!bodyResult.body) {
+    return unavailableResponse(
+      "Dados de checkout invalidos.",
+      bodyResult.errorStatus ?? 400,
+      undefined,
+      true
+    );
   }
+  const body = bodyResult.body;
 
   const session = await readAllowedSession();
   if (session === "unavailable") {

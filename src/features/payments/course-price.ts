@@ -1,10 +1,16 @@
 const COURSE_PRICE_INVALID_MESSAGE = "Preco do curso invalido.";
+export const COURSE_PRICE_FIELD_ERROR_MESSAGE =
+  "Informe um valor pago a partir de R$ 10,00.";
+export const COURSE_PRICING_MODE_ERROR_MESSAGE =
+  "Selecione se o Curso será gratuito ou pago.";
 const MINIMUM_PAID_COURSE_PRICE_IN_CENTS = 1000;
 const MAXIMUM_COURSE_PRICE_IN_CENTS = 2_147_483_647;
 const BRL_PRICE_RE = /^(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?$/;
 const DOT_DECIMAL_PRICE_RE = /^\d+\.\d{1,2}$/;
 const THOUSANDS_PRICE_RE = /^\d{1,3}(?:\.\d{3})+$/;
 const BRL_PREFIX_RE = /^R\$\s*/;
+
+export type CoursePricingMode = "free" | "paid";
 
 const invalidCoursePrice = (): never => {
   throw new Error(COURSE_PRICE_INVALID_MESSAGE);
@@ -53,4 +59,14 @@ export const parseCoursePriceToCents = (value: string): number => {
   }
 
   return Number(amountInCents);
+};
+
+export const parsePaidCoursePriceToCents = (value: string): number => {
+  const amountInCents = parseCoursePriceToCents(value);
+
+  if (amountInCents === 0) {
+    return invalidCoursePrice();
+  }
+
+  return amountInCents;
 };

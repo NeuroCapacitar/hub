@@ -2,22 +2,31 @@
 status: canonical
 owner: engineering
 last_verified_commit: 6bf5d693fd565c7c4c0c4bd9b7754efca92c2b44
-current_migration_tag: 0105_lesson_resource_cleanup_tombstones
-migration_entry_count: 106
-schema_table_count: 58
+current_migration_tag: 0106_better_auth_rate_limits
+migration_entry_count: 107
+schema_table_count: 59
 ---
 
 # Banco e migrations
 
-As migrations `0104_video_player_identity` e
-`0105_lesson_resource_cleanup_tombstones` fazem parte do fechamento de segurança.
+As migrations `0104_video_player_identity`,
+`0105_lesson_resource_cleanup_tombstones` e `0106_better_auth_rate_limits` fazem
+parte do fechamento de segurança.
 A primeira adiciona `jmvstream_video_assets.player_url` nullable e preenche somente
 hashes com uma única URL oficial conhecida nas Aulas; ativos ambíguos continuam
 sem identidade e são preservados de forma conservadora pela aplicação. A segunda
 permite tombstones `deleted` na registry de anexos, impedindo que um formulário
 antigo volte a referenciar bytes já removidos. O journal e os snapshots foram
 gerados pelo Drizzle; não aplicar essas migrations manualmente em Production.
-Seguir Staging, backup e promoção pelo fluxo canônico.
+`0106` persiste buckets do rate limiter Better Auth por HMAC da chave IP/path,
+com limpeza pela rotina maintenance; não armazena IP bruto. Foi aplicada em
+Development em 2026-10-03 pelo runner `db:migrate:development`. A verificação
+somente-leitura confirmou a tabela, o índice de expiração, o registro no journal
+e zero buckets criados. Um smoke sintético no runtime de Development enviou 12
+consumos concorrentes com limite 3: exatamente 3 foram permitidos e 9 bloqueados;
+o bucket HMAC temporário foi removido. A duração foi 669 ms e não representa
+baseline de tráfego normal. Ainda não foi aplicada em Staging ou Production.
+Seguir backup e promoção pelo fluxo canônico.
 
 ## Ambientes
 

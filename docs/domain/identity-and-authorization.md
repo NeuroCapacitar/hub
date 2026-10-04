@@ -21,6 +21,8 @@ Define Conta, sessão, perfil, papéis, permissões e bloqueios. Termos comercia
   próprios do Hub para provar posse de uma caixa postal.
 - `account_email_challenge_rate_limits`: somente hashes HMAC de destinatário/IP,
   contagem e janela; não armazena e-mail ou endereço IP em claro.
+- `better_auth_rate_limits`: buckets distribuídos de rate limit do Better Auth;
+  somente hash HMAC da chave composta por IP e path é persistido.
 - `account_email_change_requests`: etapas e prazos de troca de e-mail;
   endereços pendentes são temporários e removidos após a entrega dos avisos e
   retenção terminal curta.
@@ -39,6 +41,14 @@ Define Conta, sessão, perfil, papéis, permissões e bloqueios. Termos comercia
 Não existe Better Auth Admin Plugin nem Organization Plugin. Não há organização,
 tenant ou equipe de cliente; a equipe interna usa o lifecycle próprio de
 `staff_invitations`.
+
+O rate limiter do Better Auth usa storage compartilhado no PostgreSQL. A chave
+fornecida pela biblioteca contém IP e path, mas o Hub persiste somente HMAC-SHA-256
+em `better_auth_rate_limits`; a operação de consumo é atômica e o maintenance apaga
+linhas após `expires_at`. Requests já limitados não atualizam novamente o bucket.
+Better Auth mantém suas regras especiais de login/recuperação e o Hub conserva a
+regra de três envios de verificação por hora. A presença e operação do Sentinel
+continuam sendo configuração externa a confirmar em Production.
 
 ### REG-IDA-001 E-mail identifica a Conta sem distinção de caixa
 

@@ -114,6 +114,7 @@ describe("runMaintenance", () => {
       .mockResolvedValueOnce({ rowCount: 3 })
       .mockResolvedValueOnce({ rowCount: 4 })
       .mockResolvedValueOnce({ rowCount: 5 })
+      .mockResolvedValueOnce({ rowCount: 0 })
       .mockResolvedValueOnce({ rowCount: 8 })
       .mockResolvedValueOnce({ rowCount: 9 })
       .mockResolvedValueOnce({ rowCount: 13 })
@@ -160,6 +161,9 @@ describe("runMaintenance", () => {
     );
     expect(query).toHaveBeenCalledWith(
       "delete from account_email_challenge_rate_limits where expires_at < now()"
+    );
+    expect(query).toHaveBeenCalledWith(
+      "delete from better_auth_rate_limits where expires_at < now()"
     );
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("delete from pending_signups")
@@ -304,11 +308,13 @@ describe("runMaintenance", () => {
       .mockResolvedValueOnce({ rowCount: 3 })
       .mockResolvedValueOnce({ rowCount: 4 })
       .mockResolvedValueOnce({ rowCount: 5 })
+      .mockResolvedValueOnce({ rowCount: 0 })
       .mockResolvedValueOnce({ rowCount: 8 })
       .mockResolvedValueOnce({ rowCount: 9 });
     dependencies.getPool.mockReturnValue({ query });
     const isLeaseOwner = vi
       .fn()
+      .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
