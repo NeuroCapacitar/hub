@@ -142,12 +142,13 @@ duplicadas.
 ## Cron e workers
 
 A configuração de `vercel.json` agenda os workers de Asaas, JMVStream, outbox e
-Resend a cada quinze minutos; matrículas diariamente às 10:00 UTC e manutenção
-diariamente às 04:00 UTC.
+Resend a cada trinta minutos, nos minutos 15 e 45 UTC;
+matrículas diariamente às 10:00 UTC e manutenção diariamente às 04:00 UTC.
 
-O cron JMVStream permanece ativo em Production a cada 15 minutos. Ele busca
+O cron JMVStream permanece ativo em Production a cada 30 minutos. Ele busca
 vídeos em `processing`, atualiza player e thumbnail, reconcilia a pasta do curso
-e expira uploads abandonados.
+e expira uploads abandonados. Uploads completados também têm sincronização
+imediata; o cron recupera processamento que permaneceu pendente.
 
 Em Staging, os workers são executados somente pela operação manual
 `Run Staging jobs`, depois que a variável de repositório
@@ -156,7 +157,10 @@ periódico anterior do GitHub Actions foi removido.
 
 As inboxes Asaas/Resend, leases, retries, dead-letter e outbox são mantidos.
 Qualquer redução adicional de frequência exige evidência de que o processamento
-imediato e a recuperação continuam funcionando.
+imediato e a recuperação continuam funcionando. A recuperação Asaas tenta drenar
+a outbox depois de confirmar eventos processados. A compra segue pelo caminho
+imediato; em falhas combinadas ou backlog, o e-mail pode precisar de outra execução
+da outbox, também a cada trinta minutos.
 
 ## Backups e Neon
 

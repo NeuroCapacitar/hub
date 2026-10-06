@@ -74,4 +74,42 @@ describe("runAsaasWebhookJob", () => {
     });
     expect(dependencies.runAsaasWebhookWorker).not.toHaveBeenCalled();
   });
+
+  it("passes a targeted webhook event through the shared lease", async () => {
+    const isLeaseOwner = vi.fn(async () => true);
+    const result = {
+      deadlineReached: false,
+      failed: 0,
+      ignored: 0,
+      leaseLost: false,
+      processed: 1,
+      retried: 0,
+    };
+    dependencies.runAsaasWebhookWorker.mockResolvedValue(result);
+    dependencies.runWithScheduledJobLease.mockImplementation(
+      async ({
+        execute,
+      }: {
+        execute: (context: unknown) => Promise<unknown>;
+      }) => ({
+        acquired: true,
+        value: await execute({ deadlineAt: 123, isLeaseOwner }),
+      })
+    );
+
+    await expect(
+      runAsaasWebhookJob({
+        deadlineMs: 45_000,
+        eventId: "event-1",
+        limit: 1,
+      })
+    ).resolves.toEqual(result);
+    expect(dependencies.runAsaasWebhookWorker).toHaveBeenCalledWith({
+      deadlineAt: 123,
+      eventId: "event-1",
+      limit: 1,
+      processor: dependencies.processAsaasWebhookEvent,
+      shouldContinue: isLeaseOwner,
+    });
+  });
 });

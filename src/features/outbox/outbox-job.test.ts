@@ -28,10 +28,6 @@ describe("runOutboxJob", () => {
       deferred: 0,
       delivered: 1,
       leaseLost: false,
-      prunedDeadLetters: 0,
-      prunedDelivered: 0,
-      prunedReprocessAudits: 0,
-      prunedSuperseded: 0,
       retried: 0,
       superseded: 0,
     };

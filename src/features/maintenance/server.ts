@@ -7,6 +7,7 @@ import { reconcileAuthMediaStorage } from "@/features/auth-media/storage";
 import { reconcileRevokedCertificateArtifacts } from "@/features/certificates/artifact-reconciliation";
 import { reconcileCertificateTemplateAssets } from "@/features/certificates/template-asset-cleanup";
 import { pruneEmailDeliveryRecords } from "@/features/email-delivery/server";
+import { pruneOutboxRecords } from "@/features/outbox/server";
 import { sanitizeExpiredAsaasWebhookPayloads } from "@/features/payments/asaas-webhook-inbox";
 import { reconcileCourseCoverStorage } from "@/features/storage/course-cover-reconciliation";
 import { reconcileExpiredLessonResourceUploads } from "@/features/storage/lesson-resource-upload-cleanup";
@@ -37,6 +38,10 @@ interface MaintenanceResult {
   learningAnalyticsAggregated: number;
   learningAnalyticsEventsRemoved: number;
   leaseLost: boolean;
+  outboxDeadLettersRemoved: number;
+  outboxDeliveredRemoved: number;
+  outboxReprocessAuditsRemoved: number;
+  outboxSupersededRemoved: number;
   pendingSignupsRemoved: number;
   revokedCertificateCleanupItemsReconciled: number;
   stagedAdminImagesRemoved: number;
@@ -66,6 +71,10 @@ const emptyMaintenanceResult = (): MaintenanceResult => ({
   learningAnalyticsAggregated: 0,
   learningAnalyticsEventsRemoved: 0,
   leaseLost: false,
+  outboxDeadLettersRemoved: 0,
+  outboxDeliveredRemoved: 0,
+  outboxReprocessAuditsRemoved: 0,
+  outboxSupersededRemoved: 0,
   revokedCertificateCleanupItemsReconciled: 0,
   stagedAdminImagesRemoved: 0,
   supportRequestsRemoved: 0,
@@ -275,6 +284,15 @@ export const runMaintenance = async ({
   const emailDelivery = await pruneEmailDeliveryRecords({ client: pool });
   result.emailDeliveryEventsRemoved = emailDelivery.events;
   result.emailDeliveryMessagesRemoved = emailDelivery.messages;
+
+  if (!(await canContinue())) {
+    return result;
+  }
+  const outboxRecords = await pruneOutboxRecords({ client: pool });
+  result.outboxDeadLettersRemoved = outboxRecords.deadLetters;
+  result.outboxDeliveredRemoved = outboxRecords.delivered;
+  result.outboxReprocessAuditsRemoved = outboxRecords.reprocessAudits;
+  result.outboxSupersededRemoved = outboxRecords.superseded;
 
   if (!(await canContinue())) {
     return result;

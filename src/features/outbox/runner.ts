@@ -9,7 +9,6 @@ import {
   markOutboxMessageDelivered,
   markOutboxMessageForRetry,
   markOutboxMessageSuperseded,
-  pruneOutboxRecords,
 } from "./server";
 import {
   type OutboxProcessingOutcome,
@@ -24,10 +23,6 @@ export interface OutboxWorkerResult {
   deferred: number;
   delivered: number;
   leaseLost: boolean;
-  prunedDeadLetters: number;
-  prunedDelivered: number;
-  prunedReprocessAudits: number;
-  prunedSuperseded: number;
   retried: number;
   superseded: number;
 }
@@ -74,10 +69,6 @@ export const runOutboxWorker = async ({
     deferred: 0,
     delivered: 0,
     leaseLost: false,
-    prunedDeadLetters: 0,
-    prunedDelivered: 0,
-    prunedReprocessAudits: 0,
-    prunedSuperseded: 0,
     retried: 0,
     superseded: 0,
   };
@@ -146,21 +137,12 @@ export const runOutboxWorker = async ({
   if (result.deadlineReached || result.leaseLost) {
     return result;
   }
-
   if (now() >= deadlineAt) {
     result.deadlineReached = true;
     return result;
   }
   if (!(await shouldContinue())) {
     result.leaseLost = true;
-    return result;
   }
-  const pruned = await pruneOutboxRecords();
-  return {
-    ...result,
-    prunedDeadLetters: pruned.deadLetters,
-    prunedDelivered: pruned.delivered,
-    prunedReprocessAudits: pruned.reprocessAudits,
-    prunedSuperseded: pruned.superseded,
-  };
+  return result;
 };

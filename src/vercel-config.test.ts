@@ -79,25 +79,25 @@ describe("Vercel cron configuration", () => {
     expect(config.ignoreCommand).toContain("exit 1");
   });
 
-  it("schedules JMVStream player reconciliation every fifteen minutes", async () => {
+  it("schedules JMVStream player reconciliation every thirty minutes", async () => {
     const config = JSON.parse(await readFile("vercel.json", "utf8")) as {
       crons?: Array<{ path: string; schedule: string }>;
     };
 
     expect(config.crons).toContainEqual({
       path: "/api/cron/jmvstream",
-      schedule: "*/15 * * * *",
+      schedule: "15,45 * * * *",
     });
   });
 
-  it("schedules the Asaas webhook inbox worker every fifteen minutes", async () => {
+  it("schedules the Asaas webhook inbox worker every thirty minutes", async () => {
     const config = JSON.parse(await readFile("vercel.json", "utf8")) as {
       crons?: Array<{ path: string; schedule: string }>;
     };
 
     expect(config.crons).toContainEqual({
       path: "/api/cron/asaas-webhooks",
-      schedule: "*/15 * * * *",
+      schedule: "15,45 * * * *",
     });
   });
 

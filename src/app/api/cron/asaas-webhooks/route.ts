@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getScheduledJobEarlyResponse } from "@/features/operations/scheduled-job-request";
+import { runOutboxJob } from "@/features/outbox/outbox-job";
 import { runAsaasWebhookJob } from "@/features/payments/asaas-webhook-job";
 import { getServerEnv } from "@/lib/env";
 import {
@@ -30,7 +31,16 @@ export const GET = async (request: Request): Promise<Response> => {
 
   const result = await observeOperation({
     correlationId,
-    execute: () => runAsaasWebhookJob(),
+    execute: async () => {
+      const paymentResult = await runAsaasWebhookJob();
+      if (!("skipped" in paymentResult) && paymentResult.processed > 0) {
+        await runOutboxJob({
+          deadlineMs: 15_000,
+          limit: 5,
+        });
+      }
+      return paymentResult;
+    },
     failureErrorCode: "asaas_webhook_worker_failed",
     operation: "cron.asaas-webhooks",
     provider: "asaas",

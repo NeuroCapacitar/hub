@@ -182,7 +182,7 @@ describe("CI and deployment workflow contracts", () => {
     );
   });
 
-  it("keeps the JMVStream schedule at fifteen minutes", () => {
+  it("keeps the JMVStream schedule at thirty minutes", () => {
     const vercel = readFileSync(
       resolve(import.meta.dirname, "../../vercel.json"),
       "utf8"
@@ -190,7 +190,7 @@ describe("CI and deployment workflow contracts", () => {
     const stagingJobs = readWorkflow("run-staging-jobs.yml");
 
     expect(vercel).toContain('"path": "/api/cron/jmvstream"');
-    expect(vercel).toContain('"schedule": "*/15 * * * *"');
+    expect(vercel).toContain('"schedule": "15,45 * * * *"');
     expect(stagingJobs).toContain('call_job "/api/cron/jmvstream"');
     expect(stagingJobs).not.toContain('cron: "*/5 * * * *"');
   });

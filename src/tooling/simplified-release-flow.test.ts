@@ -55,12 +55,12 @@ describe("simplified release flow", () => {
     expect(workflow).toContain("api/health/ready");
   });
 
-  it("keeps the JMVStream cron and changes its cadence to fifteen minutes", () => {
+  it("keeps the JMVStream cron and changes its cadence to thirty minutes", () => {
     const vercel = read("vercel.json");
     const stagingJobs = read(".github/workflows/run-staging-jobs.yml");
 
     expect(vercel).toContain('"path": "/api/cron/jmvstream"');
-    expect(vercel).toContain('"schedule": "*/15 * * * *"');
+    expect(vercel).toContain('"schedule": "15,45 * * * *"');
     expect(stagingJobs).toContain('call_job "/api/cron/jmvstream"');
     expect(stagingJobs).not.toContain('cron: "*/5 * * * *"');
   });

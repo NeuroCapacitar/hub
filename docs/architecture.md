@@ -137,7 +137,7 @@ de aplicação a três conexões; readiness mantém uma conexão isolada. Veja
    Checkouts ativos; acesso continua derivado de Matrícula e estado de entrega.
 
 O processor financeiro e sua rota cron estão implementados. A agenda chama o worker
-Asaas a cada quinze minutos sob autenticação compartilhada, kill switch, lease e deadline. Isso
+Asaas a cada trinta minutos sob autenticação compartilhada, kill switch, lease e deadline. Isso
 não comprova deploy de Production. A migration `0044` remove a persistência específica
 do provedor anterior; o runtime opera somente com o contrato Asaas.
 
@@ -216,11 +216,11 @@ do provedor anterior; o runtime opera somente com o contrato Asaas.
 
 `vercel.json` agenda:
 
-- `/api/cron/asaas-webhooks` a cada quinze minutos;
+- `/api/cron/asaas-webhooks` a cada trinta minutos;
 - `/api/cron/enrollments` diariamente às 10:00 UTC;
-- `/api/cron/jmvstream` a cada quinze minutos;
-- `/api/cron/outbox` a cada quinze minutos;
-- `/api/cron/resend-webhooks` a cada quinze minutos;
+- `/api/cron/jmvstream` a cada trinta minutos;
+- `/api/cron/outbox` a cada trinta minutos;
+- `/api/cron/resend-webhooks` a cada trinta minutos;
 - `/api/cron/maintenance` diariamente às 04:00 UTC.
 
 Todos dependem de `CRON_SECRET` e do kill switch
