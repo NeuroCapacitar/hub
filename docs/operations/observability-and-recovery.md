@@ -51,7 +51,7 @@ de baixa cardinalidade; nunca adicione e-mail, código público, URL assinada,
 ID de registro ou payload como atributo.
 
 O único cron monitorado pelo Sentry é `hub-outbox-production`, no cron
-`cron.outbox`, com agenda `*/15 * * * *`, margem de cinco minutos, limite de
+`cron.outbox`, com agenda `15,45 * * * *`, margem de cinco minutos, limite de
 execução de cinco minutos, falha após duas execuções consecutivas e recuperação
 na próxima execução. O monitor só emite check-in no runtime Production; falta
 de autorização, jobs desabilitados, ausência de invocação ou falha de execução

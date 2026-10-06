@@ -186,7 +186,7 @@ históricos foram removidos. Smokes e testes manuais usam exclusivamente
 As seis rotas cron, inclusive `/api/cron/asaas-webhooks` e
 `/api/cron/resend-webhooks`, compartilham
 `CRON_SECRET` e `SCHEDULED_JOBS_ENABLED`. Os workers Asaas, JMVStream, outbox e
-Resend estão agendados a cada quinze minutos em UTC. Os
+Resend estão agendados a cada trinta minutos nos minutos 15 e 45 UTC. Os
 workers devem permanecer desabilitados até migrations, configuração e
 homologação do ambiente alvo.
 

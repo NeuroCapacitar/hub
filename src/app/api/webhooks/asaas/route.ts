@@ -104,8 +104,10 @@ export const POST = async (request: Request): Promise<Response> => {
     );
   }
 
+  let webhookEventId: string | null = null;
   try {
-    await persistAsaasWebhook({ payload });
+    const persisted = await persistAsaasWebhook({ payload });
+    webhookEventId = persisted.id;
   } catch (error) {
     return NextResponse.json(
       {
@@ -122,23 +124,23 @@ export const POST = async (request: Request): Promise<Response> => {
     observeOperation({
       correlationId,
       execute: async () => {
-        const results = await Promise.allSettled([
-          runAsaasWebhookJob({
-            deadlineMs: 45_000,
-            limit: 1,
-          }),
-          runOutboxJob({
-            deadlineMs: 15_000,
-            limit: 5,
-          }),
-        ]);
-        const rejected = results.find(
-          (result): result is PromiseRejectedResult =>
-            result.status === "rejected"
-        );
-        if (rejected) {
-          throw rejected.reason;
+        if (!webhookEventId) {
+          return;
         }
+
+        const paymentResult = await runAsaasWebhookJob({
+          deadlineMs: 45_000,
+          eventId: webhookEventId,
+          limit: 1,
+        });
+        if ("skipped" in paymentResult || paymentResult.processed === 0) {
+          return;
+        }
+
+        await runOutboxJob({
+          deadlineMs: 15_000,
+          limit: 5,
+        });
       },
       failureErrorCode: "asaas_webhook_background_failed",
       operation: "webhook.asaas.drain",

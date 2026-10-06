@@ -11,6 +11,7 @@ describe("JMVStream cron route", () => {
     expect(source).toContain("syncPendingJmvstreamPlayers");
     expect(source).toContain("getScheduledJobEarlyResponse");
     expect(source).toContain("runWithScheduledJobLease");
+    expect(source).not.toContain("expireStaleJmvstreamUploads");
     expect(source).toContain("export const maxDuration = 300");
   });
 });

@@ -13,6 +13,12 @@ const dependencies = vi.hoisted(() => ({
     events: 0,
     messages: 0,
   }),
+  pruneOutboxRecords: vi.fn().mockResolvedValue({
+    deadLetters: 0,
+    delivered: 0,
+    reprocessAudits: 0,
+    superseded: 0,
+  }),
   reconcileAuthMediaStorage: vi.fn().mockResolvedValue(0),
   reconcileCertificateTemplateAssets: vi.fn(),
   reconcileRevokedCertificateArtifacts: vi.fn(),
@@ -35,6 +41,9 @@ vi.mock("@/features/account/avatar-storage", () => ({
 }));
 vi.mock("@/features/email-delivery/server", () => ({
   pruneEmailDeliveryRecords: dependencies.pruneEmailDeliveryRecords,
+}));
+vi.mock("@/features/outbox/server", () => ({
+  pruneOutboxRecords: dependencies.pruneOutboxRecords,
 }));
 vi.mock("@/features/certificates/artifact-reconciliation", () => ({
   reconcileRevokedCertificateArtifacts:
@@ -108,6 +117,12 @@ describe("runMaintenance", () => {
       events: 13,
       messages: 14,
     });
+    dependencies.pruneOutboxRecords.mockResolvedValueOnce({
+      deadLetters: 1,
+      delivered: 2,
+      reprocessAudits: 3,
+      superseded: 4,
+    });
     const query = vi
       .fn()
       .mockResolvedValueOnce({ rowCount: 2 })
@@ -148,6 +163,10 @@ describe("runMaintenance", () => {
       learningAnalyticsAggregated: 5,
       learningAnalyticsEventsRemoved: 6,
       leaseLost: false,
+      outboxDeadLettersRemoved: 1,
+      outboxDeliveredRemoved: 2,
+      outboxReprocessAuditsRemoved: 3,
+      outboxSupersededRemoved: 4,
       pendingSignupsRemoved: 8,
       revokedCertificateCleanupItemsReconciled: 7,
       stagedAdminImagesRemoved: 8,
@@ -180,6 +199,10 @@ describe("runMaintenance", () => {
       expect.stringContaining("delete from account_password_reset_operations")
     );
     expect(dependencies.expireStaffInvitations).toHaveBeenCalledWith({
+      client: pool,
+    });
+    expect(dependencies.pruneOutboxRecords).toHaveBeenCalledOnce();
+    expect(dependencies.pruneOutboxRecords).toHaveBeenCalledWith({
       client: pool,
     });
     const cleanupQuery = query.mock.calls.find(([sql]) =>
@@ -270,6 +293,10 @@ describe("runMaintenance", () => {
           learningAnalyticsAggregated: 5,
           learningAnalyticsEventsRemoved: 6,
           leaseLost: false,
+          outboxDeadLettersRemoved: 1,
+          outboxDeliveredRemoved: 2,
+          outboxReprocessAuditsRemoved: 3,
+          outboxSupersededRemoved: 4,
           revokedCertificateCleanupItemsReconciled: 7,
           stagedAdminImagesRemoved: 8,
           supportRequestsRemoved: 12,

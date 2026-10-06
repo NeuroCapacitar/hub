@@ -62,7 +62,7 @@ describe("POST /api/webhooks/asaas", () => {
       duplicate: false,
       id: "inbox-1",
     });
-    dependencies.runAsaasWebhookJob.mockResolvedValue({});
+    dependencies.runAsaasWebhookJob.mockResolvedValue({ processed: 1 });
     dependencies.runOutboxJob.mockResolvedValue({});
   });
 
@@ -122,7 +122,7 @@ describe("POST /api/webhooks/asaas", () => {
 
   it.each([
     [{ duplicate: false, id: "inbox-1" }, "new"],
-    [{ duplicate: true, id: null }, "duplicate"],
+    [{ duplicate: true, id: "inbox-existing" }, "duplicate"],
   ])("returns exactly 200 only after persisting a %s event", async (result, _case) => {
     dependencies.persistAsaasWebhook.mockResolvedValueOnce(result);
 
@@ -136,24 +136,61 @@ describe("POST /api/webhooks/asaas", () => {
     expect(dependencies.scheduleAfterResponse).toHaveBeenCalledOnce();
   });
 
-  it("kicks the payment and outbox workers after the inbox write", async () => {
-    dependencies.scheduleAfterResponse.mockImplementation((callback) =>
-      callback()
-    );
+  it("processes the persisted payment event before draining its outbox", async () => {
+    const calls: string[] = [];
+    const backgroundTasks: Promise<unknown>[] = [];
+    dependencies.runAsaasWebhookJob.mockImplementation(() => {
+      calls.push("asaas");
+      return Promise.resolve({ processed: 1 });
+    });
+    dependencies.runOutboxJob.mockImplementation(() => {
+      calls.push("outbox");
+      return Promise.resolve({});
+    });
+    dependencies.scheduleAfterResponse.mockImplementation((callback) => {
+      backgroundTasks.push(Promise.resolve(callback()));
+    });
 
     const response = await POST(request());
+    await Promise.all(backgroundTasks);
     expect(response.status).toBe(200);
 
-    await vi.waitFor(() => {
-      expect(dependencies.runAsaasWebhookJob).toHaveBeenCalledWith({
-        deadlineMs: 45_000,
-        limit: 1,
-      });
-      expect(dependencies.runOutboxJob).toHaveBeenCalledWith({
-        deadlineMs: 15_000,
-        limit: 5,
-      });
+    expect(dependencies.runAsaasWebhookJob).toHaveBeenCalledWith({
+      deadlineMs: 45_000,
+      eventId: "inbox-1",
+      limit: 1,
     });
+    expect(dependencies.runOutboxJob).toHaveBeenCalledWith({
+      deadlineMs: 15_000,
+      limit: 5,
+    });
+    expect(calls).toEqual(["asaas", "outbox"]);
+  });
+
+  it("does not drain the outbox when the targeted event was not processed", async () => {
+    const backgroundTasks: Promise<unknown>[] = [];
+    dependencies.runAsaasWebhookJob.mockResolvedValue({
+      deadlineReached: false,
+      failed: 0,
+      ignored: 0,
+      leaseLost: false,
+      processed: 0,
+      retried: 1,
+    });
+    dependencies.scheduleAfterResponse.mockImplementation((callback) => {
+      backgroundTasks.push(Promise.resolve(callback()));
+    });
+
+    const response = await POST(request());
+    await Promise.all(backgroundTasks);
+
+    expect(response.status).toBe(200);
+    expect(dependencies.runAsaasWebhookJob).toHaveBeenCalledWith({
+      deadlineMs: 45_000,
+      eventId: "inbox-1",
+      limit: 1,
+    });
+    expect(dependencies.runOutboxJob).not.toHaveBeenCalled();
   });
 
   it("does not return success when persistence fails", async () => {

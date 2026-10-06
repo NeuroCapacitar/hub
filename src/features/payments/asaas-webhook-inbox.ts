@@ -73,7 +73,18 @@ export const persistAsaasWebhook = async ({
     [envelope.key, envelope.event, JSON.stringify(payload)]
   );
   const id = inserted.rows[0]?.id ?? null;
-  return { duplicate: id === null, id };
+  if (id) {
+    return { duplicate: false, id };
+  }
+
+  const existing = await client.query<{ id: string }>(
+    `select id
+     from webhook_events
+     where provider = 'asaas' and event_key = $1
+     limit 1`,
+    [envelope.key]
+  );
+  return { duplicate: true, id: existing.rows[0]?.id ?? null };
 };
 
 export const sanitizeExpiredAsaasWebhookPayloads = async ({

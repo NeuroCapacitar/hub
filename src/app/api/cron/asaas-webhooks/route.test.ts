@@ -7,6 +7,7 @@ const dependencies = vi.hoisted(() => ({
   observeOperation: vi.fn(
     async ({ execute }: { execute: () => Promise<unknown> }) => await execute()
   ),
+  runOutboxJob: vi.fn(),
   runAsaasWebhookJob: vi.fn(),
 }));
 
@@ -20,6 +21,9 @@ vi.mock("@/features/operations/scheduled-job-request", () => ({
 }));
 vi.mock("@/features/payments/asaas-webhook-job", () => ({
   runAsaasWebhookJob: dependencies.runAsaasWebhookJob,
+}));
+vi.mock("@/features/outbox/outbox-job", () => ({
+  runOutboxJob: dependencies.runOutboxJob,
 }));
 vi.mock("@/lib/env", () => ({
   getServerEnv: dependencies.getServerEnv,
@@ -49,6 +53,7 @@ describe("Asaas webhook cron route", () => {
       async ({ execute }: { execute: () => Promise<unknown> }) =>
         await execute()
     );
+    dependencies.runOutboxJob.mockResolvedValue({});
   });
 
   it("skips before acquiring a lease when the Asaas webhook is disabled", async () => {
@@ -65,6 +70,7 @@ describe("Asaas webhook cron route", () => {
       skipped: true,
     });
     expect(dependencies.runAsaasWebhookJob).not.toHaveBeenCalled();
+    expect(dependencies.runOutboxJob).not.toHaveBeenCalled();
   });
 
   it("uses the shared request guard before acquiring the database lease", async () => {
@@ -79,6 +85,7 @@ describe("Asaas webhook cron route", () => {
     expect(response).toBe(earlyResponse);
     expect(dependencies.getScheduledJobEarlyResponse).toHaveBeenCalledOnce();
     expect(dependencies.runAsaasWebhookJob).not.toHaveBeenCalled();
+    expect(dependencies.runOutboxJob).not.toHaveBeenCalled();
   });
 
   it("runs the real processor under the configured lease and deadline", async () => {
@@ -96,6 +103,10 @@ describe("Asaas webhook cron route", () => {
     const response = await GET(createRequest());
 
     expect(dependencies.runAsaasWebhookJob).toHaveBeenCalledWith();
+    expect(dependencies.runOutboxJob).toHaveBeenCalledWith({
+      deadlineMs: 15_000,
+      limit: 5,
+    });
     await expect(response.json()).resolves.toEqual({
       ok: true,
       ...workerResult,
@@ -118,6 +129,24 @@ describe("Asaas webhook cron route", () => {
       skipped: true,
     });
     expect(dependencies.runAsaasWebhookJob).toHaveBeenCalledOnce();
+    expect(dependencies.runOutboxJob).not.toHaveBeenCalled();
+  });
+
+  it("does not drain the outbox if the recovery worker processed no events", async () => {
+    dependencies.getScheduledJobEarlyResponse.mockReturnValue(null);
+    dependencies.runAsaasWebhookJob.mockResolvedValue({
+      deadlineReached: false,
+      failed: 0,
+      ignored: 0,
+      leaseLost: false,
+      processed: 0,
+      retried: 1,
+    });
+
+    const response = await GET(createRequest());
+
+    expect(response.status).toBe(200);
+    expect(dependencies.runOutboxJob).not.toHaveBeenCalled();
   });
 
   it("propagates worker failures through sanitized Asaas observability", async () => {

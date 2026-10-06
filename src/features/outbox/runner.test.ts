@@ -9,7 +9,6 @@ const dependencies = vi.hoisted(() => ({
   markOutboxMessageDelivered: vi.fn(),
   markOutboxMessageForRetry: vi.fn(),
   markOutboxMessageSuperseded: vi.fn(),
-  pruneOutboxRecords: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -24,7 +23,6 @@ vi.mock("./server", () => ({
   markOutboxMessageDelivered: dependencies.markOutboxMessageDelivered,
   markOutboxMessageForRetry: dependencies.markOutboxMessageForRetry,
   markOutboxMessageSuperseded: dependencies.markOutboxMessageSuperseded,
-  pruneOutboxRecords: dependencies.pruneOutboxRecords,
 }));
 
 import { runOutboxWorker } from "./runner";
@@ -59,13 +57,6 @@ describe("outbox runner", () => {
       .mockResolvedValueOnce([message])
       .mockResolvedValue([]);
     dependencies.deliverOutboxMessage.mockResolvedValue(undefined);
-    dependencies.pruneOutboxRecords.mockResolvedValue({
-      deadLetters: 0,
-      delivered: 0,
-      reprocessAudits: 0,
-      superseded: 0,
-    });
-
     await expect(
       runOutboxWorker({ limit: 10, workerId: "worker-a" })
     ).resolves.toEqual({
@@ -74,10 +65,6 @@ describe("outbox runner", () => {
       deferred: 0,
       delivered: 1,
       leaseLost: false,
-      prunedDeadLetters: 0,
-      prunedDelivered: 0,
-      prunedReprocessAudits: 0,
-      prunedSuperseded: 0,
       retried: 0,
       superseded: 0,
     });
@@ -117,13 +104,6 @@ describe("outbox runner", () => {
       })
     );
     dependencies.markOutboxMessageDeferred.mockResolvedValue(true);
-    dependencies.pruneOutboxRecords.mockResolvedValue({
-      deadLetters: 0,
-      delivered: 0,
-      reprocessAudits: 0,
-      superseded: 0,
-    });
-
     await expect(
       runOutboxWorker({ limit: 1, workerId: "worker-a" })
     ).resolves.toMatchObject({ deferred: 1, retried: 0 });
@@ -159,13 +139,6 @@ describe("outbox runner", () => {
     dependencies.deliverOutboxMessage.mockRejectedValue(
       new OutboxSupersededError("expiry_generation_changed")
     );
-    dependencies.pruneOutboxRecords.mockResolvedValue({
-      deadLetters: 0,
-      delivered: 0,
-      reprocessAudits: 0,
-      superseded: 0,
-    });
-
     await expect(
       runOutboxWorker({ limit: 1, workerId: "worker-a" })
     ).resolves.toMatchObject({ deadLettered: 0, retried: 0, superseded: 1 });
@@ -198,7 +171,6 @@ describe("outbox runner", () => {
       delivered: 0,
     });
     expect(dependencies.claimOutboxMessages).toHaveBeenCalledOnce();
-    expect(dependencies.pruneOutboxRecords).not.toHaveBeenCalled();
   });
 
   it("does not claim or prune after losing the durable lease", async () => {
@@ -215,7 +187,6 @@ describe("outbox runner", () => {
     });
 
     expect(dependencies.claimOutboxMessages).not.toHaveBeenCalled();
-    expect(dependencies.pruneOutboxRecords).not.toHaveBeenCalled();
   });
 
   it("stops without counting an outcome when its message lease is lost", async () => {
@@ -246,6 +217,5 @@ describe("outbox runner", () => {
     });
 
     expect(dependencies.claimOutboxMessages).toHaveBeenCalledOnce();
-    expect(dependencies.pruneOutboxRecords).not.toHaveBeenCalled();
   });
 });

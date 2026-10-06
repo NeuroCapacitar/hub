@@ -68,10 +68,12 @@ const getRetryDelayMs = (attemptCount: number): number =>
 
 export const claimAsaasWebhookEvents = async ({
   client,
+  eventId,
   limit,
   workerId,
 }: {
   client: WebhookQueryClient;
+  eventId?: string;
   limit: number;
   workerId: string;
 }): Promise<ClaimedAsaasWebhookEvent[]> => {
@@ -88,6 +90,7 @@ export const claimAsaasWebhookEvents = async ({
           and attempt_count < $3
           and payload_sanitized_at is null
           and payload_expires_at > now()
+          and ($4::uuid is null or id = $4::uuid)
           and (
             (
               status in ('received', 'retryable')
@@ -120,16 +123,18 @@ export const claimAsaasWebhookEvents = async ({
         event.payload,
         event.attempt_count as "attemptCount"
     `,
-    [workerId, boundedLimit, MAXIMUM_ATTEMPTS]
+    [workerId, boundedLimit, MAXIMUM_ATTEMPTS, eventId ?? null]
   );
   return claimed.rows;
 };
 
 export const failExhaustedAsaasWebhookEvents = async ({
   client,
+  eventId,
   limit,
 }: {
   client: WebhookQueryClient;
+  eventId?: string;
   limit: number;
 }): Promise<number> => {
   const boundedLimit = Math.min(
@@ -142,6 +147,7 @@ export const failExhaustedAsaasWebhookEvents = async ({
         select id
         from webhook_events
         where provider = 'asaas'
+          and ($3::uuid is null or id = $3::uuid)
           and status = 'processing'
           and locked_at < now() - interval '10 minutes'
           and attempt_count >= $2
@@ -159,7 +165,7 @@ export const failExhaustedAsaasWebhookEvents = async ({
       from exhausted_events
       where event.id = exhausted_events.id
     `,
-    [boundedLimit, MAXIMUM_ATTEMPTS]
+    [boundedLimit, MAXIMUM_ATTEMPTS, eventId ?? null]
   );
   return exhausted.rowCount ?? 0;
 };
@@ -332,6 +338,7 @@ export interface AsaasWebhookWorkerResult {
 export const runAsaasWebhookWorker = async ({
   claim = claimAsaasWebhookEvents,
   deadlineAt = Number.POSITIVE_INFINITY,
+  eventId,
   failExhausted = failExhaustedAsaasWebhookEvents,
   limit = DEFAULT_BATCH_LIMIT,
   now = Date.now,
@@ -342,6 +349,7 @@ export const runAsaasWebhookWorker = async ({
 }: {
   claim?: typeof claimAsaasWebhookEvents;
   deadlineAt?: number;
+  eventId?: string;
   failExhausted?: typeof failExhaustedAsaasWebhookEvents;
   limit?: number;
   now?: () => number;
@@ -374,6 +382,7 @@ export const runAsaasWebhookWorker = async ({
   }
   result.failed += await failExhausted({
     client: pool,
+    ...(eventId ? { eventId } : {}),
     limit: boundedLimit,
   });
 
@@ -386,7 +395,14 @@ export const runAsaasWebhookWorker = async ({
       result.leaseLost = true;
       break;
     }
-    const event = (await claim({ client: pool, limit: 1, workerId }))[0];
+    const event = (
+      await claim({
+        client: pool,
+        ...(eventId ? { eventId } : {}),
+        limit: 1,
+        workerId,
+      })
+    )[0];
     if (!event) {
       break;
     }
