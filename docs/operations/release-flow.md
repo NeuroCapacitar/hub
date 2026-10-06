@@ -107,6 +107,9 @@ revisão é assistiva e nunca substitui o check `CI`.
 
 1. Homologue o deployment atual de Staging.
 2. Execute `Deploy Vercel production` com `mode=release-staging`.
+   O gate consulta o alias `preview.neurocapacitar.com.br` pela Vercel CLI,
+   exige um deployment `READY` cujo `meta.githubCommitSha` seja exatamente o
+   SHA atual de `staging` e então executa readiness e smoke do webhook Resend.
 3. O workflow confirma que `main` é ancestral de `staging`.
 4. O workflow confirma que o SHA candidato possui um check `CI` verde associado
    ao próprio SHA. Um check verde somente no head do PR não autoriza a promoção;
@@ -128,8 +131,10 @@ promoção. Falha de build, migration ou smoke não deve alterar o tráfego púb
 O Git Integration não publica `staging` diretamente: `vercel.json` desabilita
 esse caminho para impedir que o deploy corra junto com as migrations. O
 workflow GitHub usa Vercel CLI para publicar o Custom Environment `staging`
-depois dos gates do banco. O Git Integration cria a build Production quando o
-workflow avança `main`. Feature branches não geram previews automáticos porque
+depois dos gates do banco. O verificador de release usa a Vercel CLI para
+confirmar que o alias estável aponta para um deployment pronto com o SHA exato
+de `staging`. O Git Integration cria a build Production quando o workflow
+avança `main`. Feature branches não geram previews automáticos porque
 o `ignoreCommand` encerra essas builds. O domínio Production não é
 autoatribuído durante a build; o workflow aguarda a build do SHA exato, executa
 os gates e promove o mesmo deployment.
