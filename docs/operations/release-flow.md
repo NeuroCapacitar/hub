@@ -107,8 +107,10 @@ revisão é assistiva e nunca substitui o check `CI`.
 ## Release normal
 
 1. Homologue o deployment atual de Staging.
-2. Execute `Deploy Vercel production` com `mode=release-staging`.
-   O gate consulta o alias `preview.neurocapacitar.com.br` pela Vercel CLI,
+2. Execute `Deploy Vercel production` com `mode=release-staging` usando a ref
+   `main`. O Environment `vercel-production` permite somente essa branch; o
+   job `verify_staging` usa `vercel-staging` para ler o alias e o SHA atual de
+   Staging. O gate consulta `preview.neurocapacitar.com.br` pela Vercel CLI,
    exige um deployment `READY` cujo `meta.githubCommitSha` seja exatamente o
    SHA atual de `staging` e então executa readiness e smoke do webhook Resend.
 3. O workflow confirma que `main` é ancestral de `staging`.
