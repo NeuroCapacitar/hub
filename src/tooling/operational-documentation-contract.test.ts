@@ -40,6 +40,7 @@ const resendIntegration = readText("docs/integrations/resend.md");
 
 const scheduleDescription: Record<string, string> = {
   "*/15 * * * *": "a cada quinze minutos;",
+  "15,45 * * * *": "a cada trinta minutos;",
   "0 10 * * *": "diariamente \u00e0s 10:00 UTC;",
   "0 4 * * *": "diariamente \u00e0s 04:00 UTC.",
 };
@@ -48,9 +49,9 @@ const markdownCode = String.fromCharCode(96);
 const documentedCronLine = (path: string, description: string): string =>
   ["- ", markdownCode, path, markdownCode, " ", description].join("");
 const documentedJmvstreamCron =
-  /cron `\/api\/cron\/jmvstream` adquire o lease, expira sessões de upload stale e\s+chama `syncPendingJmvstreamPlayers` a cada quinze minutos/;
+  /cron `\/api\/cron\/jmvstream` adquire o lease e chama\s+`syncPendingJmvstreamPlayers` a cada trinta minutos; o worker expira sessões\s+de upload stale uma vez/;
 const releaseFlowFrequentCronPattern =
-  /Asaas, JMVStream, outbox e\s+Resend a cada quinze minutos/;
+  /Asaas, JMVStream, outbox e\s+Resend a cada trinta minutos/;
 const releaseFlowEnrollmentCronPattern =
   /matr\u00edculas diariamente \u00e0s 10:00 UTC/;
 const releaseFlowMaintenanceCronPattern =

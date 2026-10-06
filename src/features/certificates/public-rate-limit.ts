@@ -46,9 +46,11 @@ export const consumePublicCertificateLookup = async (
           else public_certificate_rate_limits.expires_at
         end,
         updated_at = now()
+      where public_certificate_rate_limits.expires_at <= now()
+         or public_certificate_rate_limits.request_count < $3
       returning request_count
     `,
-    [keyHash, expiresAt]
+    [keyHash, expiresAt, MAX_REQUESTS_PER_WINDOW]
   );
 
   const requestCount = result.rows[0]?.request_count ?? Number.MAX_SAFE_INTEGER;

@@ -105,7 +105,7 @@ describe("GET /api/cron/outbox", () => {
         recoveryThreshold: 1,
         schedule: {
           type: "crontab",
-          value: "*/15 * * * *",
+          value: "15,45 * * * *",
         },
         timezone: "UTC",
       }

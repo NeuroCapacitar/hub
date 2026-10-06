@@ -566,7 +566,11 @@ export const listOutboxDeadLetters = async ({
   };
 };
 
-export const pruneOutboxRecords = async (): Promise<{
+export const pruneOutboxRecords = async ({
+  client = getPool(),
+}: {
+  client?: OutboxQueryClient;
+} = {}): Promise<{
   deadLetters: number;
   delivered: number;
   reprocessAudits: number;
@@ -574,28 +578,28 @@ export const pruneOutboxRecords = async (): Promise<{
 }> => {
   const [delivered, deadLetters, superseded, reprocessAudits] =
     await Promise.all([
-      getPool().query(
+      client.query(
         `
         delete from outbox_messages
         where status = 'delivered'
           and delivered_at < now() - interval '30 days'
       `
       ),
-      getPool().query(
+      client.query(
         `
         delete from outbox_messages
         where status = 'dead_letter'
           and last_error_at < now() - interval '180 days'
       `
       ),
-      getPool().query(
+      client.query(
         `
         delete from outbox_messages
         where status = 'superseded'
           and superseded_at < now() - interval '30 days'
       `
       ),
-      getPool().query(
+      client.query(
         `
         delete from audit_logs
         where action in ('outbox.requeued', 'outbox.superseded')

@@ -4,6 +4,11 @@ import {
   createCorrelationId,
   logOperationalEvent,
 } from "@/lib/observability";
+import {
+  PUBLIC_JSON_BODY_MAX_BYTES,
+  RequestBodyLimitError,
+  readBoundedJsonBody,
+} from "@/lib/request-body-limits";
 
 const noStoreHeaders = { "cache-control": "no-store" };
 
@@ -28,11 +33,14 @@ export const POST = async (request: Request): Promise<Response> => {
   );
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    body = await readBoundedJsonBody(request, PUBLIC_JSON_BODY_MAX_BYTES);
+  } catch (error) {
     return Response.json(
       { error: "invalid_staff_invitation" },
-      { headers: noStoreHeaders, status: 400 }
+      {
+        headers: noStoreHeaders,
+        status: error instanceof RequestBodyLimitError ? error.status : 400,
+      }
     );
   }
   const token = parseToken(body);

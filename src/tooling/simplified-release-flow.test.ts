@@ -43,22 +43,24 @@ describe("simplified release flow", () => {
     expect(template).toContain("label `hotfix`");
   });
 
-  it("keeps Staging deployment on Vercel Git Integration without a workflow_run deploy", () => {
+  it("deploys Staging only after the guarded migration workflow", () => {
     const workflow = read(".github/workflows/deploy-staging.yml");
 
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).not.toContain("workflow_run:");
-    expect(workflow).not.toContain("vercel deploy");
+    expect(workflow).toContain("STAGING_TARGET_READY");
+    expect(workflow).toContain("needs: migrate");
+    expect(workflow).toContain("vercel@57.0.0 deploy --prebuilt");
     expect(workflow).toContain("preview.neurocapacitar.com.br");
     expect(workflow).toContain("api/health/ready");
   });
 
-  it("keeps the JMVStream cron and changes its cadence to fifteen minutes", () => {
+  it("keeps the JMVStream cron and changes its cadence to thirty minutes", () => {
     const vercel = read("vercel.json");
     const stagingJobs = read(".github/workflows/run-staging-jobs.yml");
 
     expect(vercel).toContain('"path": "/api/cron/jmvstream"');
-    expect(vercel).toContain('"schedule": "*/15 * * * *"');
+    expect(vercel).toContain('"schedule": "15,45 * * * *"');
     expect(stagingJobs).toContain('call_job "/api/cron/jmvstream"');
     expect(stagingJobs).not.toContain('cron: "*/5 * * * *"');
   });

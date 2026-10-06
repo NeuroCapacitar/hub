@@ -22,6 +22,7 @@ import {
   getGoogleOAuthProviderConfig,
   getResolvedBetterAuthInfraConfig,
 } from "@/lib/auth-policy";
+import { consumeBetterAuthRateLimit } from "@/lib/better-auth-rate-limit-storage";
 import {
   normalizeBuyerEmail,
   resolveGoogleEmailCandidate,
@@ -231,7 +232,10 @@ const createAuth = () => {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     basePath: "/api/auth",
-    rateLimit: getBetterAuthRateLimitConfig(env.E2E_TEST_MODE),
+    rateLimit: {
+      ...getBetterAuthRateLimitConfig(env.E2E_TEST_MODE),
+      customStorage: { consume: consumeBetterAuthRateLimit },
+    },
     advanced: {
       trustedProxyHeaders: true,
     },

@@ -5,6 +5,10 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type React from "react";
 import { useEffect, useState } from "react";
 import {
+  CoursePriceInput,
+  CoursePricingModeField,
+} from "@/components/admin/course-pricing-fields";
+import {
   AdminMutationSubmitButton,
   useAdminMutationFormState,
 } from "@/components/admin-mutation-form";
@@ -14,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { DialogBody, DialogClose, DialogFooter } from "@/components/ui/dialog";
 import {
   Field,
+  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -30,10 +35,20 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { saveCourseAction } from "@/features/admin/actions";
+import {
+  COURSE_PRICE_FIELD_ERROR_MESSAGE,
+  COURSE_PRICING_MODE_ERROR_MESSAGE,
+  type CoursePricingMode,
+} from "@/features/payments/course-price";
 
 const COURSE_PRICE_ERROR_RE = /pre[cç]o do curso inv[aá]lido/i;
 const COURSE_DURATION_ERROR_RE = /accessDurationMonths/;
-const COURSE_ERROR_FIELDS = ["title", "price", "accessDurationMonths"] as const;
+const COURSE_ERROR_FIELDS = [
+  "title",
+  "pricingMode",
+  "price",
+  "accessDurationMonths",
+] as const;
 
 type CourseErrorField = (typeof COURSE_ERROR_FIELDS)[number];
 
@@ -59,10 +74,13 @@ const getCourseFieldErrors = (error: unknown): Record<string, string> => {
     return { title: message };
   }
 
-  if (COURSE_PRICE_ERROR_RE.test(message)) {
+  if (field === "pricingMode") {
+    return { pricingMode: COURSE_PRICING_MODE_ERROR_MESSAGE };
+  }
+
+  if (field === "price" || COURSE_PRICE_ERROR_RE.test(message)) {
     return {
-      price:
-        "Informe 0,00 para um Curso gratuito ou um valor pago a partir de R$ 10,00.",
+      price: COURSE_PRICE_FIELD_ERROR_MESSAGE,
     };
   }
 
@@ -134,12 +152,17 @@ function CourseCreationFields({
   const titleFieldId = `${priceFieldId}-title`;
   const descriptionFieldId = `${priceFieldId}-description`;
   const durationFieldId = `${priceFieldId}-access-duration`;
+  const pricingModeFieldId = `${priceFieldId}-mode`;
   const titleErrorId = `${titleFieldId}-error`;
   const priceErrorId = `${priceFieldId}-error`;
+  const priceDescriptionId = `${priceFieldId}-price-description`;
   const durationErrorId = `${durationFieldId}-error`;
   const titleError = fieldErrors.title;
+  const pricingModeError = fieldErrors.pricingMode;
   const priceError = fieldErrors.price;
   const durationError = fieldErrors.accessDurationMonths;
+  const [pricingMode, setPricingMode] = useState<CoursePricingMode | "">("");
+  const [priceValue, setPriceValue] = useState("");
 
   useEffect(() => {
     const firstInvalidField = COURSE_ERROR_FIELDS.find(
@@ -152,15 +175,26 @@ function CourseCreationFields({
 
     const fieldIds: Record<CourseErrorField, string> = {
       accessDurationMonths: durationFieldId,
+      pricingMode: `${pricingModeFieldId}-free`,
       price: priceFieldId,
       title: titleFieldId,
     };
     document.getElementById(fieldIds[firstInvalidField])?.focus();
-  }, [durationFieldId, fieldErrors, priceFieldId, titleFieldId]);
+  }, [
+    durationFieldId,
+    fieldErrors,
+    priceFieldId,
+    pricingModeFieldId,
+    titleFieldId,
+  ]);
 
   return (
     <>
       <input name="courseId" type="hidden" value="" />
+      <input name="pricingMode" type="hidden" value={pricingMode} />
+      {pricingMode === "free" ? (
+        <input name="price" type="hidden" value="0" />
+      ) : null}
       <FieldSet aria-label="Identidade do curso" className="gap-5">
         <div className="grid min-w-0 gap-5 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] md:items-stretch">
           <Field className="min-w-0">
@@ -210,31 +244,34 @@ function CourseCreationFields({
       <FieldSeparator />
 
       <FieldSet aria-label="Configuração inicial" className="gap-5">
-        <div className="grid gap-5 sm:grid-cols-2">
+        <CoursePricingModeField
+          error={pricingModeError}
+          idPrefix={pricingModeFieldId}
+          onValueChange={setPricingMode}
+          value={pricingMode}
+        />
+        {pricingMode === "paid" ? (
           <Field data-invalid={Boolean(priceError)}>
-            <div className="flex items-center gap-1.5">
-              <FieldLabel htmlFor={priceFieldId}>
-                Preço inicial <RequiredMark />
-              </FieldLabel>
-              <FieldHelp label="Ajuda sobre o preço inicial">
-                Use 0,00 para um Curso gratuito. Cursos pagos começam em R$
-                10,00; Pix e cartão com até 3x ficam ativos por padrão.
-              </FieldHelp>
-            </div>
-            <Input
-              aria-describedby={priceError ? priceErrorId : undefined}
-              aria-invalid={priceError ? true : undefined}
-              autoComplete="off"
+            <FieldLabel htmlFor={priceFieldId}>
+              Valor do curso <RequiredMark />
+            </FieldLabel>
+            <CoursePriceInput
+              ariaDescribedBy={`${priceDescriptionId}${priceError ? ` ${priceErrorId}` : ""}`}
+              ariaInvalid={Boolean(priceError)}
               id={priceFieldId}
-              inputMode="decimal"
-              name="price"
-              placeholder="497,00"
-              required
+              onValueChange={setPriceValue}
+              value={priceValue}
             />
+            <FieldDescription id={priceDescriptionId}>
+              Mínimo para Curso pago: R$ 10,00. Pix e cartão em até 3 parcelas
+              ficam ativos por padrão; o valor é formatado ao sair do campo.
+            </FieldDescription>
             {priceError ? (
               <FieldError id={priceErrorId}>{priceError}</FieldError>
             ) : null}
           </Field>
+        ) : null}
+        <div className="grid gap-5 sm:grid-cols-2">
           <Field data-invalid={Boolean(durationError)}>
             <div className="flex items-center gap-1.5">
               <FieldLabel htmlFor={durationFieldId}>

@@ -28,7 +28,8 @@ describe("consumeAccountRateLimit", () => {
       .update("email:student@example.test")
       .digest("hex");
     expect(statement).toContain("on conflict (key_hash) do update");
-    expect(values).toEqual([expectedHash, 60_000]);
+    expect(statement).toContain("request_count < $3");
+    expect(values).toEqual([expectedHash, 60_000, 3]);
     expect(JSON.stringify(values)).not.toContain("student@example.test");
   });
 

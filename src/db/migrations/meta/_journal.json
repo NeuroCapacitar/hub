@@ -743,6 +743,13 @@
       "when": 1790994443033,
       "tag": "0105_lesson_resource_cleanup_tombstones",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1791061871816,
+      "tag": "0106_better_auth_rate_limits",
+      "breakpoints": true
     }
   ]
 }

@@ -43,6 +43,24 @@ describe("Asaas query policy", () => {
     expect(wait).not.toHaveBeenCalled();
   });
 
+  it("does not retry before a provider reset beyond the synchronous wait budget", async () => {
+    const error = new AsaasGatewayError({
+      kind: "rate_limited",
+      message: "rate limited",
+      outcome: "rejected",
+      retryAfterMs: 30_001,
+      retryable: true,
+    });
+    const operation = vi.fn().mockRejectedValue(error);
+    const wait = vi.fn().mockResolvedValue(undefined);
+
+    await expect(runCoordinatedAsaasQuery({ operation, wait })).rejects.toBe(
+      error
+    );
+    expect(operation).toHaveBeenCalledOnce();
+    expect(wait).not.toHaveBeenCalled();
+  });
+
   it("serializes concurrent query operations", async () => {
     const execution: string[] = [];
     let releaseFirst = (): void => undefined;

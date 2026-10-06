@@ -29,9 +29,11 @@ const runLauncher = (
   );
 
 const developmentEnvironment = `
-DATABASE_URL=postgresql://user:password@ep-development-pooler.example.com/neondb
-DATABASE_URL_DIRECT=postgresql://user:password@ep-development.example.com/neondb
-DEVELOPMENT_DATABASE_HOST=ep-development.example.com
+DATABASE_URL=postgresql://user:password@ep-autumn-hill-b6erdexq-pooler.c-2.sa-east-1.aws.neon.tech/neondb
+DATABASE_URL_DIRECT=postgresql://user:password@ep-autumn-hill-b6erdexq.c-2.sa-east-1.aws.neon.tech/neondb
+DEVELOPMENT_DATABASE_HOST=ep-autumn-hill-b6erdexq.c-2.sa-east-1.aws.neon.tech
+DEVELOPMENT_NEON_PROJECT_ID=shy-bar-59728129
+DEVELOPMENT_NEON_BRANCH_ID=br-square-recipe-b67a4ch7
 BETTER_AUTH_URL=http://127.0.0.1:3000
 CERTIFICATE_PUBLIC_BASE_URL=http://127.0.0.1:3000
 NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000

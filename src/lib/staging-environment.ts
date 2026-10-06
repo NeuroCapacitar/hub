@@ -1,8 +1,12 @@
+import {
+  EXPECTED_NEON_TARGETS,
+  getNeonMetadataProblems,
+  isProductionNeonHost,
+} from "../db/neon-database-target";
 import { getNonProductionSentryProblems } from "./sentry-environment";
 
 const STAGING_ORIGIN = "https://preview.neurocapacitar.com.br";
 const ASAAS_SANDBOX_ORIGIN = "https://api-sandbox.asaas.com";
-const PRODUCTION_NEON_COMPUTE = "ep-hidden-tooth-ac843qc2";
 const APPROVED_JMVSTREAM_PLAN_ID = "OD-20912";
 const DEVELOPMENT_PRIVATE_BUCKET = "hub-development-private";
 const DEVELOPMENT_PUBLIC_BUCKET = "hub-development-public";
@@ -67,8 +71,9 @@ const getCanonicalOriginProblems = (environment: Environment): string[] => {
 };
 
 const getDatabaseProblems = (environment: Environment): string[] => {
-  const problems: string[] = [];
+  const problems = getNeonMetadataProblems(environment, "staging");
   const expectedHost = environment.STAGING_DATABASE_HOST?.trim();
+  const approvedHost = EXPECTED_NEON_TARGETS.staging.host;
   const databaseUrl = readUrl(environment, "DATABASE_URL");
 
   if (!hasConfiguredValue(environment, "DATABASE_URL")) {
@@ -78,25 +83,19 @@ const getDatabaseProblems = (environment: Environment): string[] => {
     ["postgres:", "postgresql:"].includes(databaseUrl.protocol)
   ) {
     const normalizedHost = normalizeNeonHost(databaseUrl.hostname);
-    if (normalizedHost.startsWith(PRODUCTION_NEON_COMPUTE)) {
+    if (isProductionNeonHost(databaseUrl.hostname)) {
       problems.push("DATABASE_URL must not target the Production Neon compute");
     }
     if (expectedHost && normalizedHost !== normalizeNeonHost(expectedHost)) {
       problems.push("DATABASE_URL must target STAGING_DATABASE_HOST");
     }
+    if (normalizedHost !== approvedHost) {
+      problems.push("DATABASE_URL must target the approved Staging Neon host");
+    }
   } else {
     problems.push("DATABASE_URL must be a valid PostgreSQL URL");
   }
 
-  if (!expectedHost) {
-    problems.push("STAGING_DATABASE_HOST is required");
-  } else if (
-    normalizeNeonHost(expectedHost).startsWith(PRODUCTION_NEON_COMPUTE)
-  ) {
-    problems.push(
-      "STAGING_DATABASE_HOST must not identify the Production Neon compute"
-    );
-  }
   return problems;
 };
 

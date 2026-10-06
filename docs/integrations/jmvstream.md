@@ -81,8 +81,9 @@ Até lá, a documentação descreve o payload real do código e não promete com
 
 ## Sincronização e limpeza
 
-- cron `/api/cron/jmvstream` adquire o lease, expira sessões de upload stale e
-  chama `syncPendingJmvstreamPlayers` a cada quinze minutos;
+- cron `/api/cron/jmvstream` adquire o lease e chama
+  `syncPendingJmvstreamPlayers` a cada trinta minutos; o worker expira sessões
+  de upload stale uma vez antes de consultar os players pendentes;
 - a execução adquire advisory lock de sessão; uma segunda invocação retorna
   `skipped` sem repetir chamadas externas;
 - `expireStaleJmvstreamUploads` marca sessões abandonadas;
@@ -160,8 +161,8 @@ de duração aceita mensagens somente da janela e origem oficiais do iframe.
 
 O cron JMVStream permanece ativo em Production para reconciliar vídeos que ainda
 estão em processamento, mas não roda automaticamente em Staging. Em Staging,
-use `Run Staging jobs` durante a homologação. O intervalo de quinze minutos
-reduz despertares do Neon sem remover a recuperação automática.
+use `Run Staging jobs` durante a homologação. A execução a cada trinta minutos
+limita a janela normal de recuperação sem deixar vídeos pendentes até o dia seguinte.
 
 ## Retomada de reprodução
 

@@ -9,9 +9,11 @@ import {
 
 export const runAsaasWebhookJob = async ({
   deadlineMs = scheduledJobs.asaasWebhooks.deadlineMs,
+  eventId,
   limit,
 }: {
   deadlineMs?: number;
+  eventId?: string;
   limit?: number;
 } = {}): Promise<
   AsaasWebhookWorkerResult | { reason: "already_running"; skipped: true }
@@ -21,6 +23,7 @@ export const runAsaasWebhookJob = async ({
     execute: ({ deadlineAt, isLeaseOwner }) =>
       runAsaasWebhookWorker({
         ...(limit === undefined ? {} : { limit }),
+        ...(eventId ? { eventId } : {}),
         deadlineAt,
         processor: processAsaasWebhookEvent,
         shouldContinue: isLeaseOwner,

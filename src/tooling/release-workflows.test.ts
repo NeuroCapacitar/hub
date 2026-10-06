@@ -99,7 +99,7 @@ describe("CI and deployment workflow contracts", () => {
     expect(workflow).toContain("bun run knip");
   });
 
-  it("migrates Staging after its branch changes but never deploys from Actions", () => {
+  it("binds the Staging deploy to its migration SHA and gates webhook smoke until maintenance is off", () => {
     const workflow = readWorkflow("deploy-staging.yml");
 
     expect(workflow).toContain("push:");
@@ -107,9 +107,36 @@ describe("CI and deployment workflow contracts", () => {
     expect(workflow).toContain("workflow_dispatch:");
     expect(workflow).not.toContain("workflow_run:");
     expect(workflow).toContain("bun run db:migrate:staging");
-    expect(workflow).not.toContain("vercel deploy");
+    expect(workflow).toContain("STAGING_TARGET_READY");
+    expect(workflow).toContain("needs: migrate");
+    expect(workflow).toContain(
+      "migrated_sha: " +
+        String.fromCharCode(36) +
+        "{{ steps.verify_target.outputs.sha }}"
+    );
+    expect(workflow).toContain(
+      "ref: " +
+        String.fromCharCode(36) +
+        "{{ needs.migrate.outputs.migrated_sha }}"
+    );
+    expect(workflow).toContain("MIGRATED_STAGING_SHA");
+    expect(workflow).toContain(
+      "Reconfirm the migrated Staging SHA immediately before deploy"
+    );
+    expect(workflow).toContain("inputs.confirm_maintenance_off == true");
+    expect(workflow).toContain("vercel@57.0.0 deploy --prebuilt");
     expect(workflow).toContain("preview.neurocapacitar.com.br");
     expect(workflow).toContain("api/health/ready");
+
+    const verifyStart = workflow.indexOf("  verify:");
+    expect(verifyStart).toBeGreaterThanOrEqual(0);
+    const deployBlock = workflow.slice(
+      workflow.indexOf("  deploy:"),
+      verifyStart
+    );
+    const verifyBlock = workflow.slice(verifyStart);
+    expect(deployBlock).not.toContain("/api/webhooks/resend");
+    expect(verifyBlock).toContain("/api/webhooks/resend");
   });
 
   it("creates a reconciliation PR when main contains Production-only changes", () => {
@@ -120,6 +147,12 @@ describe("CI and deployment workflow contracts", () => {
     expect(workflow).toContain("git merge-base --is-ancestor");
     expect(workflow).toContain("sync/production-into-staging-");
     expect(workflow).toContain("git merge --no-edit origin/main");
+    expect(workflow).toContain(
+      'git config --local user.name "github-actions[bot]"'
+    );
+    expect(workflow).toContain(
+      'git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"'
+    );
     expect(workflow).toContain("git merge --abort");
     expect(workflow).toContain("gh workflow run ci.yml");
     expect(workflow).toContain(
@@ -155,7 +188,7 @@ describe("CI and deployment workflow contracts", () => {
     );
   });
 
-  it("validates the Staging alias and exact Vercel commit before Production release", () => {
+  it("verifies the exact current Vercel Staging alias before Production release", () => {
     const workflow = readWorkflow("deploy-vercel.yml");
     const verifyStart = workflow.indexOf("  verify_staging:");
     const deployStart = workflow.indexOf("  deploy:");
@@ -166,14 +199,20 @@ describe("CI and deployment workflow contracts", () => {
     expect(verifyBlock).toContain(
       "vercel@57.0.0 inspect preview.neurocapacitar.com.br"
     );
+    expect(verifyBlock).toContain("vercel@57.0.0 list hub");
     expect(verifyBlock).toContain("--environment=preview");
-    expect(verifyBlock).toContain("meta.githubCommitSha == $sha");
+    expect(verifyBlock).toContain("--status=READY");
+    expect(verifyBlock).not.toContain('.target == "preview"');
+    expect(verifyBlock).toContain("meta.githubCommitSha");
+    expect(verifyBlock).toContain("staging_alias_metadata");
+    expect(verifyBlock).toContain("Vercel records=");
     expect(verifyBlock).toContain("api/health/ready");
     expect(verifyBlock).toContain("api/webhooks/resend");
     expect(verifyBlock).not.toContain("/deployments?sha=");
+    expect(verifyBlock).not.toContain('creator.login == "vercel[bot]"');
   });
 
-  it("keeps the JMVStream schedule at fifteen minutes", () => {
+  it("keeps the JMVStream schedule at thirty minutes", () => {
     const vercel = readFileSync(
       resolve(import.meta.dirname, "../../vercel.json"),
       "utf8"
@@ -181,7 +220,7 @@ describe("CI and deployment workflow contracts", () => {
     const stagingJobs = readWorkflow("run-staging-jobs.yml");
 
     expect(vercel).toContain('"path": "/api/cron/jmvstream"');
-    expect(vercel).toContain('"schedule": "*/15 * * * *"');
+    expect(vercel).toContain('"schedule": "15,45 * * * *"');
     expect(stagingJobs).toContain('call_job "/api/cron/jmvstream"');
     expect(stagingJobs).not.toContain('cron: "*/5 * * * *"');
   });

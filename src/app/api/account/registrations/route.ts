@@ -7,6 +7,11 @@ import {
   createCorrelationId,
   logOperationalEvent,
 } from "@/lib/observability";
+import {
+  PUBLIC_JSON_BODY_MAX_BYTES,
+  RequestBodyLimitError,
+  readBoundedJsonBody,
+} from "@/lib/request-body-limits";
 
 const acceptedResponse = (): Response =>
   Response.json(
@@ -27,11 +32,14 @@ export const POST = async (request: Request): Promise<Response> => {
 
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    body = await readBoundedJsonBody(request, PUBLIC_JSON_BODY_MAX_BYTES);
+  } catch (error) {
     return Response.json(
       { error: "invalid_signup_request" },
-      { headers: { "cache-control": "no-store" }, status: 400 }
+      {
+        headers: { "cache-control": "no-store" },
+        status: error instanceof RequestBodyLimitError ? error.status : 400,
+      }
     );
   }
 

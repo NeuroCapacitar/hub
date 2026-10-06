@@ -63,6 +63,31 @@ describe("Asaas webhook PostgreSQL concurrency", () => {
     await pool.end();
   });
 
+  it("claims only the event targeted by the webhook's immediate drain", async () => {
+    const earlierEventId = await insertEvent();
+    const targetEventId = await insertEvent();
+
+    const claimed = await claimAsaasWebhookEvents({
+      client: pool,
+      eventId: targetEventId,
+      limit: 1,
+      workerId: "integration-targeted-worker",
+    });
+
+    expect(claimed.map((event) => event.id)).toEqual([targetEventId]);
+    const persisted = await pool.query<{ id: string; status: string }>(
+      `select id, status
+       from webhook_events
+       where id = any($1::uuid[])
+       order by id`,
+      [[earlierEventId, targetEventId]]
+    );
+    expect(persisted.rows.map(({ status }) => status).sort()).toEqual([
+      "processing",
+      "received",
+    ]);
+  });
+
   it("lets two workers produce one claimed and committed effect", async () => {
     const eventId = await insertEvent();
     const firstWorker = await pool.connect();

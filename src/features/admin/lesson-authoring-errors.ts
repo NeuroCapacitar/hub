@@ -1,4 +1,9 @@
-export type LessonAuthoringErrorField = "content" | "general" | "title";
+export type LessonAuthoringErrorField =
+  | "content"
+  | "general"
+  | "price"
+  | "pricingMode"
+  | "title";
 
 export class LessonAuthoringError extends Error {
   readonly field: LessonAuthoringErrorField;

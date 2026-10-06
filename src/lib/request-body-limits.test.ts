@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { readBoundedBody, readBoundedMultipart } from "./request-body-limits";
+import {
+  readBoundedBody,
+  readBoundedJsonBody,
+  readBoundedMultipart,
+} from "./request-body-limits";
 
 describe("bounded upload bodies", () => {
   it("cancels a streamed body when actual bytes exceed the cap", async () => {
@@ -47,6 +51,32 @@ describe("bounded upload bodies", () => {
       1024
     );
     expect(parsed.get("label")).toBe("valid");
+  });
+
+  it("parses small JSON and rejects a body above the declared-byte cap", async () => {
+    const request = new Request("https://example.test/registration", {
+      body: JSON.stringify({ email: "student@example.test" }),
+      method: "POST",
+    });
+    await expect(readBoundedJsonBody(request, 1024)).resolves.toEqual({
+      email: "student@example.test",
+    });
+
+    const oversizedBody = JSON.stringify({ value: "x".repeat(32) });
+    const oversizedRequest = new Request("https://example.test/registration", {
+      body: oversizedBody,
+      headers: {
+        "content-length": String(
+          new TextEncoder().encode(oversizedBody).byteLength
+        ),
+      },
+      method: "POST",
+    });
+    await expect(
+      readBoundedJsonBody(oversizedRequest, 16)
+    ).rejects.toMatchObject({
+      status: 413,
+    });
   });
 
   it("times out and cancels a stalled body", async () => {

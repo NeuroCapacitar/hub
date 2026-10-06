@@ -173,10 +173,13 @@ enfileirado para novos Pedidos; o corte o mantém somente para v1 histórica.
 
 ## Entrega, concorrência e idempotência
 
-`runOutboxWorker` é chamado por `GET /api/cron/outbox` a cada quinze minutos. A rota exige `Authorization: Bearer <CRON_SECRET>` em produção. O drain iniciado após a resposta reutiliza o mesmo `runOutboxJob`, lease, limite e transições; ele não substitui o cron.
+`runOutboxWorker` é chamado por `GET /api/cron/outbox` a cada trinta minutos. A rota exige `Authorization: Bearer <CRON_SECRET>` em produção. O drain iniciado após a resposta reutiliza o mesmo `runOutboxJob`, lease, limite e transições; ele não substitui o cron. A limpeza de retenção da outbox roda na manutenção diária; drains de entrega não executam os quatro `DELETE`s de retenção. Os prazos continuam em 30 dias para entregues/superseded e 180 dias para dead letters/auditorias; a remoção pode ocorrer até um dia após o prazo.
 O worker da inbox Asaas é separado da outbox e roda por
-`GET /api/cron/asaas-webhooks` a cada quinze minutos, mas reutiliza o mesmo guard de
-`CRON_SECRET`, kill switch e padrão de lease/deadline.
+`GET /api/cron/asaas-webhooks` a cada trinta minutos, mas reutiliza o mesmo guard de
+`CRON_SECRET`, kill switch e padrão de lease/deadline. Se a execução de recuperação
+processar eventos, ela também tenta drenar a outbox após o commit. O drain é limitado
+a cinco mensagens e quinze segundos; se outro worker possuir o lease ou restar backlog,
+o cron da outbox permanece como fallback periódico.
 
 - A rota só executa com `SCHEDULED_JOBS_ENABLED=true` e adquire um lease
   persistente por nome de job.

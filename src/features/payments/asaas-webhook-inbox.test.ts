@@ -70,16 +70,23 @@ describe("Asaas webhook inbox", () => {
   });
 
   it("acknowledges a duplicate without processing business effects", async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [] });
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: "inbox-existing" }] });
 
     await expect(
       persistAsaasWebhook({
         client: { query } as never,
         payload: paymentEvent,
       })
-    ).resolves.toEqual({ duplicate: true, id: null });
+    ).resolves.toEqual({ duplicate: true, id: "inbox-existing" });
 
-    expect(query).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenLastCalledWith(
+      expect.stringContaining("select id"),
+      ["evt_123"]
+    );
   });
 
   it("persists an unknown event name for later safe classification", async () => {

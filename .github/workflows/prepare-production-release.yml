@@ -134,6 +134,8 @@ jobs:
           set -euo pipefail
           sync_branch="sync/production-into-staging-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           git switch --create "${sync_branch}" origin/staging
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git merge --no-edit origin/main; then
             conflict_mode=false
           elif [[ -n "$(git ls-files --unmerged)" ]]; then

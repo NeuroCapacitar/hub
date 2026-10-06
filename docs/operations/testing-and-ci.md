@@ -210,7 +210,7 @@ Os testes de workflow devem detectar regressão quando:
 - aparecer dependência de `NEON_CI_API_KEY`;
 - uma segunda instalação de dependências for adicionada;
 - Staging voltar a ser publicado pelo GitHub Action;
-- o cron JMVStream deixar de existir ou mudar de quinze minutos;
+- o cron JMVStream deixar de existir ou mudar de trinta minutos;
 - release permitir hotfix com migration;
 - reconciliação deixar de abrir PR para `staging`.
 

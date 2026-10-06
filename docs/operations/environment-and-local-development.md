@@ -10,13 +10,12 @@ last_verified_commit: edad1eb0506ea4ca4afeecdf85ac03cf5c65a9ac
 
 Use `.env.local`, nunca versione segredos. Parta de `.env.example`. Banco e provedores externos devem apontar a ambiente de desenvolvimento. `db:reset`, `db:seed` e `db:seed:student` recusam host remoto; siga o [runbook de banco](database-and-migrations.md).
 
-O `.env.local` da estação principal foi corrigido e passa pelo preflight
-fail-closed de Development. Ele usa a branch Neon `development`, os buckets
-`hub-development-private` e `hub-development-public` e Asaas Sandbox. O Sentry
-é Production-only e não é inicializado nessa estação. Resend reutiliza o domínio verificado
-com allowlist obrigatória. JMVStream reutiliza conscientemente o plano
-Production e, por isso, continua sendo a única integração sem isolamento
-técnico completo.
+A migração Neon está em andamento. O novo projeto não produtivo
+`shy-bar-59728129` já contém as branches vazias `development`
+(`br-square-recipe-b67a4ch7`) e `staging` (`br-cool-bread-b69twnrp`). Ainda não
+foram aplicadas migrations/seeds nem trocadas as URLs runtime. Não use os novos
+alvos até atualizar e conferir as conexões conforme o runbook. O Production
+permanece no projeto `damp-snow-22911188`.
 
 A topologia, o onboarding de outra estação e as restrições de cada provider
 estão no [guia de Development compartilhado](shared-development-and-release-guide.md).
@@ -74,13 +73,18 @@ históricos foram removidos. Smokes e testes manuais usam exclusivamente
 | Variável | Ambiente/obrigatoriedade | Consumidor | Sensível |
 |---|---|---|---|
 | `DATABASE_URL` | runtime com banco | `getPool` | sim |
-| `DATABASE_URL_DIRECT` | somente job de migration/auditoria; proibida no web runtime de produção | `drizzle.config.ts`, `migrate-production.ts` | sim |
-| `STAGING_DATABASE_HOST` | confirmação do compute Neon de Staging | preflight e comandos guardados | identificador protegido |
-| `STAGING_NEON_BRANCH_ID` | confirmação da branch Neon de Staging | migration, seed e reset | identificador protegido |
+| `DATABASE_URL_DIRECT` | job de migration/auditoria; usar endpoint direto, nunca `-pooler`; proibida no web runtime | guards de alvo e migrations | sim |
+| `STAGING_DATABASE_HOST` | host direto aprovado de Staging | runtime, workflows e comandos guardados | identificador protegido |
+| `STAGING_NEON_PROJECT_ID` | projeto não produtivo `shy-bar-59728129` | runtime, workflow, migrations e backups | identificador protegido |
+| `STAGING_NEON_BRANCH_ID` | branch `br-cool-bread-b69twnrp` | runtime, workflow, migrations e backups | identificador protegido |
+| `STAGING_TARGET_READY` | variável do repositório GitHub `hub`; `true` só após conferir GitHub/Vercel | gate pré-job de migrations/deploy | não |
 | `STAGING_OPERATION_CONFIRMATION` | literal `staging` | comandos de Staging | não |
 | `STAGING_ADMIN_EMAIL` | seed idempotente do Admin inicial | `seed-staging-admin.ts` | dado interno |
 | `STAGING_ADMIN_PASSWORD` | seed idempotente do Admin inicial | `seed-staging-admin.ts` | sim |
-| `DEVELOPMENT_DATABASE_HOST` | preflight e seed Development | confirmação do endpoint Neon | identificador protegido |
+| `DEVELOPMENT_DATABASE_HOST` | host direto aprovado de Development | runtime, migration, preflight e seed | identificador protegido |
+| `DEVELOPMENT_NEON_PROJECT_ID` | projeto não produtivo `shy-bar-59728129` | runtime, migration, preflight e seed | identificador protegido |
+| `DEVELOPMENT_NEON_BRANCH_ID` | branch `br-square-recipe-b67a4ch7` | runtime, migration, preflight e seed | identificador protegido |
+| `DEVELOPMENT_OPERATION_CONFIRMATION` | literal `development` | migration Development | não |
 | `SHARED_DEVELOPMENT_SEED_CONFIRMATION` | seed Development | confirmação literal `development` | não |
 | `DEVELOPMENT_ADMIN_EMAIL` | seed Development | Conta Admin fictícia | dado interno |
 | `DEVELOPMENT_ADMIN_PASSWORD` | seed Development | Conta Admin fictícia | sim |
@@ -160,8 +164,9 @@ históricos foram removidos. Smokes e testes manuais usam exclusivamente
 | `BACKUP_R2_SECRET_ACCESS_KEY` | segredo da credencial read/write limitada ao bucket | workflow de backup | sim |
 | `BACKUP_AGE_RECIPIENT` | destinatário público X25519 | cifragem do dump | não |
 | `PRODUCTION_DATABASE_HOST` | host direto esperado de Production | backup e guardas de restore | identificador protegido |
-| `PRODUCTION_NEON_BRANCH_ID` | branch Production esperada | backup | identificador protegido |
-| `PRODUCTION_NEON_PROJECT_ID` | projeto Neon Production esperado | backup | identificador protegido |
+| `PRODUCTION_DATABASE_HOST` | host direto fixo de Production | guard antes de migration Production | identificador protegido |
+| `PRODUCTION_NEON_BRANCH_ID` | branch Production `br-dark-boat-ac5ju6m4` | migration e backup | identificador protegido |
+| `PRODUCTION_NEON_PROJECT_ID` | projeto Production `damp-snow-22911188` | migration e backup | identificador protegido |
 | `NEON_API_KEY` | leitura da branch e endpoints que provam a origem do dump | GitHub Environment `production-backup` | sim |
 | `VERCEL_TOKEN` | leitura do deployment Production implantado | GitHub Environment `production-backup` | sim |
 | `VERCEL_ORG_ID` | organização dona do deployment Production | backup | identificador protegido |
@@ -181,7 +186,7 @@ históricos foram removidos. Smokes e testes manuais usam exclusivamente
 As seis rotas cron, inclusive `/api/cron/asaas-webhooks` e
 `/api/cron/resend-webhooks`, compartilham
 `CRON_SECRET` e `SCHEDULED_JOBS_ENABLED`. Os workers Asaas, JMVStream, outbox e
-Resend estão agendados a cada quinze minutos em UTC. Os
+Resend estão agendados a cada trinta minutos nos minutos 15 e 45 UTC. Os
 workers devem permanecer desabilitados até migrations, configuração e
 homologação do ambiente alvo.
 

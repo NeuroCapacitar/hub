@@ -155,7 +155,7 @@ describe("server environment", () => {
       CLIENT_IP_SOURCE: "x-forwarded-for",
       CRON_SECRET: "staging-cron-secret-at-least-thirty-two-characters",
       DATABASE_URL:
-        "postgresql://user:secret@ep-staging-pooler.sa-east-1.aws.neon.tech/neondb",
+        "postgresql://user:secret@ep-noisy-band-b6lcc8jk-pooler.c-2.sa-east-1.aws.neon.tech/neondb",
       HEALTHCHECK_SECRET:
         "staging-health-secret-at-least-thirty-two-characters",
       JMVSTREAM_AUTH_RESOURCE: "fixture-resource",
@@ -175,7 +175,10 @@ describe("server environment", () => {
       RESEND_WEBHOOK_SECRET:
         "resend-webhook-secret-at-least-thirty-two-characters",
       SCHEDULED_JOBS_ENABLED: "true",
-      STAGING_DATABASE_HOST: "ep-staging.sa-east-1.aws.neon.tech",
+      STAGING_DATABASE_HOST:
+        "ep-noisy-band-b6lcc8jk.c-2.sa-east-1.aws.neon.tech",
+      STAGING_NEON_PROJECT_ID: "shy-bar-59728129",
+      STAGING_NEON_BRANCH_ID: "br-cool-bread-b69twnrp",
       STAGING_EMAIL_RECIPIENT_ALLOWLIST:
         "staging-recipient@example.com,staging-ops@example.com",
       STAGING_JMVSTREAM_USES_PRODUCTION: "true",

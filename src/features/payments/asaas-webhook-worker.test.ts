@@ -54,7 +54,35 @@ describe("Asaas webhook worker persistence", () => {
     expect(sql).toContain("locked_by = $1");
     expect(sql).toContain("attempt_count = event.attempt_count + 1");
     expect(sql).toContain("attempt_count < $3");
-    expect(query).toHaveBeenCalledWith(expect.any(String), ["worker-a", 20, 5]);
+    expect(query).toHaveBeenCalledWith(expect.any(String), [
+      "worker-a",
+      20,
+      5,
+      null,
+    ]);
+  });
+
+  it("limits the claim to the event received by the webhook", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [claimedEvent] });
+
+    await expect(
+      claimAsaasWebhookEvents({
+        client: { query } as never,
+        eventId: "00000000-0000-4000-8000-000000000001",
+        limit: 1,
+        workerId: "worker-a",
+      })
+    ).resolves.toEqual([claimedEvent]);
+
+    expect(String(query.mock.calls[0]?.[0])).toContain(
+      "and ($4::uuid is null or id = $4::uuid)"
+    );
+    expect(query).toHaveBeenCalledWith(expect.any(String), [
+      "worker-a",
+      1,
+      5,
+      "00000000-0000-4000-8000-000000000001",
+    ]);
   });
 
   it("terminalizes a stale fifth attempt without claiming or processing it again", async () => {
@@ -73,8 +101,9 @@ describe("Asaas webhook worker persistence", () => {
     expect(sql).toContain("locked_at < now() - interval '10 minutes'");
     expect(sql).toContain("for update skip locked");
     expect(sql).toContain("status = 'failed'");
+    expect(query).toHaveBeenCalledWith(expect.any(String), [20, 5, null]);
     expect(sql).toContain("error_message = 'webhook_attempts_exhausted'");
-    expect(query).toHaveBeenCalledWith(expect.any(String), [20, 5]);
+    expect(query).toHaveBeenCalledWith(expect.any(String), [20, 5, null]);
   });
 
   it("completes processing in one transaction and exposes an order row-lock contract", async () => {
@@ -413,6 +442,7 @@ describe("Asaas webhook runner", () => {
     await expect(
       runAsaasWebhookWorker({
         claim: dependencies.claimAsaasWebhookEvents,
+        eventId: "event-1",
         failExhausted: dependencies.failExhaustedAsaasWebhookEvents,
         limit: 20,
         process: dependencies.processClaimedAsaasWebhookEvent,
@@ -432,6 +462,7 @@ describe("Asaas webhook runner", () => {
     expect(dependencies.claimAsaasWebhookEvents).toHaveBeenCalledOnce();
     expect(dependencies.failExhaustedAsaasWebhookEvents).toHaveBeenCalledWith({
       client: pool,
+      eventId: "event-1",
       limit: 20,
     });
     expect(dependencies.processClaimedAsaasWebhookEvent).toHaveBeenCalledWith({

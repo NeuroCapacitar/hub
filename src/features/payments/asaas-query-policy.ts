@@ -31,10 +31,8 @@ const getBackoffMs = ({
   attempt: number;
   error: AsaasGatewayError;
 }): number =>
-  Math.min(
-    error.retryAfterMs ?? INITIAL_BACKOFF_MS * 2 ** attempt,
-    MAX_BACKOFF_MS
-  );
+  error.retryAfterMs ??
+  Math.min(INITIAL_BACKOFF_MS * 2 ** attempt, MAX_BACKOFF_MS);
 
 export const runCoordinatedAsaasQuery = async <Result>({
   operation,
@@ -53,6 +51,8 @@ export const runCoordinatedAsaasQuery = async <Result>({
           error instanceof AsaasGatewayError &&
           error.kind === "rate_limited" &&
           error.retryable &&
+          (error.retryAfterMs === undefined ||
+            error.retryAfterMs <= MAX_BACKOFF_MS) &&
           attempt < MAX_QUERY_ATTEMPTS - 1;
         if (!shouldRetry) {
           throw error;

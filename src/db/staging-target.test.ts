@@ -1,56 +1,53 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { EXPECTED_NEON_TARGETS } from "./neon-database-target";
 import { assertStagingTarget } from "./staging-target";
 
-const STAGING_URL =
-  "postgresql://user:secret@ep-staging-pooler.sa-east-1.aws.neon.tech/neondb";
+const expected = EXPECTED_NEON_TARGETS.staging;
+const STAGING_URL = `postgresql://user:secret@${expected.host}/${expected.databaseName}`;
+const createStagingTarget = (
+  overrides: Partial<{
+    branchId: string;
+    confirmation: string;
+    databaseUrl: string;
+    expectedHost: string;
+    projectId: string;
+  }> = {}
+) => ({
+  branchId: expected.branchId,
+  confirmation: "staging",
+  databaseUrl: STAGING_URL,
+  expectedHost: expected.host,
+  projectId: expected.projectId,
+  ...overrides,
+});
 
 describe("Staging database target", () => {
   it("accepts the explicitly confirmed Staging compute", () => {
-    expect(
-      assertStagingTarget({
-        branchId: "br-staging",
-        confirmation: "staging",
-        databaseUrl: STAGING_URL,
-        expectedBranchId: "br-staging",
-        expectedHost: "ep-staging.sa-east-1.aws.neon.tech",
-      })
-    ).toEqual({
-      branchId: "br-staging",
+    expect(assertStagingTarget(createStagingTarget())).toEqual({
+      branchId: expected.branchId,
       databaseName: "neondb",
-      host: "ep-staging.sa-east-1.aws.neon.tech",
+      host: expected.host,
     });
   });
 
   it("rejects Production, wrong branch, and weak confirmation", () => {
     expect(() =>
-      assertStagingTarget({
-        branchId: "br-staging",
-        confirmation: "staging",
-        databaseUrl:
-          "postgresql://user:do-not-print@ep-hidden-tooth-ac843qc2.sa-east-1.aws.neon.tech/neondb",
-        expectedBranchId: "br-staging",
-        expectedHost: "ep-hidden-tooth-ac843qc2.sa-east-1.aws.neon.tech",
-      })
-    ).toThrow("Staging command refuses the Production Neon compute.");
+      assertStagingTarget(
+        createStagingTarget({
+          databaseUrl:
+            "postgresql://user:do-not-print@ep-hidden-tooth-ac843qc2.sa-east-1.aws.neon.tech/neondb",
+        })
+      )
+    ).toThrow(
+      "DATABASE_URL_DIRECT must not target the Production Neon compute"
+    );
     expect(() =>
-      assertStagingTarget({
-        branchId: "br-other",
-        confirmation: "staging",
-        databaseUrl: STAGING_URL,
-        expectedBranchId: "br-staging",
-        expectedHost: "ep-staging.sa-east-1.aws.neon.tech",
-      })
-    ).toThrow("Staging branch does not match STAGING_NEON_BRANCH_ID.");
+      assertStagingTarget(createStagingTarget({ branchId: "br-other" }))
+    ).toThrow("STAGING_NEON_BRANCH_ID does not match the approved Neon branch");
     expect(() =>
-      assertStagingTarget({
-        branchId: "br-staging",
-        confirmation: "production",
-        databaseUrl: STAGING_URL,
-        expectedBranchId: "br-staging",
-        expectedHost: "ep-staging.sa-east-1.aws.neon.tech",
-      })
+      assertStagingTarget(createStagingTarget({ confirmation: "production" }))
     ).toThrow("Set STAGING_OPERATION_CONFIRMATION=staging.");
   });
 
@@ -64,6 +61,7 @@ describe("Staging database target", () => {
       expect(source).toContain("DATABASE_URL_DIRECT");
       expect(source).toContain("STAGING_DATABASE_HOST");
       expect(source).toContain("STAGING_NEON_BRANCH_ID");
+      expect(source).toContain("STAGING_NEON_PROJECT_ID");
       expect(source).toContain("STAGING_OPERATION_CONFIRMATION");
       expect(source).toContain("assertStagingTarget");
     }

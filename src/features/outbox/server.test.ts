@@ -195,15 +195,16 @@ describe("outbox persistence", () => {
   });
 
   it("prunes superseded messages after thirty days separately", async () => {
+    dependencies.getPool.mockReset();
     const query = vi
       .fn()
       .mockResolvedValueOnce({ rowCount: 2 })
       .mockResolvedValueOnce({ rowCount: 3 })
       .mockResolvedValueOnce({ rowCount: 4 })
       .mockResolvedValueOnce({ rowCount: 5 });
-    dependencies.getPool.mockReturnValue({ query });
+    const client = { query };
 
-    await expect(pruneOutboxRecords()).resolves.toEqual({
+    await expect(pruneOutboxRecords({ client })).resolves.toEqual({
       deadLetters: 3,
       delivered: 2,
       reprocessAudits: 5,
@@ -211,6 +212,7 @@ describe("outbox persistence", () => {
     });
     expect(String(query.mock.calls[2]?.[0])).toContain("status = 'superseded'");
     expect(String(query.mock.calls[2]?.[0])).toContain("interval '30 days'");
+    expect(dependencies.getPool).not.toHaveBeenCalled();
   });
 
   it("allows exactly one manually audited reprocess", async () => {

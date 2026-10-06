@@ -2,33 +2,52 @@
 status: canonical
 owner: engineering
 last_verified_commit: 6bf5d693fd565c7c4c0c4bd9b7754efca92c2b44
-current_migration_tag: 0105_lesson_resource_cleanup_tombstones
-migration_entry_count: 106
-schema_table_count: 58
+current_migration_tag: 0106_better_auth_rate_limits
+migration_entry_count: 107
+schema_table_count: 59
 ---
 
 # Banco e migrations
 
-As migrations `0104_video_player_identity` e
-`0105_lesson_resource_cleanup_tombstones` fazem parte do fechamento de segurança.
+As migrations `0104_video_player_identity`,
+`0105_lesson_resource_cleanup_tombstones` e `0106_better_auth_rate_limits` fazem
+parte do fechamento de segurança.
 A primeira adiciona `jmvstream_video_assets.player_url` nullable e preenche somente
 hashes com uma única URL oficial conhecida nas Aulas; ativos ambíguos continuam
 sem identidade e são preservados de forma conservadora pela aplicação. A segunda
 permite tombstones `deleted` na registry de anexos, impedindo que um formulário
 antigo volte a referenciar bytes já removidos. O journal e os snapshots foram
 gerados pelo Drizzle; não aplicar essas migrations manualmente em Production.
-Seguir Staging, backup e promoção pelo fluxo canônico.
+`0106` persiste buckets do rate limiter Better Auth por HMAC da chave IP/path,
+com limpeza pela rotina maintenance; não armazena IP bruto. Foi aplicada no
+Development antigo em 2026-10-03 pelo runner `db:migrate:development`. A verificação
+somente-leitura confirmou a tabela, o índice de expiração, o registro no journal
+e zero buckets criados. Um smoke sintético no runtime de Development enviou 12
+consumos concorrentes com limite 3: exatamente 3 foram permitidos e 9 bloqueados;
+o bucket HMAC temporário foi removido. A duração foi 669 ms e não representa
+baseline de tráfego normal. O novo Development isolado ainda não recebeu
+migrations; Staging e Production também não receberam essa migration. Seguir
+backup e promoção pelo fluxo canônico.
 
 ## Ambientes
 
 Production e Staging são branches Neon persistentes e independentes no uso da
-aplicação. A CI usa PostgreSQL local e não cria branches Neon.
+aplicação. Production permanece no projeto `damp-snow-22911188`, branch
+`br-dark-boat-ac5ju6m4`. Development e Staging migram para o projeto isolado
+`shy-bar-59728129`, respectivamente branches `br-square-recipe-b67a4ch7` e
+`br-cool-bread-b69twnrp`, filhas de `nonprod-base`
+(`br-sparkling-tree-b6c6emws`). A configuração de runtime ainda está em
+cutover; não declare a migração concluída até aplicar o schema, conferir as
+conexões GitHub/Vercel e validar readiness. Consulte o guia de
+[Development compartilhado](shared-development-and-release-guide.md) para
+hosts e instruções operacionais. A CI usa PostgreSQL local e não cria branches
+Neon.
 
 | Ambiente | Uso | Migration automática |
 |---|---|---|
 | Development | desenvolvimento compartilhado/local | workflow manual |
 | CI | integração e E2E descartáveis | PostgreSQL local do runner |
-| Staging | homologação online | operação após `push` em `staging` |
+| Staging | homologação online | após `push` em `staging`, somente quando a variável de repositório `STAGING_TARGET_READY=true`; migration/inspeção precedem o deploy |
 | Production | dados reais | workflow de release |
 
 Branch Git e branch Neon são conceitos diferentes. Trocar a branch Git não
@@ -47,7 +66,7 @@ Revise SQL, journal e snapshot. Nunca edite journal ou snapshot manualmente e
 não use `db:push` para acelerar uma release.
 
 `bun run db:migrate:development`, `bun run db:migrate:staging` e
-`bun run db:migrate:production` usam o endpoint direto, lock compartilhado e uma
+`bun run db:migrate:production` exigem o endpoint direto (sem pooler), lock compartilhado e uma
 transação por arquivo de migration. `bun run db:migrate:e2e` usa a mesma
 separação no banco descartável. A separação é necessária quando uma migration
 adiciona um valor de enum que será usado por uma migration posterior; o PostgreSQL
@@ -62,12 +81,19 @@ Essa compatibilidade nunca é habilitada em Staging, Production ou E2E.
 `db:migrations:check` valida a cadeia local e `db:migrations:inspect` audita o banco
 somente para leitura.
 
+O workflow Production valida o host, project ID e branch ID aprovados em
+`db:preflight:production-target` antes de criar o branch de recuperação; o
+script de migration repete o guard antes de abrir conexão. Guards de
+Development e Staging também exigem os IDs e hosts estáticos aprovados. Todos
+os comandos de migration exigem `DATABASE_URL_DIRECT` com endpoint direto,
+nunca `-pooler`, pois o lock consultivo é mantido na sessão PostgreSQL.
+
 ### Preflight de identidades Google em Development
 
 Antes de aplicar as migrations `0095`/`0096`, execute
 `bun run db:preflight:google-identities`. O comando exige
-`DATABASE_URL_DIRECT` e `DEVELOPMENT_DATABASE_HOST`, compara o host esperado e
-recusa o compute Production. Em uma transação `READ ONLY`, verifica pares
+`DATABASE_URL_DIRECT`, host, project ID e branch ID aprovados de Development;
+recusa endpoints pooler e Production. Em uma transação `READ ONLY`, verifica pares
 duplicados de `(provider_id, account_id)` e colisões de `normalizeBuyerEmail`.
 O resultado traz somente hashes para e-mails/IDs externos; em colisões de
 provider lista IDs locais de linha/Conta para investigação. `safeToApply=false`

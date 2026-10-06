@@ -163,6 +163,8 @@ describe("JMVStream server SQL", () => {
     expect(persistenceSource).toContain(
       "export const expireStaleJmvstreamUploads"
     );
-    expect(playerSource).toContain("await expireStaleJmvstreamUploads()");
+    expect(
+      playerSource.match(/await expireStaleJmvstreamUploads\(\)/gu)
+    ).toHaveLength(1);
   });
 });
