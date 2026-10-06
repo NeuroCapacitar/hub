@@ -72,13 +72,19 @@ describe("Vercel deployment contract", () => {
       "if: always() && (inputs.mode == 'hotfix' || needs.verify_staging.result == 'success')"
     );
     expect(source).toContain("githubCommitSha");
+    expect(source).toContain(
+      "vercel@57.0.0 inspect preview.neurocapacitar.com.br"
+    );
     expect(source).toContain("vercel@57.0.0 inspect app.neurocapacitar.com.br");
     expect(source).toContain("vercel@57.0.0 list hub");
+    expect(source).toContain("--environment=preview");
     expect(source).toContain("--status=READY");
-    expect(source).not.toContain("--environment=preview");
-    expect(source).toContain("/deployments?sha=");
-    expect(source).toContain("environment=staging");
-    expect(source).toContain("/statuses?per_page=100");
+    expect(source).toContain(".meta.githubCommitSha == $sha");
+    expect(source).toContain("api/health/ready");
+    expect(source).toContain("api/webhooks/resend");
+    expect(source).not.toContain("/deployments?sha=");
+    expect(source).not.toContain("/statuses?per_page=100");
+    expect(source).not.toContain('creator.login == "vercel[bot]"');
     expect(source).not.toContain("api.vercel.com/v6/deployments");
     expect(source).not.toContain("--status=BUILDING,READY,ERROR,CANCELED");
     expect(source).toContain("name: Await automatic Production deployment");
