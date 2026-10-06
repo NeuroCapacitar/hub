@@ -1,7 +1,7 @@
 ---
 status: accepted
 owner: engineering
-last_verified_commit: 10c9cb8dd187482144850015841fb4485eacbd5f
+last_verified_commit: ed88213831bf5a4b6e5b697bcefe752789917895
 audit_date: 2026-09-01
 ---
 
@@ -180,3 +180,12 @@ credencial R2 somente leitura, secrets, acesso sem escrita, lock/lifecycle,
 restore descartável Neon, Resend com cabeçalhos Production e rotação de
 secrets Vercel/Resend. A pendência operacional restante é somente a observação
 DMARC até 2026-09-12, sem alteração de DNS.
+
+## Evidência operacional posterior — 2026-10-06
+
+`main` e `staging` foram reconciliadas e o SHA
+`ed88213831bf5a4b6e5b697bcefe752789917895` passou na CI `37435884516` e no
+workflow protegido `Deploy Vercel production` `37436937277`. O deployment e a
+migration `0106_better_auth_rate_limits` passaram os gates e smokes do runbook.
+Esse release não altera a decisão histórica **AMARELO**: a prontidão de Sentry
+Production e a observação DMARC continuam com suas provas separadas.

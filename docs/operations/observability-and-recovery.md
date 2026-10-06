@@ -1,7 +1,7 @@
 ---
 status: runbook
 owner: operations
-last_verified_commit: edad1eb0506ea4ca4afeecdf85ac03cf5c65a9ac
+last_verified_commit: ed88213831bf5a4b6e5b697bcefe752789917895
 ---
 
 # Observabilidade e recuperação
@@ -10,14 +10,27 @@ last_verified_commit: edad1eb0506ea4ca4afeecdf85ac03cf5c65a9ac
 
 Este runbook torna falhas detectáveis sem registrar dados pessoais ou segredos. Ele cobre processo, Postgres, filas persistidas e integrações assíncronas. O código, isoladamente, não prova estado externo de backup, proteção de branch ou alertas ativos em produção; cada item exige confirmação no painel do provedor e registro sanitizado.
 
-## Evidência operacional atual — 2026-09-03
+## Evidência operacional atual — 2026-10-06
 
-No SHA `10c9cb8dd187482144850015841fb4485eacbd5f`, a CI `33716424503`, a prova Sentry
-`33718401953`, o backup `33778673874` e o job controlado de lifecycle
-do Resend `33718939437` terminaram `success`. Os Environments do GitHub
-restringem `vercel-production` a `main` e `vercel-staging` a
-`staging`. O responsável confirmou R2, restore descartável, cabeçalhos da caixa
-Production e rotação de secrets Resend; DMARC permanece em observação.
+No SHA `ed88213831bf5a4b6e5b697bcefe752789917895`, CI `37435884516` e o
+workflow `Deploy Vercel production` `37436937277` terminaram `success`. O
+deployment `dpl_Ae2oopywxoqGnEtGDE5m9eztZbVJ` está `READY`. O release aplicou e
+auditou a migration `0106_better_auth_rate_limits` após validar backups
+independentes. O gate não repetiu a prova de Sentry Production; essa prova e a
+observação DMARC seguem separadas do status do deployment.
+
+O Environment `vercel-production` permanece permitido somente para `main`.
+`vercel-staging` permite `main` e `staging` para que o workflow despachado de
+Production possa verificar o alias de Staging antes de acessar o Environment
+Production.
+
+### Evidência histórica — 2026-09-03
+
+No SHA `10c9cb8dd187482144850015841fb4485eacbd5f`, a CI `33716424503`, a prova
+Sentry `33718401953`, o backup `33778673874` e o job controlado de lifecycle
+Resend `33718939437` terminaram `success`. O responsável confirmou R2, restore
+descartável, cabeçalhos da caixa Production e rotação de secrets Resend; DMARC
+permanecia em observação.
 
 **Admin > Operação** mostra contagens, idade de backlog, saúde da JMVStream e filas locais de recuperação. Nunca expõe payload, token, e-mail ou URL assinada. **Admin > Auditoria** fica reservado ao histórico administrativo, aos eventos de Matrícula e aos eventos financeiros relevantes. **Admin > Configurações** mantém somente identidade global de Certificados e conteúdo editorial.
 

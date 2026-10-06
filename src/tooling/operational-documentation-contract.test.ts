@@ -57,13 +57,13 @@ const releaseFlowEnrollmentCronPattern =
 const releaseFlowMaintenanceCronPattern =
   /manuten\u00e7\u00e3o\s+diariamente \u00e0s 04:00 UTC/;
 const currentMainShaPattern =
-  /No checkpoint de 2026-09-03, \x60main\x60 apontava para\s+\x60([0-9a-f]{40})\x60/u;
-const currentStagingShaPattern =
-  /O \u00faltimo checkpoint verificado de\s+\x60staging\x60\s+\u00e9 o merge commit\s+\x60([0-9a-f]{40})\x60/u;
+  /No checkpoint de \d{4}-\d{2}-\d{2}, \x60main\x60 apontava para\s+\x60([0-9a-f]{40})\x60/u;
+const lastProductionStagingCandidatePattern =
+  /O \u00faltimo candidato de Staging promovido para Production foi o merge commit\s+\x60([0-9a-f]{40})\x60/u;
 const releaseMetadataCommitPattern =
   /^(?:last_verified_commit|documented_commit): [0-9a-f]{40}$/gmu;
 const workflowEvidencePattern =
-  /(?:CI|Sentry|Backup Production database|verify-resend-lifecycle)[\s\S]{0,160}\b\d{11}\b/iu;
+  /(?:CI|Sentry|Backup Production database|verify-resend-lifecycle|Deploy Vercel production)[\s\S]{0,160}\b\d{11}\b/iu;
 const productCutoverPattern =
   /corte\s+controlado\s+de Production\s+(?:j\u00e1\s+)?foi executado/;
 const externalConfirmationPattern =
@@ -127,16 +127,16 @@ describe("Operational documentation contracts", () => {
     expect(backupRunbook).toMatch(workflowEvidencePattern);
     expect(resendIntegration).toContain(currentMainSha);
     expect(resendIntegration).toMatch(workflowEvidencePattern);
-    const lastVerifiedStagingSha = releaseState.match(
-      currentStagingShaPattern
+    const lastProductionStagingCandidateSha = releaseState.match(
+      lastProductionStagingCandidatePattern
     )?.[1];
-    expect(lastVerifiedStagingSha).toBeDefined();
-    if (!lastVerifiedStagingSha) {
+    expect(lastProductionStagingCandidateSha).toBeDefined();
+    if (!lastProductionStagingCandidateSha) {
       throw new Error(
-        "release-state is missing its last verified staging checkpoint"
+        "release-state is missing its last Staging candidate promoted to Production"
       );
     }
-    expect(readme).toContain(lastVerifiedStagingSha);
+    expect(readme).toContain(lastProductionStagingCandidateSha);
   });
 
   it("does not present historical operational gaps as current", () => {
