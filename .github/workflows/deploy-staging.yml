@@ -228,7 +228,10 @@ jobs:
           fi
 
       - name: Deploy the verified Staging build
-        run: bunx vercel@57.0.0 deploy --prebuilt --target=staging --yes --token="$VERCEL_TOKEN"
+        run: >-
+          bunx vercel@57.0.0 deploy --prebuilt --target=staging
+          --meta "githubCommitSha=${MIGRATED_STAGING_SHA}"
+          --yes --token="$VERCEL_TOKEN"
 
       - name: Smoke the Staging alias
         run: |

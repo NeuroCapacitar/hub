@@ -36,6 +36,13 @@ describe("Vercel deployment contract", () => {
     expect(source).toContain("name: vercel-staging");
     expect(source).toContain("HEALTHCHECK_SECRET");
     expect(source).toContain("DATABASE_URL_DIRECT");
+    expect(source).toContain(
+      [
+        '--meta "githubCommitSha=',
+        String.fromCharCode(36),
+        '{MIGRATED_STAGING_SHA}"',
+      ].join("")
+    );
   });
 
   it("derives a Staging or hotfix candidate, gates migrations, and promotes one staged deployment", async () => {

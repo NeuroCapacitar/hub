@@ -131,10 +131,11 @@ promoção. Falha de build, migration ou smoke não deve alterar o tráfego púb
 O Git Integration não publica `staging` diretamente: `vercel.json` desabilita
 esse caminho para impedir que o deploy corra junto com as migrations. O
 workflow GitHub usa Vercel CLI para publicar o Custom Environment `staging`
-depois dos gates do banco. O verificador de release usa a Vercel CLI para
-confirmar que o alias estável aponta para um deployment pronto com o SHA exato
-de `staging`. O Git Integration cria a build Production quando o workflow
-avança `main`. Feature branches não geram previews automáticos porque
+depois dos gates do banco. Ele grava `MIGRATED_STAGING_SHA` no metadata do
+deployment como `githubCommitSha`. O verificador de release usa a Vercel CLI
+para confirmar que o alias estável aponta para um deployment pronto com esse
+SHA exato. O Git Integration cria a build Production quando o workflow avança
+`main`. Feature branches não geram previews automáticos porque
 o `ignoreCommand` encerra essas builds. O domínio Production não é
 autoatribuído durante a build; o workflow aguarda a build do SHA exato, executa
 os gates e promove o mesmo deployment.

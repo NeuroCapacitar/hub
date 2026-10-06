@@ -197,6 +197,8 @@ describe("CI and deployment workflow contracts", () => {
     expect(verifyBlock).toContain("--environment=preview");
     expect(verifyBlock).toContain("--status=READY");
     expect(verifyBlock).toContain("meta.githubCommitSha");
+    expect(verifyBlock).toContain("staging_alias_metadata");
+    expect(verifyBlock).toContain("Vercel records=");
     expect(verifyBlock).toContain("api/health/ready");
     expect(verifyBlock).toContain("api/webhooks/resend");
     expect(verifyBlock).not.toContain("/deployments?sha=");
