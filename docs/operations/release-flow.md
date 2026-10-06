@@ -61,7 +61,8 @@ staging → Production anterior + alterações acumuladas
 
 Novos PRs ainda podem entrar em `staging`. Antes da próxima release, execute
 `Prepare Production release`. Se houver commits exclusivos de `main`, o
-workflow cria uma branch `sync/production-into-staging-*`, incorpora `main`,
+workflow cria uma branch `sync/production-into-staging-*`, configura identidade
+Git local do GitHub Actions para criar o merge commit, incorpora `main`,
 dispara a CI e abre um PR para `staging`. Resolva conflitos somente nessa PR,
 homologue a árvore combinada e só então execute `Deploy Vercel production`.
 
