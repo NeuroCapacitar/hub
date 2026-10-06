@@ -93,7 +93,13 @@ revisão é assistiva e nunca substitui o check `CI`.
 ## Release normal
 
 1. Homologue o deployment atual de Staging.
-2. Execute `Deploy Vercel production` com `mode=release-staging`.
+2. Execute `Deploy Vercel production` com `mode=release-staging` usando a ref
+   `main`. O Environment `vercel-production` permite somente essa branch; o
+   job `verify_staging` usa `vercel-staging` para ler o alias e o SHA atual de
+   Staging.
+   O gate consulta `preview.neurocapacitar.com.br` pela Vercel CLI, exige um
+   deployment `READY` cujo `meta.githubCommitSha` seja o SHA atual de `staging`
+   e executa readiness e smoke do webhook Resend.
 3. O workflow confirma que `main` é ancestral de `staging`.
 4. O workflow confirma que o SHA candidato possui um check `CI` verde associado
    ao próprio SHA. Um check verde somente no head do PR não autoriza a promoção;
@@ -117,6 +123,11 @@ workflow avança `main`. Feature branches não geram previews automáticos porqu
 o `ignoreCommand` encerra essas builds. O domínio Production não é
 autoatribuído durante a build; o workflow aguarda a build do SHA exato, executa
 os gates e promove o mesmo deployment.
+
+O workflow de Production é despachado pela ref `main` para respeitar a
+allowlist do Environment. Seu primeiro job consulta o alias estável de Staging
+via Vercel CLI e valida o SHA antes de a execução acessar o Environment de
+Production.
 
 Não execute `vercel deploy` manualmente para corrigir uma variável de ambiente
 ou repetir uma release. Atualize a variável no ambiente correto e use o
