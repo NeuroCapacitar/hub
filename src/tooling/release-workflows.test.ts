@@ -147,6 +147,12 @@ describe("CI and deployment workflow contracts", () => {
     expect(workflow).toContain("git merge-base --is-ancestor");
     expect(workflow).toContain("sync/production-into-staging-");
     expect(workflow).toContain("git merge --no-edit origin/main");
+    expect(workflow).toContain(
+      'git config --local user.name "github-actions[bot]"'
+    );
+    expect(workflow).toContain(
+      'git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"'
+    );
     expect(workflow).toContain("git merge --abort");
     expect(workflow).toContain("gh workflow run ci.yml");
     expect(workflow).toContain(
