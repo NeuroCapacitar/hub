@@ -94,6 +94,13 @@ jobs:
               --format=json \
               --no-color 2>/dev/null
           )"
+          staging_alias_metadata="$(
+            jq -c --arg url "${staging_deployment_url}" \
+              '[.deployments[]
+               | select(.url == $url)
+               | {url, target, readyState, githubCommitSha: .meta.githubCommitSha}]' \
+              <<< "${staging_deployments_json}" 2>/dev/null
+          )" || staging_alias_metadata="[]"
           staging_deployment_json="$(
             jq -ce \
               --arg sha "${staging_sha}" \
@@ -104,9 +111,10 @@ jobs:
                | last // empty' <<< "${staging_deployments_json}" 2>/dev/null
           )" || staging_deployment_json=""
           if [[ -z "${staging_deployment_json}" ]]; then
-            echo "The current Vercel Staging alias does not resolve to the exact current Staging SHA." >&2
+            echo "The current Vercel Staging alias does not resolve to the exact current Staging SHA ${staging_sha}; alias=${staging_deployment_url}; Vercel records=${staging_alias_metadata}." >&2
             exit 1
           fi
+          echo "Verified Vercel Staging alias ${staging_deployment_url} for SHA ${staging_sha}." >> "$GITHUB_STEP_SUMMARY"
           curl --fail --silent --show-error \
             --header "Authorization: Bearer ${HEALTHCHECK_SECRET}" \
             "${STAGING_ORIGIN}/api/health/ready" > /dev/null
