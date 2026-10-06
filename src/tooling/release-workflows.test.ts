@@ -155,6 +155,24 @@ describe("CI and deployment workflow contracts", () => {
     );
   });
 
+  it("validates the Staging alias and exact Vercel commit before Production release", () => {
+    const workflow = readWorkflow("deploy-vercel.yml");
+    const verifyStart = workflow.indexOf("  verify_staging:");
+    const deployStart = workflow.indexOf("  deploy:");
+    const verifyBlock = workflow.slice(verifyStart, deployStart);
+
+    expect(verifyStart).toBeGreaterThanOrEqual(0);
+    expect(deployStart).toBeGreaterThan(verifyStart);
+    expect(verifyBlock).toContain(
+      "vercel@57.0.0 inspect preview.neurocapacitar.com.br"
+    );
+    expect(verifyBlock).toContain("--environment=preview");
+    expect(verifyBlock).toContain("meta.githubCommitSha == $sha");
+    expect(verifyBlock).toContain("api/health/ready");
+    expect(verifyBlock).toContain("api/webhooks/resend");
+    expect(verifyBlock).not.toContain("/deployments?sha=");
+  });
+
   it("keeps the JMVStream schedule at fifteen minutes", () => {
     const vercel = readFileSync(
       resolve(import.meta.dirname, "../../vercel.json"),

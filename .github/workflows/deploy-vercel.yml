@@ -38,9 +38,12 @@ jobs:
     outputs:
       candidate_sha: ${{ steps.staging.outputs.sha }}
     env:
-      GH_TOKEN: ${{ github.token }}
       HEALTHCHECK_SECRET: ${{ secrets.HEALTHCHECK_SECRET }}
       STAGING_ORIGIN: https://preview.neurocapacitar.com.br
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_SCOPE: neuro-capacitar
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -59,44 +62,59 @@ jobs:
           staging_sha="$(git rev-parse origin/staging)"
           [[ "$(git rev-parse HEAD)" == "${staging_sha}" ]]
 
+          for name in HEALTHCHECK_SECRET VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_TOKEN; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "${name} is required by the vercel-staging environment." >&2
+              exit 1
+            fi
+          done
+
+          staging_inspect_json="$(
+            bunx vercel@57.0.0 inspect preview.neurocapacitar.com.br \
+              --scope="$VERCEL_SCOPE" \
+              --token="$VERCEL_TOKEN" \
+              --format=json \
+              --no-color 2>/dev/null
+          )"
+          staging_deployment_url="$(jq -er '.url' <<< "${staging_inspect_json}")"
+          staging_deployment_state="$(jq -r '.readyState // .state // "UNKNOWN"' <<< "${staging_inspect_json}")"
+          if [[ "${staging_deployment_state}" != "READY" ]] ||
+             [[ ! "${staging_deployment_url}" =~ ^[a-zA-Z0-9.-]+\.vercel\.app$ ]]; then
+            echo "The Staging alias does not resolve to a READY Vercel deployment." >&2
+            exit 1
+          fi
+
           staging_deployments_json="$(
-            curl --fail-with-body --silent --show-error \
-              --header "Accept: application/vnd.github+json" \
-              --header "Authorization: Bearer ${GH_TOKEN}" \
-              --header "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/${GITHUB_REPOSITORY}/deployments?sha=${staging_sha}&environment=staging&per_page=100"
+            bunx vercel@57.0.0 list hub \
+              --scope="$VERCEL_SCOPE" \
+              --token="$VERCEL_TOKEN" \
+              --environment=preview \
+              --status=READY \
+              --limit=100 \
+              --format=json \
+              --no-color 2>/dev/null
           )"
-          staging_deployment_id="$(
-            jq -er --arg sha "${staging_sha}" '
-              [.[]
-               | select(.sha == $sha and .environment == "staging" and .creator.login == "vercel[bot]")
-               | .id]
-              | .[0] // empty
-            ' <<< "${staging_deployments_json}"
-          )"
-          if [[ -z "${staging_deployment_id}" ]]; then
-            echo "No READY Vercel Staging deployment exists for the current SHA." >&2
+          staging_alias_metadata="$(
+            jq -c --arg url "${staging_deployment_url}" \
+              '[.deployments[]
+               | select(.url == $url)
+               | {url, target, readyState, githubCommitSha: .meta.githubCommitSha}]' \
+              <<< "${staging_deployments_json}" 2>/dev/null
+          )" || staging_alias_metadata="[]"
+          staging_deployment_json="$(
+            jq -ce \
+              --arg sha "${staging_sha}" \
+              --arg url "${staging_deployment_url}" \
+              '[.deployments[]
+               | select(.url == $url and .meta.githubCommitSha == $sha)]
+               | sort_by(.createdAt)
+               | last // empty' <<< "${staging_deployments_json}" 2>/dev/null
+          )" || staging_deployment_json=""
+          if [[ -z "${staging_deployment_json}" ]]; then
+            echo "The current Vercel Staging alias does not resolve to the exact current Staging SHA ${staging_sha}; alias=${staging_deployment_url}; Vercel records=${staging_alias_metadata}." >&2
             exit 1
           fi
-          staging_statuses_json="$(
-            curl --fail-with-body --silent --show-error \
-              --header "Accept: application/vnd.github+json" \
-              --header "Authorization: Bearer ${GH_TOKEN}" \
-              --header "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/${GITHUB_REPOSITORY}/deployments/${staging_deployment_id}/statuses?per_page=100"
-          )"
-          staging_deployment_url="$(
-            jq -er '
-              [.[]
-               | select(.state == "success")
-               | .environment_url // empty]
-              | .[0] // empty
-            ' <<< "${staging_statuses_json}"
-          )"
-          if [[ ! "${staging_deployment_url}" =~ ^https://[a-zA-Z0-9.-]+\.vercel\.app$ ]]; then
-            echo "Vercel Staging deployment has no successful deployment URL." >&2
-            exit 1
-          fi
+          echo "Verified Vercel Staging alias ${staging_deployment_url} for SHA ${staging_sha}." >> "$GITHUB_STEP_SUMMARY"
           curl --fail --silent --show-error \
             --header "Authorization: Bearer ${HEALTHCHECK_SECRET}" \
             "${STAGING_ORIGIN}/api/health/ready" > /dev/null
@@ -290,6 +308,7 @@ jobs:
           RESTORE_R2_SECRET_ACCESS_KEY: ${{ secrets.RESTORE_R2_SECRET_ACCESS_KEY }}
           BACKUP_R2_ACCOUNT_ID: ${{ vars.BACKUP_R2_ACCOUNT_ID }}
           BACKUP_R2_BUCKET_NAME: ${{ vars.BACKUP_R2_BUCKET_NAME }}
+          PRODUCTION_DATABASE_HOST: ${{ vars.PRODUCTION_DATABASE_HOST }}
           PRODUCTION_NEON_BRANCH_ID: ${{ vars.PRODUCTION_NEON_BRANCH_ID }}
           PRODUCTION_NEON_PROJECT_ID: ${{ vars.PRODUCTION_NEON_PROJECT_ID }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
@@ -298,7 +317,7 @@ jobs:
           set -euo pipefail
           required_names=(HEALTHCHECK_SECRET VERCEL_AUTOMATION_BYPASS_SECRET VERCEL_ORG_ID VERCEL_PROJECT_ID VERCEL_SCOPE VERCEL_TOKEN)
           if [[ "${HAS_MIGRATIONS}" == "true" ]]; then
-            required_names+=(DATABASE_URL_DIRECT NEON_API_KEY RESTORE_R2_ACCESS_KEY_ID RESTORE_R2_SECRET_ACCESS_KEY BACKUP_R2_ACCOUNT_ID BACKUP_R2_BUCKET_NAME PRODUCTION_NEON_BRANCH_ID PRODUCTION_NEON_PROJECT_ID)
+            required_names+=(DATABASE_URL_DIRECT NEON_API_KEY RESTORE_R2_ACCESS_KEY_ID RESTORE_R2_SECRET_ACCESS_KEY BACKUP_R2_ACCOUNT_ID BACKUP_R2_BUCKET_NAME PRODUCTION_DATABASE_HOST PRODUCTION_NEON_BRANCH_ID PRODUCTION_NEON_PROJECT_ID)
           fi
           for name in "${required_names[@]}"; do
             if [[ -z "${!name:-}" ]]; then
@@ -306,6 +325,9 @@ jobs:
               exit 1
             fi
           done
+          if [[ "${HAS_MIGRATIONS}" == "true" ]]; then
+            bun run db:preflight:production-target
+          fi
 
       - name: Advance main to the approved Staging candidate
         if: inputs.mode == 'release-staging'
@@ -412,12 +434,18 @@ jobs:
         if: steps.release.outputs.has_migrations == 'true'
         env:
           DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+          PRODUCTION_DATABASE_HOST: ${{ vars.PRODUCTION_DATABASE_HOST }}
+          PRODUCTION_NEON_BRANCH_ID: ${{ vars.PRODUCTION_NEON_BRANCH_ID }}
+          PRODUCTION_NEON_PROJECT_ID: ${{ vars.PRODUCTION_NEON_PROJECT_ID }}
         run: bun run db:migrate:production
 
       - name: Audit Production migration state
         if: steps.release.outputs.has_migrations == 'true'
         env:
           DATABASE_URL_DIRECT: ${{ secrets.DATABASE_URL_DIRECT }}
+          PRODUCTION_DATABASE_HOST: ${{ vars.PRODUCTION_DATABASE_HOST }}
+          PRODUCTION_NEON_BRANCH_ID: ${{ vars.PRODUCTION_NEON_BRANCH_ID }}
+          PRODUCTION_NEON_PROJECT_ID: ${{ vars.PRODUCTION_NEON_PROJECT_ID }}
         run: bun run db:migrations:inspect -- --environment=vercel-production
 
       - name: Smoke unpromoted Production deployment
