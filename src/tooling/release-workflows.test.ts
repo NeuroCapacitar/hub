@@ -196,6 +196,7 @@ describe("CI and deployment workflow contracts", () => {
     expect(verifyBlock).toContain("vercel@57.0.0 list hub");
     expect(verifyBlock).toContain("--environment=preview");
     expect(verifyBlock).toContain("--status=READY");
+    expect(verifyBlock).not.toContain('.target == "preview"');
     expect(verifyBlock).toContain("meta.githubCommitSha");
     expect(verifyBlock).toContain("staging_alias_metadata");
     expect(verifyBlock).toContain("Vercel records=");

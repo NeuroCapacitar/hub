@@ -106,7 +106,7 @@ jobs:
               --arg sha "${staging_sha}" \
               --arg url "${staging_deployment_url}" \
               '[.deployments[]
-               | select(.url == $url and .target == "preview" and .meta.githubCommitSha == $sha)]
+               | select(.url == $url and .meta.githubCommitSha == $sha)]
                | sort_by(.createdAt)
                | last // empty' <<< "${staging_deployments_json}" 2>/dev/null
           )" || staging_deployment_json=""
