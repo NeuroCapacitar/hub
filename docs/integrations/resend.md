@@ -1,12 +1,22 @@
 ---
 status: canonical
 owner: engineering
-last_verified_commit: 10c9cb8dd187482144850015841fb4485eacbd5f
+last_verified_commit: ed88213831bf5a4b6e5b697bcefe752789917895
 ---
 
 # Resend e e-mail institucional
 
-## Evidência remota atual — 2026-09-03
+## Evidência remota atual — 2026-10-06
+
+O SHA `ed88213831bf5a4b6e5b697bcefe752789917895` foi aprovado pela CI
+`37435884516` e publicado em Production pelo workflow protegido
+`37436937277`. O deployment incluiu a redução do worker Resend para cada 30
+minutos. O gate de Staging rejeitou um POST Resend sem assinatura (`400`); o
+smoke Production verificou o webhook Asaas sem assinatura (`401`). Nenhum
+lifecycle de e-mail foi emitido por esta promoção, portanto ela não representa
+uma nova prova de entrega em caixa.
+
+## Histórico de evidências — 2026-09-03
 
 O job `verify-resend-lifecycle` do workflow `Run Staging jobs`
 `33718939437` terminou `success` no SHA

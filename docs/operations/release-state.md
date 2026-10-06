@@ -1,18 +1,58 @@
 ---
 status: runbook
 owner: engineering
-last_verified_commit: 35e838c21f2ad94fefe2aec187db5068f2726c0e
-deployed_commit: 10c9cb8dd187482144850015841fb4485eacbd5f
+last_verified_commit: ed88213831bf5a4b6e5b697bcefe752789917895
+deployed_commit: ed88213831bf5a4b6e5b697bcefe752789917895
 deployed_environment: production
-verified_commit: 10c9cb8dd187482144850015841fb4485eacbd5f
+verified_commit: ed88213831bf5a4b6e5b697bcefe752789917895
 verified_environment: production
-documented_commit: 35e838c21f2ad94fefe2aec187db5068f2726c0e
+documented_commit: ed88213831bf5a4b6e5b697bcefe752789917895
 documented_environment: production
 ---
 
 # Estado de release
 
-## Último checkpoint operacional documentado — 2026-09-03
+## Último checkpoint operacional documentado — 2026-10-06
+
+No checkpoint do release de 2026-10-06, Production estava no deployment
+`dpl_Ae2oopywxoqGnEtGDE5m9eztZbVJ`, estado `READY`, servido por
+`https://hub-iga6oyngb-neuro-capacitar.vercel.app` e promovido para
+`app.neurocapacitar.com.br`. `main` e `staging` apontavam para o merge commit
+`ed88213831bf5a4b6e5b697bcefe752789917895`.
+No checkpoint de 2026-10-06, `main` apontava para
+`ed88213831bf5a4b6e5b697bcefe752789917895`.
+O último candidato de Staging promovido para Production foi o merge commit
+`ed88213831bf5a4b6e5b697bcefe752789917895`.
+
+O workflow protegido `Deploy Vercel production` `37436937277` terminou
+`success`. A CI manual do SHA exato `37435884516` e o workflow de deploy de
+Staging `37435507670` também terminaram `success`. O gate Vercel confirmou que o
+alias de Staging estava `READY` e que o metadata `githubCommitSha` correspondia
+ao candidato. Readiness, R2, migration, inspeção de journal, provider, smoke
+público e metadata do deployment Production passaram no mesmo run.
+
+O release conferiu o backup independente R2 `209a28ae-a358-493f-aea0-03c36233c3d6`,
+criado em `2026-10-06T06:23:54Z`; tinha 133 minutos e status `fresh` no preflight.
+Antes da aplicação, o journal Production estava em
+`0105_lesson_resource_cleanup_tombstones`. O workflow criou a branch de
+recuperação Neon `br-broad-boat-acgynlqd`, chamada
+`production-release-37436937277-1`, no projeto `damp-snow-22911188`, filha da
+branch Production `br-dark-boat-ac5ju6m4` e expira em `2026-10-20T08:36:54Z`.
+O helper não provisiona endpoint de compute para essa branch.
+
+A migration `0106_better_auth_rate_limits` foi aplicada e o journal auditado.
+Ela cria a tabela e o índice do rate limit persistente; não remove nem
+transforma registros existentes. Os workers Asaas, JMVStream, outbox e Resend
+agora executam a cada trinta minutos, nos minutos 15 e 45 UTC; matrículas
+continuam diárias às 10:00 UTC e manutenção às 04:00 UTC. Isso reduz pela
+metade as chamadas agendadas desses quatro workers; a redução real de CU-hours
+do Neon ainda precisa ser medida no próximo ciclo de uso.
+
+O smoke Production validou `/`, `/entrar`, `/admin`, `/api/health`, readiness,
+R2, checkout sem parâmetros (`400`) e rejeição de webhook Asaas sem assinatura
+(`401`). A promoção usou o mesmo deployment já validado, sem rebuild.
+
+## Histórico operacional — 2026-09-03
 
 Production está no deployment `dpl_E17vxVRp27EDVVmW5sEQgTYFpXb5`, estado
 `READY`, região `gru1`, servido pelo commit

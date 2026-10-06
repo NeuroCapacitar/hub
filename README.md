@@ -98,10 +98,10 @@ Cloudflare R2. Push e merge não publicam Production automaticamente: a promoç�
 usa um workflow manual que aplica migrations pendentes, testa um deployment sem
 domínio e só então o promove.
 
-O último checkpoint verificado de `staging` é o merge commit
-`35e838c21f2ad94fefe2aec187db5068f2726c0e`; a CI completa da última mudança de organização passou os gates
-obrigatórios. Production continua servindo o deployment verificado do SHA
-`10c9cb8`, e o fluxo de promoção permanece separado da homologação.
+O último candidato de Staging promovido para Production foi o merge commit
+`ed88213831bf5a4b6e5b697bcefe752789917895`; a CI completa desse candidato
+passou. Production serve o deployment `dpl_Ae2oopywxoqGnEtGDE5m9eztZbVJ` no
+mesmo SHA, confirmado pelo workflow protegido `37436937277`.
 
 Na requalificação operacional atual, Resend, Sentry e R2/restore estão
 encerrados conforme as evidências registradas. DMARC permanece deliberadamente
@@ -114,8 +114,8 @@ histórico da migração concluída, não o procedimento diário.
 
 A jornada E2E completa de conclusão, emissão, renderização, e-mail absorvido,
 download privado e validação pública está implementada no repositório. A CI
-remota do SHA atual de `main` foi confirmada no run `33716424503`, incluindo
-integração PostgreSQL, E2E, build e Knip. Esse resultado é evidência do commit;
+remota do SHA atual de `main` foi confirmada no run `37435884516`, incluindo
+integração PostgreSQL, E2E, build, Knip e audit. Esse resultado é evidência do commit;
 continua sendo a evidência obrigatória do commit candidato; um commit local
 isolado não é tratado como promoção ou deploy e não substitui o fluxo de
 promoção protegido.

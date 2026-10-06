@@ -1,12 +1,28 @@
 ---
 status: runbook
 owner: operations
-last_verified_commit: 10c9cb8dd187482144850015841fb4485eacbd5f
+last_verified_commit: ed88213831bf5a4b6e5b697bcefe752789917895
 ---
 
 # Backup Production e restauração
 
-## Evidência remota atual — 2026-09-03
+## Evidência remota atual — 2026-10-06
+
+O release protegido `Deploy Vercel production` `37436937277` terminou
+`success` no SHA `ed88213831bf5a4b6e5b697bcefe752789917895`. O preflight
+validou o backup R2 independente `209a28ae-a358-493f-aea0-03c36233c3d6`,
+criado em `2026-10-06T06:23:54Z`, com idade de 133 minutos e status `fresh`.
+O journal Production estava em `0105_lesson_resource_cleanup_tombstones`.
+
+Para a migration `0106_better_auth_rate_limits`, o workflow criou o backup Neon
+`production-release-37436937277-1`, branch
+`br-broad-boat-acgynlqd`, filha de Production
+`br-dark-boat-ac5ju6m4` no projeto `damp-snow-22911188`; a expiração foi
+definida para `2026-10-20T08:36:54Z`. O helper não provisiona endpoint de
+compute. A migration foi aplicada e o journal auditado antes da promoção do
+deployment.
+
+## Histórico de evidências — 2026-09-03
 
 O workflow `Backup Production database` `33778673874` terminou `success`
 no SHA `10c9cb8dd187482144850015841fb4485eacbd5f`. Esta evidência fecha a execução
