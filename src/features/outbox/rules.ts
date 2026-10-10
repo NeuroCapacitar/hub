@@ -16,6 +16,7 @@ export const OUTBOX_TOPICS = {
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const COURSE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export type OutboxTopic = (typeof OUTBOX_TOPICS)[keyof typeof OUTBOX_TOPICS];
 
@@ -38,7 +39,16 @@ export interface ExpiryWarningPayloadV2 {
   warningKind: "1d" | "7d";
 }
 
-export type OutboxPayload = OutboxPayloadV1 | ExpiryWarningPayloadV2;
+export interface EmailVerificationPayloadV2 {
+  challengeId: string;
+  generation: number;
+  returnToCourseSlug: string;
+}
+
+export type OutboxPayload =
+  | OutboxPayloadV1
+  | EmailVerificationPayloadV2
+  | ExpiryWarningPayloadV2;
 
 interface OutboxMessageBase {
   aggregateId: string;
@@ -67,7 +77,15 @@ interface ExpiryWarningMessageInputV2 extends OutboxMessageBase {
   topic: typeof OUTBOX_TOPICS.accessExpiryWarning;
 }
 
+interface EmailVerificationMessageInputV2 extends OutboxMessageBase {
+  aggregateType: "account_email_challenge";
+  payload: EmailVerificationPayloadV2;
+  payloadVersion: 2;
+  topic: typeof OUTBOX_TOPICS.emailVerification;
+}
+
 export type OutboxMessageInput =
+  | EmailVerificationMessageInputV2
   | ExpiryWarningMessageInputV2
   | OutboxMessageInputV1;
 
@@ -127,12 +145,35 @@ export const createAccountActivationMessage = ({
 export const createEmailVerificationMessage = ({
   challengeId,
   generation,
+  returnToCourseSlug,
 }: {
   challengeId: string;
   generation: number;
+  returnToCourseSlug?: string | null;
 }): OutboxMessageInput => {
   if (!Number.isSafeInteger(generation) || generation < 1) {
     throw new Error("Email challenge generation must be a positive integer.");
+  }
+
+  const hasCourseReturn =
+    returnToCourseSlug !== undefined && returnToCourseSlug !== null;
+  if (
+    hasCourseReturn &&
+    (returnToCourseSlug.length > 247 ||
+      !COURSE_SLUG_PATTERN.test(returnToCourseSlug))
+  ) {
+    throw new Error("Email challenge course return is invalid.");
+  }
+
+  if (hasCourseReturn) {
+    return {
+      aggregateId: challengeId,
+      aggregateType: "account_email_challenge",
+      idempotencyKey: `${OUTBOX_TOPICS.emailVerification}/${challengeId}/${generation}/v2`,
+      payload: { challengeId, generation, returnToCourseSlug },
+      payloadVersion: 2,
+      topic: OUTBOX_TOPICS.emailVerification,
+    };
   }
 
   return {
@@ -379,6 +420,33 @@ export const parseOutboxPayload = ({
           warningKind,
         } as ExpiryWarningPayloadV2;
       }
+    }
+    throw unsupportedPayloadVersion();
+  }
+
+  if (topic === OUTBOX_TOPICS.emailVerification && payloadVersion === 2) {
+    const { challengeId, generation, returnToCourseSlug } = payload as {
+      challengeId?: unknown;
+      generation?: unknown;
+      returnToCourseSlug?: unknown;
+    };
+    if (
+      Object.keys(payload).length === 3 &&
+      typeof challengeId === "string" &&
+      UUID_PATTERN.test(challengeId) &&
+      Number.isSafeInteger(generation) &&
+      Number(generation) > 0 &&
+      typeof returnToCourseSlug === "string" &&
+      returnToCourseSlug.length <= 247 &&
+      COURSE_SLUG_PATTERN.test(returnToCourseSlug) &&
+      idempotencyKey ===
+        `${OUTBOX_TOPICS.emailVerification}/${challengeId}/${Number(generation)}/v2`
+    ) {
+      return {
+        challengeId,
+        generation: Number(generation),
+        returnToCourseSlug,
+      };
     }
     throw unsupportedPayloadVersion();
   }

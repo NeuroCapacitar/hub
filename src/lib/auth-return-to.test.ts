@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getAuthSignInPath,
+  getAuthSignUpPath,
   getEmailVerificationCallbackUrl,
   getGoogleOAuthCallbackUrl,
   getSafeAuthRedirectPath,
@@ -92,6 +93,15 @@ describe("auth redirect destinations", () => {
       "/entrar?returnTo=%2Fcomprar%2Fcurso-gratis"
     );
     expect(getAuthSignInPath("https://outside.example/escape")).toBe("/entrar");
+  });
+
+  it("builds a sign-up path with only a safe course return path", () => {
+    expect(getAuthSignUpPath("/comprar/curso-gratis")).toBe(
+      "/cadastro?returnTo=%2Fcomprar%2Fcurso-gratis"
+    );
+    expect(getAuthSignUpPath("https://outside.example/escape")).toBe(
+      "/cadastro"
+    );
   });
 
   it.each([

@@ -15,6 +15,7 @@ export interface EmailChallengeClaims {
   expiresAt: Date;
   generation: number;
   purpose: EmailChallengePurpose;
+  returnToCourseSlug?: string;
 }
 
 interface CreateEmailChallengeTokenInput extends EmailChallengeClaims {
@@ -30,9 +31,12 @@ interface VerifyEmailChallengeTokenInput {
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const COURSE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SIGNATURE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const TOKEN_VERSION = "ec1";
+const TOKEN_VERSION_WITH_RETURN = "ec2";
 const SIGNATURE_DOMAIN = "hub:account-email-challenge:v1\0";
+const SIGNATURE_DOMAIN_WITH_RETURN = "hub:account-email-challenge:v2\0";
 
 const isEmailChallengePurpose = (
   value: string
@@ -44,6 +48,7 @@ const assertChallengeClaims = ({
   expiresAt,
   generation,
   purpose,
+  returnToCourseSlug,
   secret,
 }: CreateEmailChallengeTokenInput): number => {
   if (!UUID_PATTERN.test(challengeId)) {
@@ -58,6 +63,14 @@ const assertChallengeClaims = ({
   if (!isEmailChallengePurpose(purpose)) {
     throw new Error("Email challenge purpose is invalid.");
   }
+  if (
+    returnToCourseSlug !== undefined &&
+    (purpose !== "verify_email" ||
+      returnToCourseSlug.length > 247 ||
+      !COURSE_SLUG_PATTERN.test(returnToCourseSlug))
+  ) {
+    throw new Error("Email challenge return course is invalid.");
+  }
   if (!secret) {
     throw new Error("Email challenge signing secret is required.");
   }
@@ -65,27 +78,40 @@ const assertChallengeClaims = ({
   return Math.trunc(expiresAt.getTime());
 };
 
-const createSignature = (payload: string, secret: string): Buffer =>
-  createHmac("sha256", secret)
-    .update(SIGNATURE_DOMAIN)
-    .update(payload)
-    .digest();
+const createSignature = (
+  payload: string,
+  secret: string,
+  signatureDomain: string
+): Buffer =>
+  createHmac("sha256", secret).update(signatureDomain).update(payload).digest();
 
 export const createEmailChallengeToken = (
   input: CreateEmailChallengeTokenInput
 ): string => {
   const expiresAtMs = assertChallengeClaims(input);
-  const payload = [
+  const payloadParts = [
     input.challengeId,
     String(input.generation),
     String(expiresAtMs),
     input.purpose,
-  ].join(".");
-  const signature = createSignature(payload, input.secret).toString(
-    "base64url"
-  );
+  ];
+  if (input.returnToCourseSlug !== undefined) {
+    payloadParts.push(input.returnToCourseSlug);
+  }
+  const payload = payloadParts.join(".");
+  const tokenVersion = input.returnToCourseSlug
+    ? TOKEN_VERSION_WITH_RETURN
+    : TOKEN_VERSION;
+  const signatureDomain = input.returnToCourseSlug
+    ? SIGNATURE_DOMAIN_WITH_RETURN
+    : SIGNATURE_DOMAIN;
+  const signature = createSignature(
+    payload,
+    input.secret,
+    signatureDomain
+  ).toString("base64url");
 
-  return [TOKEN_VERSION, payload, signature].join(".");
+  return [tokenVersion, payload, signature].join(".");
 };
 
 export const verifyEmailChallengeToken = ({
@@ -104,11 +130,20 @@ export const verifyEmailChallengeToken = ({
     generationValue,
     expiresAtValue,
     purpose,
-    signature,
+    contextOrSignature,
+    contextSignature,
     ...rest
   ] = token.split(".");
+  const hasReturnContext = version === TOKEN_VERSION_WITH_RETURN;
+  const returnToCourseSlug = hasReturnContext ? contextOrSignature : undefined;
+  const signature = hasReturnContext ? contextSignature : contextOrSignature;
+  const signatureDomain = hasReturnContext
+    ? SIGNATURE_DOMAIN_WITH_RETURN
+    : SIGNATURE_DOMAIN;
   if (
-    version !== TOKEN_VERSION ||
+    (version !== TOKEN_VERSION && !hasReturnContext) ||
+    (hasReturnContext && token.split(".").length !== 7) ||
+    (!hasReturnContext && token.split(".").length !== 6) ||
     rest.length > 0 ||
     !challengeId ||
     !UUID_PATTERN.test(challengeId) ||
@@ -118,7 +153,12 @@ export const verifyEmailChallengeToken = ({
     !signature ||
     !SIGNATURE_PATTERN.test(signature) ||
     !isEmailChallengePurpose(purpose) ||
-    purpose !== expectedPurpose
+    purpose !== expectedPurpose ||
+    (hasReturnContext &&
+      (purpose !== "verify_email" ||
+        !returnToCourseSlug ||
+        returnToCourseSlug.length > 247 ||
+        !COURSE_SLUG_PATTERN.test(returnToCourseSlug)))
   ) {
     return null;
   }
@@ -134,10 +174,12 @@ export const verifyEmailChallengeToken = ({
     return null;
   }
 
-  const payload = [challengeId, generationValue, expiresAtValue, purpose].join(
-    "."
-  );
-  const expectedSignature = createSignature(payload, secret);
+  const payloadParts = [challengeId, generationValue, expiresAtValue, purpose];
+  if (returnToCourseSlug) {
+    payloadParts.push(returnToCourseSlug);
+  }
+  const payload = payloadParts.join(".");
+  const expectedSignature = createSignature(payload, secret, signatureDomain);
   const suppliedSignature = Buffer.from(signature, "base64url");
   if (
     suppliedSignature.length !== expectedSignature.length ||
@@ -151,5 +193,6 @@ export const verifyEmailChallengeToken = ({
     expiresAt: new Date(expiresAtMs),
     generation,
     purpose,
+    ...(returnToCourseSlug ? { returnToCourseSlug } : {}),
   };
 };

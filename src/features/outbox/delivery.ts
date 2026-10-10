@@ -288,12 +288,15 @@ const deliverEmailVerification = async ({
   }
 
   const verificationUrl = new URL(getApplicationUrl("/confirmar-email"));
+  const returnToCourseSlug =
+    "returnToCourseSlug" in payload ? payload.returnToCourseSlug : undefined;
   verificationUrl.hash = new URLSearchParams({
     token: createEmailChallengeToken({
       challengeId: challenge.challenge_id,
       expiresAt: challenge.expires_at,
       generation: challenge.generation,
       purpose: challenge.purpose as "signup" | "verify_email",
+      ...(returnToCourseSlug ? { returnToCourseSlug } : {}),
       secret: getServerEnv().BETTER_AUTH_SECRET,
     }),
   }).toString();

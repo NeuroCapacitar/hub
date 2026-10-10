@@ -80,6 +80,8 @@ redirecione sua saída para logs compartilhados.
 
 `AUTH_PUBLIC_SIGNUP_ENABLED` tem default `false`. O endpoint nativo Better Auth `POST sign-up/email` é sempre bloqueado, inclusive quando o cadastro público está habilitado, pois persiste a senha antes da prova da caixa. Quando a flag está ligada, o fluxo próprio de `/cadastro` é `/api/account/registrations`; login Google desconhecido nunca cria Conta. Contas também podem entrar por fluxo financeiro, convite ou bootstrap operacional.
 
+Com a flag ligada, `/entrar` exibe o link para `/cadastro`; desligada, o link não é renderizado. Ao seguir de `/entrar?returnTo=/comprar/<slug>`, o cadastro recebe somente esse destino validado e o preserva durante a confirmação e o login.
+
 **Autorização:** o endpoint de bootstrap Admin só existe fora de produção, exige `INTERNAL_BOOTSTRAP_SECRET` e retorna 404 em produção por `getBootstrapAdminDecision`.
 
 **Falhas:** sem Resend, recuperação de senha e e-mails de acesso falham; isso não reabre cadastro. O formulário público de recuperação sempre usa a mesma mensagem para Conta existente, inexistente ou falha de entrega, evitando enumeração visível no navegador. Depois de uma resposta aceita, ele substitui os campos por uma confirmação e só permite nova solicitação após a ação explícita de tentar com outro e-mail.
@@ -87,6 +89,8 @@ redirecione sua saída para logs compartilhados.
 ### REG-IDA-002A Cadastro público cria apenas a Conta
 
 `AUTH_PUBLIC_SIGNUP_ENABLED` continua com default `false`. Quando habilitado, `/cadastro` coleta nome e e-mail, nunca senha. A resposta externa é neutra para e-mail novo, existente, limitado ou suprimido. Antes da prova da caixa, só existe uma pendência temporária e um desafio HMAC com finalidade, geração, prazo e uso único; não há Conta, Perfil, credencial, sessão, Pedido, Concessão ou Matrícula. Abrir o link por `GET` não altera estado: o token fica no fragmento da URL, é removido do histórico do navegador e só é consumido após ação explícita por `POST`. A confirmação cria uma Conta Student verificada sem credencial nem sessão, e direciona para entrar; senha pode ser criada depois. Colisão canônica nunca faz merge ou substituição. A inscrição gratuita continua sendo uma ação autenticada separada.
+
+Quando o cadastro começa com retorno seguro para `/comprar/<slug>`, uma nova identidade conserva o slug validado em `pending_signups`. Para uma Conta Student existente e ainda não verificada, o pedido continua com resposta neutra e o contexto é carregado por uma versão assinada do desafio `verify_email`; a outbox não guarda URL nem token. Nos dois casos, a confirmação explícita leva a `/entrar` com o retorno do Curso, e o login autenticado volta à página do Curso. Criar/confirmar Conta não efetua a inscrição: a ação autenticada de matrícula permanece explícita.
 
 A confirmação remove imediatamente a pendência que continha nome/e-mail;
 pendências abandonadas são apagadas após o vencimento pelo maintenance. Desafios

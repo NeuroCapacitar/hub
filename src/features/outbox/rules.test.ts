@@ -49,6 +49,40 @@ describe("outbox message contracts", () => {
     );
   });
 
+  it("stores a safe purchase return in a versioned email challenge payload", () => {
+    const challengeId = "f5c60626-5c2f-4f2a-8d2d-03c28e47b68c";
+    const message = createEmailVerificationMessage({
+      challengeId,
+      generation: 4,
+      returnToCourseSlug: "curso-gratis",
+    });
+
+    expect(message).toEqual({
+      aggregateId: challengeId,
+      aggregateType: "account_email_challenge",
+      idempotencyKey: `auth.email-verification/${challengeId}/4/v2`,
+      payload: {
+        challengeId,
+        generation: 4,
+        returnToCourseSlug: "curso-gratis",
+      },
+      payloadVersion: 2,
+      topic: "auth.email-verification",
+    });
+    expect(parseOutboxPayload(message)).toEqual({
+      challengeId,
+      generation: 4,
+      returnToCourseSlug: "curso-gratis",
+    });
+    expect(() =>
+      createEmailVerificationMessage({
+        challengeId,
+        generation: 4,
+        returnToCourseSlug: "../outside",
+      })
+    ).toThrow();
+  });
+
   it("stores only stable identifiers in a certificate notification", () => {
     const message = createCertificateIssuedMessage({
       certificateId: "certificate-1",

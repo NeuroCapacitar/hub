@@ -40,6 +40,37 @@ describe("email challenge token", () => {
     });
   });
 
+  it("signs a course return path into verification context", () => {
+    const token = createEmailChallengeToken({
+      ...CHALLENGE,
+      returnToCourseSlug: "curso-gratis",
+    });
+
+    expect(
+      verifyEmailChallengeToken({
+        now: new Date("2026-10-01T11:59:59.000Z"),
+        purpose: "verify_email",
+        secret: CHALLENGE.secret,
+        token,
+      })
+    ).toMatchObject({
+      challengeId: CHALLENGE.challengeId,
+      generation: CHALLENGE.generation,
+      purpose: "verify_email",
+      returnToCourseSlug: "curso-gratis",
+    });
+
+    const tamperedToken = token.replace("curso-gratis", "outro-curso");
+    expect(
+      verifyEmailChallengeToken({
+        now: new Date("2026-10-01T11:59:59.000Z"),
+        purpose: "verify_email",
+        secret: CHALLENGE.secret,
+        token: tamperedToken,
+      })
+    ).toBeNull();
+  });
+
   it("rejects expiry, purpose mismatch, wrong secret, and tampering", () => {
     const token = createEmailChallengeToken(CHALLENGE);
 

@@ -22,6 +22,7 @@ vi.mock("./sign-in-form", () => ({
   SignInForm: ({
     googleLoginEnabled,
     googleOAuthCallbackUrl,
+    allowPublicSignup,
     emailVerified,
     emailVerificationFailed,
     returnTo,
@@ -29,6 +30,7 @@ vi.mock("./sign-in-form", () => ({
   }: {
     googleLoginEnabled: boolean;
     googleOAuthCallbackUrl: string;
+    allowPublicSignup: boolean;
     emailVerified: boolean;
     emailVerificationFailed: boolean;
     returnTo: string | null;
@@ -39,6 +41,7 @@ vi.mock("./sign-in-form", () => ({
       data-email-verified={String(emailVerified)}
       data-google-callback-url={googleOAuthCallbackUrl}
       data-google-login-enabled={String(googleLoginEnabled)}
+      data-public-signup-enabled={String(allowPublicSignup)}
       data-return-to={returnTo ?? "none"}
       data-support-email={supportEmail ?? "none"}
     >
@@ -56,6 +59,7 @@ describe("SignInPage", () => {
     vi.clearAllMocks();
     dependencies.connection.mockResolvedValue(undefined);
     dependencies.getServerEnv.mockReturnValue({
+      AUTH_PUBLIC_SIGNUP_ENABLED: false,
       BETTER_AUTH_URL: "https://hub.example.test",
       GOOGLE_CLIENT_ID: undefined,
       GOOGLE_CLIENT_SECRET: undefined,
@@ -75,6 +79,7 @@ describe("SignInPage", () => {
     );
 
     expect(markup).toContain('data-return-to="/comprar/curso-gratis"');
+    expect(markup).toContain('data-public-signup-enabled="false"');
     expect(markup).toContain('data-support-email="support@example.test"');
     expect(markup).toContain(
       "Entre para voltar ao Curso e confirmar sua inscrição gratuita."
@@ -84,6 +89,7 @@ describe("SignInPage", () => {
 
   it("passes only provider availability, never the Google client secret, to the form", async () => {
     dependencies.getServerEnv.mockReturnValue({
+      AUTH_PUBLIC_SIGNUP_ENABLED: false,
       BETTER_AUTH_URL: "https://hub.example.test",
       GOOGLE_CLIENT_ID: "google-client-id-fixture",
       GOOGLE_CLIENT_SECRET: "google-client-secret-fixture",
@@ -99,6 +105,22 @@ describe("SignInPage", () => {
       'data-google-callback-url="https://hub.example.test/oauth/callback"'
     );
     expect(markup).not.toContain("google-client-secret-fixture");
+  });
+
+  it("passes the public signup flag to the sign-in form", async () => {
+    dependencies.getServerEnv.mockReturnValue({
+      AUTH_PUBLIC_SIGNUP_ENABLED: true,
+      BETTER_AUTH_URL: "https://hub.example.test",
+      GOOGLE_CLIENT_ID: undefined,
+      GOOGLE_CLIENT_SECRET: undefined,
+      SUPPORT_EMAIL: "support@example.test",
+    });
+
+    const markup = renderToStaticMarkup(
+      await SignInPage({ searchParams: Promise.resolve({}) })
+    );
+
+    expect(markup).toContain('data-public-signup-enabled="true"');
   });
 
   it("recognizes the one-time email verification return without exposing a token", async () => {

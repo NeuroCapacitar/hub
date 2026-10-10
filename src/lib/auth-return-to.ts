@@ -50,6 +50,15 @@ export const getAuthSignInPath = (returnTo: unknown): string => {
   return `/entrar?${new URLSearchParams({ returnTo: safeReturnTo }).toString()}`;
 };
 
+export const getAuthSignUpPath = (returnTo: unknown): string => {
+  const safeReturnTo = getSafeAuthReturnTo(returnTo);
+  if (!safeReturnTo) {
+    return "/cadastro";
+  }
+
+  return `/cadastro?${new URLSearchParams({ returnTo: safeReturnTo }).toString()}`;
+};
+
 const createApplicationUrl = (path: string, appUrl: string): URL => {
   const configuredUrl = new URL(appUrl);
   if (

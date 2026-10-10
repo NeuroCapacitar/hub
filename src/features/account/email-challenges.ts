@@ -105,24 +105,29 @@ const isRateLimited = async ({
 const queueVerificationMessage = async ({
   challenge,
   client,
+  returnToCourseSlug,
 }: {
   challenge: EmailChallengeRow;
   client: PoolClient;
+  returnToCourseSlug?: string | null;
 }): Promise<void> => {
   await enqueueOutboxMessage({
     client,
     message: createEmailVerificationMessage({
       challengeId: challenge.id,
       generation: challenge.generation,
+      ...(returnToCourseSlug === undefined ? {} : { returnToCourseSlug }),
     }),
   });
 };
 
 const issueUnverifiedAccountVerificationChallenge = async ({
   client,
+  returnToCourseSlug,
   userId,
 }: {
   client: PoolClient;
+  returnToCourseSlug?: string | null;
   userId: string;
 }): Promise<ChallengeRequestOutcome> => {
   const result = await client.query<AccountIdentityRow>(
@@ -170,7 +175,11 @@ const issueUnverifiedAccountVerificationChallenge = async ({
   if (!challenge) {
     throw new Error("email_challenge_creation_failed");
   }
-  await queueVerificationMessage({ challenge, client });
+  await queueVerificationMessage({
+    challenge,
+    client,
+    ...(returnToCourseSlug === undefined ? {} : { returnToCourseSlug }),
+  });
   return "queued";
 };
 
@@ -325,6 +334,7 @@ export const requestPublicAccountRegistration = async ({
       ) {
         return await issueUnverifiedAccountVerificationChallenge({
           client,
+          returnToCourseSlug: input.courseSlug,
           userId: existing.id,
         });
       }
@@ -517,16 +527,23 @@ const getPurchaseChallengeReturnTo = async ({
 const consumeVerifiedEmailChallenge = async ({
   account,
   challenge,
+  claims,
   client,
 }: {
   account: AccountClaimRow;
   challenge: StoredEmailChallengeRow;
+  claims: NonNullable<ReturnType<typeof resolveChallengeClaims>>;
   client: PoolClient;
 }): Promise<{ confirmed: false } | { confirmed: true; nextPath: string }> => {
-  const returnTo =
-    challenge.purpose === "purchase_verification"
-      ? await getPurchaseChallengeReturnTo({ challenge, client })
-      : null;
+  let returnTo: string | null = null;
+  if (challenge.purpose === "purchase_verification") {
+    returnTo = await getPurchaseChallengeReturnTo({ challenge, client });
+  } else if (
+    challenge.purpose === "verify_email" &&
+    claims.returnToCourseSlug
+  ) {
+    returnTo = getSafeAuthReturnTo(`/comprar/${claims.returnToCourseSlug}`);
+  }
   return await consumeUnverifiedAccount({
     account,
     challenge,
@@ -645,7 +662,13 @@ const consumeUnverifiedAccount = async ({
   returnTo: string | null;
 }): Promise<{ confirmed: false } | { confirmed: true; nextPath: string }> => {
   if (account.email_verified) {
-    if (!(challenge.purpose === "purchase_verification" && returnTo)) {
+    if (
+      !(
+        returnTo &&
+        (challenge.purpose === "purchase_verification" ||
+          challenge.purpose === "verify_email")
+      )
+    ) {
       return { confirmed: false };
     }
     await markEmailChallengeConsumed({ challenge, client });
@@ -746,6 +769,7 @@ export const consumeAccountEmailChallenge = async (
       return await consumeVerifiedEmailChallenge({
         account: owner.account,
         challenge,
+        claims,
         client,
       });
     }
@@ -777,6 +801,7 @@ export const consumeAccountEmailChallenge = async (
       return await consumeVerifiedEmailChallenge({
         account: owner.account,
         challenge,
+        claims,
         client,
       });
     }

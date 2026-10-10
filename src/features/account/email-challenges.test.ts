@@ -598,4 +598,113 @@ describe("account email challenges", () => {
     expect(query.mock.calls.join("\n")).not.toContain("delete from accounts");
     expect(query.mock.calls.join("\n")).not.toContain("delete from sessions");
   });
+
+  it("preserves a safe course return when signup confirms an existing unverified Student", async () => {
+    const challengeId = randomUUID();
+    const userId = "legacy-student-signup-return";
+    const existingAccount = {
+      email: "legacy@example.test",
+      email_verified: false,
+      id: userId,
+      role: "student",
+    };
+    const { client } = makeClient((statement) => {
+      if (
+        statement.includes("insert into account_email_challenge_rate_limits")
+      ) {
+        return { rows: [{ request_count: 1 }] };
+      }
+      if (statement.includes("canonicalize_auth_email_identity")) {
+        return { rows: [existingAccount] };
+      }
+      if (statement.includes("where users.id = $1")) {
+        return { rows: [existingAccount] };
+      }
+      if (statement.includes("insert into account_email_challenges")) {
+        return { rows: [{ generation: 1, id: challengeId }] };
+      }
+      return { rows: [] };
+    });
+    dependencies.connect.mockResolvedValue(client);
+
+    await expect(
+      requestPublicAccountRegistration({
+        input: {
+          courseSlug: "curso-gratis",
+          email: "legacy@example.test",
+          name: "Legacy Student",
+        },
+        requestHeaders: REQUEST_HEADERS,
+      })
+    ).resolves.toBe("queued");
+
+    expect(dependencies.enqueueOutboxMessage).toHaveBeenCalledWith({
+      client,
+      message: {
+        aggregateId: challengeId,
+        aggregateType: "account_email_challenge",
+        idempotencyKey: `auth.email-verification/${challengeId}/1/v2`,
+        payload: {
+          challengeId,
+          generation: 1,
+          returnToCourseSlug: "curso-gratis",
+        },
+        payloadVersion: 2,
+        topic: "auth.email-verification",
+      },
+    });
+  });
+
+  it("returns to a signed course path after confirming an existing unverified Student", async () => {
+    const challengeId = randomUUID();
+    const userId = "legacy-student-return-target";
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    const token = createEmailChallengeToken({
+      challengeId,
+      expiresAt,
+      generation: 1,
+      purpose: "verify_email",
+      returnToCourseSlug: "curso-gratis",
+      secret: SECRET,
+    });
+    const { client, query } = makeClient((statement) => {
+      if (statement.includes("from account_email_challenges")) {
+        return {
+          rows: [
+            {
+              consumed_at: null,
+              expires_at: expiresAt,
+              generation: 1,
+              id: challengeId,
+              order_id: null,
+              owner_email: "legacy@example.test",
+              pending_email: null,
+              pending_signup_id: null,
+              purpose: "verify_email",
+              user_id: userId,
+            },
+          ],
+        };
+      }
+      if (
+        statement.includes("from users") &&
+        statement.includes("email_verified")
+      ) {
+        return {
+          rows: [{ email: "legacy@example.test", email_verified: false }],
+        };
+      }
+      return { rows: [] };
+    });
+    dependencies.connect.mockResolvedValue(client);
+
+    await expect(consumeAccountEmailChallenge(token)).resolves.toEqual({
+      confirmed: true,
+      nextPath: "/entrar?returnTo=%2Fcomprar%2Fcurso-gratis&emailVerified=1",
+    });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("set email_verified = true"),
+      [userId]
+    );
+  });
 });
