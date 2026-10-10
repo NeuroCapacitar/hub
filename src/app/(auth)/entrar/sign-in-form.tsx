@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { getSafeAuthReturnTo } from "@/lib/auth-return-to";
+import { getAuthSignUpPath, getSafeAuthReturnTo } from "@/lib/auth-return-to";
 import { route } from "@/lib/routes";
 import { getSignInOutcome } from "./sign-in-result";
 
@@ -23,6 +23,7 @@ const getAuthRedirectPath = (returnTo: string | null): string => {
 };
 
 export function SignInForm({
+  allowPublicSignup = false,
   emailVerificationFailed = false,
   emailVerified = false,
   googleLoginEnabled = false,
@@ -30,6 +31,7 @@ export function SignInForm({
   returnTo = null,
   supportEmail = null,
 }: {
+  allowPublicSignup?: boolean;
   emailVerificationFailed?: boolean;
   emailVerified?: boolean;
   googleLoginEnabled?: boolean;
@@ -267,6 +269,17 @@ export function SignInForm({
       >
         Esqueci minha senha
       </Link>
+      {allowPublicSignup ? (
+        <p className="mt-5 text-center text-muted-foreground text-sm">
+          Ainda não tem uma conta?{" "}
+          <Link
+            className="font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-2"
+            href={getAuthSignUpPath(safeReturnTo)}
+          >
+            Criar conta
+          </Link>
+        </p>
+      ) : null}
     </form>
   );
 }

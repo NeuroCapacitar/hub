@@ -120,6 +120,24 @@ describe("SignInForm", () => {
     expect(dependencies.assign).toHaveBeenCalledWith(COURSE_RETURN_TO);
   });
 
+  it("offers public signup with the same safe course return path", () => {
+    act(() =>
+      root.render(<SignInForm allowPublicSignup returnTo={COURSE_RETURN_TO} />)
+    );
+
+    expect(
+      container
+        .querySelector<HTMLAnchorElement>('a[href^="/cadastro"]')
+        ?.getAttribute("href")
+    ).toBe("/cadastro?returnTo=%2Fcomprar%2Fcurso-gratis");
+  });
+
+  it("does not offer a signup link while public signup is disabled", () => {
+    act(() => root.render(<SignInForm returnTo={COURSE_RETURN_TO} />));
+
+    expect(container.querySelector('a[href^="/cadastro"]')).toBeNull();
+  });
+
   it("drops an invalid return prop instead of sending it to the redirect route", async () => {
     act(() =>
       root.render(<SignInForm returnTo="https://other.example/escape" />)

@@ -175,6 +175,7 @@ export default async function SignInPage({
             </div>
           ) : (
             <SignInForm
+              allowPublicSignup={env.AUTH_PUBLIC_SIGNUP_ENABLED}
               emailVerificationFailed={emailVerificationFailed}
               emailVerified={emailVerified}
               googleLoginEnabled={googleLoginEnabled}

@@ -57,15 +57,19 @@ devolve o certificado a `pending` antes de reentregar a mesma mensagem.
   exatamente `userId` e `orderId`. Novos Pedidos usam
   `email.purchase-confirmed`; reprocessamento manual de v1 foi bloqueado.
 - `auth.email-verification`: desafio de cadastro ou confirmação local; agregado
-  `account_email_challenge`; chave
-  `auth.email-verification/<challenge-id>/<generation>/v1`; payload exatamente
-  `challengeId` e `generation`. O delivery relê propósito, geração, prazo,
-  destinatário e estado atual; deriva o token HMAC somente ao enviar. A URL
-  coloca o token no fragmento do navegador, não na requisição GET, e o `GET`
-  apenas apresenta a confirmação. Somente um `POST` explícito consome o desafio
-  em transação. Geração antiga, desafio expirado/consumido ou origem não mais
-  elegível termina como `superseded`; payload e logs não contêm e-mail, token
-  ou URL.
+  `account_email_challenge`. V1 usa a chave
+  `auth.email-verification/<challenge-id>/<generation>/v1` e payload exatamente
+  `challengeId` e `generation`. V2 é usado apenas quando uma solicitação pública
+  de cadastro de Conta já existente e não verificada preserva o retorno a um
+  Curso; sua chave termina em `/v2` e o payload contém exatamente
+  `challengeId`, `generation` e o `returnToCourseSlug` validado. O delivery relê
+  propósito, geração, prazo, destinatário e estado atual; deriva o token HMAC
+  somente ao enviar. O token `ec2` assina também o slug de retorno; tokens `ec1`
+  anteriores continuam válidos. A URL coloca o token no fragmento do navegador,
+  não na requisição GET, e o `GET` apenas apresenta a confirmação. Somente um
+  `POST` explícito consome o desafio em transação. Geração antiga, desafio
+  expirado/consumido ou origem não mais elegível termina como `superseded`;
+  payload e logs não contêm e-mail, token ou URL.
 - `auth.staff-invitation`: emitido na transação do convite; agregado
   `staff_invitation`; chave por convite e geração; payload somente
   `invitationId` e `generation`. A entrega relê o convite e o Admin

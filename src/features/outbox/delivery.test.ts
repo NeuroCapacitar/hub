@@ -337,6 +337,71 @@ describe("outbox email delivery", () => {
     expect(verificationUrl.toString()).not.toContain("student@example.test");
   });
 
+  it("signs a safe course return into an unverified-account challenge email", async () => {
+    const challengeId = "9dd6caaa-ef77-41e6-a4b3-baccaa25a5d8";
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const query = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          challenge_id: challengeId,
+          consumed_at: null,
+          email_verified: false,
+          expires_at: expiresAt,
+          generation: 2,
+          pending_signup_id: null,
+          pending_signup_email: null,
+          pending_signup_name: null,
+          pending_signup_status: null,
+          purpose: "verify_email",
+          recipient_email: "legacy@example.test",
+          recipient_name: "Legacy Student",
+          user_id: "legacy-student-1",
+          user_email: "legacy@example.test",
+          user_name: "Legacy Student",
+        },
+      ],
+    });
+    dependencies.getPool.mockReturnValue({ query });
+    dependencies.getApplicationUrl.mockImplementation(
+      (path: string) => `https://hub.example.test${path}`
+    );
+
+    await deliverOutboxMessage({
+      aggregateId: challengeId,
+      aggregateType: "account_email_challenge",
+      attempts: 1,
+      id: "outbox-email-challenge-with-return",
+      idempotencyKey: `auth.email-verification/${challengeId}/2/v2`,
+      payload: {
+        challengeId,
+        generation: 2,
+        returnToCourseSlug: "curso-gratis",
+      },
+      payloadVersion: 2,
+      topic: "auth.email-verification",
+    });
+
+    const verificationUrl = new URL(
+      dependencies.sendEmailVerificationEmail.mock.calls[0]?.[0]
+        ?.verificationUrl
+    );
+    const token = new URLSearchParams(verificationUrl.hash.slice(1)).get(
+      "token"
+    );
+    expect(
+      verifyEmailChallengeToken({
+        purpose: "verify_email",
+        secret: "auth-secret",
+        token: token ?? "",
+      })
+    ).toMatchObject({
+      challengeId,
+      generation: 2,
+      purpose: "verify_email",
+      returnToCourseSlug: "curso-gratis",
+    });
+  });
+
   it("sends a verified buyer to the purchased course without a password reset URL", async () => {
     const query = vi
       .fn()
