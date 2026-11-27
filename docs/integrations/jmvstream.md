@@ -10,7 +10,7 @@ last_verified_commit: 4b3c9b8a80b3bf3628b53c983dfd56d7ebec5b8d
 
 Hospedar vídeo, organizar galerias por Curso e fornecer player/thumbnail. O Hub persiste a sessão operacional e relaciona `video_hash` à Aula.
 
-Contrato oficial consultado: [Public API JMVStream](https://jmvstream.com/en/developer), que documenta upload multipart direto e `gallery` opcional no complete. Em 2026-07-27, o recurso configurado autenticou e a consulta somente leitura retornou as três pastas reais. CORS, upload multipart e o contrato `gallery` continuam dependendo de um envio funcional controlado.
+Contrato oficial consultado: [Public API JMVStream](https://jmvstream.com/en/developer), que documenta upload multipart direto e `gallery` opcional no complete. Em 2026-07-27, o recurso configurado autenticou e a consulta somente leitura retornou as três pastas reais. Em 2026-11-27, um envio controlado pelo servidor, com vídeo descartável, validou autenticação, criação de pasta, multipart de duas partes, complete com `gallery`, processamento e exclusão. O teste também comprovou os requisitos de navegador descritos em [Upload pelo navegador](#upload-pelo-navegador).
 
 ## Configuração correta
 
@@ -66,18 +66,22 @@ Parâmetros em `src/features/jmvstream/upload-config.ts`:
 
 Arquitetura e racional: [ADR-0003](../adr/0003-jmvstream-direct-multipart-upload.md).
 
-## Contradição `gallery`
+### Upload pelo navegador
 
-A documentação histórica do projeto orientava omitir `gallery` no complete. `createJmvstreamClient.completeMultipartUpload`, no `HEAD`, sempre envia `gallery: input.galleryUuid`; a documentação oficial atual define o campo como opcional.
+O PUT de cada parte sai do navegador da operadora para `https://s3.jmvstream.com`. Dois controles precisam permitir essa origem:
 
-Isso permanece bloqueio de contrato, não uma correção assumida. Antes de mudar:
+- CSP do Hub: `buildContentSecurityPolicy` inclui `https://s3.jmvstream.com` em `connect-src`. Sem isso o navegador recusa a conexão antes de enviar a requisição.
+- CORS do provedor: cada origem do Hub precisa estar cadastrada em **Domínios externos** do plano, no portal JMVStream. Origens cadastradas recebem `Access-Control-Allow-Origin` e `Access-Control-Expose-Headers: ETag`; as demais recebem preflight 204 sem cabeçalhos CORS, e o navegador bloqueia o PUT.
 
-1. capturar request/response em ambiente de teste sem secrets;
-2. confirmar se o UUID de `jmvstream_folders` é o valor aceito no complete;
-3. testar com e sem o campo;
-4. registrar o contrato validado e adicionar teste.
+Origens esperadas: `https://app.neurocapacitar.com.br`, `https://preview.neurocapacitar.com.br` e, para upload em desenvolvimento local, `http://localhost:3000`. Um novo domínio do Hub exige cadastro antes do primeiro upload.
 
-Até lá, a documentação descreve o payload real do código e não promete compatibilidade de produção.
+Para diagnosticar, envie um `OPTIONS` com `Origin` e `Access-Control-Request-Method: PUT` para qualquer caminho em `s3.jmvstream.com`; o preflight não exige URL assinada válida.
+
+## Contrato `gallery`
+
+`createJmvstreamClient.completeMultipartUpload` envia `gallery: input.galleryUuid`, com o UUID da pasta do Curso em `jmvstream_folders`. A documentação oficial define o campo como opcional.
+
+Em 2026-11-27, o envio controlado confirmou que o vídeo concluído fica nessa pasta: a exclusão da pasta antes da exclusão do vídeo retornou `Folder is not empty`. `GET /v1/videos/:hash` não retorna `folder_uuid`, então a leitura do vídeo não serve para conferir a pasta.
 
 ## Sincronização e limpeza
 
@@ -135,7 +139,8 @@ deve mostrar o estado local mínimo e encaminhar o detalhe externo ao portal.
 ## Falhas e recuperação
 
 - 401/403 => conferir resource/token e autenticação, sem expor valores;
-- CORS/ETag ausente => conferir origem, métodos PUT e headers expostos no provedor;
+- CORS/ETag ausente => conferir a origem em **Domínios externos** do plano e a CSP `connect-src`, conforme [Upload pelo navegador](#upload-pelo-navegador);
+- `not allowed` em `/v2/authenticate` => o provedor recusou o UUID do plano; a mesma resposta ocorre com plano suspenso, UUID regenerado ou UUID inexistente. Conferir a situação da conta no portal antes de trocar a variável;
 - parte falhou => repetir a parte, preservando ETags válidos;
 - complete falhou => não criar nova sessão até consultar estado da atual;
 - player pendente => cron/manual sync;

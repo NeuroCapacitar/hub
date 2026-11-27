@@ -9,6 +9,8 @@ export const buildContentSecurityPolicy = ({
     "'self'",
     // Browser Sentry SDK reports to the organization ingest host only.
     "https://*.ingest.us.sentry.io",
+    // The admin uploads JMVStream multipart parts directly to presigned URLs.
+    "https://s3.jmvstream.com",
     ...new Set(additionalConnectOrigins),
   ].join(" ");
 

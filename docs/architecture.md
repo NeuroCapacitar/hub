@@ -234,8 +234,7 @@ verificados externamente.
 - ausência de coortes: publicar conteúdo altera a experiência de todas as Matrículas elegíveis;
 - recuperação pública e ativação legada permanecem fora da outbox;
 - decisões implementadas sem ratificação de produto;
-- infraestrutura e dados de produção não verificados;
-- JMVStream `gallery` no complete diverge da documentação histórica do projeto.
+- infraestrutura e dados de produção não verificados.
 
 ## Como investigar uma mudança
 
