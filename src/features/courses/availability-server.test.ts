@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dependencies = vi.hoisted(() => ({
   connect: vi.fn(),
+  deletePublicR2Objects: vi.fn(),
   enqueueOutboxMessage: vi.fn(),
+  publishR2Object: vi.fn(),
   query: vi.fn(),
 }));
 
@@ -12,6 +14,10 @@ vi.mock("@/db", () => ({
 }));
 vi.mock("@/features/outbox/server", () => ({
   enqueueOutboxMessage: dependencies.enqueueOutboxMessage,
+}));
+vi.mock("@/features/storage/r2", () => ({
+  deletePublicR2Objects: dependencies.deletePublicR2Objects,
+  publishR2Object: dependencies.publishR2Object,
 }));
 
 import {
@@ -59,6 +65,28 @@ const createClient = (course = ACTIVE_COURSE) => {
   return { query, release: vi.fn() };
 };
 
+const COVER_CARD_KEY = "courses/course-1/cover/nonce-card.webp";
+const COVER_IMAGE = {
+  variants: {
+    card: {
+      contentType: "image/webp",
+      height: 720,
+      key: COVER_CARD_KEY,
+      sizeBytes: 1024,
+      width: 1280,
+    },
+  },
+};
+const HIDDEN_DRAFT_COURSE = {
+  ...ACTIVE_COURSE,
+  catalog_visibility: "hidden",
+  cover_image_json: COVER_IMAGE,
+  has_commercial_history: false,
+  has_published_publication: false,
+  sales_status: "closed",
+  status: "draft",
+};
+
 describe("Course availability commands", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -66,6 +94,79 @@ describe("Course availability commands", () => {
       id: "outbox-1",
       inserted: true,
     });
+    dependencies.publishR2Object.mockResolvedValue(undefined);
+    dependencies.deletePublicR2Objects.mockResolvedValue(undefined);
+  });
+
+  it("publishes the cover before committing a hidden draft as coming soon", async () => {
+    const client = createClient(HIDDEN_DRAFT_COURSE);
+    dependencies.connect.mockResolvedValue(client);
+
+    await expect(
+      setCourseAvailability({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        preset: "coming_soon",
+      })
+    ).resolves.toMatchObject({ preset: "coming_soon" });
+
+    expect(dependencies.publishR2Object).toHaveBeenCalledWith(COVER_CARD_KEY);
+    const commitIndex = client.query.mock.calls.findIndex(
+      ([sql]) => sql === "commit"
+    );
+    expect(commitIndex).toBeGreaterThan(-1);
+    expect(
+      dependencies.publishR2Object.mock.invocationCallOrder[0]
+    ).toBeLessThan(client.query.mock.invocationCallOrder[commitIndex] ?? 0);
+    expect(dependencies.deletePublicR2Objects).not.toHaveBeenCalled();
+  });
+
+  it("keeps the course hidden when the cover cannot be published", async () => {
+    const client = createClient(HIDDEN_DRAFT_COURSE);
+    dependencies.connect.mockResolvedValue(client);
+    dependencies.publishR2Object.mockRejectedValue(
+      new Error("R2 indisponível")
+    );
+
+    await expect(
+      setCourseAvailability({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        preset: "coming_soon",
+      })
+    ).rejects.toThrow("R2 indisponível");
+
+    expect(client.query).toHaveBeenCalledWith("rollback");
+    expect(client.query).not.toHaveBeenCalledWith("commit");
+    expect(client.query).not.toHaveBeenCalledWith(
+      expect.stringContaining("catalog_visibility = $3"),
+      expect.anything()
+    );
+  });
+
+  it("removes the public cover copy after a listed draft returns to draft", async () => {
+    const client = createClient({
+      ...HIDDEN_DRAFT_COURSE,
+      catalog_visibility: "listed",
+    });
+    dependencies.connect.mockResolvedValue(client);
+
+    await expect(
+      setCourseAvailability({
+        actorUserId: "admin-1",
+        courseId: "course-1",
+        preset: "draft",
+      })
+    ).resolves.toEqual({
+      checkoutCancellationsEnqueued: 0,
+      notificationsEnqueued: 0,
+      preset: "draft",
+    });
+
+    expect(dependencies.publishR2Object).not.toHaveBeenCalled();
+    expect(dependencies.deletePublicR2Objects).toHaveBeenCalledWith([
+      COVER_CARD_KEY,
+    ]);
   });
 
   it("pauses sales, preserves delivery, and enqueues active checkout cancellation", async () => {

@@ -1,32 +1,37 @@
 import { getPool } from "@/db";
-import { getCourseCoverStorageKeys } from "@/features/storage/course-cover";
-import { publishR2Object } from "@/features/storage/r2";
+import { getCourseCoverPublicStorageKeys } from "@/features/storage/course-cover";
+import { publishCourseCover } from "@/features/storage/course-cover-publication";
 
+/**
+ * Republishes the cover of every Course whose cover route redirects to the
+ * public bucket: active delivery or listed in the catalog ("Em breve").
+ */
 const publishActiveCourseCovers = async (): Promise<number> => {
   const { rows } = await getPool().query<{ cover_image_json: unknown }>(
     `
       select cover_image_json
       from courses
-      where status = 'active'
+      where (status = 'active' or catalog_visibility = 'listed')
         and cover_image_json is not null
     `
   );
-  const keys = new Set(
-    rows.flatMap((row) => getCourseCoverStorageKeys(row.cover_image_json))
-  );
+  let publishedObjectCount = 0;
 
-  for (const key of keys) {
-    await publishR2Object(key);
+  for (const row of rows) {
+    await publishCourseCover(row.cover_image_json);
+    publishedObjectCount += getCourseCoverPublicStorageKeys(
+      row.cover_image_json
+    ).length;
   }
 
-  return keys.size;
+  return publishedObjectCount;
 };
 
 if (import.meta.main) {
   try {
     const publishedObjectCount = await publishActiveCourseCovers();
     process.stdout.write(
-      `Published ${publishedObjectCount} active course cover objects.\n`
+      `Published ${publishedObjectCount} public course cover objects.\n`
     );
   } finally {
     await getPool().end();

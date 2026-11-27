@@ -245,4 +245,59 @@ describe("CourseCoverUploadField", () => {
       "https://media.example/persisted.webp"
     );
   });
+
+  it("adopts the newly persisted cover instead of resubmitting a consumed upload", async () => {
+    const coverFor = (nonce: string) => ({
+      variants: {
+        card: {
+          contentType: "image/webp",
+          height: 720,
+          key: `courses/${aggregateId}/cover/${nonce}-card.webp`,
+          sizeBytes: 1024,
+          width: 1280,
+        },
+      },
+    });
+    const previousCover = coverFor("previous");
+    const savedCover = coverFor("saved");
+    stagedUploadMock.mockResolvedValue(referenceFor("cropped.webp"));
+    const renderField = (coverImage: unknown, thumbnailUrl: string): void => {
+      act(() => {
+        root.render(
+          <CourseCoverUploadField
+            aggregateId={aggregateId}
+            defaultCoverImage={coverImage}
+            defaultThumbnailUrl={thumbnailUrl}
+          />
+        );
+      });
+    };
+    const readHidden = (name: string): string | undefined =>
+      container.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.value;
+
+    renderField(previousCover, "/api/cover?v=previous");
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new File(["source"], "source.png", { type: "image/png" })],
+    });
+    act(() => input?.dispatchEvent(new Event("change", { bubbles: true })));
+    act(() =>
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent === "Confirmar recorte")
+        ?.click()
+    );
+    await act(async () => undefined);
+    expect(readHidden("coverUpload")).not.toBe("");
+
+    // A successful save revalidates the page with the cover it persisted.
+    renderField(savedCover, "/api/cover?v=saved");
+
+    expect(readHidden("coverUpload")).toBe("");
+    expect(JSON.parse(readHidden("coverImage") ?? "null")).toEqual(savedCover);
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(
+      "/api/cover?v=saved"
+    );
+  });
 });

@@ -9,6 +9,11 @@ import {
 } from "@/features/outbox/rules";
 import { enqueueOutboxMessage } from "@/features/outbox/server";
 import { ASAAS_MINIMUM_CHECKOUT_VALUE_IN_CENTS } from "@/features/payments/asaas";
+import { isCourseCoverPubliclyVisible } from "@/features/storage/course-cover";
+import {
+  publishCourseCover,
+  unpublishCourseCover,
+} from "@/features/storage/course-cover-publication";
 import { getServerEnv } from "@/lib/env";
 import {
   type CourseAvailabilityPreset,
@@ -23,6 +28,7 @@ import { assertMaxReleaseDelayFitsAccessDuration } from "./module-content-releas
 interface LockedCourseAvailabilityRow {
   access_duration_months: number;
   catalog_visibility: CourseCatalogVisibility;
+  cover_image_json: unknown;
   has_commercial_history: boolean;
   has_published_publication: boolean;
   id: string;
@@ -53,6 +59,10 @@ interface AvailabilityCommandResult {
   preset: CourseAvailabilityPreset | "archived";
 }
 
+interface AvailabilityTransactionResult extends AvailabilityCommandResult {
+  hiddenCoverImage: unknown;
+}
+
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const getChangedAvailabilityFields = (
@@ -76,6 +86,7 @@ const readLockedCourse = async (
              c.title,
              c.status,
              c.catalog_visibility,
+             c.cover_image_json,
              c.sales_status,
              c.launch_date,
              c.launch_landing_url,
@@ -393,8 +404,17 @@ const applyTarget = async ({
   client: PoolClient;
   course: LockedCourseAvailabilityRow;
   target: AvailabilityTarget;
-}): Promise<AvailabilityCommandResult> => {
+}): Promise<AvailabilityTransactionResult> => {
   validateTarget({ course, target });
+  const isCoverPublic = isCourseCoverPubliclyVisible({
+    catalogVisibility: target.catalogVisibility,
+    deliveryStatus: target.deliveryStatus,
+  });
+  // The cover route redirects public courses to the public bucket as soon as
+  // this transaction commits, so the copy must exist before the commit.
+  if (isCoverPublic) {
+    await publishCourseCover(course.cover_image_json);
+  }
   await persistTarget({ actorUserId, client, course, target });
   const isClosingSales =
     course.sales_status === "open" && target.salesStatus === "closed";
@@ -408,26 +428,34 @@ const applyTarget = async ({
     : 0;
   return {
     checkoutCancellationsEnqueued,
+    hiddenCoverImage: isCoverPublic ? null : course.cover_image_json,
     notificationsEnqueued,
     preset: target.preset,
   };
 };
 
 const runAvailabilityTransaction = async (
-  operation: (client: PoolClient) => Promise<AvailabilityCommandResult>
+  operation: (client: PoolClient) => Promise<AvailabilityTransactionResult>
 ): Promise<AvailabilityCommandResult> => {
   const client = await getPool().connect();
+  let result: AvailabilityTransactionResult;
   try {
     await client.query("begin");
-    const result = await operation(client);
+    result = await operation(client);
     await client.query("commit");
-    return result;
   } catch (error) {
     await client.query("rollback");
     throw error;
   } finally {
     client.release();
   }
+
+  const { hiddenCoverImage, ...commandResult } = result;
+  if (hiddenCoverImage) {
+    // Best effort: a leftover public copy is removed again on the next save.
+    await unpublishCourseCover(hiddenCoverImage).catch(() => undefined);
+  }
+  return commandResult;
 };
 
 export const setCourseAvailability = async ({
