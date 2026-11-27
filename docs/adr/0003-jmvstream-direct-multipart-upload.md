@@ -24,11 +24,11 @@ Configuração vigente: partes de 64 MiB, concorrência quatro, até 10.000 part
 
 ## Consequências
 
-- CORS e ETag legível são requisitos externos;
+- CORS e ETag legível são requisitos externos, configurados em Domínios externos do plano JMVStream; a CSP do Hub precisa permitir o host de upload;
 - sessão persistida permite recuperação e limpeza;
 - retry de parte é local; complete deve ser idempotente/recuperável;
 - credencial JMVStream fica somente no servidor;
-- divergência de contrato do payload `gallery` precisa ser resolvida antes de alterar o código.
+- o payload `gallery` no complete foi validado em envio controlado; o contrato está no guia de [JMVStream](../integrations/jmvstream.md#contrato-gallery).
 
 ## Evidências
 

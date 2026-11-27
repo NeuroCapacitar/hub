@@ -369,7 +369,7 @@ abre conexão, não executa migration e não restaura banco.
 ### JMVStream e R2
 
 1. Para JMVStream, confira `videoHash`, estado local, cron e etapa: parte, complete, processamento, sync ou delete.
-2. Preserve sessão, ETags e IDs. A divergência `gallery` permanece bloqueio no guia de [JMVStream](../integrations/jmvstream.md).
+2. Preserve sessão, ETags e IDs. Falha de rede no PUT de parte indica CSP ou CORS; siga [Upload pelo navegador](../integrations/jmvstream.md#upload-pelo-navegador).
 3. Para R2, registre somente bucket/chave; teste HEAD privado e GET público conforme publicação. Não limpe objetos sem reconciliar referência.
 4. Para anexos de Aula, `prepare` 4xx/5xx indica autenticação, validação, banco ou assinatura; preflight 403 indica origem/método/header fora da política; PUT 403 sem CORS indica URL expirada ou assinatura inválida; falha de rede dispara reemissão e uma segunda tentativa. Fallback server-side só é permitido até 4 MiB; não encaminhe arquivos maiores pelo Hub.
 5. A confirmação exige HEAD do objeto e só então marca a sessão como `uploaded`. Se o salvamento falhar, mantenha a sessão para retry; a manutenção remove apenas sessões expiradas sem referência no conteúdo da Aula.
