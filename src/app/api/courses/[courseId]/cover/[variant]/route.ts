@@ -1,5 +1,6 @@
 import { getPool } from "@/db";
 import {
+  isCourseCoverPubliclyVisible,
   isCourseCoverVariant,
   parseCourseCoverImage,
 } from "@/features/storage/course-cover";
@@ -38,8 +39,10 @@ export async function GET(
   }
 
   if (
-    rows[0]?.status === "active" ||
-    rows[0]?.catalog_visibility === "listed"
+    isCourseCoverPubliclyVisible({
+      catalogVisibility: rows[0]?.catalog_visibility,
+      deliveryStatus: rows[0]?.status,
+    })
   ) {
     return new Response(null, {
       headers: {

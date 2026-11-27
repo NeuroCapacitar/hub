@@ -50,7 +50,22 @@ const isValidCoverFile = (file: File): boolean => {
   return true;
 };
 
-export function CourseCoverUploadField({
+/**
+ * Remounts the field whenever the persisted cover changes. After a successful
+ * save the page revalidates without unmounting the form; keeping the old state
+ * would resubmit the consumed upload reference and the replaced cover.
+ */
+export function CourseCoverUploadField(
+  props: CourseCoverUploadFieldProps
+): React.JSX.Element {
+  const persistedCoverKey =
+    parseCourseCoverImage(props.defaultCoverImage)?.variants.card?.key ??
+    "none";
+
+  return <CourseCoverUploadFieldState key={persistedCoverKey} {...props} />;
+}
+
+function CourseCoverUploadFieldState({
   aggregateId,
   className,
   defaultCoverImage,

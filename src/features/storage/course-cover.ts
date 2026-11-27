@@ -85,6 +85,15 @@ const getFileExtension = (fileName: string): string | null => {
   return extension && extension !== sanitized ? extension : null;
 };
 
+/** Listed or actively delivered Courses serve their cover from the public bucket. */
+export const isCourseCoverPubliclyVisible = ({
+  catalogVisibility,
+  deliveryStatus,
+}: {
+  catalogVisibility: string | null | undefined;
+  deliveryStatus: string | null | undefined;
+}): boolean => deliveryStatus === "active" || catalogVisibility === "listed";
+
 export const isCourseCoverVariant = (
   value: string
 ): value is CourseCoverVariant => value === "card" || value === "thumb";

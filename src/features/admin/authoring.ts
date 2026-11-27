@@ -53,7 +53,6 @@ import {
 } from "@/features/payments/course-price";
 import {
   type CourseCoverImage,
-  getCourseCoverPublicStorageKeys,
   getCourseCoverStorageKeys,
   getCourseCoverVariantPath,
   parseCourseCoverImage,
@@ -62,6 +61,10 @@ import {
   assertCourseCoverOwnership,
   preserveCourseCover,
 } from "@/features/storage/course-cover-ownership";
+import {
+  publishCourseCover,
+  unpublishCourseCover,
+} from "@/features/storage/course-cover-publication";
 import {
   type CourseCoverFile,
   readCourseCoverFile,
@@ -83,9 +86,7 @@ import {
 } from "@/features/storage/lesson-resource-upload-registry";
 import {
   confirmLessonResourceUpload,
-  deletePublicR2Objects,
   deleteR2Objects,
-  publishR2Object,
   uploadCourseCoverFile,
 } from "@/features/storage/r2";
 import { parseStagedAdminImageReference } from "@/features/storage/staged-image-upload";
@@ -366,22 +367,6 @@ const cleanupUploadedCourseCover = async (
   coverImage: CourseCoverImage | null
 ): Promise<void> => {
   await deleteR2Objects(getCourseCoverStorageKeys(coverImage));
-};
-
-const cleanupPublishedCourseCover = async (
-  coverImage: CourseCoverImage | null
-): Promise<void> => {
-  await deletePublicR2Objects(getCourseCoverStorageKeys(coverImage));
-};
-
-const publishCourseCover = async (
-  coverImage: CourseCoverImage | null
-): Promise<void> => {
-  await Promise.all(
-    getCourseCoverPublicStorageKeys(coverImage).map((key) =>
-      publishR2Object(key)
-    )
-  );
 };
 
 const readContentStatus = (formData: FormData): ContentStatus =>
@@ -1992,7 +1977,7 @@ const updateExistingCourse = async ({
     if (shouldPublish) {
       await publishCourseCover(nextCoverImage);
     } else {
-      await cleanupPublishedCourseCover(nextCoverImage);
+      await unpublishCourseCover(nextCoverImage);
     }
 
     await runCourseUpdateTransaction({
@@ -2008,7 +1993,7 @@ const updateExistingCourse = async ({
   } catch (error) {
     await Promise.all([
       cleanupUploadedCourseCover(uploadedCoverImage),
-      cleanupPublishedCourseCover(uploadedCoverImage),
+      unpublishCourseCover(uploadedCoverImage),
     ]);
     throw error;
   }
