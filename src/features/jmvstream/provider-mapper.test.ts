@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getJmvstreamVideoPlacement,
+  isJmvstreamJobNotFoundError,
   isJmvstreamVideoNotFoundError,
 } from "./provider-mapper";
 
@@ -30,5 +31,19 @@ describe("JMVStream provider mapper", () => {
     expect(isJmvstreamVideoNotFoundError(new Error("permission denied"))).toBe(
       false
     );
+  });
+
+  it("recognizes only the provider's not-yet-visible conversion job", () => {
+    expect(
+      isJmvstreamJobNotFoundError(
+        new Error("Job não encontrado para este vídeo")
+      )
+    ).toBe(true);
+    expect(
+      isJmvstreamJobNotFoundError(new Error("JMVStream retornou erro 404."))
+    ).toBe(false);
+    expect(
+      isJmvstreamJobNotFoundError("Job não encontrado para este vídeo")
+    ).toBe(false);
   });
 });

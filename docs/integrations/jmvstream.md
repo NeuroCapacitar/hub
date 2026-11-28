@@ -81,7 +81,19 @@ Para diagnosticar, envie um `OPTIONS` com `Origin` e `Access-Control-Request-Met
 
 `createJmvstreamClient.completeMultipartUpload` envia `gallery: input.galleryUuid`, com o UUID da pasta do Curso em `jmvstream_folders`. A documentação oficial define o campo como opcional.
 
-Em 2026-11-27, o envio controlado confirmou que o vídeo concluído fica nessa pasta: a exclusão da pasta antes da exclusão do vídeo retornou `Folder is not empty`. `GET /v1/videos/:hash` não retorna `folder_uuid`, então a leitura do vídeo não serve para conferir a pasta.
+Em 2026-11-27, o envio controlado confirmou que o vídeo concluído fica nessa pasta: a exclusão da pasta antes da exclusão do vídeo retornou `Folder is not empty`. `GET /v1/videos/:hash` não retorna `folder_uuid`; somente a listagem `GET /v1/videos/application` informa a pasta de cada vídeo.
+
+## Contrato `moveVideo`
+
+A documentação oficial define `PUT /v1/videos/moveVideo/:hash` com o campo `gallery`. O provedor responde 200 "Video successfully moved to the new folder." para esse campo, mas ignora o valor e grava o vídeo numa pasta que não aparece em `GET /v1/folders` (`03abc7fa-dce3-4471-8e3a-f88643f46a32` no plano atual). O campo `folder` tem o mesmo efeito. O campo aceito é `folder_uuid`, com o UUID da pasta; `createJmvstreamClient.moveVideo` envia esse campo.
+
+Como a leitura individual do vídeo não devolve a pasta, `getJmvstreamVideoPlacement` sempre resulta em `move` depois que o vídeo fica visível. Com `folder_uuid`, mover para a pasta onde o vídeo já está é idempotente.
+
+Verificado em 2026-11-27 com vídeo e pasta descartáveis, removidos ao final.
+
+## Janela inicial de processamento
+
+Por alguns segundos depois do complete, `GET /v1/videos/:hash` responde 404 `Video not found` e `GET /v1/videos/job-status/:hash` responde 404 `Job não encontrado para este vídeo`. A sincronização do player trata essas duas respostas como processamento pendente. Outros erros do job continuam propagando.
 
 ## Sincronização e limpeza
 
@@ -144,6 +156,8 @@ deve mostrar o estado local mínimo e encaminhar o detalhe externo ao portal.
 - parte falhou => repetir a parte, preservando ETags válidos;
 - complete falhou => não criar nova sessão até consultar estado da atual;
 - player pendente => cron/manual sync;
+- vídeo ausente da pasta do Curso no portal => conferir `folder_uuid` na listagem `GET /v1/videos/application`; vídeos movidos com o campo `gallery` ficaram numa pasta não listada e precisam de `moveVideo` com `folder_uuid`;
+- "Minified React error #441" no painel de upload => uma Server Action lançou erro e o Next ocultou a mensagem em produção; investigar o erro no servidor;
 - player com ativo local `failed` => a experiência do Aluno interrompe o polling e oferece suporte; não expor `last_error` do provedor;
 - deleção falhou => manter registro `needs_review` e tentar pelo comando autorizado;
 - hash já associado => `assertJmvstreamVideoHashAvailable` deve impedir duplicidade.
