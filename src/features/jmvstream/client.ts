@@ -457,7 +457,9 @@ export const createJmvstreamClient = ({
       await request<unknown>(
         `/v1/videos/moveVideo/${encodeURIComponent(videoHash)}`,
         {
-          body: JSON.stringify({ gallery: folderUuid }),
+          // The public docs name this field `gallery`, but the provider ignores
+          // it and moves the video to an unlisted folder; `folder_uuid` works.
+          body: JSON.stringify({ folder_uuid: folderUuid }),
           method: "PUT",
         }
       );

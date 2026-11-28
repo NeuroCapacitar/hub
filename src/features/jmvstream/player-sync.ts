@@ -15,6 +15,7 @@ import { getJmvstreamThumbnailUrlFromPlayerHtml } from "@/features/jmvstream/cli
 import { requireJmvstreamCourseFolder } from "@/features/jmvstream/course-folders";
 import {
   getJmvstreamVideoPlacement,
+  isJmvstreamJobNotFoundError,
   isJmvstreamVideoNotFoundError,
 } from "@/features/jmvstream/provider-mapper";
 import { isJmvstreamPlayerUrl } from "@/features/videos/jmvstream";
@@ -87,7 +88,7 @@ export const syncJmvstreamLessonPlayer = async (
   });
 
   if (!(playerUrl && isJmvstreamPlayerUrl(playerUrl))) {
-    const jobStatus = await client.getVideoJobStatus(videoHash);
+    const jobStatus = await readJmvstreamJobStatus(client, videoHash);
 
     if (jobStatus === "ERROR") {
       await markJmvstreamUploadFailed({
@@ -171,6 +172,21 @@ export const syncPendingJmvstreamPlayers = async (
   }
 
   return summary;
+};
+
+const readJmvstreamJobStatus = async (
+  client: Awaited<ReturnType<typeof getConfiguredJmvstreamClient>>,
+  videoHash: string
+): Promise<string | null> => {
+  try {
+    return await client.getVideoJobStatus(videoHash);
+  } catch (error) {
+    if (isJmvstreamJobNotFoundError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
 };
 
 export const moveJmvstreamVideoToCourseFolder = async ({

@@ -17,3 +17,9 @@ export const getJmvstreamVideoPlacement = ({
 export const isJmvstreamVideoNotFoundError = (error: unknown): boolean =>
   error instanceof Error &&
   error.message.trim().toLocaleLowerCase() === "video not found";
+
+// The conversion job is not visible for a few seconds after the complete call.
+export const isJmvstreamJobNotFoundError = (error: unknown): boolean =>
+  error instanceof Error &&
+  error.message.trim().toLocaleLowerCase() ===
+    "job não encontrado para este vídeo";

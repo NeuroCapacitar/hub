@@ -154,6 +154,16 @@ describe("JMVStream server SQL", () => {
     expect(source).toContain('jobStatus === "ERROR"');
   });
 
+  it("keeps a just-completed upload processing while its conversion job is not yet visible", async () => {
+    const source = await readFile(
+      new URL("./player-sync.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(source).toContain("await readJmvstreamJobStatus(client, videoHash)");
+    expect(source).toContain("if (isJmvstreamJobNotFoundError(error)) {");
+  });
+
   it("expires abandoned uploads before processing pending players", async () => {
     const [persistenceSource, playerSource] = await Promise.all([
       readFile(new URL("./asset-persistence.ts", import.meta.url), "utf8"),

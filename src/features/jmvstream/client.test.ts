@@ -497,7 +497,7 @@ describe("JMVStream API client", () => {
     );
   });
 
-  it("moves videos to a target folder", async () => {
+  it("moves videos to a target folder through the provider's accepted field", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValue(createJsonResponse({ status: 200 }));
@@ -508,7 +508,7 @@ describe("JMVStream API client", () => {
     expect(fetcher).toHaveBeenCalledWith(
       "https://api.jmvstream.com/v1/videos/moveVideo/video-hash",
       expect.objectContaining({
-        body: JSON.stringify({ gallery: "folder-uuid" }),
+        body: JSON.stringify({ folder_uuid: "folder-uuid" }),
         method: "PUT",
       })
     );
